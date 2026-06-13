@@ -10,6 +10,7 @@
 - 禁止不安全的类型断言和调用（对应 `@typescript-eslint/no-unsafe-argument`、`no-unsafe-call`）
 - API 请求和响应必须使用 `@nebula/shared` 中定义的 `ApiResponse<T>`、`PaginatedResponse<T>` 等类型
 - 组件 Props 必须定义独立的 interface 或 type，禁止内联对象类型
+- 保留 TypeScript 6.0 新特性校验，禁止使用 `ignoreDeprecations: "6.0"` 忽略所有 6.0 相关弃用警告，必须从根源上解决（如使用 `paths` 替代 `baseUrl`）
 
 ## ESLint 规范
 

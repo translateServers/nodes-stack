@@ -30,7 +30,7 @@ export default function MainLayout() {
   const drawer = (
     <div>
       <Toolbar>
-        <Typography variant="h6" noWrap component="div" fontWeight="bold">
+        <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
           Nebula
         </Typography>
       </Toolbar>

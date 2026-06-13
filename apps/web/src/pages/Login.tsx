@@ -22,7 +22,7 @@ export default function LoginPage() {
     >
       <Card sx={{ maxWidth: 400, width: '100%', mx: 2 }}>
         <CardContent sx={{ p: 4 }}>
-          <Typography variant="h4" align="center" gutterBottom fontWeight="bold">
+          <Typography variant="h4" align="center" gutterBottom sx={{ fontWeight: 'bold' }}>
             Nebula
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 4 }}>
