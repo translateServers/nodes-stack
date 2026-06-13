@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ProfileResponse } from '@nebula/shared/schemas';
+import type { ProfileResponse } from '@nebula/shared';
 
 const ACCESS_TOKEN_KEY = 'nebula_access_token';
 const REFRESH_TOKEN_KEY = 'nebula_refresh_token';

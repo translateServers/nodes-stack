@@ -1,4 +1,3 @@
-import Typography from '@mui/material/Typography';
 import { createBrowserRouter } from 'react-router';
 import RequireAuth from '@/components/RequireAuth';
 import MainLayout from '@/layouts/MainLayout';
@@ -7,7 +6,7 @@ import LoginPage from '@/pages/Login';
 import UsersPage from '@/pages/Users';
 
 function ComingSoonPage() {
-  return <Typography variant="h5">该功能未上线</Typography>;
+  return <div className="text-xl font-semibold">该功能未上线</div>;
 }
 
 const router = createBrowserRouter([

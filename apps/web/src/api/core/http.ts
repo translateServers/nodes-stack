@@ -1,7 +1,13 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { z, type ZodType } from 'zod';
-import { BizCode, type ApiErrorResponse, type ApiResponse } from '@nebula/shared/types';
-import { BusinessError, getBizMessage } from '@nebula/shared/errors';
+import {
+  BizCode,
+  type ApiErrorResponse,
+  type ApiResponse,
+  BusinessError,
+  getBizMessage,
+} from '@nebula/shared';
+import { emitApiError } from './api-error';
 import { API_BASE_URL, ENDPOINTS } from './endpoints';
 import { useAuthStore } from '@/store/auth';
 
@@ -51,6 +57,12 @@ function parseResponse<TSchema extends ZodType>(data: unknown, schema: TSchema):
   return result.data;
 }
 
+function throwApiError(code: number, message: string, details?: string[]): never {
+  const businessError = new BusinessError(code, message, details);
+  emitApiError(businessError);
+  throw businessError;
+}
+
 const http: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
@@ -96,7 +108,7 @@ http.interceptors.response.use(
     }
 
     if (payload.code !== BizCode.SUCCESS) {
-      throw new BusinessError(payload.code, payload.message);
+      throwApiError(payload.code, payload.message);
     }
 
     const responseSchema = (response.config as NebulaRequestConfig).meta?.responseSchema;
@@ -110,7 +122,7 @@ http.interceptors.response.use(
     const { response, config } = error;
 
     if (!response) {
-      throw new BusinessError(-1, error.message || '网络异常');
+      throwApiError(-1, error.message || '网络异常');
     }
 
     const requestConfig = config as NebulaRequestConfig | undefined;
@@ -127,7 +139,7 @@ http.interceptors.response.use(
       const refreshToken = useAuthStore.getState().refreshToken;
       if (!refreshToken) {
         useAuthStore.getState().clearAuth();
-        throw new BusinessError(errorCode, errorMessage, errorDetails);
+        throwApiError(errorCode, errorMessage, errorDetails);
       }
 
       if (isRefreshing) {
@@ -155,13 +167,14 @@ http.interceptors.response.use(
       } catch (refreshError) {
         processPendingQueue(refreshError, null);
         useAuthStore.getState().clearAuth();
+        emitApiError(refreshError);
         throw refreshError;
       } finally {
         isRefreshing = false;
       }
     }
 
-    throw new BusinessError(errorCode, errorMessage, errorDetails);
+    throwApiError(errorCode, errorMessage, errorDetails);
   },
 );
 

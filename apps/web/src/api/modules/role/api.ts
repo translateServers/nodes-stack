@@ -4,7 +4,7 @@ import {
   CreateRoleSchema,
   RoleResponseSchema,
   UpdateRoleSchema,
-} from '@nebula/shared/schemas';
+} from '@nebula/shared';
 import { ENDPOINTS } from '../../core/endpoints';
 import { del, get, patch, post } from '../../core/http';
 

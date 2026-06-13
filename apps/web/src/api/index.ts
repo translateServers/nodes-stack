@@ -5,9 +5,11 @@ export {
   type ApiResponse,
   type PaginatedResponse,
   type PaginationQuery,
-} from '@nebula/shared/types';
-export { BusinessError, getBizMessage, isBusinessError } from '@nebula/shared/errors';
-export * from '@nebula/shared/utils';
+  BusinessError,
+  getBizMessage,
+  isBusinessError,
+} from '@nebula/shared';
+export * from '@nebula/shared';
 
 // ── Core ────────────────────────────────────────────────────────────
 export {

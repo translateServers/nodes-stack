@@ -1,6 +1,12 @@
 import { z } from 'zod';
-import type { CreateUserParams, UpdateUserParams, UserResponse } from '@nebula/shared/schemas';
-import { CreateUserSchema, UpdateUserSchema, UserResponseSchema } from '@nebula/shared/schemas';
+import {
+  type CreateUserParams,
+  type UpdateUserParams,
+  type UserResponse,
+  CreateUserSchema,
+  UpdateUserSchema,
+  UserResponseSchema,
+} from '@nebula/shared';
 import { ENDPOINTS } from '../../core/endpoints';
 import { del, get, patch, post } from '../../core/http';
 

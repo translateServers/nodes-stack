@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CreateDictTypeSchema, DictTypeSchema, DictValueSchema } from '@nebula/shared/schemas';
+import { CreateDictTypeSchema, DictTypeSchema, DictValueSchema } from '@nebula/shared';
 import { ENDPOINTS } from '../../core/endpoints';
 import { del, get, patch, post } from '../../core/http';
 

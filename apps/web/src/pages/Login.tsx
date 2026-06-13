@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import CircularProgress from '@mui/material/CircularProgress';
-import Stack from '@mui/material/Stack';
-import TextField from '@mui/material/TextField';
-import Typography from '@mui/material/Typography';
 import { useCaptcha, useLogin } from '@/api';
+import { InlineAlert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useAuthStore } from '@/store/auth';
 
 export default function LoginPage() {
@@ -47,85 +43,79 @@ export default function LoginPage() {
   };
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '100vh',
-        bgcolor: 'grey.100',
-      }}
-    >
-      <Card sx={{ maxWidth: 420, width: '100%', mx: 2 }}>
-        <CardContent sx={{ p: 4 }}>
-          <Typography variant="h4" align="center" gutterBottom sx={{ fontWeight: 'bold' }}>
-            Nebula
-          </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 4 }}>
-            管理后台登录
-          </Typography>
-          <Box
-            component="form"
+    <div className="bg-muted/30 flex min-h-screen items-center justify-center px-4">
+      <Card className="w-full max-w-[420px]">
+        <CardHeader className="space-y-2 text-center">
+          <CardTitle className="text-3xl font-bold">Nebula</CardTitle>
+          <CardDescription>管理后台登录</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            className="space-y-4"
             onSubmit={(event) => {
               void handleSubmit(event);
             }}
           >
-            <Stack spacing={2}>
-              <TextField
-                label="账号"
+            <div className="space-y-2">
+              <label htmlFor="account" className="text-sm font-medium">
+                账号
+              </label>
+              <Input
+                id="account"
                 value={account}
                 onChange={(event) => setAccount(event.target.value)}
-                fullWidth
                 required
               />
-              <TextField
-                label="密码"
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium">
+                密码
+              </label>
+              <Input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                fullWidth
                 required
               />
-              <TextField
-                label="验证码"
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="captchaCode" className="text-sm font-medium">
+                验证码
+              </label>
+              <Input
+                id="captchaCode"
                 value={captchaCode}
                 onChange={(event) => setCaptchaCode(event.target.value)}
-                fullWidth
                 required
               />
-              {captchaQuery.isLoading ? (
-                <CircularProgress size={24} />
-              ) : captchaQuery.error ? (
-                <Alert severity="error">验证码加载失败</Alert>
-              ) : (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    p: 1,
-                  }}
-                  dangerouslySetInnerHTML={captchaMarkup}
-                />
-              )}
-              <Button type="button" variant="text" onClick={() => void captchaQuery.refetch()}>
-                刷新验证码
-              </Button>
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                fullWidth
-                disabled={loginMutation.isPending}
-              >
-                {loginMutation.isPending ? '登录中...' : '登录'}
-              </Button>
-            </Stack>
-          </Box>
+            </div>
+            {captchaQuery.isLoading ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : captchaQuery.error ? (
+              <InlineAlert variant="destructive">验证码加载失败</InlineAlert>
+            ) : (
+              <div
+                className="border-border flex justify-center rounded-lg border p-3"
+                dangerouslySetInnerHTML={captchaMarkup}
+              />
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => void captchaQuery.refetch()}
+            >
+              刷新验证码
+            </Button>
+            <Button type="submit" size="lg" className="w-full" disabled={loginMutation.isPending}>
+              {loginMutation.isPending ? '登录中...' : '登录'}
+            </Button>
+          </form>
         </CardContent>
       </Card>
-    </Box>
+    </div>
   );
 }

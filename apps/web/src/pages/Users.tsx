@@ -1,31 +1,33 @@
-import Paper from '@mui/material/Paper';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
-import CircularProgress from '@mui/material/CircularProgress';
-import Alert from '@mui/material/Alert';
 import { useUsers } from '@/api';
+import { InlineAlert } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function UsersPage() {
   const { data, isLoading, error } = useUsers();
 
   if (isLoading) {
-    return <CircularProgress />;
+    return <Spinner className="size-8" />;
   }
 
   if (error) {
-    return <Alert severity="error">加载用户列表失败</Alert>;
+    return <InlineAlert variant="destructive">加载用户列表失败</InlineAlert>;
   }
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4">用户管理</Typography>
+    <div className="space-y-4">
+      <h1 className="text-3xl font-semibold tracking-tight">用户管理</h1>
       {data?.map((user) => (
-        <Paper key={user.id} sx={{ p: 2 }}>
-          <Typography variant="h6">{user.username}</Typography>
-          <Typography color="text.secondary">{user.email}</Typography>
-          <Typography variant="body2">状态：{user.isActive ? '启用' : '禁用'}</Typography>
-        </Paper>
+        <Card key={user.id}>
+          <CardHeader className="pb-3">
+            <CardTitle>{user.username}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 pt-0 text-sm">
+            <div className="text-muted-foreground">{user.email}</div>
+            <div>状态：{user.isActive ? '启用' : '禁用'}</div>
+          </CardContent>
+        </Card>
       ))}
-    </Stack>
+    </div>
   );
 }

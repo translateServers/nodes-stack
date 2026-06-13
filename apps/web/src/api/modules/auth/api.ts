@@ -5,7 +5,7 @@ import type {
   RefreshTokenParams,
   RegisterParams,
   TokenResponse,
-} from '@nebula/shared/schemas';
+} from '@nebula/shared';
 import {
   CaptchaResponseSchema,
   LoginSchema,
@@ -13,7 +13,7 @@ import {
   RefreshTokenSchema,
   RegisterSchema,
   TokenResponseSchema,
-} from '@nebula/shared/schemas';
+} from '@nebula/shared';
 import { ENDPOINTS } from '../../core/endpoints';
 import { get, post } from '../../core/http';
 

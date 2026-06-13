@@ -1,4 +1,4 @@
-import { BusinessError, getBizMessage, isBusinessError } from '@nebula/shared';
+import { BusinessError, getBizMessage, isBusinessError } from '@nebula/shared/errors';
 
 export type ApiErrorEventDetail = {
   message: string;
@@ -7,11 +7,23 @@ export type ApiErrorEventDetail = {
 };
 
 const API_ERROR_EVENT = 'nebula:api-error';
+const notifiedErrors = new WeakSet<object>();
+
+function isObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null;
+}
 
 export function emitApiError(
   error: unknown,
   severity: ApiErrorEventDetail['severity'] = 'error',
 ): void {
+  if (isObject(error)) {
+    if (notifiedErrors.has(error)) {
+      return;
+    }
+    notifiedErrors.add(error);
+  }
+
   const detail: ApiErrorEventDetail = isBusinessError(error)
     ? { code: error.code, message: error.message || getBizMessage(error.code), severity }
     : { message: '请求失败，请稍后重试', severity };
