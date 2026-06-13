@@ -1,0 +1,206 @@
+schema_version: 1
+module_path: ""
+title: NestJS 模块化后端应用架构
+scope:
+    - .dockerignore
+    - .env
+    - .env.example
+    - .gitignore
+    - .prettierrc
+    - .qoder\repowiki\knowledge\zh\NestJS 后端应用核心架构\_module.yaml
+    - .qoder\repowiki\knowledge\zh\NestJS 后端应用核心架构\技术栈.md
+    - .qoder\repowiki\knowledge\zh\NestJS 后端应用核心架构\架构设计.md
+    - .qoder\repowiki\knowledge\zh\NestJS 后端应用核心架构\概述.md
+    - .qoder\repowiki\knowledge\zh\NestJS 后端应用核心架构\编码规范.md
+    - .qoder\repowiki\knowledge\zh\NestJS 模块化后端应用架构\_module.yaml
+    - .qoder\repowiki\knowledge\zh\NestJS 模块化后端应用架构\技术栈.md
+    - .qoder\repowiki\knowledge\zh\NestJS 模块化后端应用架构\架构设计.md
+    - .qoder\repowiki\knowledge\zh\NestJS 模块化后端应用架构\概述.md
+    - .qoder\repowiki\knowledge\zh\NestJS 模块化后端应用架构\特殊配置与命令.md
+    - .qoder\repowiki\knowledge\zh\NestJS 模块化后端应用架构\编码规范.md
+    - .qoder\repowiki\knowledge\zh\Prisma 数据模型与种子管理\_module.yaml
+    - .qoder\repowiki\knowledge\zh\Prisma 数据模型与种子管理\技术栈.md
+    - .qoder\repowiki\knowledge\zh\Prisma 数据模型与种子管理\架构设计.md
+    - .qoder\repowiki\knowledge\zh\Prisma 数据模型与种子管理\概述.md
+    - .qoder\repowiki\knowledge\zh\Prisma 数据模型与种子管理\编码规范.md
+    - .qoder\repowiki\knowledge\zh\_index.yaml
+    - .qoder\repowiki\zh\content\API 接口文档\API 响应格式规范.md
+    - .qoder\repowiki\zh\content\API 接口文档\API 接口文档.md
+    - .qoder\repowiki\zh\content\API 接口文档\健康检查接口.md
+    - .qoder\repowiki\zh\content\API 接口文档\用户管理接口.md
+    - .qoder\repowiki\zh\content\API 接口文档\认证接口.md
+    - .qoder\repowiki\zh\content\中间件和拦截器\中间件和拦截器.md
+    - .qoder\repowiki\zh\content\中间件和拦截器\守卫机制.md
+    - .qoder\repowiki\zh\content\中间件和拦截器\拦截器实现.md
+    - .qoder\repowiki\zh\content\中间件和拦截器\装饰器和工具类.md
+    - .qoder\repowiki\zh\content\中间件和拦截器\过滤器配置.md
+    - .qoder\repowiki\zh\content\工具类和辅助函数\实用工具函数.md
+    - .qoder\repowiki\zh\content\工具类和辅助函数\工具类和辅助函数.md
+    - .qoder\repowiki\zh\content\工具类和辅助函数\常量定义.md
+    - .qoder\repowiki\zh\content\工具类和辅助函数\自定义装饰器.md
+    - .qoder\repowiki\zh\content\开发最佳实践\Git 工作流程.md
+    - .qoder\repowiki\zh\content\开发最佳实践\代码规范标准.md
+    - .qoder\repowiki\zh\content\开发最佳实践\团队协作规范.md
+    - .qoder\repowiki\zh\content\开发最佳实践\开发最佳实践.md
+    - .qoder\repowiki\zh\content\开发最佳实践\性能优化实践.md
+    - .qoder\repowiki\zh\content\快速开始.md
+    - .qoder\repowiki\zh\content\数据库设计\Prisma ORM 配置.md
+    - .qoder\repowiki\zh\content\数据库设计\数据库架构.md
+    - .qoder\repowiki\zh\content\数据库设计\数据库设计.md
+    - .qoder\repowiki\zh\content\数据库设计\数据模型定义.md
+    - .qoder\repowiki\zh\content\数据库设计\数据迁移管理.md
+    - .qoder\repowiki\zh\content\日志和监控系统\健康检查和监控.md
+    - .qoder\repowiki\zh\content\日志和监控系统\日志和监控系统.md
+    - .qoder\repowiki\zh\content\日志和监控系统\日志配置管理.md
+    - .qoder\repowiki\zh\content\日志和监控系统\结构化日志记录.md
+    - .qoder\repowiki\zh\content\架构设计\中间件和拦截器系统\中间件和拦截器系统.md
+    - .qoder\repowiki\zh\content\架构设计\中间件和拦截器系统\守卫系统.md
+    - .qoder\repowiki\zh\content\架构设计\中间件和拦截器系统\拦截器系统.md
+    - .qoder\repowiki\zh\content\架构设计\中间件和拦截器系统\装饰器系统.md
+    - .qoder\repowiki\zh\content\架构设计\中间件和拦截器系统\过滤器系统.md
+    - .qoder\repowiki\zh\content\架构设计\依赖注入机制.md
+    - .qoder\repowiki\zh\content\架构设计\整体架构概览.md
+    - .qoder\repowiki\zh\content\架构设计\架构设计.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\基础设施模块\基础设施模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\基础设施模块\数据库模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\基础设施模块\日志模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\基础设施模块\缓存模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\核心功能模块\健康检查模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\核心功能模块\核心功能模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\核心功能模块\用户模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\核心功能模块\认证模块.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\模块化系统设计.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\模块生命周期管理.md
+    - .qoder\repowiki\zh\content\架构设计\模块化系统设计\模块间通信机制.md
+    - .qoder\repowiki\zh\content\架构设计\设计模式应用.md
+    - .qoder\repowiki\zh\content\测试策略\单元测试.md
+    - .qoder\repowiki\zh\content\测试策略\测试策略.md
+    - .qoder\repowiki\zh\content\测试策略\测试配置.md
+    - .qoder\repowiki\zh\content\测试策略\集成测试.md
+    - .qoder\repowiki\zh\content\用户管理系统\用户 CRUD 操作.md
+    - .qoder\repowiki\zh\content\用户管理系统\用户业务逻辑.md
+    - .qoder\repowiki\zh\content\用户管理系统\用户数据模型.md
+    - .qoder\repowiki\zh\content\用户管理系统\用户权限控制.md
+    - .qoder\repowiki\zh\content\用户管理系统\用户管理系统.md
+    - .qoder\repowiki\zh\content\认证授权系统.md
+    - .qoder\repowiki\zh\content\部署和运维\Docker 容器化.md
+    - .qoder\repowiki\zh\content\部署和运维\环境配置管理.md
+    - .qoder\repowiki\zh\content\部署和运维\生产环境部署.md
+    - .qoder\repowiki\zh\content\部署和运维\监控和维护.md
+    - .qoder\repowiki\zh\content\部署和运维\部署和运维.md
+    - .qoder\repowiki\zh\content\配置管理系统\环境变量管理.md
+    - .qoder\repowiki\zh\content\配置管理系统\类型安全配置服务.md
+    - .qoder\repowiki\zh\content\配置管理系统\配置架构设计.md
+    - .qoder\repowiki\zh\content\配置管理系统\配置模式定义.md
+    - .qoder\repowiki\zh\content\配置管理系统\配置管理系统.md
+    - .qoder\repowiki\zh\content\项目概述\快速开始指南.md
+    - .qoder\repowiki\zh\content\项目概述\技术栈概览.md
+    - .qoder\repowiki\zh\content\项目概述\架构设计理念.md
+    - .qoder\repowiki\zh\content\项目概述\核心功能特性\健康检查系统.md
+    - .qoder\repowiki\zh\content\项目概述\核心功能特性\日志记录系统.md
+    - .qoder\repowiki\zh\content\项目概述\核心功能特性\核心功能特性.md
+    - .qoder\repowiki\zh\content\项目概述\核心功能特性\用户管理系统.md
+    - .qoder\repowiki\zh\content\项目概述\核心功能特性\用户认证授权系统.md
+    - .qoder\repowiki\zh\content\项目概述\项目介绍.md
+    - .qoder\repowiki\zh\content\项目概述\项目概述.md
+    - .qoder\repowiki\zh\meta\repowiki-metadata.json
+    - .trae\documents\NestJS 技术栈集成计划.md
+    - .trae\documents\Swagger_API文档_Controller类型定义_全局响应体重构计划.md
+    - .trae\documents\TypeScript 6.0 升级评估.md
+    - .trae\documents\架构改进计划.md
+    - .trae\documents\测试修复计划.md
+    - .trae\rules\项目规则.md
+    - .trae\skills\typescript-quality\SKILL.md
+    - .trae\specs\cleanup-unused-code\audit.md
+    - .trae\specs\cleanup-unused-code\checklist.md
+    - .trae\specs\cleanup-unused-code\spec.md
+    - .trae\specs\cleanup-unused-code\tasks.md
+    - .trae\specs\menu-management\checklist.md
+    - .trae\specs\menu-management\spec.md
+    - .trae\specs\menu-management\tasks.md
+    - Dockerfile
+    - README.md
+    - dev.db
+    - docker-compose.yml
+    - eslint.config.mjs
+    - jest.config.js
+    - nest-cli.json
+    - package.json
+    - pnpm-lock.yaml
+    - pnpm-workspace.yaml
+    - prisma.config.ts
+    - prisma\schema.prisma
+    - prisma\schema\Dict.prisma
+    - prisma\schema\Menu.prisma
+    - prisma\schema\RefreshToken.prisma
+    - prisma\schema\Role.prisma
+    - prisma\schema\User.prisma
+    - prisma\seed.ts
+    - scripts\debug-token.ts
+    - src\app.module.ts
+    - src\common\constants\log-level.constants.ts
+    - src\common\decorators\api-success-response.decorator.ts
+    - src\common\decorators\public.decorator.ts
+    - src\common\decorators\response-message.decorator.ts
+    - src\common\decorators\skip-throttle.decorator.ts
+    - src\common\dto\api-error-response.dto.ts
+    - src\common\dto\api-response.dto.ts
+    - src\common\enums\biz-code.enum.ts
+    - src\common\exceptions\business.exception.ts
+    - src\common\filters\http-exception.filter.spec.ts
+    - src\common\filters\http-exception.filter.ts
+    - src\common\guards\jwt-auth.guard.spec.ts
+    - src\common\guards\jwt-auth.guard.ts
+    - src\common\guards\throttler.guard.ts
+    - src\common\interceptors\logging.interceptor.ts
+    - src\common\interceptors\transform.interceptor.spec.ts
+    - src\common\interceptors\transform.interceptor.ts
+    - src\common\interfaces\jwt.interface.ts
+    - src\common\interfaces\user.interface.ts
+    - src\common\schemas\datetime.schema.ts
+    - src\common\schemas\user-fields.schema.ts
+    - src\common\utils\sanitize.util.spec.ts
+    - src\common\utils\sanitize.util.ts
+    - src\common\utils\time.util.spec.ts
+    - src\common\utils\time.util.ts
+    - src\config\config-loader.ts
+    - src\config\config.module.ts
+    - src\config\schemas\app.schema.ts
+    - src\config\schemas\database.schema.ts
+    - src\config\schemas\jwt.schema.ts
+    - src\config\schemas\logger.schema.ts
+    - src\config\schemas\root.schema.ts
+    - src\config\typed-config.service.ts
+    - src\config\types.ts
+    - src\main.ts
+    - src\modules\auth\auth.controller.spec.ts
+    - src\modules\auth\auth.controller.ts
+    - src\modules\auth\auth.module.ts
+    - src\modules\auth\auth.service.spec.ts
+    - src\modules\auth\auth.service.ts
+    - src\modules\auth\captcha.service.spec.ts
+    - src\modules\auth\captcha.service.ts
+    - src\modules\auth\dto\auth.dto.ts
+    - src\modules\auth\strategies\jwt.strategy.ts
+    - src\modules\cache\cache.module.ts
+    - src\modules\health\health.controller.ts
+    - src\modules\health\health.module.ts
+    - src\modules\logger\log-query.service.ts
+    - src\modules\logger\logger.factory.ts
+    - src\modules\logger\logger.module.ts
+    - src\modules\user\dto\user.dto.ts
+    - src\modules\user\user.controller.ts
+    - src\modules\user\user.module.ts
+    - src\modules\user\user.service.spec.ts
+    - src\modules\user\user.service.ts
+    - src\prisma\prisma.module.ts
+    - src\prisma\prisma.service.ts
+    - test\app.e2e-spec.ts
+    - test\jest-e2e.json
+    - test\setup.ts
+    - tsconfig.build.json
+    - tsconfig.json
+    - tsconfig.test.json
+source_files: []
+depends_on: []
+related_to: []

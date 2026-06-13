@@ -2,15 +2,27 @@
   "name": "@nebula/shared",
   "version": "1.0.0",
   "private": true,
-  "main": "./dist/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": ["dist"],
   "scripts": {
-    "build": "echo \"Add your build command here\"",
-    "dev": "echo \"Add your dev command here\"",
-    "lint": "echo \"Add your lint command here\"",
-    "test": "echo \"Add your test command here\"",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {
+    "@nebula/typescript-config": "workspace:*",
+    "tsup": "^8.4.0",
+    "typescript": "^6.0.3"
+  }
 }

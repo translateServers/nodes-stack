@@ -1,0 +1,15 @@
+- [x] Prisma 数据模型正确创建（Menu、Role 模型及关联关系）
+- [x] Prisma Client 成功生成（pnpm prisma generate 无错误）
+- [x] 错误码和消息常量已扩展（包含 MENU_NOT_FOUND、ROLE_NOT_FOUND 等）
+- [x] 角色模块完整实现（Service、Controller、DTO、Module）
+- [x] 菜单模块完整实现（Service、Controller、DTO、Module）
+- [x] 菜单树形结构正确返回（children 嵌套）
+- [x] 角色菜单权限分配功能正常
+- [x] REST API 接口符合规范（POST/GET/PATCH/DELETE）
+- [x] Swagger 文档正确生成（ApiProperty、ApiOperation、ApiTags）
+- [x] DTO 验证规则正确（class-validator）
+- [x] 模块已在 app.module.ts 中注册
+- [x] 单元测试通过（menu.service.spec.ts、role.service.spec.ts）
+- [x] 代码符合 ESLint 规范（0 errors）
+- [x] TypeScript 类型检查通过（0 errors）
+- [x] 响应式接口使用（接口遵循 REST 风格，支持按 roleId 过滤）
