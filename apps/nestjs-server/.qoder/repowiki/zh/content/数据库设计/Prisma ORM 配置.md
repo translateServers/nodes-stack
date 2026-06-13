@@ -21,6 +21,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -33,7 +34,9 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件系统性梳理了本项目中 Prisma ORM 的配置与集成方式，涵盖以下主题：
+
 - Prisma 客户端生成器与 Zod 类型生成器配置
 - 数据源配置与适配器选择（SQLite 与 PostgreSQL）
 - Prisma 服务初始化流程、连接管理与依赖注入
@@ -42,10 +45,12 @@
 - Prisma 与 NestJS 框架的模块化集成与依赖注入
 
 ## 项目结构
+
 围绕 Prisma 的关键文件分布如下：
-- Prisma 配置与模式：prisma/schema.prisma、prisma.config.ts、prisma/schema/*.prisma
+
+- Prisma 配置与模式：prisma/schema.prisma、prisma.config.ts、prisma/schema/\*.prisma
 - NestJS 集成：src/prisma/prisma.module.ts、src/prisma/prisma.service.ts
-- 配置体系：src/config/config.module.ts、src/config/typed-config.service.ts、src/config/schemas/*.schema.ts
+- 配置体系：src/config/config.module.ts、src/config/typed-config.service.ts、src/config/schemas/\*.schema.ts
 - 使用示例：src/modules/user/user.service.ts、src/modules/auth/auth.service.ts
 - 种子数据：prisma/seed.ts
 - 依赖声明：package.json
@@ -85,6 +90,7 @@ L --> E
 ```
 
 图表来源
+
 - [prisma/schema.prisma:1-13](file://prisma/schema.prisma#L1-L13)
 - [prisma.config.ts:1-14](file://prisma.config.ts#L1-L14)
 - [src/prisma/prisma.module.ts:1-10](file://src/prisma/prisma.module.ts#L1-L10)
@@ -98,6 +104,7 @@ L --> E
 - [src/modules/auth/auth.service.ts:1-162](file://src/modules/auth/auth.service.ts#L1-L162)
 
 章节来源
+
 - [prisma/schema.prisma:1-13](file://prisma/schema.prisma#L1-L13)
 - [prisma.config.ts:1-14](file://prisma.config.ts#L1-L14)
 - [src/prisma/prisma.module.ts:1-10](file://src/prisma/prisma.module.ts#L1-L10)
@@ -109,6 +116,7 @@ L --> E
 - [src/app.module.ts:1-61](file://src/app.module.ts#L1-L61)
 
 ## 核心组件
+
 - 生成器配置
   - 客户端生成器：用于生成 Prisma 客户端代码，供应用层调用。
   - Zod 类型生成器：用于生成与 Prisma 模型对应的 Zod 校验类型，便于 DTO 层校验与序列化。
@@ -121,11 +129,13 @@ L --> E
   - 在模块初始化阶段建立连接，在模块销毁阶段断开连接，确保资源释放。
 
 章节来源
+
 - [prisma/schema.prisma:1-13](file://prisma/schema.prisma#L1-L13)
 - [prisma.config.ts:1-14](file://prisma.config.ts#L1-L14)
 - [src/prisma/prisma.service.ts:1-44](file://src/prisma/prisma.service.ts#L1-L44)
 
 ## 架构总览
+
 下图展示了 Prisma 在 NestJS 中的集成架构与数据流：
 
 ```mermaid
@@ -154,6 +164,7 @@ Q --> U
 ```
 
 图表来源
+
 - [src/app.module.ts:1-61](file://src/app.module.ts#L1-L61)
 - [src/config/config.module.ts:1-20](file://src/config/config.module.ts#L1-L20)
 - [src/config/typed-config.service.ts:1-48](file://src/config/typed-config.service.ts#L1-L48)
@@ -165,6 +176,7 @@ Q --> U
 ## 详细组件分析
 
 ### 生成器与数据源配置
+
 - 客户端生成器
   - 作用：生成 TypeScript 客户端 API，提供类型安全的查询与变更能力。
   - 配置位置：prisma/schema.prisma 的 generator client。
@@ -176,10 +188,12 @@ Q --> U
   - URL 来源：优先使用环境变量 DATABASE_URL；若为空则使用默认 SQLite 文件路径。
 
 章节来源
+
 - [prisma/schema.prisma:1-13](file://prisma/schema.prisma#L1-L13)
 - [prisma.config.ts:1-14](file://prisma.config.ts#L1-L14)
 
 ### Prisma 服务初始化与连接管理
+
 - 初始化流程
   - 读取配置：通过 TypedConfigService 获取 database.provider 与 database.url。
   - 适配器选择：当 provider 为 sqlite 时，使用 PrismaBetterSqlite3 并传入 url；否则使用默认适配器。
@@ -211,16 +225,19 @@ PS->>PS : 调用 $disconnect()
 ```
 
 图表来源
+
 - [src/app.module.ts:1-61](file://src/app.module.ts#L1-L61)
 - [src/config/typed-config.service.ts:1-48](file://src/config/typed-config.service.ts#L1-L48)
 - [src/prisma/prisma.module.ts:1-10](file://src/prisma/prisma.module.ts#L1-L10)
 - [src/prisma/prisma.service.ts:1-44](file://src/prisma/prisma.service.ts#L1-L44)
 
 章节来源
+
 - [src/prisma/prisma.service.ts:1-44](file://src/prisma/prisma.service.ts#L1-L44)
 - [src/config/typed-config.service.ts:1-48](file://src/config/typed-config.service.ts#L1-L48)
 
 ### 依赖注入与模块化架构
+
 - 全局模块
   - PrismaModule 使用 @Global() 全局注册，导出 PrismaService，使任意模块可直接注入使用。
 - 配置模块
@@ -259,6 +276,7 @@ PrismaModule --> PrismaService : "提供"
 ```
 
 图表来源
+
 - [src/app.module.ts:1-61](file://src/app.module.ts#L1-L61)
 - [src/config/config.module.ts:1-20](file://src/config/config.module.ts#L1-L20)
 - [src/config/typed-config.service.ts:1-48](file://src/config/typed-config.service.ts#L1-L48)
@@ -266,11 +284,13 @@ PrismaModule --> PrismaService : "提供"
 - [src/prisma/prisma.service.ts:1-44](file://src/prisma/prisma.service.ts#L1-L44)
 
 章节来源
+
 - [src/app.module.ts:1-61](file://src/app.module.ts#L1-L61)
 - [src/config/config.module.ts:1-20](file://src/config/config.module.ts#L1-L20)
 - [src/prisma/prisma.module.ts:1-10](file://src/prisma/prisma.module.ts#L1-L10)
 
 ### SQLite 数据库配置、连接池与性能优化
+
 - 数据库提供者与 URL
   - 提供者：sqlite
   - URL：优先从环境变量 DATABASE_URL 读取；若未设置，则使用默认 SQLite 文件路径。
@@ -282,11 +302,13 @@ PrismaModule --> PrismaService : "提供"
   - 生产环境建议切换至 PostgreSQL，并通过 prisma.config.ts 的 datasource.url 统一管理。
 
 章节来源
+
 - [prisma/schema.prisma:10-12](file://prisma/schema.prisma#L10-L12)
 - [prisma.config.ts:10-12](file://prisma.config.ts#L10-L12)
 - [src/prisma/prisma.service.ts:18-34](file://src/prisma/prisma.service.ts#L18-L34)
 
 ### Prisma 客户端使用示例与最佳实践
+
 - 基础 CRUD 示例
   - 用户模块：UserService 展示了查询、创建、更新、删除等操作，均通过 PrismaService 访问数据库。
   - 关注点分离：业务逻辑集中在服务层，数据访问集中在 PrismaService。
@@ -298,10 +320,12 @@ PrismaModule --> PrismaService : "提供"
   - 事务与并发：在需要强一致性的场景，结合 Prisma 的事务能力与连接池参数进行优化。
 
 章节来源
+
 - [src/modules/user/user.service.ts:1-125](file://src/modules/user/user.service.ts#L1-L125)
 - [src/modules/auth/auth.service.ts:1-162](file://src/modules/auth/auth.service.ts#L1-L162)
 
 ### 模型与关系映射
+
 - 用户与角色多对多关系
   - User 与 Role 通过中间关系名进行关联，映射到实际表结构。
 - 刷新令牌模型
@@ -340,16 +364,19 @@ USER ||--o{ ROLE : "属于(多对多)"
 ```
 
 图表来源
+
 - [prisma/schema/User.prisma:1-15](file://prisma/schema/User.prisma#L1-L15)
 - [prisma/schema/Role.prisma:1-13](file://prisma/schema/Role.prisma#L1-L13)
 - [prisma/schema/RefreshToken.prisma:1-12](file://prisma/schema/RefreshToken.prisma#L1-L12)
 
 章节来源
+
 - [prisma/schema/User.prisma:1-15](file://prisma/schema/User.prisma#L1-L15)
 - [prisma/schema/Role.prisma:1-13](file://prisma/schema/Role.prisma#L1-L13)
 - [prisma/schema/RefreshToken.prisma:1-12](file://prisma/schema/RefreshToken.prisma#L1-L12)
 
 ## 依赖关系分析
+
 - 外部依赖
   - @prisma/client：Prisma 客户端
   - @prisma/adapter-better-sqlite3：SQLite 适配器
@@ -373,16 +400,19 @@ AS["AuthService"] --> PS
 ```
 
 图表来源
+
 - [package.json:26-86](file://package.json#L26-L86)
 - [src/prisma/prisma.service.ts:1-44](file://src/prisma/prisma.service.ts#L1-L44)
 - [src/modules/user/user.service.ts:1-125](file://src/modules/user/user.service.ts#L1-L125)
 - [src/modules/auth/auth.service.ts:1-162](file://src/modules/auth/auth.service.ts#L1-L162)
 
 章节来源
+
 - [package.json:26-86](file://package.json#L26-L86)
 - [src/prisma/prisma.service.ts:1-44](file://src/prisma/prisma.service.ts#L1-L44)
 
 ## 性能考虑
+
 - 连接池参数
   - SQLite：当前通过适配器默认行为管理连接；可通过调整 DATABASE_URL 参数或在更高层进行连接复用策略优化。
   - PostgreSQL：通过 prisma.config.ts 的 datasource.url 统一管理，可在生产环境配合数据库侧连接池参数进行调优。
@@ -393,6 +423,7 @@ AS["AuthService"] --> PS
   - 可结合应用缓存模块与日志模块，对高频查询结果进行缓存与审计。
 
 ## 故障排查指南
+
 - 配置缺失
   - 若根配置缺失，TypedConfigService 将记录错误并终止进程，需检查配置加载是否正确。
 - 数据库连接失败
@@ -403,19 +434,23 @@ AS["AuthService"] --> PS
   - prisma.config.ts 已配置迁移与种子脚本，确保执行迁移命令后数据库结构与初始数据可用。
 
 章节来源
+
 - [src/config/typed-config.service.ts:14-18](file://src/config/typed-config.service.ts#L14-L18)
 - [prisma.config.ts:6-12](file://prisma.config.ts#L6-L12)
 - [prisma/seed.ts:1-41](file://prisma/seed.ts#L1-L41)
 
 ## 结论
+
 本项目采用 Prisma 作为 ORM，结合 NestJS 的模块化与依赖注入机制，实现了：
+
 - 清晰的生成器与数据源配置
 - 类型安全的客户端与 Zod 校验类型
 - 可扩展的适配器与生命周期管理
 - 与业务模块的解耦与高内聚
-在 SQLite 与 PostgreSQL 之间灵活切换，并通过配置与适配器实现稳定的连接管理与性能优化。
+  在 SQLite 与 PostgreSQL 之间灵活切换，并通过配置与适配器实现稳定的连接管理与性能优化。
 
 ## 附录
+
 - 配置 Schema
   - 根 Schema 聚合了 app、database、jwt、logger 等命名空间，便于集中管理。
   - DatabaseSchema 定义了 provider、url、maxConnections、logging 等关键参数。
@@ -423,6 +458,7 @@ AS["AuthService"] --> PS
   - seed.ts 使用与应用相同的适配器与 URL，演示了如何在开发环境中快速初始化数据。
 
 章节来源
+
 - [src/config/schemas/root.schema.ts:1-21](file://src/config/schemas/root.schema.ts#L1-L21)
 - [src/config/schemas/database.schema.ts:1-11](file://src/config/schemas/database.schema.ts#L1-L11)
 - [prisma/seed.ts:1-41](file://prisma/seed.ts#L1-L41)

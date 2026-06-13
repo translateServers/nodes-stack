@@ -19,13 +19,16 @@
 </cite>
 
 ## 更新摘要
+
 **所做更改**
+
 - 更新了响应装饰器与Swagger文档集成部分，强调使用createZodDto生成的schema通过$ref引用
 - 优化了响应拦截器的数据字段处理逻辑，改进了undefined和null的处理
 - 新增了Swagger文档与业务DTO同步的说明
 - 更新了架构图和组件分析以反映最新的集成方式
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -82,11 +85,13 @@ J --> V[user.dto.ts]
 ```
 
 **图表来源**
+
 - [api-response.dto.ts:1-16](file://src/common/dto/api-response.dto.ts#L1-L16)
 - [biz-code.enum.ts:1-171](file://src/common/enums/biz-code.enum.ts#L1-L171)
 - [transform.interceptor.ts:1-47](file://src/common/interceptors/transform.interceptor.ts#L1-L47)
 
 **章节来源**
+
 - [api-response.dto.ts:1-16](file://src/common/dto/api-response.dto.ts#L1-L16)
 - [biz-code.enum.ts:1-171](file://src/common/enums/biz-code.enum.ts#L1-L171)
 - [transform.interceptor.ts:1-47](file://src/common/interceptors/transform.interceptor.ts#L1-L47)
@@ -97,11 +102,11 @@ J --> V[user.dto.ts]
 
 系统采用标准化的响应结构，确保所有 API 接口返回一致的数据格式：
 
-| 字段名 | 类型 | 必填 | 描述 | 示例值 |
-|--------|------|------|------|--------|
-| code | number | 是 | 业务状态码 | 0 |
-| data | T | 否 | 业务数据，可能为 null 或具体对象 | { id: 1, name: "测试" } |
-| message | string | 是 | 响应消息 | "操作成功" |
+| 字段名  | 类型   | 必填 | 描述                             | 示例值                  |
+| ------- | ------ | ---- | -------------------------------- | ----------------------- |
+| code    | number | 是   | 业务状态码                       | 0                       |
+| data    | T      | 否   | 业务数据，可能为 null 或具体对象 | { id: 1, name: "测试" } |
+| message | string | 是   | 响应消息                         | "操作成功"              |
 
 **更新** 响应结构现在通过Swagger装饰器直接定义，而非依赖特定DTO的职责。外层包装结构由TransformInterceptor在运行时统一构造，确保与Swagger文档保持一致。
 
@@ -109,11 +114,11 @@ J --> V[user.dto.ts]
 
 错误响应采用统一的错误结构，支持详细的错误信息：
 
-| 字段名 | 类型 | 必填 | 描述 | 示例值 |
-|--------|------|------|------|--------|
-| code | number | 是 | 业务错误码 | 1001 |
-| message | string | 是 | 错误消息 | "请求参数校验失败" |
-| details | string[] | 否 | 错误详情列表 | ["邮箱格式不正确", "密码至少6个字符"] |
+| 字段名  | 类型     | 必填 | 描述         | 示例值                                |
+| ------- | -------- | ---- | ------------ | ------------------------------------- |
+| code    | number   | 是   | 业务错误码   | 1001                                  |
+| message | string   | 是   | 错误消息     | "请求参数校验失败"                    |
+| details | string[] | 否   | 错误详情列表 | ["邮箱格式不正确", "密码至少6个字符"] |
 
 ### 业务状态码规范
 
@@ -137,9 +142,11 @@ C --> C6[INTERNAL_ERROR: 1099]
 ```
 
 **图表来源**
+
 - [biz-code.enum.ts:13-78](file://src/common/enums/biz-code.enum.ts#L13-L78)
 
 **章节来源**
+
 - [api-response.dto.ts:11-15](file://src/common/dto/api-response.dto.ts#L11-L15)
 - [biz-code.enum.ts:13-78](file://src/common/enums/biz-code.enum.ts#L13-L78)
 
@@ -172,6 +179,7 @@ Filter-->>Client : 返回错误响应
 **更新** 架构图反映了最新的集成改进：响应装饰器现在直接生成Swagger文档，使用createZodDto生成的schema通过$ref引用，确保与业务DTO完全同步。
 
 **图表来源**
+
 - [transform.interceptor.ts:21-46](file://src/common/interceptors/transform.interceptor.ts#L21-L46)
 - [api-success-response.decorator.ts:94-108](file://src/common/decorators/api-success-response.decorator.ts#L94-L108)
 - [http-exception.filter.ts:28-78](file://src/common/filters/http-exception.filter.ts#L28-L78)
@@ -205,12 +213,14 @@ TransformInterceptor --> BizCode : "使用业务码"
 **更新** 拦截器现在优化了数据字段处理逻辑，通过改进的条件判断确保undefined和null值都能正确处理。空值处理更加精确，避免了之前可能出现的边界情况。
 
 拦截器的主要功能：
+
 1. **统一响应包装**：将控制器返回的数据包装为 `{ code, data, message }` 结构
 2. **优化的空值处理**：改进的条件判断确保undefined和null都被正确转换为null数据
 3. **消息定制**：支持通过元数据设置自定义响应消息
 4. **业务码应用**：默认使用 `BizCode.SUCCESS` (0)
 
 **章节来源**
+
 - [transform.interceptor.ts:15-46](file://src/common/interceptors/transform.interceptor.ts#L15-L46)
 - [response-message.decorator.ts:1-6](file://src/common/decorators/response-message.decorator.ts#L1-L6)
 
@@ -243,6 +253,7 @@ ApiGlobalErrors --> ApiResponse : "生成错误文档"
 **更新** 响应装饰器系统现已完全集成Swagger文档生成，使用createZodDto生成的schema并通过$ref引用，确保Swagger文档与业务DTO始终保持同步。这解决了之前可能出现的文档与实现不一致的问题。
 
 装饰器的功能特性：
+
 1. **类型安全**：支持泛型类型定义，确保响应数据结构正确
 2. **数组支持**：自动识别单对象和数组类型的响应
 3. **Swagger 集成**：自动生成 API 文档结构，使用$ref引用确保同步
@@ -250,6 +261,7 @@ ApiGlobalErrors --> ApiResponse : "生成错误文档"
 5. **Zod schema 集成**：直接使用createZodDto生成的schema
 
 **章节来源**
+
 - [api-success-response.decorator.ts:94-156](file://src/common/decorators/api-success-response.decorator.ts#L94-L156)
 
 ### 业务异常处理
@@ -279,16 +291,19 @@ HttpExceptionFilter --> BizCode : "映射业务码"
 ```
 
 **图表来源**
+
 - [business.exception.ts:16-41](file://src/common/exceptions/business.exception.ts#L16-L41)
 - [http-exception.filter.ts:24-218](file://src/common/filters/http-exception.filter.ts#L24-L218)
 
 异常处理流程：
+
 1. **业务异常捕获**：识别并处理 BusinessException
 2. **HTTP 状态码映射**：根据业务码映射到相应 HTTP 状态
 3. **错误详情处理**：支持字段级校验错误的详细信息
 4. **日志记录**：记录异常信息便于调试和监控
 
 **章节来源**
+
 - [business.exception.ts:16-41](file://src/common/exceptions/business.exception.ts#L16-L41)
 - [http-exception.filter.ts:24-218](file://src/common/filters/http-exception.filter.ts#L24-L218)
 
@@ -300,27 +315,28 @@ HttpExceptionFilter --> BizCode : "映射业务码"
 
 认证模块使用了多种响应装饰器来定义不同的响应格式：
 
-| 方法 | 响应装饰器 | HTTP 状态码 | 响应类型 | 说明 |
-|------|------------|-------------|----------|------|
-| getCaptcha | ApiSuccessResponse(CaptchaResponseDto) | 200 | 验证码信息 | 获取图形验证码 |
-| register | ApiSuccessResponse(TokenResponseDto) | 201 | 令牌信息 | 用户注册并登录 |
-| login | ApiSuccessResponse(TokenResponseDto) | 200 | 令牌信息 | 用户登录 |
-| logout | ApiSuccessNoDataResponse | 200 | 无数据 | 退出登录 |
-| getProfile | ApiSuccessResponse(ProfileResponseDto) | 200 | 用户信息 | 获取用户资料 |
+| 方法       | 响应装饰器                             | HTTP 状态码 | 响应类型   | 说明           |
+| ---------- | -------------------------------------- | ----------- | ---------- | -------------- |
+| getCaptcha | ApiSuccessResponse(CaptchaResponseDto) | 200         | 验证码信息 | 获取图形验证码 |
+| register   | ApiSuccessResponse(TokenResponseDto)   | 201         | 令牌信息   | 用户注册并登录 |
+| login      | ApiSuccessResponse(TokenResponseDto)   | 200         | 令牌信息   | 用户登录       |
+| logout     | ApiSuccessNoDataResponse               | 200         | 无数据     | 退出登录       |
+| getProfile | ApiSuccessResponse(ProfileResponseDto) | 200         | 用户信息   | 获取用户资料   |
 
 #### 用户模块控制器
 
 用户模块展示了 CRUD 操作的标准响应格式：
 
-| 方法 | 响应装饰器 | HTTP 状态码 | 响应类型 | 说明 |
-|------|------------|-------------|----------|------|
-| create | ApiSuccessResponse(UserResponseDto) | 201 | 用户信息 | 创建用户 |
-| findAll | ApiSuccessResponse(UserResponseDto, { isArray: true }) | 200 | 用户列表 | 获取用户列表 |
-| findOne | ApiSuccessResponse(UserResponseDto) | 200 | 单个用户 | 根据ID获取用户 |
-| update | ApiSuccessResponse(UserResponseDto) | 200 | 更新后的用户 | 更新用户信息 |
-| remove | ApiSuccessNoDataResponse | 200 | 无数据 | 删除用户 |
+| 方法    | 响应装饰器                                             | HTTP 状态码 | 响应类型     | 说明           |
+| ------- | ------------------------------------------------------ | ----------- | ------------ | -------------- |
+| create  | ApiSuccessResponse(UserResponseDto)                    | 201         | 用户信息     | 创建用户       |
+| findAll | ApiSuccessResponse(UserResponseDto, { isArray: true }) | 200         | 用户列表     | 获取用户列表   |
+| findOne | ApiSuccessResponse(UserResponseDto)                    | 200         | 单个用户     | 根据ID获取用户 |
+| update  | ApiSuccessResponse(UserResponseDto)                    | 200         | 更新后的用户 | 更新用户信息   |
+| remove  | ApiSuccessNoDataResponse                               | 200         | 无数据       | 删除用户       |
 
 **章节来源**
+
 - [auth.controller.ts:46-129](file://src/modules/auth/auth.controller.ts#L46-L129)
 - [user.controller.ts:33-88](file://src/modules/user/user.controller.ts#L33-L88)
 
@@ -356,11 +372,13 @@ G --> R[ZodValidationException]
 **更新** 依赖关系图反映了最新的集成改进：响应装饰器现在直接依赖createZodDto生成的schema，并通过$ref引用确保Swagger文档与业务DTO同步。
 
 **图表来源**
+
 - [transform.interceptor.ts:10-12](file://src/common/interceptors/transform.interceptor.ts#L10-L12)
 - [api-success-response.decorator.ts:100-108](file://src/common/decorators/api-success-response.decorator.ts#L100-L108)
 - [http-exception.filter.ts:9-12](file://src/common/filters/http-exception.filter.ts#L9-L12)
 
 **章节来源**
+
 - [transform.interceptor.ts:10-12](file://src/common/interceptors/transform.interceptor.ts#L10-L12)
 - [api-success-response.decorator.ts:100-108](file://src/common/decorators/api-success-response.decorator.ts#L100-L108)
 - [http-exception.filter.ts:9-12](file://src/common/filters/http-exception.filter.ts#L9-L12)
@@ -386,6 +404,7 @@ G --> R[ZodValidationException]
 **问题**：API 响应缺少必要的字段或包含多余字段
 
 **解决方案**：
+
 1. 检查控制器是否正确应用了响应装饰器
 2. 确认拦截器是否正常工作
 3. 验证 DTO 定义是否符合预期
@@ -395,6 +414,7 @@ G --> R[ZodValidationException]
 **问题**：业务异常返回了错误的 HTTP 状态码
 
 **解决方案**：
+
 1. 确保使用 BusinessException 而不是普通 HttpException
 2. 检查 BizCode 是否在枚举中正确定义
 3. 验证 getHttpStatus 函数的映射关系
@@ -404,6 +424,7 @@ G --> R[ZodValidationException]
 **问题**：API 文档显示的响应格式与实际不符
 
 **解决方案**：
+
 1. 检查响应装饰器的类型参数是否正确
 2. 确认 isArray 参数是否正确设置
 3. 验证 DTO 的 Zod schema 定义
@@ -414,11 +435,13 @@ G --> R[ZodValidationException]
 **问题**：undefined或null值处理不正确
 
 **解决方案**：
+
 1. 检查拦截器的条件判断逻辑
 2. 确认数据类型转换是否符合预期
 3. 验证响应消息的设置是否正确
 
 **章节来源**
+
 - [transform.interceptor.spec.ts:22-109](file://src/common/interceptors/transform.interceptor.spec.ts#L22-L109)
 - [http-exception.filter.spec.ts:27-136](file://src/common/filters/http-exception.filter.spec.ts#L27-L136)
 
@@ -429,6 +452,7 @@ G --> R[ZodValidationException]
 **更新** 最新的改进显著提升了系统的可靠性和维护性：响应装饰器与Swagger文档的深度集成确保了文档与实现的完全同步，而拦截器优化的数据处理逻辑则提高了系统的健壮性。
 
 规范的核心优势包括：
+
 1. **一致性**：所有 API 接口返回统一的响应格式
 2. **可维护性**：通过装饰器和拦截器实现声明式编程
 3. **可扩展性**：支持业务码的动态扩展和国际化
@@ -442,6 +466,7 @@ G --> R[ZodValidationException]
 #### 成功响应示例
 
 **单对象响应**：
+
 ```json
 {
   "code": 0,
@@ -455,6 +480,7 @@ G --> R[ZodValidationException]
 ```
 
 **数组响应**：
+
 ```json
 {
   "code": 0,
@@ -464,7 +490,7 @@ G --> R[ZodValidationException]
       "email": "user1@example.com"
     },
     {
-      "id": "user-2", 
+      "id": "user-2",
       "email": "user2@example.com"
     }
   ],
@@ -473,6 +499,7 @@ G --> R[ZodValidationException]
 ```
 
 **无数据响应**：
+
 ```json
 {
   "code": 0,
@@ -484,18 +511,17 @@ G --> R[ZodValidationException]
 #### 业务异常响应示例
 
 **字段校验错误**：
+
 ```json
 {
   "code": 1001,
   "message": "请求参数校验失败",
-  "details": [
-    "邮箱格式不正确",
-    "密码至少6个字符"
-  ]
+  "details": ["邮箱格式不正确", "密码至少6个字符"]
 }
 ```
 
 **业务逻辑错误**：
+
 ```json
 {
   "code": 10001,
@@ -506,6 +532,7 @@ G --> R[ZodValidationException]
 #### 系统异常响应示例
 
 **服务器内部错误**：
+
 ```json
 {
   "code": 1099,
@@ -514,6 +541,7 @@ G --> R[ZodValidationException]
 ```
 
 **资源不存在**：
+
 ```json
 {
   "code": 1004,

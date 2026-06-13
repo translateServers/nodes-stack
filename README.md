@@ -17,16 +17,19 @@ nebula/
 ## Getting Started
 
 Install dependencies:
+
 ```bash
 pnpm install
 ```
 
 Run development servers:
+
 ```bash
 pnpm dev
 ```
 
 Build all packages:
+
 ```bash
 pnpm build
 ```

@@ -73,6 +73,7 @@
 ## 交付清单
 
 ### 删除的文件（11 个）
+
 1. `src/common/constants/menu.constants.ts`
 2. `src/common/constants/error-codes.constants.ts`
 3. `src/common/constants/messages.constants.ts`
@@ -86,6 +87,7 @@
 11. `src/modules/logger/logger.module.ts`
 
 ### 修改的文件（10 个）
+
 1. `src/app.module.ts` —— 移除 `LoggerModule` import 与 `RolesGuard` provider
 2. `src/common/constants/index.ts` —— barrel 同步
 3. `src/common/decorators/index.ts` —— barrel 同步
@@ -101,4 +103,5 @@
 13. `test/setup.ts` —— 移除 `mockConfigService`
 
 ### 新增的文件（1 个）
+
 1. `ts-prune` 加入 devDependencies（用于本次扫描 + 未来可重复使用）

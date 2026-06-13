@@ -47,6 +47,7 @@ Swagger 自动文档生成
 ### 数据结构统一
 
 **成功响应格式：**
+
 ```typescript
 {
   code: 200,           // HTTP 状态码
@@ -57,6 +58,7 @@ Swagger 自动文档生成
 ```
 
 **错误响应格式：**
+
 ```typescript
 {
   code: 400,           // 错误码
@@ -77,6 +79,7 @@ Swagger 自动文档生成
 **目标：** 创建泛型 DTO 类，同时满足 TypeScript 类型系统和 Swagger 文档需求
 
 **关键变更：**
+
 - 创建 `ApiResponseDto<T>` 泛型类，包含 `code`, `message`, `success`, `data` 四个字段
 - `data` 字段使用泛型类型 `T`，支持任意数据类型
 - 使用 `@ApiProperty` 装饰器自动生成 Swagger 文档
@@ -84,6 +87,7 @@ Swagger 自动文档生成
 - 移除旧的 `ApiResponseDto` 和 `ApiVoidResponseDto`（非泛型版本）
 
 **设计要点：**
+
 - 泛型参数 `T` 默认为 `void`，处理无数据返回的接口
 - 使用 TypeScript 条件类型处理 `void` 特殊情况
 - 保持与现有 `TransformInterceptor` 兼容
@@ -95,11 +99,13 @@ Swagger 自动文档生成
 **目标：** 移除重复的 `ApiResponse` 和 `ApiErrorResponse` 接口，统一使用 DTO 类
 
 **关键变更：**
+
 - 删除 `ApiResponse` 接口（已被 `ApiResponseDto<T>` 替代）
 - 删除 `ApiErrorResponse` 接口（已被 `ApiErrorResponseDto` 替代）
 - 保留 `UserPayload` 接口（认证相关，不属于响应体范畴）
 
 **影响文件：**
+
 - `src/common/interceptors/transform.interceptor.ts`
 - `src/common/filters/http-exception.filter.ts`
 
@@ -112,6 +118,7 @@ Swagger 自动文档生成
 **目标：** 实现自动类型推断，消除手动指定
 
 **关键变更：**
+
 - 重构 `ApiSuccessResponse<T>` 装饰器，从泛型参数自动构建 Swagger Schema
 - 移除 `isVoid` 选项，改为检测 `T` 是否为 `void` 类型
 - 使用 `getSchemaPath` 自动生成 DTO 引用
@@ -119,6 +126,7 @@ Swagger 自动文档生成
 - 保持 `ApiSuccessArrayResponse<T>` 用于数组返回类型
 
 **技术实现：**
+
 ```typescript
 // 自动检测 void 类型
 function isVoidType(type: Type<any>): boolean {
@@ -126,10 +134,7 @@ function isVoidType(type: Type<any>): boolean {
 }
 
 // 自动构建 Schema
-function buildSuccessSchema<T>(
-  type: Type<T>,
-  isArray: boolean = false
-): Record<string, unknown> {
+function buildSuccessSchema<T>(type: Type<T>, isArray: boolean = false): Record<string, unknown> {
   // 根据泛型类型自动生成正确的 Swagger Schema
 }
 ```
@@ -141,12 +146,14 @@ function buildSuccessSchema<T>(
 **目标：** 统一错误响应文档装饰器
 
 **关键功能：**
+
 - `@ApiErrorResponse(options)` - 通用错误响应装饰器
 - 支持自定义错误码、错误描述
 - 预设常见错误状态码（400, 401, 403, 404, 409, 500）
 - 自动生成标准化的错误响应 Schema
 
 **使用示例：**
+
 ```typescript
 @ApiErrorResponse({ status: 400, description: '请求参数验证失败' })
 @ApiErrorResponse({ status: 404, description: '资源不存在' })
@@ -161,6 +168,7 @@ function buildSuccessSchema<T>(
 **目标：** 使用统一的类型定义
 
 **关键变更：**
+
 - 导入 `ApiResponseDto` 替代本地类型
 - 确保拦截器返回类型与 DTO 定义一致
 - 保持现有功能不变（包装响应为 `{ code, data, message, success }` 格式）
@@ -172,6 +180,7 @@ function buildSuccessSchema<T>(
 **目标：** 使用统一的错误响应类型
 
 **关键变更：**
+
 - 导入 `ApiErrorResponseDto` 替代本地类型
 - 确保错误响应格式与 DTO 定义一致
 - 保持现有错误处理逻辑不变
@@ -183,11 +192,13 @@ function buildSuccessSchema<T>(
 **文件：** `src/modules/auth/auth.controller.ts`
 
 **关键变更：**
+
 - 移除 `ApiSuccessResponse as ApiVoidSuccessResponse` 的别名导入
 - 更新 `logout` 方法装饰器，使用 `ApiSuccessResponse<void>`
 - 简化错误响应装饰器使用新的 `@ApiErrorResponse`
 
 **变更示例：**
+
 ```typescript
 // 旧代码
 @ApiVoidSuccessResponse(TokenResponseDto, { isVoid: true })
@@ -201,6 +212,7 @@ function buildSuccessSchema<T>(
 **文件：** `src/modules/user/user.controller.ts`
 
 **关键变更：**
+
 - 简化装饰器使用
 - 确保所有接口都有完整的 Swagger 文档
 
@@ -209,6 +221,7 @@ function buildSuccessSchema<T>(
 **文件：** `src/modules/menu/menu.controller.ts`
 
 **关键变更：**
+
 - 统一装饰器风格
 - 确保树形结构响应正确文档化
 
@@ -217,6 +230,7 @@ function buildSuccessSchema<T>(
 **文件：** `src/modules/role/role.controller.ts`
 
 **关键变更：**
+
 - 移除内部的 `AssignMenusDto` 类定义，移到 `dto/` 目录
 - 简化装饰器使用
 
@@ -225,6 +239,7 @@ function buildSuccessSchema<T>(
 #### 步骤 5.1：运行类型检查
 
 **命令：**
+
 ```bash
 pnpm run typecheck
 ```
@@ -234,6 +249,7 @@ pnpm run typecheck
 #### 步骤 5.2：运行 ESLint 检查
 
 **命令：**
+
 ```bash
 pnpm run lint
 ```
@@ -243,17 +259,20 @@ pnpm run lint
 #### 步骤 5.3：运行单元测试
 
 **命令：**
+
 ```bash
 pnpm run test
 ```
 
 **目标：** 确保现有测试通过，特别是：
+
 - `transform.interceptor.spec.ts`
 - `http-exception.filter.spec.ts`
 
 #### 步骤 5.4：验证 Swagger 文档
 
 **方法：**
+
 1. 启动开发服务器：`pnpm run start:dev`
 2. 访问 `http://localhost:3000/api/docs`
 3. 检查所有接口文档是否正确生成
@@ -263,13 +282,13 @@ pnpm run test
 
 ### 重构前 vs 重构后对比
 
-| 维度 | 重构前 | 重构后 |
-|------|--------|--------|
-| 类型定义位置 | 2处（types.ts + dto） | 1处（dto） |
-| 装饰器类型推断 | 手动指定 | 自动推断 |
-| 错误响应文档 | 手动编写 Schema | 统一装饰器 |
-| 类型安全保障 | 弱（易遗漏） | 强（编译时检查） |
-| 维护成本 | 高（同步多处） | 低（单一数据源） |
+| 维度           | 重构前                | 重构后           |
+| -------------- | --------------------- | ---------------- |
+| 类型定义位置   | 2处（types.ts + dto） | 1处（dto）       |
+| 装饰器类型推断 | 手动指定              | 自动推断         |
+| 错误响应文档   | 手动编写 Schema       | 统一装饰器       |
+| 类型安全保障   | 弱（易遗漏）          | 强（编译时检查） |
+| 维护成本       | 高（同步多处）        | 低（单一数据源） |
 
 ### 代码量变化
 

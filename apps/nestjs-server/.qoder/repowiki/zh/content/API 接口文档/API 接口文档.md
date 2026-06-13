@@ -20,6 +20,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -32,9 +33,11 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件为该项目的公共 API 接口文档，覆盖认证接口（登录、注册、刷新令牌、登出）、用户管理接口（获取资料、更新信息、创建、查询、删除）以及健康检查接口。文档遵循 RESTful 设计规范，明确 HTTP 方法、URL 模式、请求参数、响应格式、状态码与错误处理策略，并提供认证流程、速率限制与安全建议。
 
 ## 项目结构
+
 - 认证模块：负责验证码、注册、登录、刷新令牌、登出与获取当前用户资料。
 - 用户模块：提供用户增删改查能力，支持分页与条件查询（由服务层实现）。
 - 健康检查模块：提供服务健康状态与 Ping 接口，便于监控与运维。
@@ -58,17 +61,20 @@ HC --> HC
 ```
 
 图表来源
+
 - [src/modules/auth/auth.controller.ts:35-128](file://src/modules/auth/auth.controller.ts#L35-L128)
 - [src/modules/auth/auth.service.ts:14-161](file://src/modules/auth/auth.service.ts#L14-L161)
 - [src/modules/user/user.controller.ts:25-87](file://src/modules/user/user.controller.ts#L25-L87)
 - [src/modules/health/health.controller.ts:8-85](file://src/modules/health/health.controller.ts#L8-L85)
 
 章节来源
+
 - [src/modules/auth/auth.controller.ts:35-128](file://src/modules/auth/auth.controller.ts#L35-L128)
 - [src/modules/user/user.controller.ts:25-87](file://src/modules/user/user.controller.ts#L25-L87)
 - [src/modules/health/health.controller.ts:8-85](file://src/modules/health/health.controller.ts#L8-L85)
 
 ## 核心组件
+
 - 统一响应结构：所有成功响应采用统一结构 { code, data, message }，其中 code=0 表示成功，data 可为空（表现为 null），message 为业务提示。
 - 统一错误结构：所有错误响应采用 { code, message, details? } 结构，details 用于展示字段级校验错误。
 - 业务码体系：定义了从 0 开始的成功码及各模块的错误码区间，错误码与 HTTP 状态码映射规则明确。
@@ -78,6 +84,7 @@ HC --> HC
 - 异常过滤器：将业务异常与通用 HttpException 映射为统一错误响应结构，并记录日志。
 
 章节来源
+
 - [src/common/dto/api-response.dto.ts:9-39](file://src/common/dto/api-response.dto.ts#L9-L39)
 - [src/common/dto/api-error-response.dto.ts:4-13](file://src/common/dto/api-error-response.dto.ts#L4-L13)
 - [src/common/enums/biz-code.enum.ts:13-170](file://src/common/enums/biz-code.enum.ts#L13-L170)
@@ -88,6 +95,7 @@ HC --> HC
 - [src/common/interceptors/transform.interceptor.ts:14-40](file://src/common/interceptors/transform.interceptor.ts#L14-L40)
 
 ## 架构总览
+
 以下序列图展示了认证流程（登录、注册、刷新令牌、登出）与用户资料获取的整体交互。
 
 ```mermaid
@@ -135,6 +143,7 @@ AuthCtrl-->>Client : { code, data, message }
 ```
 
 图表来源
+
 - [src/modules/auth/auth.controller.ts:44-127](file://src/modules/auth/auth.controller.ts#L44-L127)
 - [src/modules/auth/auth.service.ts:29-161](file://src/modules/auth/auth.service.ts#L29-L161)
 - [src/modules/user/user.controller.ts:116-127](file://src/modules/user/user.controller.ts#L116-L127)
@@ -215,6 +224,7 @@ AuthCtrl-->>Client : { code, data, message }
   - 示例调用：见“附录”
 
 章节来源
+
 - [src/modules/auth/auth.controller.ts:44-127](file://src/modules/auth/auth.controller.ts#L44-L127)
 - [src/modules/auth/auth.service.ts:29-161](file://src/modules/auth/auth.service.ts#L29-L161)
 - [src/modules/auth/dto/auth.dto.ts:44-89](file://src/modules/auth/dto/auth.dto.ts#L44-L89)
@@ -275,6 +285,7 @@ AuthCtrl-->>Client : { code, data, message }
   - 示例调用：见“附录”
 
 章节来源
+
 - [src/modules/user/user.controller.ts:27-87](file://src/modules/user/user.controller.ts#L27-L87)
 - [src/modules/user/dto/user.dto.ts:5-39](file://src/modules/user/dto/user.dto.ts#L5-L39)
 - [src/common/guards/jwt-auth.guard.ts:17-45](file://src/common/guards/jwt-auth.guard.ts#L17-L45)
@@ -298,6 +309,7 @@ AuthCtrl-->>Client : { code, data, message }
   - 示例调用：见“附录”
 
 章节来源
+
 - [src/modules/health/health.controller.ts:8-85](file://src/modules/health/health.controller.ts#L8-L85)
 - [src/common/guards/throttler.guard.ts:10-32](file://src/common/guards/throttler.guard.ts#L10-L32)
 
@@ -347,6 +359,7 @@ HealthController --> ThrottlerGuard : "使用"
 ```
 
 图表来源
+
 - [src/modules/auth/auth.controller.ts:35-128](file://src/modules/auth/auth.controller.ts#L35-L128)
 - [src/modules/auth/auth.service.ts:14-161](file://src/modules/auth/auth.service.ts#L14-L161)
 - [src/modules/user/user.controller.ts:25-87](file://src/modules/user/user.controller.ts#L25-L87)
@@ -355,6 +368,7 @@ HealthController --> ThrottlerGuard : "使用"
 - [src/common/guards/throttler.guard.ts:10-32](file://src/common/guards/throttler.guard.ts#L10-L32)
 
 ## 性能与安全考量
+
 - 速率限制
   - 登录接口：每 60 秒最多 5 次；验证码获取：每 60 秒最多 10 次。
   - 健康检查接口：跳过全局速率限制，避免影响监控探针。
@@ -370,6 +384,7 @@ HealthController --> ThrottlerGuard : "使用"
   - 业务码与 HTTP 状态码映射清晰，便于网关与代理层识别。
 
 章节来源
+
 - [src/modules/auth/auth.controller.ts:44-127](file://src/modules/auth/auth.controller.ts#L44-L127)
 - [src/modules/auth/auth.service.ts:72-110](file://src/modules/auth/auth.service.ts#L72-L110)
 - [src/common/enums/biz-code.enum.ts:127-170](file://src/common/enums/biz-code.enum.ts#L127-L170)
@@ -377,6 +392,7 @@ HealthController --> ThrottlerGuard : "使用"
 - [src/common/interceptors/transform.interceptor.ts:14-40](file://src/common/interceptors/transform.interceptor.ts#L14-L40)
 
 ## 故障排查指南
+
 - 常见错误码与含义
   - 1002 未授权，请先登录：缺少或无效的访问令牌。
   - 10001 凭证无效（邮箱或密码错误）：登录凭证实名校验失败。
@@ -397,16 +413,19 @@ HealthController --> ThrottlerGuard : "使用"
   - 异常过滤器会记录业务码、HTTP 状态与请求路径，便于定位问题。
 
 章节来源
+
 - [src/common/enums/biz-code.enum.ts:31-78](file://src/common/enums/biz-code.enum.ts#L31-L78)
 - [src/common/exceptions/business.exception.ts:16-41](file://src/common/exceptions/business.exception.ts#L16-L41)
 - [src/common/filters/http-exception.filter.ts:24-78](file://src/common/filters/http-exception.filter.ts#L24-L78)
 
 ## 结论
+
 本项目提供了完整、规范的公共 API 接口，覆盖认证、用户管理与健康检查三大领域。通过统一的响应与错误结构、完善的业务码体系、严格的认证与速率限制策略，能够满足生产环境对一致性、安全性与可维护性的要求。建议在客户端实现中严格遵循本文档的请求与响应格式，并结合速率限制与重试策略提升稳定性。
 
 ## 附录
 
 ### 统一响应与错误格式
+
 - 成功响应结构
   - 字段：code（数字，0 表示成功）、data（对象或数组，可空）、message（字符串）
   - 示例：见“附录”中的示例请求与响应
@@ -414,6 +433,7 @@ HealthController --> ThrottlerGuard : "使用"
   - 字段：code（数字，非 0）、message（字符串）、details（可选，字符串数组）
 
 章节来源
+
 - [src/common/dto/api-response.dto.ts:9-39](file://src/common/dto/api-response.dto.ts#L9-L39)
 - [src/common/dto/api-error-response.dto.ts:4-13](file://src/common/dto/api-error-response.dto.ts#L4-L13)
 
@@ -453,6 +473,7 @@ HealthController --> ThrottlerGuard : "使用"
   - 响应：{ code, data: { id, email, username, name?, createdAt, updatedAt }, message }
 
 章节来源
+
 - [src/modules/auth/auth.controller.ts:44-127](file://src/modules/auth/auth.controller.ts#L44-L127)
 - [src/modules/auth/dto/auth.dto.ts:44-89](file://src/modules/auth/dto/auth.dto.ts#L44-L89)
 
@@ -481,6 +502,7 @@ HealthController --> ThrottlerGuard : "使用"
   - 响应：{ code, message }
 
 章节来源
+
 - [src/modules/user/user.controller.ts:27-87](file://src/modules/user/user.controller.ts#L27-L87)
 - [src/modules/user/dto/user.dto.ts:5-39](file://src/modules/user/dto/user.dto.ts#L5-L39)
 
@@ -495,9 +517,11 @@ HealthController --> ThrottlerGuard : "使用"
   - 响应：{ code, data: { message: "pong" }, message }
 
 章节来源
+
 - [src/modules/health/health.controller.ts:14-84](file://src/modules/health/health.controller.ts#L14-L84)
 
 ### 客户端实现要点
+
 - 认证方式
   - 使用访问令牌：在请求头 Authorization 中携带 Bearer <accessToken>。
   - 登录后保存 accessToken 与 refreshToken，优先使用访问令牌。
@@ -511,6 +535,7 @@ HealthController --> ThrottlerGuard : "使用"
   - 对于 401 未授权，引导用户重新登录或刷新令牌。
 
 章节来源
+
 - [src/common/guards/jwt-auth.guard.ts:17-45](file://src/common/guards/jwt-auth.guard.ts#L17-L45)
 - [src/common/guards/throttler.guard.ts:10-32](file://src/common/guards/throttler.guard.ts#L10-L32)
 - [src/common/enums/biz-code.enum.ts:127-170](file://src/common/enums/biz-code.enum.ts#L127-L170)
