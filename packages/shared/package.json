@@ -13,6 +13,30 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./types": {
+      "import": {
+        "types": "./dist/types/api.types.d.mts",
+        "default": "./dist/types/api.types.mjs"
+      }
+    },
+    "./schemas": {
+      "import": {
+        "types": "./dist/schemas/index.d.mts",
+        "default": "./dist/schemas/index.mjs"
+      }
+    },
+    "./errors": {
+      "import": {
+        "types": "./dist/errors/index.d.mts",
+        "default": "./dist/errors/index.mjs"
+      }
+    },
+    "./utils": {
+      "import": {
+        "types": "./dist/utils/index.d.mts",
+        "default": "./dist/utils/index.mjs"
+      }
     }
   },
   "main": "./dist/index.cjs",
@@ -26,6 +50,9 @@
     "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@nebula/typescript-config": "workspace:*",

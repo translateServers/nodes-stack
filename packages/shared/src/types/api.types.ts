@@ -1,20 +1,60 @@
-// 业务错误码枚举
-export enum BizCode {
-  SUCCESS = 0,
-  INVALID_PARAMS = 10001,
-  UNAUTHORIZED = 10002,
-  FORBIDDEN = 10003,
-  NOT_FOUND = 10004,
-  CONFLICT = 10005,
-  INTERNAL_ERROR = 10006,
-}
+// 业务错误码（与后端 BizCode 枚举严格对齐）
+export const BizCode = {
+  // 成功
+  SUCCESS: 0,
 
-// API 统一响应格式
+  // 通用错误 (1xxx)
+  UNKNOWN_ERROR: 1000,
+  VALIDATION_ERROR: 1001,
+  UNAUTHORIZED: 1002,
+  FORBIDDEN: 1003,
+  NOT_FOUND: 1004,
+  INTERNAL_ERROR: 1099,
+
+  // 认证模块 (10xxx)
+  AUTH_INVALID_CREDENTIALS: 10001,
+  AUTH_EMAIL_ALREADY_REGISTERED: 10002,
+  AUTH_USERNAME_ALREADY_TAKEN: 10003,
+  AUTH_INVALID_REFRESH_TOKEN: 10004,
+  AUTH_CAPTCHA_NOT_FOUND: 10005,
+  AUTH_CAPTCHA_EXPIRED: 10006,
+  AUTH_CAPTCHA_INVALID: 10007,
+
+  // 用户模块 (20xxx)
+  USER_NOT_FOUND: 20001,
+  USER_EMAIL_EXISTS: 20002,
+
+  // 菜单模块 (30xxx)
+  MENU_NOT_FOUND: 30001,
+  MENU_ALREADY_EXISTS: 30002,
+  MENU_PARENT_NOT_FOUND: 30003,
+  MENU_HAS_CHILDREN: 30004,
+
+  // 角色模块 (40xxx)
+  ROLE_NOT_FOUND: 40001,
+  ROLE_ALREADY_EXISTS: 40002,
+
+  // 字典模块 (50xxx)
+  DICT_TYPE_NOT_FOUND: 50001,
+  DICT_TYPE_ALREADY_EXISTS: 50002,
+  DICT_VALUE_NOT_FOUND: 50003,
+  DICT_VALUE_ALREADY_EXISTS: 50004,
+} as const;
+
+export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];
+
+// API 统一响应格式（与后端 ApiResponseType 对齐）
 export interface ApiResponse<T = unknown> {
   code: number;
+  data?: T;
   message: string;
-  data: T;
-  timestamp: string;
+}
+
+// API 错误响应格式
+export interface ApiErrorResponse {
+  code: number;
+  message: string;
+  details?: string[];
 }
 
 // 分页请求参数
