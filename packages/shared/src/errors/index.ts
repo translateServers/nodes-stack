@@ -1,7 +1,7 @@
 import { BizCode } from '../types/api.types.js';
 
-// 业务错误码对应的默认消息（与后端 BizMessage 对齐）
-const BizMessage: Record<number, string> = {
+// 业务错误码对应的默认消息（与后端 BizMessage 同源）
+export const BizMessage: Record<number, string> = {
   [BizCode.SUCCESS]: '操作成功',
   [BizCode.UNKNOWN_ERROR]: '未知错误',
   [BizCode.VALIDATION_ERROR]: '请求参数校验失败',

@@ -71,3 +71,52 @@ export interface PaginatedResponse<T> {
   pageSize: number;
   totalPages: number;
 }
+
+// 业务码 → HTTP 状态码映射
+const BIZ_CODE_TO_HTTP_STATUS: Record<BizCodeValue, number> = {
+  [BizCode.SUCCESS]: 200,
+
+  // 通用错误
+  [BizCode.UNKNOWN_ERROR]: 500,
+  [BizCode.VALIDATION_ERROR]: 400,
+  [BizCode.UNAUTHORIZED]: 401,
+  [BizCode.FORBIDDEN]: 403,
+  [BizCode.NOT_FOUND]: 404,
+  [BizCode.INTERNAL_ERROR]: 500,
+
+  // 认证模块
+  [BizCode.AUTH_INVALID_CREDENTIALS]: 401,
+  [BizCode.AUTH_EMAIL_ALREADY_REGISTERED]: 409,
+  [BizCode.AUTH_USERNAME_ALREADY_TAKEN]: 409,
+  [BizCode.AUTH_INVALID_REFRESH_TOKEN]: 401,
+  [BizCode.AUTH_CAPTCHA_NOT_FOUND]: 404,
+  [BizCode.AUTH_CAPTCHA_EXPIRED]: 400,
+  [BizCode.AUTH_CAPTCHA_INVALID]: 400,
+
+  // 用户模块
+  [BizCode.USER_NOT_FOUND]: 404,
+  [BizCode.USER_EMAIL_EXISTS]: 409,
+
+  // 菜单模块
+  [BizCode.MENU_NOT_FOUND]: 404,
+  [BizCode.MENU_ALREADY_EXISTS]: 409,
+  [BizCode.MENU_PARENT_NOT_FOUND]: 404,
+  [BizCode.MENU_HAS_CHILDREN]: 409,
+
+  // 角色模块
+  [BizCode.ROLE_NOT_FOUND]: 404,
+  [BizCode.ROLE_ALREADY_EXISTS]: 409,
+
+  // 字典模块
+  [BizCode.DICT_TYPE_NOT_FOUND]: 404,
+  [BizCode.DICT_TYPE_ALREADY_EXISTS]: 409,
+  [BizCode.DICT_VALUE_NOT_FOUND]: 404,
+  [BizCode.DICT_VALUE_ALREADY_EXISTS]: 409,
+};
+
+/**
+ * 根据业务码获取对应的 HTTP 状态码
+ */
+export function getHttpStatus(bizCode: BizCodeValue): number {
+  return BIZ_CODE_TO_HTTP_STATUS[bizCode] ?? 500;
+}

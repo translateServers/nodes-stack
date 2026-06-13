@@ -2,7 +2,7 @@ import { ExceptionFilter, Catch, ArgumentsHost, HttpException, Logger } from '@n
 import type { Response } from 'express';
 import type { ApiErrorResponseDto } from '../dto/api-error-response.dto';
 import { BusinessException } from '../exceptions/business.exception';
-import { BizCode, BizMessage } from '../enums/biz-code.enum';
+import { BizCode, BizMessage, type BizCodeValue } from '../enums/biz-code.enum';
 import { ZodValidationException } from 'nestjs-zod';
 
 interface HttpExceptionResponseLike {
@@ -72,7 +72,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     exceptionResponse: unknown,
     httpStatus: number,
   ): {
-    bizCode: BizCode;
+    bizCode: BizCodeValue;
     message: string;
     details: string[] | null;
   } {
@@ -188,7 +188,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
   /**
    * 将 HTTP 状态码映射到通用业务码
    */
-  private httpStatusToBizCode(httpStatus: number): BizCode {
+  private httpStatusToBizCode(httpStatus: number): BizCodeValue {
     switch (httpStatus) {
       case 400:
         return BizCode.VALIDATION_ERROR;

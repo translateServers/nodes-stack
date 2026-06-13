@@ -1,5 +1,5 @@
 import { HttpException } from '@nestjs/common';
-import { BizCode, BizMessage, getHttpStatus } from '../enums/biz-code.enum';
+import { BizMessage, getHttpStatus, type BizCodeValue } from '../enums/biz-code.enum';
 
 /**
  * 业务异常类
@@ -15,13 +15,13 @@ import { BizCode, BizMessage, getHttpStatus } from '../enums/biz-code.enum';
  */
 export class BusinessException extends HttpException {
   /** 业务状态码 */
-  public readonly bizCode: BizCode;
+  public readonly bizCode: BizCodeValue;
   /** 业务消息 */
   public readonly bizMessage: string;
   /** 附加详情（如参数校验错误列表） */
   public readonly details?: string[];
 
-  constructor(bizCode: BizCode, message?: string, details?: string[]) {
+  constructor(bizCode: BizCodeValue, message?: string, details?: string[]) {
     const resolvedMessage = message ?? BizMessage[bizCode] ?? '未知错误';
     const httpStatus = getHttpStatus(bizCode);
 

@@ -62,7 +62,6 @@ describe('TransformInterceptor', () => {
         next: (result) => {
           expect(result).toEqual({
             code: 0,
-            data: null,
             message: '操作成功',
           });
           done();
@@ -87,7 +86,6 @@ describe('TransformInterceptor', () => {
         next: (result) => {
           expect(result).toEqual({
             code: 0,
-            data: null,
             message: '操作成功',
           });
           done();

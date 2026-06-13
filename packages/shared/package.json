@@ -18,24 +18,40 @@
       "import": {
         "types": "./dist/types/api.types.d.mts",
         "default": "./dist/types/api.types.mjs"
+      },
+      "require": {
+        "types": "./dist/types/api.types.d.cts",
+        "default": "./dist/types/api.types.cjs"
       }
     },
     "./schemas": {
       "import": {
         "types": "./dist/schemas/index.d.mts",
         "default": "./dist/schemas/index.mjs"
+      },
+      "require": {
+        "types": "./dist/schemas/index.d.cts",
+        "default": "./dist/schemas/index.cjs"
       }
     },
     "./errors": {
       "import": {
         "types": "./dist/errors/index.d.mts",
         "default": "./dist/errors/index.mjs"
+      },
+      "require": {
+        "types": "./dist/errors/index.d.cts",
+        "default": "./dist/errors/index.cjs"
       }
     },
     "./utils": {
       "import": {
         "types": "./dist/utils/index.d.mts",
         "default": "./dist/utils/index.mjs"
+      },
+      "require": {
+        "types": "./dist/utils/index.d.cts",
+        "default": "./dist/utils/index.cjs"
       }
     }
   },

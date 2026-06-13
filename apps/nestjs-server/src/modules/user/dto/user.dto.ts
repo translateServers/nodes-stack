@@ -1,25 +1,19 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import {
+  CreateUserSchema as _CreateUserSchema,
+  UpdateUserSchema as _UpdateUserSchema,
+  UserResponseSchema as _UserResponseSchema,
+} from '@nebula/shared/schemas';
 import { DateTimeStringSchema } from '@/common/schemas/datetime.schema';
-import { userFields } from '@/common/schemas/user-fields.schema';
 
-export const CreateUserSchema = z.object({
-  email: userFields.email,
-  username: userFields.username,
-  password: userFields.password,
-  name: userFields.name,
-});
+// 请求 Schema 直接从 shared 导入（无日期字段，完全一致）
+export const CreateUserSchema = _CreateUserSchema;
+export const UpdateUserSchema = _UpdateUserSchema;
 
-export const UpdateUserSchema = CreateUserSchema.partial().omit({
-  password: true,
-});
-
-export const UserResponseSchema = z.object({
-  id: z.string().describe('用户唯一标识（UUID）'),
-  email: z.string().describe('用户邮箱地址'),
-  username: z.string().describe('用户名'),
-  name: z.string().nullable().optional().describe('用户显示名称'),
-  isActive: z.boolean().describe('是否启用'),
+// 响应 Schema 需要用后端的 DateTimeStringSchema 覆盖时间字段
+// （后端 Prisma 返回 Date 对象，需要 z.preprocess 自动转为字符串）
+export const UserResponseSchema = _UserResponseSchema.extend({
   createdAt: DateTimeStringSchema.describe('创建时间'),
   updatedAt: DateTimeStringSchema.describe('更新时间'),
 });
