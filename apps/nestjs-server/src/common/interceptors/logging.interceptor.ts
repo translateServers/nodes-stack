@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { Response } from 'express';
 import { RequestWithUser } from '../guards/jwt-auth.guard';
@@ -22,17 +16,13 @@ export class LoggingInterceptor implements NestInterceptor {
     const userId = req.user?.id ?? 'anonymous';
     const startTime = Date.now();
 
-    this.logger.log(
-      `${method} ${url} - User: ${userId} - IP: ${ip} - UA: ${userAgent}`,
-    );
+    this.logger.log(`${method} ${url} - User: ${userId} - IP: ${ip} - UA: ${userAgent}`);
 
     return next.handle().pipe(
       tap(() => {
         const duration = Date.now() - startTime;
         const statusCode = res.statusCode;
-        this.logger.log(
-          `${method} ${url} ${statusCode} - ${duration}ms - User: ${userId}`,
-        );
+        this.logger.log(`${method} ${url} ${statusCode} - ${duration}ms - User: ${userId}`);
       }),
     );
   }

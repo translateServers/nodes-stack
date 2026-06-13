@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  HttpCode,
-  HttpStatus,
-  Request,
-  Get,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Request, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request as ExpressRequest } from 'express';
@@ -48,8 +40,7 @@ export class AuthController {
   @Throttle({ long: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: '获取验证码',
-    description:
-      '生成一张SVG格式的验证码图片，返回验证码ID和图片内容。登录时需要携带此验证码ID。',
+    description: '生成一张SVG格式的验证码图片，返回验证码ID和图片内容。登录时需要携带此验证码ID。',
   })
   @ApiSuccessResponse(CaptchaResponseDto)
   getCaptcha(): CaptchaResponseDto {
@@ -81,10 +72,7 @@ export class AuthController {
   @ApiSuccessResponse(TokenResponseDto)
   async login(@Body() loginDto: LoginDto): Promise<TokenResponseDto> {
     this.captchaService.verifyCaptcha(loginDto.captchaId, loginDto.captchaCode);
-    return this.authService.loginWithCredentials(
-      loginDto.account,
-      loginDto.password,
-    );
+    return this.authService.loginWithCredentials(loginDto.account, loginDto.password);
   }
 
   @Public()
@@ -96,9 +84,7 @@ export class AuthController {
       '使用刷新令牌获取新的访问令牌和刷新令牌。旧刷新令牌会立即失效。当访问令牌过期时，可使用此接口获取新令牌，无需重新登录。',
   })
   @ApiSuccessResponse(TokenResponseDto)
-  async refresh(
-    @Body() refreshTokenDto: RefreshTokenDto,
-  ): Promise<TokenResponseDto> {
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto): Promise<TokenResponseDto> {
     return this.authService.refreshToken(refreshTokenDto.refreshToken);
   }
 
@@ -122,9 +108,7 @@ export class AuthController {
     description: '获取当前登录用户的详细信息（不包含密码）。',
   })
   @ApiSuccessResponse(ProfileResponseDto)
-  async getProfile(
-    @Request() req: AuthenticatedRequest,
-  ): Promise<ProfileResponseDto> {
+  async getProfile(@Request() req: AuthenticatedRequest): Promise<ProfileResponseDto> {
     return this.userService.findOne(req.user.id);
   }
 }

@@ -18,10 +18,10 @@ export class ThrottlerGuard extends NestThrottlerGuard {
   }
 
   override async canActivate(context: ExecutionContext): Promise<boolean> {
-    const skipThrottle = this.reflector.getAllAndOverride<boolean>(
-      SKIP_THROTTLE_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const skipThrottle = this.reflector.getAllAndOverride<boolean>(SKIP_THROTTLE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     if (skipThrottle) {
       return true;

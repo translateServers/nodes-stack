@@ -160,9 +160,7 @@ describe('UserService', () => {
     it('should throw BusinessException when user not found', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.findOne('non-existent-id')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.findOne('non-existent-id')).rejects.toThrow(BusinessException);
     });
   });
 
@@ -350,9 +348,9 @@ describe('UserService', () => {
     it('should throw BusinessException when updating non-existent user', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.update('non-existent-id', { name: 'New Name' }),
-      ).rejects.toThrow(BusinessException);
+      await expect(service.update('non-existent-id', { name: 'New Name' })).rejects.toThrow(
+        BusinessException,
+      );
     });
   });
 
@@ -396,39 +394,29 @@ describe('UserService', () => {
     it('should throw BusinessException when removing non-existent user', async () => {
       mockPrismaService.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.remove('non-existent-id')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.remove('non-existent-id')).rejects.toThrow(BusinessException);
     });
   });
 
   describe('validatePassword', () => {
     it('should return true for valid password', async () => {
       const plainPassword = 'password123';
-      const hashedPassword =
-        '$2b$10$rRzH4qk8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X';
+      const hashedPassword = '$2b$10$rRzH4qk8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X';
 
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
-      const result = await service.validatePassword(
-        plainPassword,
-        hashedPassword,
-      );
+      const result = await service.validatePassword(plainPassword, hashedPassword);
 
       expect(result).toBe(true);
     });
 
     it('should return false for invalid password', async () => {
       const plainPassword = 'wrong-password';
-      const hashedPassword =
-        '$2b$10$rRzH4qk8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X';
+      const hashedPassword = '$2b$10$rRzH4qk8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X8X';
 
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
-      const result = await service.validatePassword(
-        plainPassword,
-        hashedPassword,
-      );
+      const result = await service.validatePassword(plainPassword, hashedPassword);
 
       expect(result).toBe(false);
     });

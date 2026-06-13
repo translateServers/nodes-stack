@@ -3,11 +3,7 @@ import { AuthController } from '@/modules/auth/auth.controller';
 import { AuthService } from '@/modules/auth/auth.service';
 import { UserService } from '@/modules/user/user.service';
 import { CaptchaService } from '@/modules/auth/captcha.service';
-import {
-  LoginDto,
-  RegisterDto,
-  RefreshTokenDto,
-} from '@/modules/auth/dto/auth.dto';
+import { LoginDto, RegisterDto, RefreshTokenDto } from '@/modules/auth/dto/auth.dto';
 import type { RequestWithUser } from '@/common/guards/jwt-auth.guard';
 import type { UserPayload } from '@/common/interfaces/user.interface';
 
@@ -127,9 +123,7 @@ describe('AuthController', () => {
 
       const result = await controller.refresh(refreshTokenDto);
 
-      expect(mockAuthService.refreshToken).toHaveBeenCalledWith(
-        refreshTokenDto.refreshToken,
-      );
+      expect(mockAuthService.refreshToken).toHaveBeenCalledWith(refreshTokenDto.refreshToken);
       expect(result).toEqual(mockTokens);
     });
   });

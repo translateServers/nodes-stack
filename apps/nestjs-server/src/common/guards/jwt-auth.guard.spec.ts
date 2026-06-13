@@ -52,10 +52,10 @@ describe('JwtAuthGuard', () => {
 
       const result = guard.canActivate(mockContext);
 
-      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(
-        IS_PUBLIC_KEY,
-        [mockContext.getHandler(), mockContext.getClass()],
-      );
+      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(IS_PUBLIC_KEY, [
+        mockContext.getHandler(),
+        mockContext.getClass(),
+      ]);
       expect(result).toBe(true);
     });
 
@@ -69,10 +69,10 @@ describe('JwtAuthGuard', () => {
 
       const result = guard.canActivate(mockContext);
 
-      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(
-        IS_PUBLIC_KEY,
-        [mockContext.getHandler(), mockContext.getClass()],
-      );
+      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(IS_PUBLIC_KEY, [
+        mockContext.getHandler(),
+        mockContext.getClass(),
+      ]);
       expect(result).toBe(true);
     });
 
@@ -86,10 +86,10 @@ describe('JwtAuthGuard', () => {
 
       const result = guard.canActivate(mockContext);
 
-      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(
-        IS_PUBLIC_KEY,
-        [mockContext.getHandler(), mockContext.getClass()],
-      );
+      expect(mockReflector.getAllAndOverride).toHaveBeenCalledWith(IS_PUBLIC_KEY, [
+        mockContext.getHandler(),
+        mockContext.getClass(),
+      ]);
       expect(result).toBe(true);
     });
   });

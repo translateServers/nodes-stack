@@ -25,10 +25,7 @@ export class CaptchaService implements OnModuleInit, OnModuleDestroy {
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   onModuleInit() {
-    this.cleanupTimer = setInterval(
-      () => this.cleanExpiredCaptchas(),
-      60 * 1000,
-    );
+    this.cleanupTimer = setInterval(() => this.cleanExpiredCaptchas(), 60 * 1000);
   }
 
   onModuleDestroy() {

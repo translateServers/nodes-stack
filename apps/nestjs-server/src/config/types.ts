@@ -4,10 +4,7 @@
 type Primitive = string | number | boolean | null | undefined | Date;
 
 // 2. 递归提取所有合法的路径 (限制最大深度为 3 层，防止 TS 性能问题)
-export type ConfigPath<
-  T,
-  Depth extends number[] = [],
-> = Depth['length'] extends 3
+export type ConfigPath<T, Depth extends number[] = []> = Depth['length'] extends 3
   ? never
   : T extends Primitive
     ? never
@@ -20,10 +17,7 @@ export type ConfigPath<
         }[keyof T & string];
 
 // 3. 根据路径推导值类型
-export type ConfigPathValue<
-  T,
-  P extends ConfigPath<T>,
-> = P extends `${infer Key}.${infer Rest}`
+export type ConfigPathValue<T, P extends ConfigPath<T>> = P extends `${infer Key}.${infer Rest}`
   ? Key extends keyof T
     ? Rest extends ConfigPath<T[Key]>
       ? ConfigPathValue<T[Key], Rest>

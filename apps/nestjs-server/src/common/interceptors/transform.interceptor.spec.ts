@@ -11,8 +11,7 @@ describe('TransformInterceptor', () => {
       providers: [TransformInterceptor],
     }).compile();
 
-    interceptor =
-      module.get<TransformInterceptor<unknown>>(TransformInterceptor);
+    interceptor = module.get<TransformInterceptor<unknown>>(TransformInterceptor);
   });
 
   it('should be defined', () => {
@@ -32,10 +31,7 @@ describe('TransformInterceptor', () => {
         handle: jest.fn().mockReturnValue(of(mockData)),
       };
 
-      const result$: Observable<unknown> = interceptor.intercept(
-        mockContext,
-        mockCallHandler,
-      );
+      const result$: Observable<unknown> = interceptor.intercept(mockContext, mockCallHandler);
 
       result$.subscribe({
         next: (result) => {
@@ -60,10 +56,7 @@ describe('TransformInterceptor', () => {
         handle: jest.fn().mockReturnValue(of(null)),
       };
 
-      const result$: Observable<unknown> = interceptor.intercept(
-        mockContext,
-        mockCallHandler,
-      );
+      const result$: Observable<unknown> = interceptor.intercept(mockContext, mockCallHandler);
 
       result$.subscribe({
         next: (result) => {
@@ -88,10 +81,7 @@ describe('TransformInterceptor', () => {
         handle: jest.fn().mockReturnValue(of(undefined)),
       };
 
-      const result$: Observable<unknown> = interceptor.intercept(
-        mockContext,
-        mockCallHandler,
-      );
+      const result$: Observable<unknown> = interceptor.intercept(mockContext, mockCallHandler);
 
       result$.subscribe({
         next: (result) => {

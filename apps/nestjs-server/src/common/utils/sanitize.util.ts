@@ -15,10 +15,7 @@ function isSensitiveKey(key: string): boolean {
   return SENSITIVE_KEYS.some((k) => lower.includes(k.toLowerCase()));
 }
 
-export function sanitizeObject<T extends Record<string, unknown>>(
-  obj: T,
-  mask = '***',
-): T {
+export function sanitizeObject<T extends Record<string, unknown>>(obj: T, mask = '***'): T {
   const sanitized = { ...obj };
   for (const key of Object.keys(sanitized)) {
     if (isSensitiveKey(key)) {

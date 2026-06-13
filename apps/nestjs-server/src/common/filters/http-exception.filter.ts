@@ -1,10 +1,4 @@
-import {
-  ExceptionFilter,
-  Catch,
-  ArgumentsHost,
-  HttpException,
-  Logger,
-} from '@nestjs/common';
+import { ExceptionFilter, Catch, ArgumentsHost, HttpException, Logger } from '@nestjs/common';
 import type { Response } from 'express';
 import type { ApiErrorResponseDto } from '../dto/api-error-response.dto';
 import { BusinessException } from '../exceptions/business.exception';
@@ -15,9 +9,7 @@ interface HttpExceptionResponseLike {
   message?: string[] | string;
 }
 
-function isHttpExceptionResponseLike(
-  response: unknown,
-): response is HttpExceptionResponseLike {
+function isHttpExceptionResponseLike(response: unknown): response is HttpExceptionResponseLike {
   return typeof response === 'object' && response !== null;
 }
 
@@ -37,9 +29,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof BusinessException) {
       const { bizCode, bizMessage, details } = exception;
 
-      this.logger.warn(
-        `[BizCode ${bizCode}]: ${bizMessage} - ${request.method} ${request.url}`,
-      );
+      this.logger.warn(`[BizCode ${bizCode}]: ${bizMessage} - ${request.method} ${request.url}`);
 
       const errorResponse: ApiErrorResponseDto = {
         code: bizCode,

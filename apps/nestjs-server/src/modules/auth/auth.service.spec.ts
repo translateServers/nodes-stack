@@ -89,10 +89,7 @@ describe('AuthService', () => {
       const result = await service.loginWithCredentials(account, password);
 
       expect(mockUserService.findByAccount).toHaveBeenCalledWith(account);
-      expect(mockUserService.validatePassword).toHaveBeenCalledWith(
-        password,
-        mockUser.password,
-      );
+      expect(mockUserService.validatePassword).toHaveBeenCalledWith(password, mockUser.password);
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
     });
@@ -100,9 +97,9 @@ describe('AuthService', () => {
     it('should throw BusinessException for non-existent user', async () => {
       mockUserService.findByAccount.mockResolvedValue(null);
 
-      await expect(
-        service.loginWithCredentials('nonexistent', 'password'),
-      ).rejects.toThrow(BusinessException);
+      await expect(service.loginWithCredentials('nonexistent', 'password')).rejects.toThrow(
+        BusinessException,
+      );
     });
 
     it('should throw BusinessException for invalid password', async () => {
@@ -116,9 +113,9 @@ describe('AuthService', () => {
       mockUserService.findByAccount.mockResolvedValue(mockUser);
       mockUserService.validatePassword.mockResolvedValue(false);
 
-      await expect(
-        service.loginWithCredentials('testuser', 'wrong-password'),
-      ).rejects.toThrow(BusinessException);
+      await expect(service.loginWithCredentials('testuser', 'wrong-password')).rejects.toThrow(
+        BusinessException,
+      );
     });
   });
 
@@ -146,12 +143,8 @@ describe('AuthService', () => {
 
       const result = await service.register(registerDto);
 
-      expect(mockUserService.findByEmail).toHaveBeenCalledWith(
-        registerDto.email,
-      );
-      expect(mockUserService.findByUsername).toHaveBeenCalledWith(
-        registerDto.username,
-      );
+      expect(mockUserService.findByEmail).toHaveBeenCalledWith(registerDto.email);
+      expect(mockUserService.findByUsername).toHaveBeenCalledWith(registerDto.username);
       expect(mockUserService.create).toHaveBeenCalledWith(registerDto);
       expect(result).toHaveProperty('accessToken');
       expect(result).toHaveProperty('refreshToken');
@@ -166,9 +159,7 @@ describe('AuthService', () => {
 
       mockUserService.findByEmail.mockResolvedValue({ id: 'existing-id' });
 
-      await expect(service.register(registerDto)).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.register(registerDto)).rejects.toThrow(BusinessException);
     });
 
     it('should throw BusinessException for duplicate username', async () => {
@@ -181,18 +172,14 @@ describe('AuthService', () => {
       mockUserService.findByEmail.mockResolvedValue(null);
       mockUserService.findByUsername.mockResolvedValue({ id: 'existing-id' });
 
-      await expect(service.register(registerDto)).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.register(registerDto)).rejects.toThrow(BusinessException);
     });
   });
 
   describe('refreshToken', () => {
     it('should generate new tokens and revoke old refresh token', async () => {
       const oldRefreshToken = 'old-refresh-token';
-      const hashedToken = createHash('sha256')
-        .update(oldRefreshToken)
-        .digest('hex');
+      const hashedToken = createHash('sha256').update(oldRefreshToken).digest('hex');
       const mockStoredToken = {
         id: 'token-id',
         token: hashedToken,
@@ -206,9 +193,7 @@ describe('AuthService', () => {
         },
       };
 
-      mockPrismaService.refreshToken.findUnique.mockResolvedValue(
-        mockStoredToken,
-      );
+      mockPrismaService.refreshToken.findUnique.mockResolvedValue(mockStoredToken);
       mockPrismaService.refreshToken.update.mockResolvedValue({});
       mockJwtService.signAsync.mockResolvedValue('new-token');
       mockPrismaService.refreshToken.create.mockResolvedValue({});
@@ -230,9 +215,7 @@ describe('AuthService', () => {
     it('should throw BusinessException for non-existent token', async () => {
       mockPrismaService.refreshToken.findUnique.mockResolvedValue(null);
 
-      await expect(service.refreshToken('invalid-token')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.refreshToken('invalid-token')).rejects.toThrow(BusinessException);
     });
 
     it('should throw BusinessException for revoked token', async () => {
@@ -249,13 +232,9 @@ describe('AuthService', () => {
         },
       };
 
-      mockPrismaService.refreshToken.findUnique.mockResolvedValue(
-        mockStoredToken,
-      );
+      mockPrismaService.refreshToken.findUnique.mockResolvedValue(mockStoredToken);
 
-      await expect(service.refreshToken('revoked-token')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.refreshToken('revoked-token')).rejects.toThrow(BusinessException);
     });
 
     it('should throw BusinessException for expired token', async () => {
@@ -272,13 +251,9 @@ describe('AuthService', () => {
         },
       };
 
-      mockPrismaService.refreshToken.findUnique.mockResolvedValue(
-        mockStoredToken,
-      );
+      mockPrismaService.refreshToken.findUnique.mockResolvedValue(mockStoredToken);
 
-      await expect(service.refreshToken('expired-token')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.refreshToken('expired-token')).rejects.toThrow(BusinessException);
     });
   });
 

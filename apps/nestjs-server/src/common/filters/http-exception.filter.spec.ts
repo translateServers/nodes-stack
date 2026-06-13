@@ -1,11 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpExceptionFilter } from './http-exception.filter';
-import {
-  HttpException,
-  HttpStatus,
-  ArgumentsHost,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, ArgumentsHost, UnauthorizedException } from '@nestjs/common';
 import { BusinessException } from '../exceptions/business.exception';
 import { BizCode } from '../enums/biz-code.enum';
 
@@ -62,10 +57,7 @@ describe('HttpExceptionFilter', () => {
     it('should handle BusinessException with custom message', () => {
       const { response, host } = createMockHost();
 
-      const exception = new BusinessException(
-        BizCode.USER_NOT_FOUND,
-        '自定义消息',
-      );
+      const exception = new BusinessException(BizCode.USER_NOT_FOUND, '自定义消息');
 
       filter.catch(exception, host);
 
@@ -82,10 +74,7 @@ describe('HttpExceptionFilter', () => {
       const exception = new HttpException(
         {
           statusCode: HttpStatus.BAD_REQUEST,
-          message: [
-            'email must be an email',
-            'password must be longer than 6 characters',
-          ],
+          message: ['email must be an email', 'password must be longer than 6 characters'],
           error: 'Bad Request',
         },
         HttpStatus.BAD_REQUEST,
@@ -97,10 +86,7 @@ describe('HttpExceptionFilter', () => {
       expect(response.json).toHaveBeenCalledWith({
         code: BizCode.VALIDATION_ERROR,
         message: '请求参数校验失败',
-        details: [
-          'email must be an email',
-          'password must be longer than 6 characters',
-        ],
+        details: ['email must be an email', 'password must be longer than 6 characters'],
       });
     });
 

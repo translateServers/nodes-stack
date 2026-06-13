@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -12,16 +7,10 @@ import { RESPONSE_MESSAGE_KEY } from '../decorators/response-message.decorator';
 import { BizCode, BizMessage } from '../enums/biz-code.enum';
 
 @Injectable()
-export class TransformInterceptor<T> implements NestInterceptor<
-  T,
-  ApiResponseType<T>
-> {
+export class TransformInterceptor<T> implements NestInterceptor<T, ApiResponseType<T>> {
   constructor(private reflector: Reflector) {}
 
-  intercept(
-    context: ExecutionContext,
-    next: CallHandler,
-  ): Observable<ApiResponseType<T>> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponseType<T>> {
     return next.handle().pipe(
       map((data: T) => {
         const responseMessage = this.reflector.get<string>(

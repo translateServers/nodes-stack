@@ -20,9 +20,7 @@ export class TypedConfigService {
   /**
    * 获取配置值，支持点语法（Dot Notation）
    */
-  get<P extends ConfigPath<RootConfig>>(
-    path: P,
-  ): ConfigPathValue<RootConfig, P> {
+  get<P extends ConfigPath<RootConfig>>(path: P): ConfigPathValue<RootConfig, P> {
     // 运行时解析点语法
     const keys = path.split('.');
     let result: unknown = this.config;

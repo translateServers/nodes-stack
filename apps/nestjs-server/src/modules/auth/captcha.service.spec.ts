@@ -57,23 +57,17 @@ describe('CaptchaService', () => {
       if (!storedData) throw new Error('Captcha not found');
       const storedCode = storedData.code;
 
-      expect(() =>
-        service.verifyCaptcha(captchaId, storedCode.toUpperCase()),
-      ).not.toThrow();
+      expect(() => service.verifyCaptcha(captchaId, storedCode.toUpperCase())).not.toThrow();
     });
 
     it('should throw BusinessException for non-existent captcha', () => {
-      expect(() => service.verifyCaptcha('non-existent-id', '1234')).toThrow(
-        BusinessException,
-      );
+      expect(() => service.verifyCaptcha('non-existent-id', '1234')).toThrow(BusinessException);
     });
 
     it('should throw BusinessException for wrong captcha code', () => {
       const { captchaId } = service.generateCaptcha();
 
-      expect(() => service.verifyCaptcha(captchaId, 'wrong-code')).toThrow(
-        BusinessException,
-      );
+      expect(() => service.verifyCaptcha(captchaId, 'wrong-code')).toThrow(BusinessException);
     });
 
     it('should throw BusinessException for expired captcha', () => {
@@ -87,9 +81,7 @@ describe('CaptchaService', () => {
       if (!data) throw new Error('Captcha not found');
       data.expiresAt = Date.now() - 1000;
 
-      expect(() => service.verifyCaptcha(captchaId, data.code)).toThrow(
-        BusinessException,
-      );
+      expect(() => service.verifyCaptcha(captchaId, data.code)).toThrow(BusinessException);
     });
 
     it('should delete captcha after successful verification', () => {

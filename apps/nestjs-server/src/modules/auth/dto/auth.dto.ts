@@ -6,24 +6,15 @@ import { UserResponseSchema } from '@/modules/user/dto/user.dto';
 
 const captchaFields = {
   captchaId: z.string().min(1, '验证码 ID 不能为空').describe('验证码 ID'),
-  captchaCode: z
-    .string()
-    .min(1, '验证码不能为空')
-    .describe('验证码内容（不区分大小写）'),
+  captchaCode: z.string().min(1, '验证码不能为空').describe('验证码内容（不区分大小写）'),
   captchaImage: z.string().describe('验证码图片（SVG 格式）'),
 };
 
 // --- Auth 专属原子字段 ---
 const authFields = {
-  account: z
-    .string()
-    .min(1, '账号不能为空')
-    .describe('用户账号（邮箱或用户名）'),
+  account: z.string().min(1, '账号不能为空').describe('用户账号（邮箱或用户名）'),
   accessToken: z.string().min(1).describe('访问令牌（JWT）'),
-  refreshToken: z
-    .string()
-    .min(1, '刷新令牌不能为空')
-    .describe('刷新令牌（JWT）'),
+  refreshToken: z.string().min(1, '刷新令牌不能为空').describe('刷新令牌（JWT）'),
 };
 
 // --- 请求 DTOs ---

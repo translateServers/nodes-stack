@@ -39,12 +39,8 @@ function createLogFormat(colorize: boolean) {
           : undefined;
       const ts = `${ANSI.gray}[${dayjs(rawTs).format('YYYY-MM-DD HH:mm:ss.SSS')}]${ANSI.reset}`;
       const levelStr = typeof level === 'string' ? level : '';
-      const ctx =
-        typeof context === 'string'
-          ? ` ${ANSI.gray}[${context}]${ANSI.reset}`
-          : '';
-      const msg =
-        typeof message === 'string' ? message : JSON.stringify(message);
+      const ctx = typeof context === 'string' ? ` ${ANSI.gray}[${context}]${ANSI.reset}` : '';
+      const msg = typeof message === 'string' ? message : JSON.stringify(message);
 
       let duration = '';
       if (typeof ms === 'string') {

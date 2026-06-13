@@ -12,8 +12,7 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   const envConfig = app.get(TypedConfigService);
-  const { port, apiPrefix, corsOrigin, enableSwagger } =
-    envConfig.namespace('app');
+  const { port, apiPrefix, corsOrigin, enableSwagger } = envConfig.namespace('app');
   const logger = createLogger(envConfig);
   app.useLogger(logger);
 
@@ -35,10 +34,7 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(port);
 
-  logger.log(
-    `Application is running on: http://localhost:${port}`,
-    'Bootstrap',
-  );
+  logger.log(`Application is running on: http://localhost:${port}`, 'Bootstrap');
   if (enableSwagger) {
     logger.log(
       `Swagger documentation is available at: http://localhost:${port}/${apiPrefix}/docs`,

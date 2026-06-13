@@ -53,18 +53,11 @@ export class LogQueryService {
           continue;
         }
 
-        if (
-          keyword &&
-          !entry.raw.toLowerCase().includes(keyword.toLowerCase())
-        ) {
+        if (keyword && !entry.raw.toLowerCase().includes(keyword.toLowerCase())) {
           continue;
         }
 
-        if (
-          module &&
-          entry.module &&
-          !entry.module.toLowerCase().includes(module.toLowerCase())
-        ) {
+        if (module && entry.module && !entry.module.toLowerCase().includes(module.toLowerCase())) {
           continue;
         }
 

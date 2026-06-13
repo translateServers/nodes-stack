@@ -26,15 +26,9 @@ export class AuthService {
    * @param password 用户密码
    * @returns token 对
    */
-  async loginWithCredentials(
-    account: string,
-    password: string,
-  ): Promise<TokenResponse> {
+  async loginWithCredentials(account: string, password: string): Promise<TokenResponse> {
     const user = await this.usersService.findByAccount(account);
-    if (
-      !user ||
-      !(await this.usersService.validatePassword(password, user.password))
-    ) {
+    if (!user || !(await this.usersService.validatePassword(password, user.password))) {
       throw new BusinessException(BizCode.AUTH_INVALID_CREDENTIALS);
     }
     const { password: _, ...userWithoutPassword } = user;
@@ -53,9 +47,7 @@ export class AuthService {
       throw new BusinessException(BizCode.AUTH_EMAIL_ALREADY_REGISTERED);
     }
 
-    const existingUsername = await this.usersService.findByUsername(
-      registerDto.username,
-    );
+    const existingUsername = await this.usersService.findByUsername(registerDto.username);
     if (existingUsername) {
       throw new BusinessException(BizCode.AUTH_USERNAME_ALREADY_TAKEN);
     }
@@ -76,11 +68,7 @@ export class AuthService {
       include: { user: true },
     });
 
-    if (
-      !storedToken ||
-      storedToken.revoked ||
-      dayjs().isAfter(storedToken.expiresAt)
-    ) {
+    if (!storedToken || storedToken.revoked || dayjs().isAfter(storedToken.expiresAt)) {
       throw new BusinessException(BizCode.AUTH_INVALID_REFRESH_TOKEN);
     }
 

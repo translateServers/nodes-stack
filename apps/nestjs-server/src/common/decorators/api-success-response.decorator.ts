@@ -36,19 +36,13 @@ const SUCCESS_BASE_PROPERTIES = {
 
 // ==================== Schema 构建辅助函数 ====================
 
-function buildDataSchema<T>(
-  type: Type<T>,
-  isArray: boolean,
-): Record<string, unknown> {
+function buildDataSchema<T>(type: Type<T>, isArray: boolean): Record<string, unknown> {
   return isArray
     ? { type: 'array' as const, items: { $ref: getSchemaPath(type) } }
     : { $ref: getSchemaPath(type) };
 }
 
-function buildSuccessSchema<T>(
-  type: Type<T>,
-  isArray: boolean,
-): Record<string, unknown> {
+function buildSuccessSchema<T>(type: Type<T>, isArray: boolean): Record<string, unknown> {
   return {
     type: 'object' as const,
     properties: {
@@ -113,9 +107,7 @@ export function ApiSuccessResponse<T>(
  * 设置 message 时会同步设置 @ResponseMessage 元数据，
  * 无需额外使用 @ResponseMessage 装饰器。
  */
-export function ApiSuccessNoDataResponse(
-  options: ApiNoDataResponseOptions = {},
-): MethodDecorator {
+export function ApiSuccessNoDataResponse(options: ApiNoDataResponseOptions = {}): MethodDecorator {
   const { status = 200, description = '请求成功', message } = options;
 
   const decorators = [
