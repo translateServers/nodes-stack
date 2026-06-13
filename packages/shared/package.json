@@ -15,14 +15,14 @@
   "types": "./dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules"
   },
   "devDependencies": {
     "@nebula/typescript-config": "workspace:*",
-    "tsup": "^8.4.0",
+    "tsdown": "^0.11.0",
     "typescript": "^6.0.3"
   }
 }
