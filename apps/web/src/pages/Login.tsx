@@ -9,8 +9,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useCaptcha, useLogin } from '@/api/hooks';
-import { getAccessToken } from '@/api/token';
+import { useCaptcha, useLogin } from '@/api';
+import { useAuthStore } from '@/store/auth';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function LoginPage() {
   const [captchaCode, setCaptchaCode] = useState('');
 
   useEffect(() => {
-    if (getAccessToken()) {
+    if (useAuthStore.getState().accessToken) {
       void navigate('/', { replace: true });
     }
   }, [navigate]);

@@ -8,7 +8,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import router from '@/router';
 import '@/styles/index.css';
 import theme from '@/theme';
-import { queryClient } from '@/api/query-client';
+import { queryClient } from '@/api/core/query-client';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

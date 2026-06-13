@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CreateDictTypeSchema, DictTypeSchema, DictValueSchema } from '@nebula/shared/schemas';
-import { ENDPOINTS } from '@/api/endpoints';
-import { del, get, patch, post } from '@/api/http';
+import { ENDPOINTS } from '../../core/endpoints';
+import { del, get, patch, post } from '../../core/http';
 
 const DictTypeListSchema = z.array(DictTypeSchema);
 const DictValueListSchema = z.array(DictValueSchema);

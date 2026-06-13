@@ -14,8 +14,8 @@ import {
   RegisterSchema,
   TokenResponseSchema,
 } from '@nebula/shared/schemas';
-import { ENDPOINTS } from '@/api/endpoints';
-import { get, post } from '@/api/http';
+import { ENDPOINTS } from '../../core/endpoints';
+import { get, post } from '../../core/http';
 
 export function getCaptcha(): Promise<CaptchaResponse> {
   return get(ENDPOINTS.auth.captcha, CaptchaResponseSchema);

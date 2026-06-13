@@ -8,35 +8,35 @@
 
 ## 1. 后端核心能力清单（探索确认）
 
-| 维度 | 内容 |
-| --- | --- |
-| 框架 | NestJS 11（模块化：Auth / User / Health / Cache / Logger / Prisma） |
-| 数据库 | Prisma 7 + SQLite（better-sqlite3 适配器） |
-| 模型 | `User`、`Role`、`Menu`、`RefreshToken`、`DictType`、`DictValue` |
-| 鉴权 | JWT 双令牌（access 15m / refresh 7d，SHA-256 哈希入库，轮换机制） |
-| 校验 | 全局 `ZodValidationPipe`（`nestjs-zod`），DTO 由 `createZodDto` 生成 |
-| 统一响应 | 成功：`{ code, data?, message }`（`data` 为 `undefined/null` 时省略字段）<br>错误：`{ code, message, details? }`，HTTP 状态由 `getHttpStatus(bizCode)` 映射 |
-| 业务码 | `BizCode`：0 成功 / 1xxx 通用 / 10xxx 认证 / 20xxx 用户 / 30xxx 菜单 / 40xxx 角色 / 50xxx 字典 |
-| API 前缀 | `/api/v1`（可通过 `API_PREFIX` 调整） |
-| 限流 | 全局：3/1s、20/10s、100/60s；登录 5/分钟；验证码 10/分钟；Health 跳过 |
+| 维度     | 内容                                                                                                                                                                                                                                                      |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 框架     | NestJS 11（模块化：Auth / User / Health / Cache / Logger / Prisma）                                                                                                                                                                                       |
+| 数据库   | Prisma 7 + SQLite（better-sqlite3 适配器）                                                                                                                                                                                                                |
+| 模型     | `User`、`Role`、`Menu`、`RefreshToken`、`DictType`、`DictValue`                                                                                                                                                                                           |
+| 鉴权     | JWT 双令牌（access 15m / refresh 7d，SHA-256 哈希入库，轮换机制）                                                                                                                                                                                         |
+| 校验     | 全局 `ZodValidationPipe`（`nestjs-zod`），DTO 由 `createZodDto` 生成                                                                                                                                                                                      |
+| 统一响应 | 成功：`{ code, data?, message }`（`data` 为 `undefined/null` 时省略字段）<br>错误：`{ code, message, details? }`，HTTP 状态由 `getHttpStatus(bizCode)` 映射                                                                                               |
+| 业务码   | `BizCode`：0 成功 / 1xxx 通用 / 10xxx 认证 / 20xxx 用户 / 30xxx 菜单 / 40xxx 角色 / 50xxx 字典                                                                                                                                                            |
+| API 前缀 | `/api/v1`（可通过 `API_PREFIX` 调整）                                                                                                                                                                                                                     |
+| 限流     | 全局：3/1s、20/10s、100/60s；登录 5/分钟；验证码 10/分钟；Health 跳过                                                                                                                                                                                     |
 | 已有接口 | `GET /auth/captcha`、`POST /auth/register`、`POST /auth/login`、`POST /auth/refresh`、`POST /auth/logout`、`GET /auth/profile`；`POST /users`、`GET /users`、`GET /users/:id`、`PATCH /users/:id`、`DELETE /users/:id`；`GET /health`、`GET /health/ping` |
-| 文档 | Swagger 位于 `/${apiPrefix}/docs`，`enableSwagger` 可关闭 |
+| 文档     | Swagger 位于 `/${apiPrefix}/docs`，`enableSwagger` 可关闭                                                                                                                                                                                                 |
 
 ---
 
 ## 2. 前端现状与差距
 
-| 现状 | 差距 |
-| --- | --- |
-| `apps/web/src/api/types.ts` 自维护 `BizCode`，与后端枚举值不一致 | 需以 `@nebula/shared` 为唯一来源 |
-| `ApiResponse<T>` 包含 `timestamp` 字段 | 后端实际不返回，需移除并定义对齐 |
-| `ApiResponse.data` 标注为必填 | 实际后端会省略 `data`（如退出登录），需改为可选 |
-| `apps/web/src/api/http.ts` 在刷新令牌分支直接 `axios.post('/api/auth/refresh', ...)`，绕过 `http` 实例的 baseURL/拦截器 | 必须统一走 `http` 实例或剥离拦截器的请求体 |
-| 无请求取消、Zod 运行时校验、类型化错误 | 需新增 |
-| `pendingQueue` 中 token 为空串仍会重试 | 需在 refresh 失败时直接拒绝队列并清空 |
-| 仅有 Auth / User 域 API；无 Menu/Role/Dict/Health 客户端 | 需按域补齐 + 预留未实现模块类型 |
-| 直接 `await http.get(...)` 风格，无缓存、无 loading 统一管理 | 需 React Query 集成 |
-| 已有 `MainLayout` 与 `Login` 占位页 | 需补齐路由守卫与错误兜底 |
+| 现状                                                                                                                    | 差距                                            |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `apps/web/src/api/types.ts` 自维护 `BizCode`，与后端枚举值不一致                                                        | 需以 `@nebula/shared` 为唯一来源                |
+| `ApiResponse<T>` 包含 `timestamp` 字段                                                                                  | 后端实际不返回，需移除并定义对齐                |
+| `ApiResponse.data` 标注为必填                                                                                           | 实际后端会省略 `data`（如退出登录），需改为可选 |
+| `apps/web/src/api/http.ts` 在刷新令牌分支直接 `axios.post('/api/auth/refresh', ...)`，绕过 `http` 实例的 baseURL/拦截器 | 必须统一走 `http` 实例或剥离拦截器的请求体      |
+| 无请求取消、Zod 运行时校验、类型化错误                                                                                  | 需新增                                          |
+| `pendingQueue` 中 token 为空串仍会重试                                                                                  | 需在 refresh 失败时直接拒绝队列并清空           |
+| 仅有 Auth / User 域 API；无 Menu/Role/Dict/Health 客户端                                                                | 需按域补齐 + 预留未实现模块类型                 |
+| 直接 `await http.get(...)` 风格，无缓存、无 loading 统一管理                                                            | 需 React Query 集成                             |
+| 已有 `MainLayout` 与 `Login` 占位页                                                                                     | 需补齐路由守卫与错误兜底                        |
 
 ---
 
@@ -85,11 +85,13 @@
 **目标**：让 `@nebula/shared` 成为前后端单一类型源；修复现有 `api.types.ts` 的不一致。
 
 #### 1.1 调整 `packages/shared/package.json`
+
 - 增加 `zod` 依赖（与后端统一版本 `^4.4.3`）
 - `exports` 拆分：`./types`、`./schemas`、`./errors`、`./utils`
 - 维持 `tsdown` 构建产物 CJS/ESM/DTS 三套
 
 #### 1.2 重写 `src/types/api.types.ts`
+
 - 移除 `timestamp` 字段
 - `ApiResponse<T>` 改为：
   ```ts
@@ -108,6 +110,7 @@
 - `BizCode` 枚举以 `Record<string, number>` 形式重新导出（**严格对齐后端**），并暴露 `type BizCodeValue`
 
 #### 1.3 新增 `src/schemas/`（Zod）
+
 - `auth.schema.ts`：`LoginSchema`、`RegisterSchema`、`RefreshTokenSchema`、`TokenResponseSchema`、`CaptchaResponseSchema`、`ProfileResponseSchema`（**与后端 `apps/nestjs-server/src/modules/auth/dto/auth.dto.ts` 字段、`.describe()` 1:1**）
 - `user.schema.ts`：`CreateUserSchema`、`UpdateUserSchema`、`UserResponseSchema`
 - `menu.schema.ts`（预留）：`MenuTypeSchema`、`CreateMenuSchema`、`UpdateMenuSchema`、`MenuResponseSchema`、`MenuTreeNodeSchema`
@@ -119,15 +122,18 @@
 > **关键约束**：每个 Schema 必须导出 `export type Xxx = z.infer<typeof XxxSchema>`，与 `createZodDto` 生成的 DTO 等价。
 
 #### 1.4 新增 `src/errors/`
+
 - `BusinessError` 类（迁移前端 `http.ts` 中的定义到共享包）
 - `isBusinessError(err): err is BusinessError` 守卫
 - `getBizMessage(code, fallback?)` 工具（前端可在此处维护一份与后端 `BizMessage` 等价的本地化表，便于无后端上下文时显示）
 
 #### 1.5 新增 `src/utils/`
+
 - `datetime.ts`：`formatDateTime(value: string | Date)`、`parseDateTime(value: string): Date`，约定格式 `YYYY-MM-DD HH:mm:ss`
 - `http.ts`（仅类型，不重复实例）：导出 `HttpMethod`、`RequestConfig<TBody>` 扩展
 
 #### 1.6 调整 `src/index.ts` 统一出口
+
 - 分组：`export * as Biz from './types/api.types'`、`export * as AuthSchemas from './schemas/auth.schema'` …
 
 **验收**：`pnpm --filter @nebula/shared build` 通过，产物包含 `dist/types`、`dist/schemas`、`dist/errors`、`dist/utils`。
@@ -139,6 +145,7 @@
 **目标**：修复现有 `http.ts` 的刷新令牌、拦截器绕行等隐患；统一基于共享包。
 
 #### 2.1 改造 `http.ts`
+
 - 删除本地 `BusinessError` 定义，改为从 `@nebula/shared` 导入
 - 删除本地 `BizCode` 定义，改为从 `@nebula/shared` 导入
 - 删除本地 token 读写工具，改为从共享包导入（如 `apps/web/src/api/token.ts` 集中管理）
@@ -148,21 +155,25 @@
 - 网络错误（`!response`）抛 `BusinessError(-1, error.message || '网络异常')`
 
 #### 2.2 新增 `token.ts`
+
 - `ACCESS_TOKEN_KEY = 'nebula_access_token'`、`REFRESH_TOKEN_KEY = 'nebula_refresh_token'`
 - `getAccessToken` / `setAccessToken` / `getRefreshToken` / `setRefreshToken` / `clearTokens`
 - 监听 `storage` 事件实现多标签页同步登出（可选，先实现单标签）
 
 #### 2.3 新增 `endpoints.ts`（集中路径常量）
+
 - `API_PREFIX = '/api'`（与 Vite proxy 配合）
 - `AUTH = { captcha: '/auth/captcha', login: '/auth/login', … }`
 - `USERS = '/users'`、`HEALTH = '/health'`
 - 预留 `MENU / ROLE / DICT` 常量
 
 #### 2.4 新增 `health.ts`（健康检查客户端）
+
 - `checkHealth()`：返回 `{ status, timestamp, uptime, database }`
 - `ping()`：返回 `{ message }`
 
 #### 2.5 重写 `auth.ts`、`user.ts`
+
 - 所有入参出参从 `@nebula/shared` 的 Schema 推导：
   ```ts
   import { z } from 'zod';
@@ -172,6 +183,7 @@
 - 函数签名显式标注返回类型 `<T extends ZodTypeAny>(res: unknown, schema: T): z.infer<T>` 模式由 `http.ts` 自动校验，API 模块无需再断言
 
 #### 2.6 新增预留模块（**类型与路径已就绪**，调用后端未实现的接口时由 React Query 自然失败）
+
 - `menu.ts`：树形查询、按角色查询、CRUD（含 `parentId`）
 - `role.ts`：CRUD、分配菜单、分配用户
 - `dict.ts`：类型 CRUD、值 CRUD、按 `code` 查询整组
@@ -185,9 +197,11 @@
 **目标**：统一 loading / error / cache / retry / invalidate。
 
 #### 3.1 安装依赖
+
 - `apps/web/package.json` 新增 `"@tanstack/react-query": "^5.59.0"`、`"@tanstack/react-query-devtools": "^5.59.0"`（dev）
 
 #### 3.2 `apps/web/src/main.tsx` 注入 `QueryClientProvider`
+
 ```tsx
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -203,9 +217,11 @@ const queryClient = new QueryClient({
   },
 });
 ```
+
 全局 `QueryCache` / `MutationCache` 捕获 `BusinessError` 并 dispatch 一个 toast 事件（自定义事件总线或 Context）。
 
 #### 3.3 编写 `apps/web/src/api/hooks/` 目录
+
 - `useLogin` / `useRegister` / `useLogout`（mutation，成功后设置 token、失效 `['profile']`）
 - `useProfile`（query，启用条件：`!!getAccessToken()`）
 - `useUsers` / `useUser` / `useCreateUser` / `useUpdateUser` / `useDeleteUser`
@@ -213,6 +229,7 @@ const queryClient = new QueryClient({
 - 预留：`useMenus` / `useRoles` / `useDictTypes` / `useDictValues`
 
 #### 3.4 错误兜底
+
 - `useApiError` Hook：返回 `{ showError, showWarning }` 函数，订阅全局 QueryCache
 - 与 MUI `Snackbar` 集成（在 `MainLayout` 顶部挂载一次）
 
@@ -223,18 +240,22 @@ const queryClient = new QueryClient({
 **目标**：与后端 `JwtAuthGuard` 配合，登录态持久化、未授权自动跳转。
 
 #### 4.1 `apps/web/src/router/index.tsx` 重构
+
 - `loader` 或组件级判断：未登录访问受保护路由 → `redirect('/login')`
 - 增加 `/users`、`/menus`（预留）、`/roles`（预留）、`/dict`（预留）路由
 - 路由 `meta` 字段保存 `requiresAuth: boolean` 与可选 `roles: string[]`
 
 #### 4.2 新增 `RequireAuth` 组件
+
 - 包装 `Outlet`，检查 `getAccessToken()`；为空则 `navigate('/login', { replace: true })`
 
 #### 4.3 `MainLayout` 顶部用户菜单
+
 - 展示 `useProfile().data?.username`
 - 退出按钮 → `useLogout()` + `clearTokens()` + `navigate('/login')`
 
 #### 4.4 `Login` 页面重写
+
 - 表单：账号、密码、验证码（图片 `captchaImage` 渲染为内联 SVG）
 - 提交：调用 `useLogin()` mutation，成功 → 存 token + `queryClient.setQueryData(['profile'], user)` + `navigate('/')`
 - 失败 → 由全局 `Snackbar` 提示 `message`
@@ -251,35 +272,35 @@ const queryClient = new QueryClient({
 
 ## 5. 关键文件改动清单
 
-| 路径 | 动作 | 关键内容 |
-| --- | --- | --- |
-| `packages/shared/package.json` | 改 | 增 `zod`、拆分 `exports` |
-| `packages/shared/src/types/api.types.ts` | 改 | 移除 `timestamp`、`data?` 可选、BizCode 重写 |
-| `packages/shared/src/schemas/*.ts` | 新增 | auth/user/menu/role/dict/paginated/datetime 全部 Zod Schema |
-| `packages/shared/src/errors/index.ts` | 新增 | `BusinessError`、`isBusinessError`、`getBizMessage` |
-| `packages/shared/src/utils/datetime.ts` | 新增 | `formatDateTime` / `parseDateTime` |
-| `packages/shared/src/index.ts` | 改 | 重新聚合导出 |
-| `apps/web/src/api/http.ts` | 改 | 修复 401 刷新走裸 axios、Zod 二次校验 |
-| `apps/web/src/api/token.ts` | 新增 | token 集中管理 |
-| `apps/web/src/api/endpoints.ts` | 新增 | 路径常量 |
-| `apps/web/src/api/types.ts` | 删除 | 改为从共享包导入 |
-| `apps/web/src/api/auth.ts` | 改 | 类型从共享包推导 |
-| `apps/web/src/api/user.ts` | 改 | 同上 |
-| `apps/web/src/api/menu.ts` | 新增 | 预留实现 |
-| `apps/web/src/api/role.ts` | 新增 | 预留实现 |
-| `apps/web/src/api/dict.ts` | 新增 | 预留实现 |
-| `apps/web/src/api/health.ts` | 新增 | 健康检查 |
-| `apps/web/src/api/hooks/*.ts` | 新增 | React Query hooks |
-| `apps/web/src/api/index.ts` | 改 | 重新聚合导出 |
-| `apps/web/src/main.tsx` | 改 | 注入 `QueryClientProvider` |
-| `apps/web/src/router/index.tsx` | 改 | 增加路由守卫、扩展路由 |
-| `apps/web/src/components/RequireAuth.tsx` | 新增 | 鉴权守卫 |
-| `apps/web/src/components/ApiErrorSnackbar.tsx` | 新增 | 全局错误提示 |
-| `apps/web/src/pages/Login.tsx` | 改 | 接入 `useLogin`、验证码图片渲染 |
-| `apps/web/src/pages/Users.tsx` | 新增 | 用户管理示例页（验证端到端） |
-| `apps/web/src/pages/Dashboard.tsx` | 改 | 接入 `useHealth`、展示 `useProfile` |
-| `apps/web/src/layouts/MainLayout.tsx` | 改 | 顶部用户菜单 + 错误提示挂载 |
-| `apps/web/package.json` | 改 | 新增 `@tanstack/react-query` |
+| 路径                                           | 动作 | 关键内容                                                    |
+| ---------------------------------------------- | ---- | ----------------------------------------------------------- |
+| `packages/shared/package.json`                 | 改   | 增 `zod`、拆分 `exports`                                    |
+| `packages/shared/src/types/api.types.ts`       | 改   | 移除 `timestamp`、`data?` 可选、BizCode 重写                |
+| `packages/shared/src/schemas/*.ts`             | 新增 | auth/user/menu/role/dict/paginated/datetime 全部 Zod Schema |
+| `packages/shared/src/errors/index.ts`          | 新增 | `BusinessError`、`isBusinessError`、`getBizMessage`         |
+| `packages/shared/src/utils/datetime.ts`        | 新增 | `formatDateTime` / `parseDateTime`                          |
+| `packages/shared/src/index.ts`                 | 改   | 重新聚合导出                                                |
+| `apps/web/src/api/http.ts`                     | 改   | 修复 401 刷新走裸 axios、Zod 二次校验                       |
+| `apps/web/src/api/token.ts`                    | 新增 | token 集中管理                                              |
+| `apps/web/src/api/endpoints.ts`                | 新增 | 路径常量                                                    |
+| `apps/web/src/api/types.ts`                    | 删除 | 改为从共享包导入                                            |
+| `apps/web/src/api/auth.ts`                     | 改   | 类型从共享包推导                                            |
+| `apps/web/src/api/user.ts`                     | 改   | 同上                                                        |
+| `apps/web/src/api/menu.ts`                     | 新增 | 预留实现                                                    |
+| `apps/web/src/api/role.ts`                     | 新增 | 预留实现                                                    |
+| `apps/web/src/api/dict.ts`                     | 新增 | 预留实现                                                    |
+| `apps/web/src/api/health.ts`                   | 新增 | 健康检查                                                    |
+| `apps/web/src/api/hooks/*.ts`                  | 新增 | React Query hooks                                           |
+| `apps/web/src/api/index.ts`                    | 改   | 重新聚合导出                                                |
+| `apps/web/src/main.tsx`                        | 改   | 注入 `QueryClientProvider`                                  |
+| `apps/web/src/router/index.tsx`                | 改   | 增加路由守卫、扩展路由                                      |
+| `apps/web/src/components/RequireAuth.tsx`      | 新增 | 鉴权守卫                                                    |
+| `apps/web/src/components/ApiErrorSnackbar.tsx` | 新增 | 全局错误提示                                                |
+| `apps/web/src/pages/Login.tsx`                 | 改   | 接入 `useLogin`、验证码图片渲染                             |
+| `apps/web/src/pages/Users.tsx`                 | 新增 | 用户管理示例页（验证端到端）                                |
+| `apps/web/src/pages/Dashboard.tsx`             | 改   | 接入 `useHealth`、展示 `useProfile`                         |
+| `apps/web/src/layouts/MainLayout.tsx`          | 改   | 顶部用户菜单 + 错误提示挂载                                 |
+| `apps/web/package.json`                        | 改   | 新增 `@tanstack/react-query`                                |
 
 ---
 
@@ -330,12 +351,12 @@ const queryClient = new QueryClient({
 
 ## 9. 风险与回滚
 
-| 风险 | 缓解 |
-| --- | --- |
-| 共享包导出结构调整导致 apps/web 编译失败 | 一次性提交 + 在 `index.ts` 保留旧路径别名导出 |
-| Zod 二次校验在数据量大时影响性能 | 仅对响应 ≤ 1MB 的接口启用，列表/导出类接口关闭 |
-| React Query 与现有 `http.ts` 拦截器冲突 | `http.ts` 抛 `BusinessError` 后，React Query 通过 `error` prop 暴露，不做 toast 自动弹，由独立 `ApiErrorSnackbar` 订阅全局事件 |
-| Menu/Role/Dict 预留接口与未来 Controller 字段不一致 | 预留 Schema 在 `packages/shared/src/schemas/*` 中以 **增量 PR** 方式更新，并配套 repowiki 文档 |
+| 风险                                                | 缓解                                                                                                                           |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 共享包导出结构调整导致 apps/web 编译失败            | 一次性提交 + 在 `index.ts` 保留旧路径别名导出                                                                                  |
+| Zod 二次校验在数据量大时影响性能                    | 仅对响应 ≤ 1MB 的接口启用，列表/导出类接口关闭                                                                                 |
+| React Query 与现有 `http.ts` 拦截器冲突             | `http.ts` 抛 `BusinessError` 后，React Query 通过 `error` prop 暴露，不做 toast 自动弹，由独立 `ApiErrorSnackbar` 订阅全局事件 |
+| Menu/Role/Dict 预留接口与未来 Controller 字段不一致 | 预留 Schema 在 `packages/shared/src/schemas/*` 中以 **增量 PR** 方式更新，并配套 repowiki 文档                                 |
 
 ---
 

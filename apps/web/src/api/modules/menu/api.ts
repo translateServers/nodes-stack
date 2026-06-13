@@ -5,8 +5,8 @@ import {
   MenuTreeNodeSchema,
   UpdateMenuSchema,
 } from '@nebula/shared/schemas';
-import { ENDPOINTS } from '@/api/endpoints';
-import { del, get, patch, post } from '@/api/http';
+import { ENDPOINTS } from '../../core/endpoints';
+import { del, get, patch, post } from '../../core/http';
 
 const MenuListSchema = z.array(MenuResponseSchema);
 const MenuTreeSchema = z.array(MenuTreeNodeSchema);

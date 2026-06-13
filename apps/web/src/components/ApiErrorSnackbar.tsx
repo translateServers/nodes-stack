@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
-import { listenApiError, type ApiErrorEventDetail } from '@/api/api-error';
+import { listenApiError, type ApiErrorEventDetail } from '@/api/core/api-error';
 
 export default function ApiErrorSnackbar() {
   const [detail, setDetail] = useState<ApiErrorEventDetail | null>(null);

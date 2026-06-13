@@ -2,14 +2,8 @@ import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig 
 import { z, type ZodType } from 'zod';
 import { BizCode, type ApiErrorResponse, type ApiResponse } from '@nebula/shared/types';
 import { BusinessError, getBizMessage } from '@nebula/shared/errors';
-import { API_BASE_URL, ENDPOINTS } from '@/api/endpoints';
-import {
-  clearTokens,
-  getAccessToken,
-  getRefreshToken,
-  setAccessToken,
-  setRefreshToken,
-} from '@/api/token';
+import { API_BASE_URL, ENDPOINTS } from './endpoints';
+import { useAuthStore } from '@/store/auth';
 
 type TokenResponse = {
   accessToken: string;
@@ -86,7 +80,7 @@ async function performRefreshToken(refreshToken: string): Promise<TokenResponse>
 }
 
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = getAccessToken();
+  const token = useAuthStore.getState().accessToken;
   if (token) {
     config.headers.set('Authorization', `Bearer ${token}`);
   }
@@ -130,9 +124,9 @@ http.interceptors.response.use(
       !requestConfig._retry &&
       !requestConfig.meta?.skipAuthRefresh
     ) {
-      const refreshToken = getRefreshToken();
+      const refreshToken = useAuthStore.getState().refreshToken;
       if (!refreshToken) {
-        clearTokens();
+        useAuthStore.getState().clearAuth();
         throw new BusinessError(errorCode, errorMessage, errorDetails);
       }
 
@@ -153,15 +147,14 @@ http.interceptors.response.use(
 
       try {
         const tokens = await performRefreshToken(refreshToken);
-        setAccessToken(tokens.accessToken);
-        setRefreshToken(tokens.refreshToken);
+        useAuthStore.getState().setTokens(tokens.accessToken, tokens.refreshToken);
         processPendingQueue(null, tokens.accessToken);
         requestConfig._retry = true;
         requestConfig.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
         return await http(requestConfig);
       } catch (refreshError) {
         processPendingQueue(refreshError, null);
-        clearTokens();
+        useAuthStore.getState().clearAuth();
         throw refreshError;
       } finally {
         isRefreshing = false;

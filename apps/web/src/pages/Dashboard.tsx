@@ -4,7 +4,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import { useHealth, useProfile } from '@/api/hooks';
+import { useHealth, useProfile } from '@/api';
 
 export default function DashboardPage() {
   const profileQuery = useProfile();

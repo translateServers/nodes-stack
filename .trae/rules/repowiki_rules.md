@@ -22,13 +22,13 @@ knowledge/zh/{模块名}/
 └── 编码规范.md      # 编码规范（必需）
 ```
 
-### _module.yaml 规范
+### \_module.yaml 规范
 
 - 必须声明 `schema_version`、`module_path`、`title`、`scope`
 - `scope` 列出模块关联的源文件路径，使用相对路径
 - `depends_on` 和 `related_to` 声明模块间依赖和关联关系
 
-### _index.yaml 规范
+### \_index.yaml 规范
 
 - 根索引文件声明 `schema_version`、`locale`、`branch`、`exported_at`
 - `modules` 下按模块 key 列出所有模块，包含 `dir_name`、`title`、`scope`

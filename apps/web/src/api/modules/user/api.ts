@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { CreateUserParams, UpdateUserParams, UserResponse } from '@nebula/shared/schemas';
 import { CreateUserSchema, UpdateUserSchema, UserResponseSchema } from '@nebula/shared/schemas';
-import { ENDPOINTS } from '@/api/endpoints';
-import { del, get, patch, post } from '@/api/http';
+import { ENDPOINTS } from '../../core/endpoints';
+import { del, get, patch, post } from '../../core/http';
 
 const UserListSchema = z.array(UserResponseSchema);
 

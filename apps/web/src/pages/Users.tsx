@@ -3,7 +3,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import { useUsers } from '@/api/hooks';
+import { useUsers } from '@/api';
 
 export default function UsersPage() {
   const { data, isLoading, error } = useUsers();

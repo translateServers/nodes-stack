@@ -8,7 +8,7 @@ export type ConfigPath<T, Depth extends number[] = []> = Depth['length'] extends
   ? never
   : T extends Primitive
     ? never
-    : T extends Array<any>
+    : T extends Array<unknown>
       ? never // 配置中通常不直接通过路径访问数组元素，这里简化处理
       : {
           [K in keyof T & string]: T[K] extends Primitive

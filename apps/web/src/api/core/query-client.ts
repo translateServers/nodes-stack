@@ -1,6 +1,6 @@
 import { BizCode, isBusinessError } from '@nebula/shared';
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
-import { emitApiError } from '@/api/api-error';
+import { emitApiError } from './api-error';
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
