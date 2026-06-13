@@ -1,0 +1,47 @@
+# Nebula 项目开发规则
+
+## TypeScript 类型安全
+
+- 项目已启用 `strict: true` + `strictNullChecks: true` + `noImplicitAny: true`，所有生成的代码必须通过类型检查，不允许产生 TS 编译错误
+- 禁止使用 `@ts-ignore`、`@ts-nocheck`、`as any` 绕过类型检查
+- 禁止使用隐式 `any`，所有函数参数和返回值必须明确声明类型
+- 第三方库必须安装对应的 `@types/*` 类型声明包
+- 异步操作必须正确处理 Promise，禁止浮动 Promise（对应 `@typescript-eslint/no-floating-promises`）
+- 禁止不安全的类型断言和调用（对应 `@typescript-eslint/no-unsafe-argument`、`no-unsafe-call`）
+- API 请求和响应必须使用 `@nebula/shared` 中定义的 `ApiResponse<T>`、`PaginatedResponse<T>` 等类型
+- 组件 Props 必须定义独立的 interface 或 type，禁止内联对象类型
+
+## ESLint 规范
+
+- 项目使用 `typescript-eslint` 的 `recommendedTypeChecked` 配置，所有生成的代码必须通过 ESLint 检查
+- `@typescript-eslint/no-explicit-any` 为 warn 级别，应尽量避免使用 `any`
+- `prettier/prettier` 为 error 级别，代码格式必须符合 Prettier 配置
+- 前端项目继承 `@nebula/eslint-config/react.js`，包含浏览器全局变量
+- 后端项目继承 `@nebula/eslint-config/nestjs.js`
+
+## 代码格式（Prettier）
+
+- 单引号、分号结尾、2 空格缩进、行宽 100
+- 尾随逗号 `all`、箭头函数参数始终加括号
+- 生成代码前必须先读取项目现有 `.prettierrc` 配置
+
+## 前端开发
+
+- 框架：React 19 + Vite 8 + MUI 9 + Tailwind CSS v4 + React Router 7
+- 样式优先使用 Tailwind CSS 工具类，复杂组件使用 MUI
+- 路径别名 `@/` 映射 `src/`，导入时使用别名路径
+- 新增页面必须在 `src/router/index.tsx` 中注册路由
+- 新增页面使用 `MainLayout` 布局，侧边栏菜单在 `MainLayout.tsx` 的 `menuItems` 中配置
+
+## Monorepo 规范
+
+- 项目使用 pnpm workspace + Turborepo 管理
+- 共享类型放在 `packages/shared`，通过 `@nebula/shared` 引用
+- 共享 TS 配置放在 `packages/typescript-config`，通过 `@nebula/typescript-config` 引用
+- 共享 ESLint 配置放在 `packages/eslint-config`，通过 `@nebula/eslint-config` 引用
+- 新增依赖时注意区分 dependencies 和 devDependencies
+
+## 生成代码验证
+
+- 每次生成代码后必须运行 `pnpm typecheck` 和 `pnpm lint` 验证无报错
+- 如果验证失败，必须修复后再输出，不允许交付带类型错误或 lint 错误的代码
