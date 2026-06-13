@@ -1,52 +1,27 @@
-import http from '@/api/http';
+import { z } from 'zod';
+import type { CreateUserParams, UpdateUserParams, UserResponse } from '@nebula/shared/schemas';
+import { CreateUserSchema, UpdateUserSchema, UserResponseSchema } from '@nebula/shared/schemas';
+import { ENDPOINTS } from '@/api/endpoints';
+import { del, get, patch, post } from '@/api/http';
 
-// 用户响应
-export interface UserResponse {
-  id: string;
-  email: string;
-  username: string;
-  name?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+const UserListSchema = z.array(UserResponseSchema);
 
-// 创建用户参数
-export interface CreateUserParams {
-  email: string;
-  username: string;
-  password: string;
-  name?: string;
-}
-
-// 更新用户参数
-export interface UpdateUserParams {
-  email?: string;
-  username?: string;
-  name?: string;
-}
-
-// 创建用户
 export function createUser(params: CreateUserParams): Promise<UserResponse> {
-  return http.post<unknown, UserResponse>('/users', params);
+  return post(ENDPOINTS.users, CreateUserSchema.parse(params), UserResponseSchema);
 }
 
-// 获取所有用户
 export function getUsers(): Promise<UserResponse[]> {
-  return http.get<unknown, UserResponse[]>('/users');
+  return get(ENDPOINTS.users, UserListSchema);
 }
 
-// 根据 ID 获取用户
 export function getUserById(id: string): Promise<UserResponse> {
-  return http.get<unknown, UserResponse>(`/users/${id}`);
+  return get(`${ENDPOINTS.users}/${id}`, UserResponseSchema);
 }
 
-// 更新用户
 export function updateUser(id: string, params: UpdateUserParams): Promise<UserResponse> {
-  return http.patch<unknown, UserResponse>(`/users/${id}`, params);
+  return patch(`${ENDPOINTS.users}/${id}`, UpdateUserSchema.parse(params), UserResponseSchema);
 }
 
-// 删除用户
-export function deleteUser(id: string): Promise<void> {
-  return http.delete<unknown, void>(`/users/${id}`);
+export function deleteUser(id: string): Promise<undefined> {
+  return del(`${ENDPOINTS.users}/${id}`);
 }

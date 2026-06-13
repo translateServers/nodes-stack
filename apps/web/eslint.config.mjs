@@ -1,4 +1,9 @@
 // @ts-check
-import reactConfig from '@nebula/eslint-config/react.js';
+import reactConfig from '@nebula/eslint-config/react';
 
-export default [...reactConfig];
+export default [
+  ...reactConfig,
+  {
+    ignores: ['eslint.config.mjs'],
+  },
+];

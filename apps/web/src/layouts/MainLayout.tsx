@@ -12,20 +12,16 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import MenuIcon from '@mui/icons-material/Menu';
-import { useState } from 'react';
+import { useUiStore } from '@/store';
 
 const DRAWER_WIDTH = 240;
 
-const menuItems = [
-  { text: '仪表盘', icon: <DashboardIcon />, path: '/' },
-];
+const menuItems = [{ text: '仪表盘', icon: <DashboardIcon />, path: '/' }];
 
 export default function MainLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const handleDrawerToggle = () => {
-    setMobileOpen((prev) => !prev);
-  };
+  const mobileOpen = useUiStore((state) => state.mobileSidebarOpen);
+  const toggleMobileSidebar = useUiStore((state) => state.toggleMobileSidebar);
+  const closeMobileSidebar = useUiStore((state) => state.closeMobileSidebar);
 
   const drawer = (
     <div>
@@ -36,7 +32,7 @@ export default function MainLayout() {
       </Toolbar>
       <List>
         {menuItems.map((item) => (
-          <ListItemButton key={item.text} href={item.path}>
+          <ListItemButton key={item.text} href={item.path} onClick={closeMobileSidebar}>
             <ListItemIcon>{item.icon}</ListItemIcon>
             <ListItemText primary={item.text} />
           </ListItemButton>
@@ -59,7 +55,7 @@ export default function MainLayout() {
           <IconButton
             color="inherit"
             edge="start"
-            onClick={handleDrawerToggle}
+            onClick={toggleMobileSidebar}
             sx={{ mr: 2, display: { sm: 'none' } }}
           >
             <MenuIcon />
@@ -73,7 +69,7 @@ export default function MainLayout() {
         <Drawer
           variant="temporary"
           open={mobileOpen}
-          onClose={handleDrawerToggle}
+          onClose={closeMobileSidebar}
           ModalProps={{ keepMounted: true }}
           sx={{
             display: { xs: 'block', sm: 'none' },

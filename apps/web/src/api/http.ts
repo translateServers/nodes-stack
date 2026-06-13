@@ -1,121 +1,148 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
-import type { ApiErrorResponse, ApiResponse } from './types';
+import { z, type ZodType } from 'zod';
+import { BizCode, type ApiErrorResponse, type ApiResponse } from '@nebula/shared/types';
+import { BusinessError, getBizMessage } from '@nebula/shared/errors';
+import { API_BASE_URL, ENDPOINTS } from '@/api/endpoints';
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setRefreshToken,
+} from '@/api/token';
 
-// 业务异常类：用于业务码非 0 时抛出
-export class BusinessError extends Error {
-  readonly code: number;
-  readonly details?: string[];
+type TokenResponse = {
+  accessToken: string;
+  refreshToken: string;
+};
 
-  constructor(code: number, message: string, details?: string[]) {
-    super(message);
-    this.name = 'BusinessError';
-    this.code = code;
-    this.details = details;
-  }
-}
-
-// 401 未授权标记，防止多个请求并发刷新 token
-let isRefreshing = false;
-let pendingQueue: Array<{
+type PendingRequest = {
   resolve: (token: string) => void;
   reject: (error: unknown) => void;
-}> = [];
+};
+
+type NebulaRequestConfig<TSchema extends ZodType | undefined = ZodType | undefined> =
+  InternalAxiosRequestConfig & {
+    meta?: {
+      responseSchema?: TSchema;
+      skipAuthRefresh?: boolean;
+    };
+    _retry?: boolean;
+  };
+
+let isRefreshing = false;
+let pendingQueue: PendingRequest[] = [];
 
 function processPendingQueue(error: unknown, token: string | null): void {
   pendingQueue.forEach(({ resolve, reject }) => {
-    if (error) {
-      reject(error);
-    } else {
-      resolve(token ?? '');
+    if (error || token === null) {
+      reject(error ?? new BusinessError(BizCode.UNAUTHORIZED, getBizMessage(BizCode.UNAUTHORIZED)));
+      return;
     }
+    resolve(token);
   });
   pendingQueue = [];
 }
 
-const ACCESS_TOKEN_KEY = 'nebula_access_token';
-const REFRESH_TOKEN_KEY = 'nebula_refresh_token';
+function parseResponse<TSchema extends ZodType>(data: unknown, schema: TSchema): z.infer<TSchema> {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    throw new BusinessError(
+      BizCode.INTERNAL_ERROR,
+      '响应数据校验失败',
+      result.error.issues.map((issue) => issue.message),
+    );
+  }
 
-export function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  return result.data;
 }
 
-export function setAccessToken(token: string): void {
-  localStorage.setItem(ACCESS_TOKEN_KEY, token);
-}
-
-export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-export function setRefreshToken(token: string): void {
-  localStorage.setItem(REFRESH_TOKEN_KEY, token);
-}
-
-export function clearTokens(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-}
-
-// 创建 axios 实例
 const http: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// 请求拦截器：注入 token
-http.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = getAccessToken();
-    if (token) {
-      config.headers.set('Authorization', `Bearer ${token}`);
-    }
-    return config;
+const refreshClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+  headers: {
+    'Content-Type': 'application/json',
   },
-  (error) => Promise.reject(error),
-);
+});
 
-// 响应拦截器：统一处理业务码和 401 刷新
+async function performRefreshToken(refreshToken: string): Promise<TokenResponse> {
+  const response = await refreshClient.post<ApiResponse<TokenResponse>>(ENDPOINTS.auth.refresh, {
+    refreshToken,
+  });
+
+  if (response.data.code !== BizCode.SUCCESS || !response.data.data) {
+    throw new BusinessError(response.data.code, response.data.message);
+  }
+
+  return response.data.data;
+}
+
+http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.set('Authorization', `Bearer ${token}`);
+  }
+  return config;
+});
+
 http.interceptors.response.use(
   (response) => {
     const payload = response.data as ApiResponse<unknown> | undefined;
-    if (payload && typeof payload.code === 'number') {
-      if (payload.code === 0) {
-        return payload.data as unknown;
-      }
+    if (!payload || typeof payload.code !== 'number') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return response.data;
+    }
+
+    if (payload.code !== BizCode.SUCCESS) {
       throw new BusinessError(payload.code, payload.message);
     }
-    return response.data;
+
+    const responseSchema = (response.config as NebulaRequestConfig).meta?.responseSchema;
+    if (!responseSchema) {
+      return payload.data;
+    }
+
+    return parseResponse(payload.data, responseSchema);
   },
   async (error: AxiosError<ApiErrorResponse>) => {
     const { response, config } = error;
 
-    // 网络错误或超时
     if (!response) {
-      throw new BusinessError(-1, error.message || '网络错误');
+      throw new BusinessError(-1, error.message || '网络异常');
     }
 
-    const { status, data } = response;
-    const bizCode = data?.code ?? status;
-    const message = data?.message ?? error.message;
+    const requestConfig = config as NebulaRequestConfig | undefined;
+    const errorCode = response.data?.code ?? response.status;
+    const errorMessage = response.data?.message ?? error.message ?? getBizMessage(errorCode);
+    const errorDetails = response.data?.details;
 
-    // 401 处理：尝试刷新 token
-    if (status === 401 && config && !('retry' in config && config.retry === true)) {
+    if (
+      response.status === 401 &&
+      requestConfig &&
+      !requestConfig._retry &&
+      !requestConfig.meta?.skipAuthRefresh
+    ) {
       const refreshToken = getRefreshToken();
       if (!refreshToken) {
         clearTokens();
-        throw new BusinessError(bizCode, message, data?.details);
+        throw new BusinessError(errorCode, errorMessage, errorDetails);
       }
 
       if (isRefreshing) {
-        return new Promise((resolve, reject) => {
+        return await new Promise((resolve, reject) => {
           pendingQueue.push({
             resolve: (token) => {
-              (config as InternalAxiosRequestConfig & { retry?: boolean }).retry = true;
-              config.headers.set('Authorization', `Bearer ${token}`);
-              resolve(http(config));
+              requestConfig._retry = true;
+              requestConfig.headers.set('Authorization', `Bearer ${token}`);
+              resolve(http(requestConfig));
             },
             reject,
           });
@@ -123,32 +150,80 @@ http.interceptors.response.use(
       }
 
       isRefreshing = true;
+
       try {
-        const result = await axios.post<ApiResponse<{ accessToken: string; refreshToken: string }>>(
-          '/api/auth/refresh',
-          { refreshToken },
-        );
-        const tokens = result.data.data;
-        if (!tokens) {
-          throw new BusinessError(bizCode, '刷新令牌失败');
-        }
+        const tokens = await performRefreshToken(refreshToken);
         setAccessToken(tokens.accessToken);
         setRefreshToken(tokens.refreshToken);
         processPendingQueue(null, tokens.accessToken);
-        (config as InternalAxiosRequestConfig & { retry?: boolean }).retry = true;
-        config.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
-        return http(config);
+        requestConfig._retry = true;
+        requestConfig.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
+        return await http(requestConfig);
       } catch (refreshError) {
         processPendingQueue(refreshError, null);
         clearTokens();
-        throw new BusinessError(bizCode, message, data?.details);
+        throw refreshError;
       } finally {
         isRefreshing = false;
       }
     }
 
-    throw new BusinessError(bizCode, message, data?.details);
+    throw new BusinessError(errorCode, errorMessage, errorDetails);
   },
 );
 
+export async function get<TSchema extends ZodType>(
+  url: string,
+  schema: TSchema,
+): Promise<z.infer<TSchema>> {
+  const config = {
+    meta: { responseSchema: schema },
+  } as NebulaRequestConfig<TSchema>;
+  return http.get(url, config);
+}
+
+export async function post<TSchema extends ZodType, TBody = unknown>(
+  url: string,
+  body: TBody,
+  schema: TSchema,
+): Promise<z.infer<TSchema>>;
+export async function post<TBody = unknown>(url: string, body?: TBody): Promise<undefined>;
+export async function post<TSchema extends ZodType, TBody = unknown>(
+  url: string,
+  body?: TBody,
+  schema?: TSchema,
+): Promise<z.infer<TSchema> | undefined> {
+  const config = {
+    meta: { responseSchema: schema },
+  } as NebulaRequestConfig<TSchema>;
+  return http.post(url, body, config);
+}
+
+export async function patch<TSchema extends ZodType, TBody = unknown>(
+  url: string,
+  body: TBody,
+  schema: TSchema,
+): Promise<z.infer<TSchema>> {
+  const config = {
+    meta: { responseSchema: schema },
+  } as NebulaRequestConfig<TSchema>;
+  return http.patch(url, body, config);
+}
+
+export async function del<TSchema extends ZodType>(
+  url: string,
+  schema: TSchema,
+): Promise<z.infer<TSchema>>;
+export async function del(url: string): Promise<undefined>;
+export async function del<TSchema extends ZodType>(
+  url: string,
+  schema?: TSchema,
+): Promise<z.infer<TSchema> | undefined> {
+  const config = {
+    meta: { responseSchema: schema },
+  } as NebulaRequestConfig<TSchema>;
+  return http.delete(url, config);
+}
+
+export { BusinessError };
 export default http;
