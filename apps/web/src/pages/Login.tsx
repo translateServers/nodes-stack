@@ -151,38 +151,41 @@ export default function LoginPage() {
                 <label htmlFor="captchaCode" className="text-sm font-medium leading-none">
                   验证码
                 </label>
-                <Input
-                  id="captchaCode"
-                  placeholder="请输入验证码"
-                  autoComplete="off"
-                  value={captchaCode}
-                  onChange={(event) => setCaptchaCode(event.target.value)}
-                  required
-                />
-              </div>
-
-              {/* Captcha image */}
-              {captchaQuery.isLoading ? (
-                <div className="flex justify-center py-3">
-                  <Spinner />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="captchaCode"
+                    placeholder="请输入验证码"
+                    autoComplete="off"
+                    value={captchaCode}
+                    onChange={(event) => setCaptchaCode(event.target.value)}
+                    className="h-10 flex-1"
+                    required
+                  />
+                  {captchaQuery.isLoading ? (
+                    <div className="flex h-10 items-center justify-center rounded-lg border border-border px-3">
+                      <Spinner />
+                    </div>
+                  ) : captchaQuery.error ? (
+                    <div className="flex h-10 items-center justify-center rounded-lg border border-destructive px-3 text-xs text-destructive">
+                      加载失败
+                    </div>
+                  ) : (
+                    <div
+                      className="flex h-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border transition-colors hover:border-primary/40"
+                      onClick={() => void captchaQuery.refetch()}
+                      role="button"
+                      tabIndex={0}
+                      aria-label="点击刷新验证码"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          void captchaQuery.refetch();
+                        }
+                      }}
+                      dangerouslySetInnerHTML={captchaMarkup}
+                    />
+                  )}
                 </div>
-              ) : captchaQuery.error ? (
-                <InlineAlert variant="destructive">验证码加载失败</InlineAlert>
-              ) : (
-                <div
-                  className="flex cursor-pointer justify-center rounded-lg border border-border p-3 transition-colors hover:border-primary/40"
-                  onClick={() => void captchaQuery.refetch()}
-                  role="button"
-                  tabIndex={0}
-                  aria-label="点击刷新验证码"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      void captchaQuery.refetch();
-                    }
-                  }}
-                  dangerouslySetInnerHTML={captchaMarkup}
-                />
-              )}
+              </div>
 
               <Button
                 type="button"
