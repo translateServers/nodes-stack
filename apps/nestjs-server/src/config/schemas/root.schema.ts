@@ -3,6 +3,7 @@ import { AppSchema } from './app.schema';
 import { DatabaseSchema } from './database.schema';
 import { JwtSchema } from './jwt.schema';
 import { LoggerSchema } from './logger.schema';
+import { RedisSchema } from './redis.schema';
 
 /**
  * 聚合分层 Schema，形成 Namespace 结构。
@@ -12,6 +13,7 @@ export const RootConfigSchema = z.object({
   database: DatabaseSchema,
   jwt: JwtSchema,
   logger: LoggerSchema,
+  redis: RedisSchema,
 });
 
 /**

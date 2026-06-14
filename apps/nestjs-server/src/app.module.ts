@@ -7,6 +7,7 @@ import { AuthModule } from '@/modules/auth/auth.module';
 import { UserModule } from '@/modules/user/user.module';
 import { HealthModule } from '@/modules/health/health.module';
 import { CacheModule } from '@/modules/cache/cache.module';
+import { RedisModule } from '@/modules/redis/redis.module';
 import { LoggerModule } from '@/modules/logger/logger.module';
 import { AppConfigModule } from '@/config/config.module';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
@@ -23,6 +24,7 @@ import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
       { name: 'medium', ttl: 10000, limit: 20 },
       { name: 'long', ttl: 60000, limit: 100 },
     ]),
+    RedisModule,
     CacheModule,
     PrismaModule,
     AuthModule,

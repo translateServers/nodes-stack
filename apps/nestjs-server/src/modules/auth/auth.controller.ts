@@ -71,7 +71,7 @@ export class AuthController {
   })
   @ApiSuccessResponse(TokenResponseDto)
   async login(@Body() loginDto: LoginDto): Promise<TokenResponseDto> {
-    this.captchaService.verifyCaptcha(loginDto.captchaId, loginDto.captchaCode);
+    await this.captchaService.verifyCaptcha(loginDto.captchaId, loginDto.captchaCode);
     return this.authService.loginWithCredentials(loginDto.account, loginDto.password);
   }
 

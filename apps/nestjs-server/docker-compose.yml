@@ -7,6 +7,8 @@ services:
       - NODE_ENV=production
       - DATABASE_PROVIDER=postgresql
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/nestdb
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - JWT_SECRET=change-this-to-a-secure-secret-at-least-32-chars
       - JWT_ACCESS_TTL=15m
       - JWT_REFRESH_SECRET=change-this-to-a-secure-refresh-secret-at-least-32-chars
@@ -14,6 +16,8 @@ services:
       - CORS_ORIGIN=*
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   db:
@@ -32,5 +36,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
+  redisdata:

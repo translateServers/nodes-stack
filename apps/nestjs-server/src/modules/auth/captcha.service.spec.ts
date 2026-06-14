@@ -1,13 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CaptchaService } from '@/modules/auth/captcha.service';
+import { RedisService } from '@/modules/redis/redis.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
+import { BizCode } from '@/common/enums/biz-code.enum';
+
+const mockRedisClient = {
+  set: jest.fn().mockResolvedValue('OK'),
+  get: jest.fn(),
+  del: jest.fn().mockResolvedValue(1),
+};
+
+const mockRedisService = {
+  client: mockRedisClient,
+  ping: jest.fn().mockResolvedValue(true),
+};
 
 describe('CaptchaService', () => {
   let service: CaptchaService;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CaptchaService],
+      providers: [
+        CaptchaService,
+        { provide: RedisService, useValue: mockRedisService },
+      ],
     }).compile();
 
     service = module.get<CaptchaService>(CaptchaService);
@@ -29,95 +47,71 @@ describe('CaptchaService', () => {
 
       expect(result1.captchaId).not.toBe(result2.captchaId);
     });
+
+    it('should store captcha code in Redis with TTL', async () => {
+      service.generateCaptcha();
+
+      // Redis set 是异步触发的，等待 microtask 完成
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(mockRedisClient.set).toHaveBeenCalledTimes(1);
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        expect.stringContaining('captcha:'),
+        expect.any(String),
+        { EX: 300 },
+      );
+    });
   });
 
   describe('verifyCaptcha', () => {
-    it('should verify correct captcha code', () => {
-      const { captchaId } = service.generateCaptcha();
-      const captchaStore = (
-        service as unknown as {
-          captchaStore: Map<string, { code: string; expiresAt: number }>;
-        }
-      ).captchaStore;
-      const storedData = captchaStore.get(captchaId);
-      if (!storedData) throw new Error('Captcha not found');
-      const storedCode = storedData.code;
+    it('should verify correct captcha code', async () => {
+      mockRedisClient.get.mockResolvedValue('abcd');
 
-      expect(() => service.verifyCaptcha(captchaId, storedCode)).not.toThrow();
+      await expect(service.verifyCaptcha('test-id', 'abcd')).resolves.toBe(true);
+      expect(mockRedisClient.del).toHaveBeenCalledWith('captcha:test-id');
     });
 
-    it('should verify captcha code case-insensitively', () => {
-      const { captchaId } = service.generateCaptcha();
-      const captchaStore = (
-        service as unknown as {
-          captchaStore: Map<string, { code: string; expiresAt: number }>;
-        }
-      ).captchaStore;
-      const storedData = captchaStore.get(captchaId);
-      if (!storedData) throw new Error('Captcha not found');
-      const storedCode = storedData.code;
+    it('should verify captcha code case-insensitively', async () => {
+      mockRedisClient.get.mockResolvedValue('abcd');
 
-      expect(() => service.verifyCaptcha(captchaId, storedCode.toUpperCase())).not.toThrow();
+      await expect(service.verifyCaptcha('test-id', 'ABCD')).resolves.toBe(true);
     });
 
-    it('should throw BusinessException for non-existent captcha', () => {
-      expect(() => service.verifyCaptcha('non-existent-id', '1234')).toThrow(BusinessException);
+    it('should throw BusinessException for non-existent captcha', async () => {
+      mockRedisClient.get.mockResolvedValue(null);
+
+      await expect(service.verifyCaptcha('non-existent-id', '1234')).rejects.toThrow(
+        BusinessException,
+      );
     });
 
-    it('should throw BusinessException for wrong captcha code', () => {
-      const { captchaId } = service.generateCaptcha();
+    it('should throw BusinessException for wrong captcha code', async () => {
+      mockRedisClient.get.mockResolvedValue('abcd');
 
-      expect(() => service.verifyCaptcha(captchaId, 'wrong-code')).toThrow(BusinessException);
+      await expect(service.verifyCaptcha('test-id', 'wrong')).rejects.toThrow(
+        BusinessException,
+      );
     });
 
-    it('should throw BusinessException for expired captcha', () => {
-      const { captchaId } = service.generateCaptcha();
-      const captchaStore = (
-        service as unknown as {
-          captchaStore: Map<string, { code: string; expiresAt: number }>;
-        }
-      ).captchaStore;
-      const data = captchaStore.get(captchaId);
-      if (!data) throw new Error('Captcha not found');
-      data.expiresAt = Date.now() - 1000;
+    it('should delete captcha after successful verification', async () => {
+      mockRedisClient.get.mockResolvedValue('abcd');
 
-      expect(() => service.verifyCaptcha(captchaId, data.code)).toThrow(BusinessException);
+      await service.verifyCaptcha('test-id', 'abcd');
+
+      expect(mockRedisClient.del).toHaveBeenCalledWith('captcha:test-id');
     });
 
-    it('should delete captcha after successful verification', () => {
-      const { captchaId } = service.generateCaptcha();
-      const captchaStore = (
-        service as unknown as {
-          captchaStore: Map<string, { code: string; expiresAt: number }>;
-        }
-      ).captchaStore;
-      const storedData = captchaStore.get(captchaId);
-      if (!storedData) throw new Error('Captcha not found');
-      const storedCode = storedData.code;
-
-      service.verifyCaptcha(captchaId, storedCode);
-
-      expect(captchaStore.has(captchaId)).toBe(false);
-    });
-
-    it('should delete captcha after expiration check', () => {
-      const { captchaId } = service.generateCaptcha();
-      const captchaStore = (
-        service as unknown as {
-          captchaStore: Map<string, { code: string; expiresAt: number }>;
-        }
-      ).captchaStore;
-      const data = captchaStore.get(captchaId);
-      if (!data) throw new Error('Captcha not found');
-      data.expiresAt = Date.now() - 1000;
+    it('should delete captcha even when verification fails (prevent brute-force)', async () => {
+      mockRedisClient.get.mockResolvedValue('abcd');
 
       try {
-        service.verifyCaptcha(captchaId, data.code);
+        await service.verifyCaptcha('test-id', 'wrong');
       } catch {
         // expected
       }
 
-      expect(captchaStore.has(captchaId)).toBe(false);
+      // 无论验证成功或失败，都应删除验证码（防止暴力破解）
+      expect(mockRedisClient.del).toHaveBeenCalledWith('captcha:test-id');
     });
   });
 });

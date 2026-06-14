@@ -1,45 +1,27 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { create } from 'svg-captcha';
 import { randomUUID } from 'crypto';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import { CaptchaResponse } from '@/modules/auth/dto/auth.dto';
+import { RedisService } from '@/modules/redis/redis.service';
 
-interface CaptchaData {
-  code: string;
-  expiresAt: number;
-}
+const CAPTCHA_KEY_PREFIX = 'captcha:';
+const CAPTCHA_EXPIRES_SECONDS = 5 * 60;
 
 /**
  * 验证码服务
  *
- * 使用进程内 Map 存储验证码数据。
- * 注意：生产环境多实例部署时需替换为 Redis 等共享存储，
- * 以确保验证码在所有实例间可验证。
+ * 使用 Redis 存储验证码数据，支持多实例部署。
+ * 验证码在 Redis 中自带 TTL，到期后自动清除。
  */
 @Injectable()
-export class CaptchaService implements OnModuleInit, OnModuleDestroy {
-  private captchaStore = new Map<string, CaptchaData>();
-  private readonly CAPTCHA_EXPIRES_MS = 5 * 60 * 1000;
-  private readonly MAX_STORE_SIZE = 10000;
-  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+export class CaptchaService {
+  private readonly logger = new Logger(CaptchaService.name);
 
-  onModuleInit() {
-    this.cleanupTimer = setInterval(() => this.cleanExpiredCaptchas(), 60 * 1000);
-  }
-
-  onModuleDestroy() {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = null;
-    }
-  }
+  constructor(private readonly redisService: RedisService) {}
 
   generateCaptcha(): CaptchaResponse {
-    if (this.captchaStore.size >= this.MAX_STORE_SIZE) {
-      this.cleanExpiredCaptchas();
-    }
-
     const captcha = create({
       size: 4,
       noise: 3,
@@ -50,12 +32,12 @@ export class CaptchaService implements OnModuleInit, OnModuleDestroy {
     });
 
     const captchaId = randomUUID();
-    const expiresAt = Date.now() + this.CAPTCHA_EXPIRES_MS;
+    const code = captcha.text.toLowerCase();
 
-    this.captchaStore.set(captchaId, {
-      code: captcha.text.toLowerCase(),
-      expiresAt,
-    });
+    // 异步写入 Redis，不阻塞响应
+    this.redisService.client
+      .set(`${CAPTCHA_KEY_PREFIX}${captchaId}`, code, { EX: CAPTCHA_EXPIRES_SECONDS })
+      .catch((err) => this.logger.error(`Failed to store captcha: ${(err as Error).message}`));
 
     return {
       captchaId,
@@ -63,32 +45,22 @@ export class CaptchaService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  verifyCaptcha(captchaId: string, userCode: string): boolean {
-    const captchaData = this.captchaStore.get(captchaId);
+  async verifyCaptcha(captchaId: string, userCode: string): Promise<boolean> {
+    const key = `${CAPTCHA_KEY_PREFIX}${captchaId}`;
+    const storedCode = await this.redisService.client.get(key);
 
-    if (!captchaData) {
+    if (!storedCode) {
+      // 无法区分"不存在"和"已过期"，统一提示验证码无效
       throw new BusinessException(BizCode.AUTH_CAPTCHA_NOT_FOUND);
     }
 
-    if (Date.now() > captchaData.expiresAt) {
-      this.captchaStore.delete(captchaId);
-      throw new BusinessException(BizCode.AUTH_CAPTCHA_EXPIRED);
-    }
+    // 验证后立即删除，确保一次性使用
+    await this.redisService.client.del(key);
 
-    if (captchaData.code !== userCode.toLowerCase()) {
+    if (storedCode !== userCode.toLowerCase()) {
       throw new BusinessException(BizCode.AUTH_CAPTCHA_INVALID);
     }
 
-    this.captchaStore.delete(captchaId);
     return true;
-  }
-
-  private cleanExpiredCaptchas(): void {
-    const now = Date.now();
-    for (const [id, data] of this.captchaStore) {
-      if (now > data.expiresAt) {
-        this.captchaStore.delete(id);
-      }
-    }
   }
 }

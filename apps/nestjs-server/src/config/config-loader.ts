@@ -31,6 +31,16 @@ export const loadConfig: ConfigFactory = () => {
       loggerMaxFiles: process.env.LOGGER_MAX_FILES,
       loggerMaxSize: process.env.LOGGER_MAX_SIZE,
     },
+    redis: {
+      host: process.env.REDIS_HOST,
+      port: process.env.REDIS_PORT,
+      password: process.env.REDIS_PASSWORD,
+      db: process.env.REDIS_DB,
+      keyPrefix: process.env.REDIS_KEY_PREFIX,
+      connectTimeout: process.env.REDIS_CONNECT_TIMEOUT,
+      maxRetries: process.env.REDIS_MAX_RETRIES,
+      lazyConnect: process.env.REDIS_LAZY_CONNECT,
+    },
   };
 
   // 2. 使用 Zod 进行严格的运行时校验和转换 (如 string -> number)
