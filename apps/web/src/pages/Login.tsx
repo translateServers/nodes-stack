@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useCaptcha, useLogin } from '@/api';
 import { InlineAlert } from '@/components/ui/alert';
@@ -27,7 +27,7 @@ export default function LoginPage() {
     [captchaQuery.data?.captchaImage],
   );
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: { preventDefault: () => void }) => {
     event.preventDefault();
     if (!captchaQuery.data?.captchaId) {
       return;
@@ -44,7 +44,7 @@ export default function LoginPage() {
 
   return (
     <div className="bg-muted/30 flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-[420px]">
+      <Card className="w-full max-w-105">
         <CardHeader className="space-y-2 text-center">
           <CardTitle className="text-3xl font-bold">Nebula</CardTitle>
           <CardDescription>管理后台登录</CardDescription>

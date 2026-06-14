@@ -1,68 +1,63 @@
 import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
 import type { ProfileResponse } from '@nebula/shared';
 
-const ACCESS_TOKEN_KEY = 'nebula_access_token';
-const REFRESH_TOKEN_KEY = 'nebula_refresh_token';
-
-interface AuthState {
+// ── State ──────────────────────────────────────────────
+interface AuthData {
   accessToken: string | null;
   refreshToken: string | null;
   user: ProfileResponse | null;
   isAuthenticated: boolean;
+}
+
+// ── Actions ────────────────────────────────────────────
+interface AuthActions {
   setTokens: (accessToken: string, refreshToken: string) => void;
   setUser: (user: ProfileResponse | null) => void;
   clearAuth: () => void;
 }
 
-function readTokens(): { accessToken: string | null; refreshToken: string | null } {
-  return {
-    accessToken: window.localStorage.getItem(ACCESS_TOKEN_KEY),
-    refreshToken: window.localStorage.getItem(REFRESH_TOKEN_KEY),
-  };
-}
+// ── Store ──────────────────────────────────────────────
+export type AuthState = AuthData & AuthActions;
 
-function writeTokens(accessToken: string, refreshToken: string): void {
-  window.localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-}
+const initialData: AuthData = {
+  accessToken: null,
+  refreshToken: null,
+  user: null,
+  isAuthenticated: false,
+};
 
-function removeTokens(): void {
-  window.localStorage.removeItem(ACCESS_TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-}
+export const useAuthStore = create<AuthState>()(
+  devtools(
+    persist(
+      (set) => ({
+        ...initialData,
 
-function createInitialState(): Pick<
-  AuthState,
-  'accessToken' | 'refreshToken' | 'user' | 'isAuthenticated'
-> {
-  const { accessToken, refreshToken } = readTokens();
-  return {
-    accessToken,
-    refreshToken,
-    user: null,
-    isAuthenticated: accessToken !== null,
-  };
-}
+        setTokens: (accessToken, refreshToken) => {
+          set({ accessToken, refreshToken, isAuthenticated: true }, false, 'setTokens');
+        },
 
-export const useAuthStore = create<AuthState>((set) => ({
-  ...createInitialState(),
+        setUser: (user) => {
+          set({ user }, false, 'setUser');
+        },
 
-  setTokens: (accessToken, refreshToken) => {
-    writeTokens(accessToken, refreshToken);
-    set({ accessToken, refreshToken, isAuthenticated: true });
-  },
-
-  setUser: (user) => {
-    set({ user });
-  },
-
-  clearAuth: () => {
-    removeTokens();
-    set({
-      accessToken: null,
-      refreshToken: null,
-      user: null,
-      isAuthenticated: false,
-    });
-  },
-}));
+        clearAuth: () => {
+          set({ ...initialData }, false, 'clearAuth');
+        },
+      }),
+      {
+        name: 'nebula-auth',
+        partialize: (state) => ({
+          accessToken: state.accessToken,
+          refreshToken: state.refreshToken,
+        }),
+        onRehydrateStorage: () => (state) => {
+          if (state?.accessToken) {
+            state.isAuthenticated = true;
+          }
+        },
+      },
+    ),
+    { name: 'AuthStore' },
+  ),
+);
