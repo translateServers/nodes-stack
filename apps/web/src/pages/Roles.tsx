@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/api';
+import type { z } from 'zod';
+import { CreateRoleSchema, UpdateRoleSchema, type RoleResponse } from '@nebula/shared';
+import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from '@/api';
 import { DataTable, createColumnHelper } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
+  DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
@@ -25,23 +25,26 @@ import { InlineAlert } from '@/components/ui/alert';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
-const columnHelper = createColumnHelper<UserResponse>();
+type CreateRoleInput = z.infer<typeof CreateRoleSchema>;
+type UpdateRoleInput = z.infer<typeof UpdateRoleSchema>;
 
-interface UserFormProps {
-  user?: UserResponse;
+const columnHelper = createColumnHelper<RoleResponse>();
+
+interface RoleFormProps {
+  role?: RoleResponse;
   onSubmit: (data: unknown) => Promise<void>;
   onCancel: () => void;
   isSubmitting: boolean;
 }
 
-function UserForm({ user, onSubmit, onCancel, isSubmitting }: UserFormProps) {
-  const isEdit = !!user;
+function RoleForm({ role, onSubmit, onCancel, isSubmitting }: RoleFormProps) {
+  const isEdit = !!role;
 
   const form = useNebulaForm({
-    schema: isEdit ? UpdateUserSchema : CreateUserSchema,
-    defaultValues: user
-      ? { username: user.username, email: user.email, name: user.name ?? '' }
-      : { username: '', email: '', password: '', name: '' },
+    schema: isEdit ? UpdateRoleSchema : CreateRoleSchema,
+    defaultValues: role
+      ? { name: role.name, description: role.description ?? '' }
+      : { name: '', description: '' },
   });
 
   const handleSubmit = form.handleSubmit(async (data) => {
@@ -53,53 +56,25 @@ function UserForm({ user, onSubmit, onCancel, isSubmitting }: UserFormProps) {
       <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
         <FormField
           control={form.control}
-          name="username"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>用户名</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入用户名" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>邮箱</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="请输入邮箱" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        {!isEdit && (
-          <FormField
-            control={form.control}
-            name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>密码</FormLabel>
-                <FormControl>
-                  <Input type="password" placeholder="请输入密码" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-        <FormField
-          control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>显示名称</FormLabel>
+              <FormLabel>角色名称</FormLabel>
               <FormControl>
-                <Input placeholder="请输入显示名称（可选）" {...field} />
+                <Input placeholder="请输入角色名称" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>角色描述</FormLabel>
+              <FormControl>
+                <Input placeholder="请输入角色描述（可选）" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -118,50 +93,47 @@ function UserForm({ user, onSubmit, onCancel, isSubmitting }: UserFormProps) {
   );
 }
 
-export default function UsersPage() {
-  const { data: users, isLoading, error } = useUsers();
-  const createUserMutation = useCreateUser();
-  const updateUserMutation = useUpdateUser();
-  const deleteUserMutation = useDeleteUser();
+export default function RolesPage() {
+  const { data: roles, isLoading, error } = useRoles();
+  const createRoleMutation = useCreateRole();
+  const updateRoleMutation = useUpdateRole();
+  const deleteRoleMutation = useDeleteRole();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserResponse | undefined>();
+  const [editingRole, setEditingRole] = useState<RoleResponse | undefined>();
 
   const handleCreate = () => {
-    setEditingUser(undefined);
+    setEditingRole(undefined);
     setDialogOpen(true);
   };
 
-  const handleEdit = (user: UserResponse) => {
-    setEditingUser(user);
+  const handleEdit = (role: RoleResponse) => {
+    setEditingRole(role);
     setDialogOpen(true);
   };
 
-  const handleDelete = async (user: UserResponse) => {
-    if (!confirm(`确定要删除用户 "${user.username}" 吗？`)) return;
-    await deleteUserMutation.mutateAsync(user.id);
+  const handleDelete = async (role: RoleResponse) => {
+    if (!confirm(`确定要删除角色 "${role.name}" 吗？`)) return;
+    await deleteRoleMutation.mutateAsync(role.id);
   };
 
   const handleFormSubmit = async (data: unknown) => {
-    if (editingUser) {
-      await updateUserMutation.mutateAsync({
-        id: editingUser.id,
-        params: data as Parameters<typeof updateUserMutation.mutateAsync>[0]['params'],
+    if (editingRole) {
+      await updateRoleMutation.mutateAsync({
+        id: editingRole.id,
+        params: data as UpdateRoleInput,
       });
     } else {
-      await createUserMutation.mutateAsync(
-        data as Parameters<typeof createUserMutation.mutateAsync>[0],
-      );
+      await createRoleMutation.mutateAsync(data as CreateRoleInput);
     }
     setDialogOpen(false);
   };
 
   const columns = [
-    columnHelper.accessor('username', { header: '用户名', size: 150 }),
-    columnHelper.accessor('email', { header: '邮箱', size: 200 }),
-    columnHelper.accessor('name', {
-      header: '显示名称',
-      size: 150,
+    columnHelper.accessor('name', { header: '角色名称', size: 200 }),
+    columnHelper.accessor('description', {
+      header: '描述',
+      size: 300,
       cell: (value) => value ?? '-',
     }),
     columnHelper.accessor('isActive', {
@@ -195,35 +167,32 @@ export default function UsersPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">用户管理</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">角色管理</h1>
         <Button onClick={handleCreate}>
           <Plus className="mr-1.5 size-4" />
-          新建用户
+          新建角色
         </Button>
       </div>
 
-      {error && <InlineAlert variant="destructive">加载用户列表失败</InlineAlert>}
+      {error && <InlineAlert variant="destructive">加载角色列表失败</InlineAlert>}
 
       <DataTable
         columns={columns}
-        data={users ?? []}
+        data={roles ?? []}
         isLoading={isLoading}
-        emptyMessage="暂无用户数据"
+        emptyMessage="暂无角色数据"
       />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingUser ? '编辑用户' : '新建用户'}</DialogTitle>
-            <DialogDescription>
-              {editingUser ? `正在编辑用户：${editingUser.username}` : '创建一个新的用户账号'}
-            </DialogDescription>
+            <DialogTitle>{editingRole ? '编辑角色' : '新建角色'}</DialogTitle>
           </DialogHeader>
-          <UserForm
-            user={editingUser}
+          <RoleForm
+            role={editingRole}
             onSubmit={handleFormSubmit}
             onCancel={() => setDialogOpen(false)}
-            isSubmitting={createUserMutation.isPending || updateUserMutation.isPending}
+            isSubmitting={createRoleMutation.isPending || updateRoleMutation.isPending}
           />
         </DialogContent>
       </Dialog>

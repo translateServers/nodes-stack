@@ -1,27 +1,27 @@
 enum MenuType {
-  menu
-  button
-  link
+  DIRECTORY
+  MENU
+  BUTTON
 }
 
 model Menu {
-  id          String      @id @default(uuid())
-  parentId    String?
-  parent      Menu?       @relation("MenuHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children    Menu[]      @relation("MenuHierarchy")
-  name        String      @unique
-  title       String
-  path        String?
-  icon        String?
-  type        MenuType    @default(menu)
-  sort        Int         @default(0)
-  isActive    Boolean     @default(true)
-  permission  String?
-  component   String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  roles       Role[]      @relation("RoleMenus")
+  id         String    @id @default(uuid())
+  parentId   String?
+  parent     Menu?     @relation("MenuHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children   Menu[]    @relation("MenuHierarchy")
+  name       String    @map("title")
+  path       String?
+  icon       String?
+  type       MenuType  @default(MENU)
+  sort       Int       @default(0)
+  isActive   Boolean   @default(true)
+  permission String?
+  component  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  roles      Role[]    @relation("RoleMenus")
 
+  @@unique([name, parentId])
   @@index([parentId])
   @@map("menus")
 }

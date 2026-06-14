@@ -5,6 +5,8 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { PrismaModule } from '@/prisma/prisma.module';
 import { AuthModule } from '@/modules/auth/auth.module';
 import { UserModule } from '@/modules/user/user.module';
+import { MenuModule } from '@/modules/menu/menu.module';
+import { RoleModule } from '@/modules/role/role.module';
 import { HealthModule } from '@/modules/health/health.module';
 import { CacheModule } from '@/modules/cache/cache.module';
 import { RedisModule } from '@/modules/redis/redis.module';
@@ -29,6 +31,8 @@ import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
     PrismaModule,
     AuthModule,
     UserModule,
+    MenuModule,
+    RoleModule,
     HealthModule,
     LoggerModule,
   ],

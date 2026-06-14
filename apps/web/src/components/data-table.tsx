@@ -7,6 +7,7 @@ import {
   flexRender,
   type ColumnDef,
   type SortingState,
+  type ColumnSizingState,
 } from '@tanstack/react-table';
 import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -75,14 +76,18 @@ export function DataTable<TData>({
   toolbar,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
 
   const isServerPagination = total !== undefined;
 
   const table = useReactTable({
     data,
     columns,
-    state: { sorting },
+    state: { sorting, columnSizing },
     onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     ...(isServerPagination
@@ -114,24 +119,34 @@ export function DataTable<TData>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
-                  >
-                    {header.isPlaceholder ? null : (
-                      <button
-                        type="button"
+                  <TableHead key={header.id} style={{ width: header.getSize() }}>
+                    <div className="flex items-center">
+                      {header.isPlaceholder ? null : (
+                        <button
+                          type="button"
+                          className={cn(
+                            'flex items-center gap-1 transition-colors hover:text-foreground',
+                            !header.column.getCanSort() && 'cursor-default',
+                          )}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && (
+                            <SortIcon isSorted={header.column.getIsSorted()} />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {/* Resize handle */}
+                    {header.column.getCanResize() && (
+                      <div
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
                         className={cn(
-                          'flex items-center gap-1 transition-colors hover:text-foreground',
-                          !header.column.getCanSort() && 'cursor-default',
+                          'absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none select-none transition-colors',
+                          header.column.getIsResizing() ? 'bg-primary' : 'hover:bg-primary/50',
                         )}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanSort() && (
-                          <SortIcon isSorted={header.column.getIsSorted()} />
-                        )}
-                      </button>
+                      />
                     )}
                   </TableHead>
                 ))}

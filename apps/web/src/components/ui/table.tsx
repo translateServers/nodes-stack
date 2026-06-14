@@ -8,6 +8,7 @@ function Table({ className, ...props }: React.ComponentProps<'table'>) {
       <table
         data-slot="table"
         className={cn('w-full caption-bottom text-sm', className)}
+        style={{ tableLayout: 'fixed' }}
         {...props}
       />
     </div>
@@ -56,7 +57,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
     <th
       data-slot="table-head"
       className={cn(
-        'h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0',
+        'relative h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0',
         className,
       )}
       {...props}
