@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: database_schemas
-title: 数据库模式定义
-scope:
-    - prisma/
-source_files: []
-depends_on: []
-related_to: []

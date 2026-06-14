@@ -11,8 +11,8 @@ export const ENDPOINTS = {
   },
   users: '/users',
   health: {
-    check: '/health',
-    ping: '/health/ping',
+    check: '',
+    ping: '/ping',
   },
   menus: '/menus',
   roles: '/roles',
