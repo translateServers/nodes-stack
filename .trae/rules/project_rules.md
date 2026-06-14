@@ -28,8 +28,8 @@
 
 ## 前端开发
 
-- 框架：React 19 + Vite 8 + MUI 9 + Tailwind CSS v4 + React Router 7
-- 样式优先使用 Tailwind CSS 工具类，复杂组件使用 MUI
+- 框架：React 19 + Vite 8 + Tailwind CSS v4 + Radix UI + shadcn/ui + React Router 7
+- 样式优先使用 Tailwind CSS 工具类，复杂交互组件使用 Radix UI + shadcn/ui
 - 路径别名 `@/` 映射 `src/`，导入时使用别名路径
 - 新增页面必须在 `src/router/index.tsx` 中注册路由
 - 新增页面使用 `MainLayout` 布局，侧边栏菜单在 `MainLayout.tsx` 的 `menuItems` 中配置
@@ -46,3 +46,14 @@
 
 - 每次生成代码后必须运行 `pnpm typecheck` 和 `pnpm lint` 验证无报错
 - 如果验证失败，必须修复后再输出，不允许交付带类型错误或 lint 错误的代码
+
+## 快速模式（Quick Mode）
+
+- 当用户明确说"快速实现"、"快速模式"、"不用管类型"、"先跑通就行"等类似表述时，进入快速模式
+- 快速模式下：
+  - 跳过 TypeScript 严格类型检查规则（允许 `any`、隐式类型、`@ts-ignore` 等）
+  - 跳过 ESLint `recommendedTypeChecked` 相关规则
+  - 仍需保证代码语法正确、能正常运行
+  - 仍需遵守 Prettier 格式规范
+  - 不需要运行 `pnpm typecheck` 和 `pnpm lint` 验证
+- 快速模式仅限当前请求，下一次请求自动恢复为默认的严格模式

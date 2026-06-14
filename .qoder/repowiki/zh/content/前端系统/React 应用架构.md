@@ -20,6 +20,7 @@
 </cite>
 
 ## 目录
+
 1. [引言](#引言)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -32,9 +33,11 @@
 10. [附录](#附录)
 
 ## 引言
+
 本文件面向使用 React 19 的前端团队，系统性梳理基于 Vite + React Router + Zustand + TanStack Query 的应用架构。重点覆盖应用入口点配置、路由系统设计模式（含嵌套路由与路由守卫）、主布局组件与导航策略、状态管理（认证与 UI 状态）、数据请求与错误处理、以及性能优化与开发调试实践。文档通过分层讲解与图示化表达，帮助读者快速理解并复用该架构。
 
 ## 项目结构
+
 Web 前端采用模块化目录组织，围绕“入口 → 路由 → 布局 → 页面 → 组件 → 状态 → 请求”的层次展开，并辅以工具函数与主题样式。
 
 ```mermaid
@@ -81,6 +84,7 @@ M --> PKG
 ```
 
 图表来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/router/index.tsx:1-51](file://apps/web/src/router/index.tsx#L1-L51)
 - [apps/web/src/layouts/MainLayout.tsx:1-97](file://apps/web/src/layouts/MainLayout.tsx#L1-L97)
@@ -98,12 +102,14 @@ M --> PKG
 - [apps/web/package.json:1-44](file://apps/web/package.json#L1-L44)
 
 章节来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/router/index.tsx:1-51](file://apps/web/src/router/index.tsx#L1-L51)
 - [apps/web/vite.config.ts:1-23](file://apps/web/vite.config.ts#L1-L23)
 - [apps/web/package.json:1-44](file://apps/web/package.json#L1-L44)
 
 ## 核心组件
+
 - 应用入口与 Provider 层
   - 入口文件负责挂载根节点，注入查询客户端、全局提示器、路由提供者与错误提示条，并引入全局样式。
   - 关键路径参考：[apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
@@ -121,6 +127,7 @@ M --> PKG
   - 关键路径参考：[apps/web/src/api/core/query-client.ts:5-31](file://apps/web/src/api/core/query-client.ts#L5-L31)，[apps/web/src/components/ApiErrorSnackbar.tsx:7-57](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L57)
 
 章节来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/router/index.tsx:1-51](file://apps/web/src/router/index.tsx#L1-L51)
 - [apps/web/src/components/RequireAuth.tsx:1-14](file://apps/web/src/components/RequireAuth.tsx#L1-L14)
@@ -131,6 +138,7 @@ M --> PKG
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 
 ## 架构总览
+
 下图展示从入口到页面渲染、状态更新与数据请求的整体调用链路。
 
 ```mermaid
@@ -158,6 +166,7 @@ end
 ```
 
 图表来源
+
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 - [apps/web/src/router/index.tsx:12-48](file://apps/web/src/router/index.tsx#L12-L48)
 - [apps/web/src/components/RequireAuth.tsx:4-13](file://apps/web/src/components/RequireAuth.tsx#L4-L13)
@@ -171,6 +180,7 @@ end
 ## 详细组件分析
 
 ### 应用入口与初始化流程
+
 - 初始化步骤
   - 创建根节点并挂载 StrictMode 包裹的应用。
   - 注入查询客户端与 Devtools，确保数据缓存与调试能力可用。
@@ -181,10 +191,12 @@ end
   - [apps/web/vite.config.ts:6-22](file://apps/web/vite.config.ts#L6-L22)
 
 章节来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/vite.config.ts:1-23](file://apps/web/vite.config.ts#L1-L23)
 
 ### 路由系统与导航策略
+
 - 设计模式
   - 顶层路由包含登录页与受保护路由组；受保护路由组通过 RequireAuth 守卫拦截未登录用户。
   - 受保护路由组内嵌套主布局，主布局内部再按路径渲染仪表盘、用户管理等页面。
@@ -199,11 +211,13 @@ end
   - [apps/web/src/pages/Login.tsx:68-72](file://apps/web/src/pages/Login.tsx#L68-L72)
 
 章节来源
+
 - [apps/web/src/router/index.tsx:1-51](file://apps/web/src/router/index.tsx#L1-L51)
 - [apps/web/src/layouts/MainLayout.tsx:1-97](file://apps/web/src/layouts/MainLayout.tsx#L1-L97)
 - [apps/web/src/pages/Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 
 ### 主布局组件与导航实现
+
 - 结构要点
   - 固定侧边栏在桌面端常驻，移动端通过抽屉控制显示/隐藏。
   - 头部区域提供移动端菜单按钮与面包屑式标题。
@@ -216,10 +230,12 @@ end
   - [apps/web/src/store/ui.ts:20-46](file://apps/web/src/store/ui.ts#L20-L46)
 
 章节来源
+
 - [apps/web/src/layouts/MainLayout.tsx:1-97](file://apps/web/src/layouts/MainLayout.tsx#L1-L97)
 - [apps/web/src/store/ui.ts:1-47](file://apps/web/src/store/ui.ts#L1-L47)
 
 ### 路由守卫机制
+
 - RequireAuth 行为
   - 读取认证状态，未登录则重定向至登录页并携带来源地址。
   - 已登录则放行，进入主布局与子页面。
@@ -230,10 +246,12 @@ end
   - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 
 章节来源
+
 - [apps/web/src/components/RequireAuth.tsx:1-14](file://apps/web/src/components/RequireAuth.tsx#L1-L14)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 
 ### 状态管理：认证与 UI
+
 - 认证状态（Zustand）
   - 字段：访问令牌、刷新令牌、用户信息、登录态。
   - 功能：设置令牌、设置用户、清理认证；持久化仅保留必要字段；水合时根据令牌设置登录态。
@@ -246,11 +264,13 @@ end
   - [apps/web/src/store/index.ts:1-3](file://apps/web/src/store/index.ts#L1-L3)
 
 章节来源
+
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/store/ui.ts:1-47](file://apps/web/src/store/ui.ts#L1-L47)
 - [apps/web/src/store/index.ts:1-3](file://apps/web/src/store/index.ts#L1-L3)
 
 ### 数据请求与错误处理
+
 - 查询客户端配置
   - 查询默认：最多重试 2 次，UNAUTHORIZED 业务错误不重试；缓存过期时间 30 秒；窗口聚焦不自动刷新。
   - 变更默认：不重试。
@@ -262,10 +282,12 @@ end
   - [apps/web/src/components/ApiErrorSnackbar.tsx:7-57](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L57)
 
 章节来源
+
 - [apps/web/src/api/core/query-client.ts:1-32](file://apps/web/src/api/core/query-client.ts#L1-L32)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 
 ### 页面组件与数据绑定
+
 - 仪表盘
   - 展示欢迎语、服务健康状态卡片；根据加载/错误状态切换 UI。
 - 用户管理
@@ -278,11 +300,13 @@ end
   - [apps/web/src/pages/Login.tsx:60-220](file://apps/web/src/pages/Login.tsx#L60-L220)
 
 章节来源
+
 - [apps/web/src/pages/Dashboard.tsx:1-41](file://apps/web/src/pages/Dashboard.tsx#L1-L41)
 - [apps/web/src/pages/Users.tsx:1-34](file://apps/web/src/pages/Users.tsx#L1-L34)
 - [apps/web/src/pages/Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 
 ## 依赖分析
+
 - 运行时依赖
   - React 19、React Router 7、Zustand、TanStack React Query、TailwindCSS、Lucide React 等。
 - 开发依赖
@@ -295,10 +319,12 @@ end
   - [apps/web/vite.config.ts:6-22](file://apps/web/vite.config.ts#L6-L22)
 
 章节来源
+
 - [apps/web/package.json:1-44](file://apps/web/package.json#L1-L44)
 - [apps/web/vite.config.ts:1-23](file://apps/web/vite.config.ts#L1-L23)
 
 ## 性能考虑
+
 - 查询缓存与过期
   - 合理设置 staleTime 与 refetchOnWindowFocus，减少不必要的网络请求。
   - 对于需要实时性的接口，谨慎开启窗口聚焦刷新。
@@ -314,6 +340,7 @@ end
   - 使用 Vite 的快速冷启与按需编译特性；生产构建开启压缩与 Tree-shaking。
 
 ## 故障排查指南
+
 - 登录后仍被重定向到登录页
   - 检查认证状态是否持久化成功，确认水合逻辑是否将 accessToken 映射为已登录。
   - 参考：[apps/web/src/store/auth.ts:48-62](file://apps/web/src/store/auth.ts#L48-L62)
@@ -328,15 +355,18 @@ end
   - 参考：[apps/web/src/api/core/query-client.ts:18-23](file://apps/web/src/api/core/query-client.ts#L18-L23)
 
 章节来源
+
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/layouts/MainLayout.tsx:1-97](file://apps/web/src/layouts/MainLayout.tsx#L1-L97)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 - [apps/web/src/api/core/query-client.ts:1-32](file://apps/web/src/api/core/query-client.ts#L1-L32)
 
 ## 结论
+
 该 React 应用以清晰的层次划分与现代工具链实现了高可维护性与良好开发体验。入口层统一注入 Provider，路由层通过守卫保障安全边界，主布局承担导航与响应式交互，状态层以轻量 Store 承担认证与 UI 状态，数据层以 QueryClient 统一处理缓存与错误。建议在后续迭代中持续关注首屏性能、路由懒加载与错误监控体系的完善。
 
 ## 附录
+
 - 最佳实践清单
   - 将 UI 状态与业务状态解耦，避免跨域污染。
   - 对关键页面启用骨架屏或占位符，改善感知性能。

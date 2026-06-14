@@ -16,6 +16,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -67,12 +68,14 @@ PS --> TCS
 ```
 
 **图表来源**
+
 - [health.controller.ts:1-99](file://apps/nestjs-server/src/modules/health/health.controller.ts#L1-L99)
 - [health.module.ts:1-10](file://apps/nestjs-server/src/modules/health/health.module.ts#L1-L10)
 - [redis.service.ts:1-149](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L1-L149)
 - [prisma.service.ts:1-36](file://apps/nestjs-server/src/prisma/prisma.service.ts#L1-L36)
 
 **章节来源**
+
 - [health.controller.ts:1-99](file://apps/nestjs-server/src/modules/health/health.controller.ts#L1-L99)
 - [health.module.ts:1-10](file://apps/nestjs-server/src/modules/health/health.module.ts#L1-L10)
 - [redis.service.ts:1-149](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L1-L149)
@@ -83,21 +86,27 @@ PS --> TCS
 健康监控模块由以下核心组件构成：
 
 ### 1. 健康控制器 (HealthController)
+
 负责处理所有健康检查相关的 HTTP 请求，提供系统状态查询和响应。
 
 ### 2. Redis 服务 (RedisService)
+
 管理 Redis 连接池，提供连接状态检查和性能监控功能。
 
 ### 3. 数据库服务 (PrismaService)
+
 封装数据库连接管理，提供数据库健康状态检查。
 
 ### 4. 健康模块 (HealthModule)
+
 模块化组织健康检查相关的控制器和服务。
 
 ### 5. 前端健康 API (Health API)
+
 提供类型安全的前端健康检查接口和 React Query 集成。
 
 **章节来源**
+
 - [health.controller.ts:10-16](file://apps/nestjs-server/src/modules/health/health.controller.ts#L10-L16)
 - [redis.service.ts:18-25](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L18-L25)
 - [prisma.service.ts:6-7](file://apps/nestjs-server/src/prisma/prisma.service.ts#L6-L7)
@@ -127,9 +136,11 @@ Note over Client,Redis : 并发检查数据库和Redis连接
 ```
 
 **图表来源**
+
 - [health.controller.ts:58-76](file://apps/nestjs-server/src/modules/health/health.controller.ts#L58-L76)
 
 系统架构的关键特点：
+
 - **异步并发检查**：使用 Promise.all 并发检查数据库和 Redis 连接状态
 - **状态聚合**：根据所有依赖服务的状态计算最终健康状态
 - **类型安全**：前后端都使用 TypeScript 和 Zod 验证数据结构
@@ -164,6 +175,7 @@ HealthController --> PingResponse : "返回"
 ```
 
 **图表来源**
+
 - [health.controller.ts:12-16](file://apps/nestjs-server/src/modules/health/health.controller.ts#L12-L16)
 - [health.controller.ts:69-75](file://apps/nestjs-server/src/modules/health/health.controller.ts#L69-L75)
 
@@ -184,9 +196,11 @@ Return --> End([结束])
 ```
 
 **图表来源**
+
 - [health.controller.ts:58-76](file://apps/nestjs-server/src/modules/health/health.controller.ts#L58-L76)
 
 **章节来源**
+
 - [health.controller.ts:58-76](file://apps/nestjs-server/src/modules/health/health.controller.ts#L58-L76)
 
 ### Redis 服务实现
@@ -221,6 +235,7 @@ RedisService --> RedisConfig : "使用"
 ```
 
 **图表来源**
+
 - [redis.service.ts:19-40](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L19-L40)
 - [redis.service.ts:84-92](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L84-L92)
 
@@ -234,6 +249,7 @@ Redis 服务采用了智能的连接管理策略：
 4. **超时控制**：通过连接超时参数控制单次连接尝试的时间
 
 **章节来源**
+
 - [redis.service.ts:83-92](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L83-L92)
 - [redis.service.ts:132-147](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L132-L147)
 
@@ -256,9 +272,11 @@ PrismaService --> TypedConfigService : "依赖"
 ```
 
 **图表来源**
+
 - [prisma.service.ts:10-26](file://apps/nestjs-server/src/prisma/prisma.service.ts#L10-L26)
 
 **章节来源**
+
 - [prisma.service.ts:10-26](file://apps/nestjs-server/src/prisma/prisma.service.ts#L10-L26)
 
 ## API 接口规范
@@ -273,17 +291,19 @@ PrismaService --> TypedConfigService : "依赖"
 **节流**: 已禁用
 
 **响应结构**:
+
 ```typescript
 interface HealthStatus {
-  status: 'ok' | 'degraded'
-  timestamp: string
-  uptime: number
-  database: 'connected' | 'disconnected'
-  redis: 'connected' | 'disconnected'
+  status: 'ok' | 'degraded';
+  timestamp: string;
+  uptime: number;
+  database: 'connected' | 'disconnected';
+  redis: 'connected' | 'disconnected';
 }
 ```
 
 **响应示例**:
+
 ```json
 {
   "status": "ok",
@@ -302,13 +322,15 @@ interface HealthStatus {
 **节流**: 已禁用
 
 **响应结构**:
+
 ```typescript
 interface PingResponse {
-  message: string
+  message: string;
 }
 ```
 
 **响应示例**:
+
 ```json
 {
   "message": "pong"
@@ -316,6 +338,7 @@ interface PingResponse {
 ```
 
 **章节来源**
+
 - [health.controller.ts:18-76](file://apps/nestjs-server/src/modules/health/health.controller.ts#L18-L76)
 - [health.controller.ts:78-97](file://apps/nestjs-server/src/modules/health/health.controller.ts#L78-L97)
 
@@ -326,29 +349,30 @@ interface PingResponse {
 ```typescript
 // 健康状态类型
 export type HealthStatus = {
-  status: 'ok' | 'degraded'
-  timestamp: string
-  uptime: number
-  database: 'connected' | 'disconnected'
-}
+  status: 'ok' | 'degraded';
+  timestamp: string;
+  uptime: number;
+  database: 'connected' | 'disconnected';
+};
 
 // Ping 响应类型
 export type PingResponse = {
-  message: string
-}
+  message: string;
+};
 ```
 
 #### API 函数
 
 ```typescript
 // 健康检查
-export function checkHealth(): Promise<HealthStatus>
+export function checkHealth(): Promise<HealthStatus>;
 
 // Ping 检查
-export function ping(): Promise<PingResponse>
+export function ping(): Promise<PingResponse>;
 ```
 
 **章节来源**
+
 - [api.ts:5-25](file://apps/web/src/api/modules/health/api.ts#L5-L25)
 
 ## 监控指标与状态报告
@@ -357,13 +381,13 @@ export function ping(): Promise<PingResponse>
 
 健康监控模块提供以下关键指标：
 
-| 指标名称 | 数据类型 | 描述 | 取值范围 |
-|---------|---------|------|---------|
-| status | string | 服务整体状态 | 'ok', 'degraded' |
-| timestamp | string | 检查时间戳 | ISO 8601 格式 |
-| uptime | number | 服务运行时长 | 秒 |
-| database | string | 数据库连接状态 | 'connected', 'disconnected' |
-| redis | string | Redis 连接状态 | 'connected', 'disconnected' |
+| 指标名称  | 数据类型 | 描述           | 取值范围                    |
+| --------- | -------- | -------------- | --------------------------- |
+| status    | string   | 服务整体状态   | 'ok', 'degraded'            |
+| timestamp | string   | 检查时间戳     | ISO 8601 格式               |
+| uptime    | number   | 服务运行时长   | 秒                          |
+| database  | string   | 数据库连接状态 | 'connected', 'disconnected' |
+| redis     | string   | Redis 连接状态 | 'connected', 'disconnected' |
 
 ### 状态计算逻辑
 
@@ -383,6 +407,7 @@ G --> H[结束]
 ```
 
 **图表来源**
+
 - [health.controller.ts:67-70](file://apps/nestjs-server/src/modules/health/health.controller.ts#L67-L70)
 
 ### 状态报告格式
@@ -394,6 +419,7 @@ G --> H[结束]
 3. **文本格式**: 简化的状态信息
 
 **章节来源**
+
 - [health.controller.ts:24-56](file://apps/nestjs-server/src/modules/health/health.controller.ts#L24-L56)
 
 ## 前端集成与使用
@@ -421,6 +447,7 @@ Note over QueryClient : 每30秒自动刷新一次
 ```
 
 **图表来源**
+
 - [hooks.ts:4-10](file://apps/web/src/api/modules/health/hooks.ts#L4-L10)
 
 ### 仪表板集成
@@ -457,10 +484,12 @@ HC --> PS
 ```
 
 **图表来源**
+
 - [Dashboard.tsx:81-196](file://apps/web/src/pages/Dashboard.tsx#L81-L196)
 - [hooks.ts:4-10](file://apps/web/src/api/modules/health/hooks.ts#L4-L10)
 
 **章节来源**
+
 - [hooks.ts:4-10](file://apps/web/src/api/modules/health/hooks.ts#L4-L10)
 - [Dashboard.tsx:81-196](file://apps/web/src/pages/Dashboard.tsx#L81-L196)
 
@@ -487,9 +516,11 @@ DashboardPage --> StatCard : "使用"
 ```
 
 **图表来源**
+
 - [Dashboard.tsx:17-52](file://apps/web/src/pages/Dashboard.tsx#L17-L52)
 
 **章节来源**
+
 - [Dashboard.tsx:17-52](file://apps/web/src/pages/Dashboard.tsx#L17-L52)
 
 ## 性能优化与缓存策略
@@ -505,22 +536,27 @@ DashboardPage --> StatCard : "使用"
 ### 性能优化建议
 
 #### 1. 并发检查优化
+
 - 使用 Promise.all 并发检查多个依赖服务
 - 避免串行检查导致的延迟累积
 
 #### 2. 连接池管理
+
 - Redis 服务采用懒加载模式减少初始开销
 - 支持连接复用和重用
 
 #### 3. 内存优化
+
 - 及时释放不再使用的连接
 - 监控内存使用情况
 
 #### 4. 网络优化
+
 - 合理设置连接超时时间
 - 实现重试机制但避免无限重试
 
 **章节来源**
+
 - [health.controller.ts:59-62](file://apps/nestjs-server/src/modules/health/health.controller.ts#L59-L62)
 - [redis.service.ts:132-147](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L132-L147)
 
@@ -533,11 +569,13 @@ DashboardPage --> StatCard : "使用"
 **症状**: 健康状态始终为 'degraded'
 
 **可能原因**:
+
 - 数据库连接异常
 - Redis 服务不可达
 - 网络连接问题
 
 **解决步骤**:
+
 1. 检查数据库连接字符串
 2. 验证 Redis 服务器状态
 3. 确认网络连通性
@@ -547,11 +585,13 @@ DashboardPage --> StatCard : "使用"
 **症状**: Dashboard 显示过期的健康状态
 
 **可能原因**:
+
 - React Query 缓存问题
 - 网络请求失败
 - 前端组件未正确订阅状态
 
 **解决步骤**:
+
 1. 检查网络连接
 2. 刷新页面强制重新获取
 3. 查看浏览器开发者工具的网络面板
@@ -561,11 +601,13 @@ DashboardPage --> StatCard : "使用"
 **症状**: 健康检查响应缓慢
 
 **可能原因**:
+
 - 数据库查询超时
 - Redis 连接池耗尽
 - 网络延迟过高
 
 **解决步骤**:
+
 1. 优化数据库查询
 2. 调整 Redis 连接池大小
 3. 检查网络带宽
@@ -589,10 +631,12 @@ I --> J[完成请求]
 ```
 
 **图表来源**
+
 - [redis.service.ts:116-127](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L116-L127)
 - [prisma.service.ts:8](file://apps/nestjs-server/src/prisma/prisma.service.ts#L8)
 
 **章节来源**
+
 - [redis.service.ts:116-127](file://apps/nestjs-server/src/modules/redis/redis.service.ts#L116-L127)
 - [prisma.service.ts:8](file://apps/nestjs-server/src/prisma/prisma.service.ts#L8)
 

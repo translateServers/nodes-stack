@@ -14,6 +14,7 @@
 </cite>
 
 ## 目录
+
 1. [引言](#引言)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -26,9 +27,11 @@
 10. [附录](#附录)
 
 ## 引言
+
 本文件聚焦于前端应用中的“UI 状态管理”，系统性阐述侧边栏展开/收起、移动端侧边栏开关、全局错误提示等 UI 状态的设计与实现。内容涵盖状态模型、响应式更新机制、与认证状态的协同、错误提示的生命周期管理、以及性能优化与最佳实践。
 
 ## 项目结构
+
 UI 状态主要由 Zustand 状态库集中管理，并在布局组件中进行消费；全局错误提示通过事件总线与 Snackbar 组件联动；页面层通过查询状态（如加载、错误）驱动 UI 呈现。
 
 ```mermaid
@@ -56,6 +59,7 @@ MAIN --> SNACKBAR
 ```
 
 图表来源
+
 - [apps/web/src/store/ui.ts:1-43](file://apps/web/src/store/ui.ts#L1-L43)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/layouts/MainLayout.tsx:1-317](file://apps/web/src/layouts/MainLayout.tsx#L1-L317)
@@ -64,6 +68,7 @@ MAIN --> SNACKBAR
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 
 章节来源
+
 - [apps/web/src/store/ui.ts:1-43](file://apps/web/src/store/ui.ts#L1-L43)
 - [apps/web/src/layouts/MainLayout.tsx:1-317](file://apps/web/src/layouts/MainLayout.tsx#L1-L317)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
@@ -71,6 +76,7 @@ MAIN --> SNACKBAR
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 
 ## 核心组件
+
 - UI 状态存储（Zustand）
   - 状态键：移动端侧边栏开关、侧边栏折叠状态
   - 动作：切换移动端侧边栏、关闭移动端侧边栏、切换侧边栏折叠
@@ -85,6 +91,7 @@ MAIN --> SNACKBAR
   - 基于查询状态（加载/错误）渲染占位与错误提示
 
 章节来源
+
 - [apps/web/src/store/ui.ts:1-43](file://apps/web/src/store/ui.ts#L1-L43)
 - [apps/web/src/layouts/MainLayout.tsx:171-317](file://apps/web/src/layouts/MainLayout.tsx#L171-L317)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
@@ -93,6 +100,7 @@ MAIN --> SNACKBAR
 - [apps/web/src/pages/Login.tsx:165-171](file://apps/web/src/pages/Login.tsx#L165-L171)
 
 ## 架构总览
+
 UI 状态管理采用“集中式状态 + 组件订阅”的模式，配合事件总线实现跨模块的错误提示。整体流程如下：
 
 ```mermaid
@@ -111,6 +119,7 @@ Snackbar-->>View : "显示错误提示自动消失"
 ```
 
 图表来源
+
 - [apps/web/src/store/ui.ts:20-42](file://apps/web/src/store/ui.ts#L20-L42)
 - [apps/web/src/layouts/MainLayout.tsx:171-317](file://apps/web/src/layouts/MainLayout.tsx#L171-L317)
 - [apps/web/src/api/core/api-error.ts:16-42](file://apps/web/src/api/core/api-error.ts#L16-L42)
@@ -119,6 +128,7 @@ Snackbar-->>View : "显示错误提示自动消失"
 ## 详细组件分析
 
 ### UI 状态模型与动作
+
 - 状态模型
   - 移动端侧边栏开关：用于移动端抽屉的显隐
   - 侧边栏折叠状态：用于桌面端侧边栏宽度与文本显示的切换
@@ -142,12 +152,15 @@ class UiState {
 ```
 
 图表来源
+
 - [apps/web/src/store/ui.ts:5-18](file://apps/web/src/store/ui.ts#L5-L18)
 
 章节来源
+
 - [apps/web/src/store/ui.ts:1-43](file://apps/web/src/store/ui.ts#L1-L43)
 
 ### 主布局中的 UI 状态消费
+
 - 消费方式
   - 从 useUiStore 中选择性订阅所需状态与动作
 - 渲染逻辑
@@ -169,14 +182,17 @@ ToggleCollapse --> End
 ```
 
 图表来源
+
 - [apps/web/src/layouts/MainLayout.tsx:171-317](file://apps/web/src/layouts/MainLayout.tsx#L171-L317)
 - [apps/web/src/lib/utils.ts:4-6](file://apps/web/src/lib/utils.ts#L4-L6)
 
 章节来源
+
 - [apps/web/src/layouts/MainLayout.tsx:171-317](file://apps/web/src/layouts/MainLayout.tsx#L171-L317)
 - [apps/web/src/lib/utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 ### 全局错误提示与事件总线
+
 - 事件派发
   - 统一封装错误对象，区分业务错误与通用错误
   - 通过自定义事件在窗口层面广播
@@ -202,14 +218,17 @@ Timer-->>SB : "时间到 -> 隐藏"
 ```
 
 图表来源
+
 - [apps/web/src/api/core/api-error.ts:16-42](file://apps/web/src/api/core/api-error.ts#L16-L42)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:7-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L58)
 
 章节来源
+
 - [apps/web/src/api/core/api-error.ts:1-45](file://apps/web/src/api/core/api-error.ts#L1-L45)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 
 ### 与认证状态的协同
+
 - 认证状态持久化
   - 使用持久化中间件仅保存令牌字段，减少存储体积
   - 恢复时根据令牌设置认证态
@@ -218,10 +237,12 @@ Timer-->>SB : "时间到 -> 隐藏"
   - 用户登出时清空认证状态，不影响 UI 状态（可按需清理）
 
 章节来源
+
 - [apps/web/src/store/auth.ts:30-64](file://apps/web/src/store/auth.ts#L30-L64)
 - [apps/web/src/pages/Login.tsx:68-72](file://apps/web/src/pages/Login.tsx#L68-L72)
 
 ### 页面层的加载与错误状态
+
 - Dashboard
   - 健康检查查询的加载/错误分支，分别渲染加载指示或错误提示
 - Login
@@ -231,11 +252,13 @@ Timer-->>SB : "时间到 -> 隐藏"
   - 使用统一的 Spinner 组件提升一致性
 
 章节来源
+
 - [apps/web/src/pages/Dashboard.tsx:122-128](file://apps/web/src/pages/Dashboard.tsx#L122-L128)
 - [apps/web/src/pages/Login.tsx:165-171](file://apps/web/src/pages/Login.tsx#L165-L171)
 - [apps/web/src/components/ui/spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 ## 依赖关系分析
+
 - 组件耦合
   - MainLayout 依赖 UI 状态与工具函数，保持低耦合高内聚
   - Snackbar 与事件系统解耦，通过事件通信
@@ -254,6 +277,7 @@ UTIL["lib/utils.ts"] --> L
 ```
 
 图表来源
+
 - [apps/web/src/store/ui.ts:1-43](file://apps/web/src/store/ui.ts#L1-L43)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/layouts/MainLayout.tsx:1-317](file://apps/web/src/layouts/MainLayout.tsx#L1-L317)
@@ -261,6 +285,7 @@ UTIL["lib/utils.ts"] --> L
 - [apps/web/src/lib/utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 章节来源
+
 - [apps/web/src/store/ui.ts:1-43](file://apps/web/src/store/ui.ts#L1-L43)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/layouts/MainLayout.tsx:1-317](file://apps/web/src/layouts/MainLayout.tsx#L1-L317)
@@ -268,6 +293,7 @@ UTIL["lib/utils.ts"] --> L
 - [apps/web/src/lib/utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 ## 性能考量
+
 - 状态订阅最小化
   - 仅订阅需要的状态片段，避免不必要的重渲染
 - 类名合并
@@ -280,6 +306,7 @@ UTIL["lib/utils.ts"] --> L
   - 页面层对加载/错误分支进行短路径处理，减少无效渲染
 
 ## 故障排查指南
+
 - 侧边栏无法关闭
   - 检查移动端 overlay 是否阻止了点击事件
   - 确认 closeMobileSidebar 动作是否被正确绑定
@@ -294,15 +321,18 @@ UTIL["lib/utils.ts"] --> L
   - 确认事件监听是否正确移除
 
 章节来源
+
 - [apps/web/src/layouts/MainLayout.tsx:182-189](file://apps/web/src/layouts/MainLayout.tsx#L182-L189)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:16-28](file://apps/web/src/components/ApiErrorSnackbar.tsx#L16-L28)
 - [apps/web/src/api/core/api-error.ts:34-42](file://apps/web/src/api/core/api-error.ts#L34-L42)
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 
 ## 结论
+
 该 UI 状态管理体系以 Zustand 为核心，围绕侧边栏与移动端交互提供简洁明确的状态与动作；通过事件总线实现全局错误提示的解耦；页面层基于查询状态进行加载与错误分支渲染。整体设计具备良好的可维护性与扩展性，适合在中大型前端应用中推广使用。
 
 ## 附录
+
 - 最佳实践
   - 将 UI 状态与业务状态分离，保持 UI 状态无副作用
   - 使用事件总线传递跨组件的非直接依赖信息

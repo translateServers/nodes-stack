@@ -14,6 +14,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -26,7 +27,9 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件面向“用户管理 API”的使用者与维护者，系统化梳理后端 NestJS 服务与前端 React 应用之间的用户 CRUD 接口设计与实现，覆盖以下能力：
+
 - RESTful 端点：创建、读取、更新、删除用户
 - 数据模型与字段验证：基于 Zod Schema 的请求/响应校验
 - 权限控制：基于 JWT 的认证装饰器与守卫
@@ -34,7 +37,9 @@
 - 扩展方向：分页、筛选、排序、批量操作、导入导出等（当前仓库未实现，但具备扩展基础）
 
 ## 项目结构
+
 用户管理相关代码分布在后端模块与前端模块中，采用“共享 Schema + 双端校验”的设计：
+
 - 后端：NestJS 控制器、服务、DTO、Prisma 模型
 - 前端：HTTP 封装、React Query Hooks、页面组件
 - 共享：Zod Schema 定义于共享包，前后端复用
@@ -67,6 +72,7 @@ SVC --> PRISMA_MODEL
 ```
 
 图表来源
+
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
 - [apps/web/src/api/modules/user/hooks.ts:1-56](file://apps/web/src/api/modules/user/hooks.ts#L1-L56)
 - [apps/web/src/pages/Users.tsx:1-34](file://apps/web/src/pages/Users.tsx#L1-L34)
@@ -78,6 +84,7 @@ SVC --> PRISMA_MODEL
 - [packages/shared/src/schemas/user.schema.ts:1-33](file://packages/shared/src/schemas/user.schema.ts#L1-L33)
 
 章节来源
+
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
 - [apps/web/src/api/modules/user/hooks.ts:1-56](file://apps/web/src/api/modules/user/hooks.ts#L1-L56)
 - [apps/web/src/pages/Users.tsx:1-34](file://apps/web/src/pages/Users.tsx#L1-L34)
@@ -89,6 +96,7 @@ SVC --> PRISMA_MODEL
 - [packages/shared/src/schemas/user.schema.ts:1-33](file://packages/shared/src/schemas/user.schema.ts#L1-L33)
 
 ## 核心组件
+
 - 用户控制器（UserController）：暴露 RESTful 端点，负责请求映射与响应包装
 - 用户服务（UserService）：业务逻辑封装，含密码哈希、唯一性约束、错误处理
 - 用户 DTO 与 Schema：前后端统一的数据契约，确保类型安全与一致性
@@ -96,6 +104,7 @@ SVC --> PRISMA_MODEL
 - Prisma 模型：数据库表结构定义与索引约束
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.controller.ts:24-78](file://apps/nestjs-server/src/modules/user/user.controller.ts#L24-L78)
 - [apps/nestjs-server/src/modules/user/user.service.ts:14-112](file://apps/nestjs-server/src/modules/user/user.service.ts#L14-L112)
 - [apps/nestjs-server/src/modules/user/dto/user.dto.ts:1-26](file://apps/nestjs-server/src/modules/user/dto/user.dto.ts#L1-L26)
@@ -104,6 +113,7 @@ SVC --> PRISMA_MODEL
 - [apps/nestjs-server/prisma/schema/User.prisma:1-15](file://apps/nestjs-server/prisma/schema/User.prisma#L1-L15)
 
 ## 架构总览
+
 下图展示从前端到后端的关键交互流程，以及数据在各层之间的传递与转换。
 
 ```mermaid
@@ -127,6 +137,7 @@ Hooks-->>UI : "渲染用户列表/详情"
 ```
 
 图表来源
+
 - [apps/web/src/pages/Users.tsx:6-33](file://apps/web/src/pages/Users.tsx#L6-L33)
 - [apps/web/src/api/modules/user/hooks.ts:9-22](file://apps/web/src/api/modules/user/hooks.ts#L9-L22)
 - [apps/web/src/api/modules/user/api.ts:19-25](file://apps/web/src/api/modules/user/api.ts#L19-L25)
@@ -136,6 +147,7 @@ Hooks-->>UI : "渲染用户列表/详情"
 ## 详细组件分析
 
 ### 用户控制器（RESTful 端点）
+
 - 创建用户
   - 方法与路径：POST /users
   - 认证：需要 Bearer Token（受保护端点）
@@ -161,18 +173,22 @@ Hooks-->>UI : "渲染用户列表/详情"
   - 处理：委托 UserService.remove
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.controller.ts:28-78](file://apps/nestjs-server/src/modules/user/user.controller.ts#L28-L78)
 
 ### 用户服务（业务逻辑与数据访问）
+
 - 密码处理：注册时对明文密码进行哈希存储；登录时比对密码
 - 数据访问：通过 Prisma 查询/更新/删除用户；仅返回白名单字段（select）
 - 错误处理：当用户不存在时抛出业务异常
 - 辅助查询：按邮箱、用户名、账号（邮箱或用户名）查询用户
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.service.ts:17-97](file://apps/nestjs-server/src/modules/user/user.service.ts#L17-L97)
 
 ### 数据模型与字段验证
+
 - Prisma 模型（User）
   - 字段：id、email（唯一）、username（唯一）、password、name、isActive、createdAt、updatedAt
   - 关系：与 RefreshToken、Role 的关联
@@ -183,11 +199,13 @@ Hooks-->>UI : "渲染用户列表/详情"
 - 后端响应 Schema 覆盖时间字段为字符串格式，确保前后端一致
 
 章节来源
+
 - [apps/nestjs-server/prisma/schema/User.prisma:1-15](file://apps/nestjs-server/prisma/schema/User.prisma#L1-L15)
 - [packages/shared/src/schemas/user.schema.ts:12-29](file://packages/shared/src/schemas/user.schema.ts#L12-L29)
 - [apps/nestjs-server/src/modules/user/dto/user.dto.ts:14-19](file://apps/nestjs-server/src/modules/user/dto/user.dto.ts#L14-L19)
 
 ### 前端集成与状态管理
+
 - HTTP 封装
   - 提供 createUser、getUsers、getUserById、updateUser、deleteUser 方法
   - 使用共享 Schema 进行参数与响应的编译校验
@@ -212,18 +230,21 @@ Parse --> Render["渲染用户卡片"]
 ```
 
 图表来源
+
 - [apps/web/src/router/index.tsx:12-31](file://apps/web/src/router/index.tsx#L12-L31)
 - [apps/web/src/pages/Users.tsx:6-33](file://apps/web/src/pages/Users.tsx#L6-L33)
 - [apps/web/src/api/modules/user/hooks.ts:9-22](file://apps/web/src/api/modules/user/hooks.ts#L9-L22)
 - [apps/web/src/api/modules/user/api.ts:19-21](file://apps/web/src/api/modules/user/api.ts#L19-L21)
 
 章节来源
+
 - [apps/web/src/api/modules/user/api.ts:15-33](file://apps/web/src/api/modules/user/api.ts#L15-L33)
 - [apps/web/src/api/modules/user/hooks.ts:9-55](file://apps/web/src/api/modules/user/hooks.ts#L9-L55)
 - [apps/web/src/pages/Users.tsx:6-33](file://apps/web/src/pages/Users.tsx#L6-L33)
 - [apps/web/src/router/index.tsx:12-31](file://apps/web/src/router/index.tsx#L12-L31)
 
 ### 权限控制机制
+
 - 控制器层
   - 使用 Bearer 认证装饰器与全局错误装饰器
 - 守卫与拦截器
@@ -232,9 +253,11 @@ Parse --> Render["渲染用户卡片"]
   - 在需要管理员权限的场景，可在控制器或方法上增加角色守卫与自定义装饰器
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.controller.ts:21-24](file://apps/nestjs-server/src/modules/user/user.controller.ts#L21-L24)
 
 ### 扩展能力：分页、筛选、排序、批量操作、导入导出
+
 - 当前实现
   - 未提供分页、筛选、排序参数
   - 未提供批量操作与导入导出接口
@@ -245,6 +268,7 @@ Parse --> Render["渲染用户卡片"]
   - 注意：以上为扩展方向，非当前仓库实现内容
 
 ## 依赖关系分析
+
 - 前端依赖后端接口与共享 Schema
 - 后端依赖 Prisma 与业务异常枚举
 - 共享 Schema 作为前后端契约，避免重复实现
@@ -266,6 +290,7 @@ BACK_SVC --> PRISMA
 ```
 
 图表来源
+
 - [packages/shared/src/schemas/user.schema.ts:1-33](file://packages/shared/src/schemas/user.schema.ts#L1-L33)
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
 - [apps/web/src/api/modules/user/hooks.ts:1-56](file://apps/web/src/api/modules/user/hooks.ts#L1-L56)
@@ -274,6 +299,7 @@ BACK_SVC --> PRISMA
 - [apps/nestjs-server/prisma/schema/User.prisma:1-15](file://apps/nestjs-server/prisma/schema/User.prisma#L1-L15)
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.controller.ts:1-79](file://apps/nestjs-server/src/modules/user/user.controller.ts#L1-L79)
 - [apps/nestjs-server/src/modules/user/user.service.ts:1-113](file://apps/nestjs-server/src/modules/user/user.service.ts#L1-L113)
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
@@ -282,6 +308,7 @@ BACK_SVC --> PRISMA
 - [packages/shared/src/schemas/user.schema.ts:1-33](file://packages/shared/src/schemas/user.schema.ts#L1-L33)
 
 ## 性能考虑
+
 - 查询优化
   - 服务层使用 select 白名单字段，避免传输敏感与冗余数据
   - 单条查询使用 findUnique，保证唯一性与性能
@@ -292,6 +319,7 @@ BACK_SVC --> PRISMA
   - 批量操作建议引入事务与分批处理，避免长事务阻塞
 
 ## 故障排查指南
+
 - 常见问题
   - 用户不存在：服务层在找不到用户时抛出业务异常
   - 参数校验失败：前后端均使用 Zod Schema 校验，需检查字段类型与长度
@@ -305,15 +333,18 @@ BACK_SVC --> PRISMA
   - 前端错误 UI 组件与查询状态
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.service.ts:46-48](file://apps/nestjs-server/src/modules/user/user.service.ts#L46-L48)
 - [apps/web/src/pages/Users.tsx:13-15](file://apps/web/src/pages/Users.tsx#L13-L15)
 
 ## 结论
+
 本项目以“共享 Schema + 双端校验”为核心，实现了用户管理的基础 CRUD 能力，并通过前端 React Query 实现了良好的状态管理与用户体验。当前版本未包含分页、筛选、排序、批量操作与导入导出等高级特性，但具备清晰的扩展路径与一致的契约设计，便于后续迭代增强。
 
 ## 附录
 
 ### API 端点一览（当前实现）
+
 - 创建用户
   - 方法：POST
   - 路径：/users
@@ -343,5 +374,6 @@ BACK_SVC --> PRISMA
   - 响应：空
 
 章节来源
+
 - [apps/nestjs-server/src/modules/user/user.controller.ts:28-78](file://apps/nestjs-server/src/modules/user/user.controller.ts#L28-L78)
 - [apps/web/src/api/modules/user/api.ts:15-33](file://apps/web/src/api/modules/user/api.ts#L15-L33)

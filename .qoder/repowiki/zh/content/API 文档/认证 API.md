@@ -18,6 +18,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -30,7 +31,9 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件面向前端与后端开发者，系统性梳理认证模块的 API 设计与实现，覆盖以下能力：
+
 - 用户登录、注册、令牌刷新、登出、获取当前用户信息
 - JWT 访问令牌与刷新令牌的生成与校验
 - 密码加密与存储策略
@@ -39,6 +42,7 @@
 - 请求/响应示例、错误处理与安全建议
 
 ## 项目结构
+
 认证相关代码主要分布在后端 NestJS 服务与前端 Web 应用两部分，并通过共享的 Zod Schema 保证前后端字段一致性。
 
 ```mermaid
@@ -75,6 +79,7 @@ RequireAuth --> Store
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:30-115](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L30-L115)
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:14-151](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L14-L151)
 - [apps/nestjs-server/src/modules/auth/captcha.service.ts:18-67](file://apps/nestjs-server/src/modules/auth/captcha.service.ts#L18-L67)
@@ -87,10 +92,12 @@ RequireAuth --> Store
 - [packages/shared/src/schemas/auth.schema.ts:1-35](file://packages/shared/src/schemas/auth.schema.ts#L1-L35)
 
 章节来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:1-115](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L1-L115)
 - [apps/web/src/api/modules/auth/api.ts:1-45](file://apps/web/src/api/modules/auth/api.ts#L1-L45)
 
 ## 核心组件
+
 - 认证控制器：暴露验证码、注册、登录、刷新、登出、获取当前用户信息等端点。
 - 认证服务：负责凭据校验、令牌签发与刷新、登出撤销、密码校验。
 - 验证码服务：生成 SVG 验证码、存入 Redis 并一次性校验。
@@ -98,6 +105,7 @@ RequireAuth --> Store
 - 前端 API 客户端与状态管理：封装认证 API、持久化令牌与用户信息、路由守卫。
 
 章节来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:30-115](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L30-L115)
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:14-151](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L14-L151)
 - [apps/nestjs-server/src/modules/auth/captcha.service.ts:18-67](file://apps/nestjs-server/src/modules/auth/captcha.service.ts#L18-L67)
@@ -107,6 +115,7 @@ RequireAuth --> Store
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 
 ## 架构总览
+
 下图展示认证端到端流程：前端调用后端 API，后端通过服务层完成业务逻辑，使用 JWT 与 Redis/数据库进行令牌与验证码管理，最终返回标准化响应。
 
 ```mermaid
@@ -140,6 +149,7 @@ API-->>FE : "更新本地状态/存储令牌"
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:38-113](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L38-L113)
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:29-149](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L29-L149)
 - [apps/nestjs-server/src/modules/auth/captcha.service.ts:24-65](file://apps/nestjs-server/src/modules/auth/captcha.service.ts#L24-L65)
@@ -148,6 +158,7 @@ API-->>FE : "更新本地状态/存储令牌"
 ## 详细组件分析
 
 ### 接口定义与行为
+
 - 获取验证码
   - 方法与路径：GET /auth/captcha
   - 请求参数：无
@@ -205,6 +216,7 @@ API-->>FE : "更新本地状态/存储令牌"
     - [apps/web/src/api/modules/auth/api.ts:40-42](file://apps/web/src/api/modules/auth/api.ts#L40-L42)
 
 ### JWT 令牌生成与验证流程
+
 - 生成流程
   - 服务层根据用户 ID 生成负载，分别使用不同密钥与过期时间签发访问令牌与刷新令牌
   - 刷新令牌以哈希形式持久化，便于快速校验与撤销
@@ -221,18 +233,21 @@ API-->>FE : "更新本地状态/存储令牌"
   - [apps/nestjs-server/src/config/schemas/jwt.schema.ts:3-8](file://apps/nestjs-server/src/config/schemas/jwt.schema.ts#L3-L8)
 
 ### 密码加密机制
+
 - 用户注册时对明文密码进行加密后存储
 - 登录时使用相同算法校验输入密码与存储值
 - 章节来源
   - [apps/nestjs-server/src/modules/auth/auth.service.ts:30-36](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L30-L36)
 
 ### 验证码系统集成
+
 - 生成：服务端生成随机 UUID 的验证码 ID 与 SVG 文本，异步写入 Redis 并设置 5 分钟过期
 - 校验：客户端提交 captchaId 与 captchaCode；服务端读取并删除该键，若不存在或不匹配则抛出相应业务异常
 - 章节来源
   - [apps/nestjs-server/src/modules/auth/captcha.service.ts:24-65](file://apps/nestjs-server/src/modules/auth/captcha.service.ts#L24-L65)
 
 ### 前端 Hook 与状态管理集成
+
 - API 客户端
   - 提供 getCaptcha、register、login、refreshToken、logout、getProfile 等方法，内部使用共享 Zod Schema 进行参数与响应校验
 - 状态管理（Zustand）
@@ -249,6 +264,7 @@ API-->>FE : "更新本地状态/存储令牌"
   - [apps/web/src/components/RequireAuth.tsx:4-14](file://apps/web/src/components/RequireAuth.tsx#L4-L14)
 
 ### 错误处理与状态码
+
 - 全局错误装饰器统一包装响应结构
 - 业务异常枚举涵盖认证相关错误（如凭据无效、验证码无效/不存在、刷新令牌无效、未授权等）
 - 常见状态码
@@ -262,6 +278,7 @@ API-->>FE : "更新本地状态/存储令牌"
   - [apps/nestjs-server/src/common/guards/jwt-auth.guard.ts:36-41](file://apps/nestjs-server/src/common/guards/jwt-auth.guard.ts#L36-L41)
 
 ## 依赖关系分析
+
 - 控制器依赖服务与验证码服务，服务依赖用户服务、Prisma、JWT 服务与配置服务
 - 守卫与策略依赖配置服务与 Prisma，用于密钥与用户信息加载
 - 前端 API 客户端依赖共享 Schema 与核心 HTTP 工具
@@ -303,6 +320,7 @@ JwtAuthGuard --> JwtStrategy : "继承"
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:32-113](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L32-L113)
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:16-149](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L16-L149)
 - [apps/nestjs-server/src/modules/auth/captcha.service.ts:19-65](file://apps/nestjs-server/src/modules/auth/captcha.service.ts#L19-L65)
@@ -310,12 +328,14 @@ JwtAuthGuard --> JwtStrategy : "继承"
 - [apps/nestjs-server/src/common/guards/jwt-auth.guard.ts:17-42](file://apps/nestjs-server/src/common/guards/jwt-auth.guard.ts#L17-L42)
 
 ## 性能考量
+
 - 验证码一次性使用并立即删除，避免重复利用与缓存膨胀
 - 刷新令牌采用哈希存储，查询与撤销操作复杂度低
 - 登录/注册并发场景建议结合限流策略（控制器已内置节流装饰器）
 - 建议在高并发场景下为验证码与刷新令牌建立独立的缓存分区与监控指标
 
 ## 故障排查指南
+
 - 登录失败
   - 检查 captchaId 是否存在且未过期
   - 确认 captchaCode 是否与验证码一致（不区分大小写）
@@ -331,22 +351,25 @@ JwtAuthGuard --> JwtStrategy : "继承"
   - 确认路由守卫是否正确识别 isAuthenticated
 
 章节来源
+
 - [apps/nestjs-server/src/modules/auth/captcha.service.ts:48-65](file://apps/nestjs-server/src/modules/auth/captcha.service.ts#L48-L65)
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:64-84](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L64-L84)
 - [apps/nestjs-server/src/common/guards/jwt-auth.guard.ts:36-41](file://apps/nestjs-server/src/common/guards/jwt-auth.guard.ts#L36-L41)
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 
 ## 结论
+
 本认证模块通过清晰的分层设计与严格的参数校验，提供了完整的登录、注册、令牌刷新与登出能力。配合验证码与 JWT 策略，既提升了安全性也兼顾了易用性。前端通过 API 客户端与状态管理实现了良好的用户体验与可维护性。
 
 ## 附录
 
 ### 请求/响应示例（基于共享 Schema）
+
 - 获取验证码
   - 请求：GET /auth/captcha
   - 响应：{
-      "captchaId": "字符串",
-      "captchaImage": "SVG 字符串"
+    "captchaId": "字符串",
+    "captchaImage": "SVG 字符串"
     }
   - 章节来源
     - [apps/nestjs-server/src/modules/auth/auth.controller.ts:38-48](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L38-L48)
@@ -355,14 +378,14 @@ JwtAuthGuard --> JwtStrategy : "继承"
 - 用户注册
   - 请求：POST /auth/register
   - 请求体：{
-      "email": "邮箱",
-      "username": "用户名",
-      "password": "密码",
-      "name": "可选显示名"
+    "email": "邮箱",
+    "username": "用户名",
+    "password": "密码",
+    "name": "可选显示名"
     }
   - 响应：{
-      "accessToken": "JWT",
-      "refreshToken": "JWT"
+    "accessToken": "JWT",
+    "refreshToken": "JWT"
     }
   - 章节来源
     - [apps/nestjs-server/src/modules/auth/auth.controller.ts:50-61](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L50-L61)
@@ -371,14 +394,14 @@ JwtAuthGuard --> JwtStrategy : "继承"
 - 用户登录
   - 请求：POST /auth/login
   - 请求体：{
-      "account": "邮箱或用户名",
-      "password": "密码",
-      "captchaId": "验证码ID",
-      "captchaCode": "验证码内容"
+    "account": "邮箱或用户名",
+    "password": "密码",
+    "captchaId": "验证码ID",
+    "captchaCode": "验证码内容"
     }
   - 响应：{
-      "accessToken": "JWT",
-      "refreshToken": "JWT"
+    "accessToken": "JWT",
+    "refreshToken": "JWT"
     }
   - 章节来源
     - [apps/nestjs-server/src/modules/auth/auth.controller.ts:63-76](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L63-L76)
@@ -387,11 +410,11 @@ JwtAuthGuard --> JwtStrategy : "继承"
 - 刷新访问令牌
   - 请求：POST /auth/refresh
   - 请求体：{
-      "refreshToken": "刷新令牌"
+    "refreshToken": "刷新令牌"
     }
   - 响应：{
-      "accessToken": "JWT",
-      "refreshToken": "JWT"
+    "accessToken": "JWT",
+    "refreshToken": "JWT"
     }
   - 章节来源
     - [apps/nestjs-server/src/modules/auth/auth.controller.ts:78-89](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L78-L89)
@@ -413,6 +436,7 @@ JwtAuthGuard --> JwtStrategy : "继承"
     - [apps/web/src/api/modules/auth/api.ts:40-42](file://apps/web/src/api/modules/auth/api.ts#L40-L42)
 
 ### 安全考虑
+
 - 密钥管理
   - 访问令牌与刷新令牌密钥长度至少 32 位，定期轮换
 - 令牌生命周期

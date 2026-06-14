@@ -16,6 +16,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -28,9 +29,11 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件系统性梳理前端 Web 应用中的核心 API 客户端实现，围绕基于 axios 的 HTTP 客户端配置、请求/响应拦截器、认证令牌自动注入、错误处理与重试策略展开，并结合端点定义、基础 URL、请求头、超时配置等进行深入解析。同时给出客户端初始化示例与最佳实践建议，帮助开发者快速理解并正确使用该客户端。
 
 ## 项目结构
+
 Web 前端通过模块化方式组织 API 层：核心 HTTP 客户端位于 core 目录，各业务模块的 API 方法封装在 modules 下，状态管理采用 Zustand，错误事件通过自定义事件总线广播，UI 层通过 React Query 进行缓存与重试控制。
 
 ```mermaid
@@ -64,6 +67,7 @@ HTTP --> ENDPOINTS
 ```
 
 **图表来源**
+
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 - [apps/web/src/api/core/http.ts:66-80](file://apps/web/src/api/core/http.ts#L66-L80)
 - [apps/web/src/api/core/endpoints.ts:1-21](file://apps/web/src/api/core/endpoints.ts#L1-L21)
@@ -75,6 +79,7 @@ HTTP --> ENDPOINTS
 - [apps/web/src/components/ApiErrorSnackbar.tsx:7-57](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L57)
 
 **章节来源**
+
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 - [apps/web/src/api/core/http.ts:66-80](file://apps/web/src/api/core/http.ts#L66-L80)
 - [apps/web/src/api/core/endpoints.ts:1-21](file://apps/web/src/api/core/endpoints.ts#L1-L21)
@@ -86,6 +91,7 @@ HTTP --> ENDPOINTS
 - [apps/web/src/components/ApiErrorSnackbar.tsx:7-57](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L57)
 
 ## 核心组件
+
 - Axios 实例与拦截器
   - 创建两个 Axios 实例：主实例用于业务请求，独立的刷新实例用于刷新令牌请求，避免循环依赖与重复拦截。
   - 请求拦截器：从认证状态中读取访问令牌，自动为请求头添加 Bearer 令牌。
@@ -100,6 +106,7 @@ HTTP --> ENDPOINTS
   - 使用 Zustand 存储访问令牌、刷新令牌与用户信息，持久化到本地存储，支持恢复状态并自动标记登录态。
 
 **章节来源**
+
 - [apps/web/src/api/core/http.ts:66-80](file://apps/web/src/api/core/http.ts#L66-L80)
 - [apps/web/src/api/core/http.ts:94-100](file://apps/web/src/api/core/http.ts#L94-L100)
 - [apps/web/src/api/core/http.ts:102-179](file://apps/web/src/api/core/http.ts#L102-L179)
@@ -109,6 +116,7 @@ HTTP --> ENDPOINTS
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 
 ## 架构总览
+
 下图展示了从页面调用到后端响应的完整链路，包括拦截器、认证刷新、错误事件与 UI 提示。
 
 ```mermaid
@@ -138,6 +146,7 @@ note over HTTP,AUTH : "401 且未重试时触发刷新流程"
 ```
 
 **图表来源**
+
 - [apps/web/src/api/core/http.ts:94-100](file://apps/web/src/api/core/http.ts#L94-L100)
 - [apps/web/src/api/core/http.ts:102-179](file://apps/web/src/api/core/http.ts#L102-L179)
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
@@ -147,6 +156,7 @@ note over HTTP,AUTH : "401 且未重试时触发刷新流程"
 ## 详细组件分析
 
 ### HTTP 客户端与拦截器
+
 - 实例配置
   - 基础 URL：来自端点常量。
   - 超时时间：15 秒。
@@ -180,23 +190,28 @@ ZOD_PARSE --> END
 ```
 
 **图表来源**
+
 - [apps/web/src/api/core/http.ts:102-120](file://apps/web/src/api/core/http.ts#L102-L120)
 - [apps/web/src/api/core/http.ts:47-58](file://apps/web/src/api/core/http.ts#L47-L58)
 
 **章节来源**
+
 - [apps/web/src/api/core/http.ts:66-80](file://apps/web/src/api/core/http.ts#L66-L80)
 - [apps/web/src/api/core/http.ts:94-100](file://apps/web/src/api/core/http.ts#L94-L100)
 - [apps/web/src/api/core/http.ts:102-179](file://apps/web/src/api/core/http.ts#L102-L179)
 - [apps/web/src/api/core/http.ts:181-232](file://apps/web/src/api/core/http.ts#L181-L232)
 
 ### 端点定义与基础 URL
+
 - 基础 URL 来源于环境变量，若未配置则回退到相对路径前缀。
 - 端点常量集中定义认证、用户、健康、菜单、角色、字典等模块的路由路径，便于统一管理与替换。
 
 **章节来源**
+
 - [apps/web/src/api/core/endpoints.ts:1-21](file://apps/web/src/api/core/endpoints.ts#L1-L21)
 
 ### 错误处理与事件总线
+
 - 错误事件总线
   - 将错误对象标准化为事件细节，去重发送，支持严重级别。
   - 提供监听器注册与注销方法，便于 UI 组件订阅。
@@ -214,22 +229,27 @@ UI->>UI : "显示错误消息并定时隐藏"
 ```
 
 **图表来源**
+
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:7-57](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L57)
 
 **章节来源**
+
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:7-57](file://apps/web/src/components/ApiErrorSnackbar.tsx#L7-L57)
 
 ### 认证状态管理
+
 - 状态字段：访问令牌、刷新令牌、用户信息、登录态标识。
 - 动作：设置令牌、设置用户、清理认证。
 - 持久化：仅持久化令牌字段，恢复时根据令牌自动标记登录态。
 
 **章节来源**
+
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 
 ### 查询客户端与重试策略
+
 - QueryClient 默认配置：
   - 查询重试：最多两次；若错误为未授权业务错误则禁止重试。
   - 缓存策略：静默时间、窗口焦点重取等。
@@ -237,17 +257,21 @@ UI->>UI : "显示错误消息并定时隐藏"
 - 与业务错误的联动：当拦截器抛出业务错误时，QueryCache/MutationCache 会接收并触发全局错误事件，交由 UI 层处理。
 
 **章节来源**
+
 - [apps/web/src/api/core/query-client.ts:5-31](file://apps/web/src/api/core/query-client.ts#L5-L31)
 
 ### 业务模块 API 封装
+
 - 认证模块：提供验证码、注册、登录、刷新、登出、个人资料等方法，均使用统一的端点常量与 HTTP 客户端。
 - 用户模块：提供增删改查等方法，统一使用 Schema 校验与响应解析。
 
 **章节来源**
+
 - [apps/web/src/api/modules/auth/api.ts:17-44](file://apps/web/src/api/modules/auth/api.ts#L17-L44)
 - [apps/web/src/api/modules/user/api.ts:10-33](file://apps/web/src/api/modules/user/api.ts#L10-L33)
 
 ## 依赖关系分析
+
 - 组件耦合
   - HTTP 客户端依赖认证状态与错误事件总线，但不直接依赖具体业务模块，保持高内聚低耦合。
   - 业务模块仅依赖端点常量与 HTTP 客户端，职责清晰。
@@ -272,6 +296,7 @@ MAIN --> ERR
 ```
 
 **图表来源**
+
 - [apps/web/src/api/core/http.ts:66-80](file://apps/web/src/api/core/http.ts#L66-L80)
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
@@ -282,6 +307,7 @@ MAIN --> ERR
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 
 **章节来源**
+
 - [apps/web/src/api/core/http.ts:66-80](file://apps/web/src/api/core/http.ts#L66-L80)
 - [apps/web/src/api/core/endpoints.ts:1-21](file://apps/web/src/api/core/endpoints.ts#L1-L21)
 - [apps/web/src/api/core/query-client.ts:5-31](file://apps/web/src/api/core/query-client.ts#L5-L31)
@@ -292,6 +318,7 @@ MAIN --> ERR
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 
 ## 性能考量
+
 - 超时与重试
   - 单请求超时 15 秒，避免长时间阻塞。
   - 查询默认最多重试两次，未授权错误禁用重试，减少无效请求。
@@ -305,6 +332,7 @@ MAIN --> ERR
 [本节为通用指导，无需列出章节来源]
 
 ## 故障排查指南
+
 - 401 未授权
   - 检查认证状态中是否存在有效访问令牌；确认刷新流程是否正常执行。
   - 若刷新失败，确认刷新令牌是否可用，后端是否返回成功响应。
@@ -317,11 +345,13 @@ MAIN --> ERR
   - 错误事件总线具备去重逻辑，若仍出现重复提示，检查事件派发与监听是否正确。
 
 **章节来源**
+
 - [apps/web/src/api/core/http.ts:121-179](file://apps/web/src/api/core/http.ts#L121-L179)
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 
 ## 结论
+
 该核心 API 客户端以 axios 为基础，结合拦截器、Zod 校验、错误事件总线与 React Query，构建了统一、可扩展且健壮的前端 HTTP 交互层。通过集中式端点管理、自动认证注入与智能重试策略，显著提升了开发效率与用户体验。建议在新增模块时遵循现有模式，统一使用 Schema 校验与错误事件处理，确保一致性与可维护性。
 
 [本节为总结性内容，无需列出章节来源]
@@ -329,15 +359,18 @@ MAIN --> ERR
 ## 附录
 
 ### 客户端初始化示例
+
 - 在应用入口挂载 QueryClientProvider 并引入全局错误提示组件，确保错误事件总线与查询缓存生效。
 - 业务模块通过导入端点常量与 HTTP 客户端，按需封装 API 方法。
 
 **章节来源**
+
 - [apps/web/src/main.tsx:12-22](file://apps/web/src/main.tsx#L12-L22)
 - [apps/web/src/api/modules/auth/api.ts:17-44](file://apps/web/src/api/modules/auth/api.ts#L17-L44)
 - [apps/web/src/api/modules/user/api.ts:10-33](file://apps/web/src/api/modules/user/api.ts#L10-L33)
 
 ### 最佳实践
+
 - 统一使用 Schema 校验响应数据，保证类型安全与契约清晰。
 - 对需要鉴权的请求避免手动设置 Authorization，依赖拦截器自动注入。
 - 对于幂等请求启用查询缓存与重试，对于写操作谨慎使用重试。

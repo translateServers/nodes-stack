@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { RefreshCw, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
+import { Moon, RefreshCw, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
 import { useCaptcha, useLogin } from '@/api';
 import { InlineAlert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuthStore } from '@/store/auth';
+import { useUiStore } from '@/store/ui';
 
 /* ── Decorative orbs for the brand panel ──────────────── */
 function BrandPanel() {
@@ -56,6 +57,27 @@ function BrandPanel() {
   );
 }
 
+/* ── Theme Toggle ─────────────────────────────────────── */
+function ThemeToggle() {
+  const theme = useUiStore((s) => s.theme);
+  const setTheme = useUiStore((s) => s.setTheme);
+
+  const toggle = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      aria-label="切换主题"
+    >
+      {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+    </button>
+  );
+}
+
 /* ── Login page ───────────────────────────────────────── */
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -97,7 +119,10 @@ export default function LoginPage() {
       <BrandPanel />
 
       {/* ── Right: Form Panel ── */}
-      <main className="flex flex-1 items-center justify-center bg-background px-4 py-8 lg:px-8">
+      <main className="relative flex flex-1 items-center justify-center bg-background px-4 py-8 lg:px-8">
+        {/* Theme toggle */}
+        <ThemeToggle />
+
         <Card className="w-full max-w-md border-0 shadow-lg lg:shadow-xl">
           <CardHeader className="space-y-1 pb-8 text-center">
             {/* Mobile-only brand badge */}

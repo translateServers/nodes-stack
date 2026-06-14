@@ -4,9 +4,11 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
+  Sun,
   User,
   Users,
   X,
@@ -112,6 +114,22 @@ function SidebarNavItem({
   }
 
   return link;
+}
+
+// ── Theme Toggle ────────────────────────────────────────
+function ThemeToggle() {
+  const theme = useUiStore((s) => s.theme);
+  const setTheme = useUiStore((s) => s.setTheme);
+
+  const toggle = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  };
+
+  return (
+    <Button type="button" variant="ghost" size="icon-sm" onClick={toggle} aria-label="切换主题">
+      {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+    </Button>
+  );
 }
 
 // ── User Menu ───────────────────────────────────────────
@@ -276,7 +294,7 @@ export default function MainLayout() {
       <div
         className={cn(
           'flex min-h-screen flex-col transition-[padding-left] duration-300 ease-in-out',
-          collapsed ? 'lg:pl-[4.5rem]' : 'lg:pl-64',
+          collapsed ? 'lg:pl-18' : 'lg:pl-64',
         )}
       >
         {/* Header */}
@@ -293,7 +311,10 @@ export default function MainLayout() {
             </Button>
             <Breadcrumb />
           </div>
-          <UserMenu />
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <UserMenu />
+          </div>
         </header>
 
         {/* Page Content */}

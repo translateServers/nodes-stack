@@ -16,6 +16,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -28,10 +29,13 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
 
 ## 项目结构
+
 组件库位于前端应用的组件目录中，采用按功能分层组织方式：
+
 - 样式与主题：通过 Tailwind CSS 与自定义 CSS 变量构建主题系统，并引入动画与字体资源。
 - 工具函数：统一的类名合并工具，确保变体与用户传入类名的合并逻辑稳定可靠。
 - 页面示例：Dashboard 与 Login 页面展示了组件的实际组合与交互用法。
@@ -78,6 +82,7 @@ SPIN --> LOGIN
 ```
 
 图表来源
+
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
@@ -89,12 +94,14 @@ SPIN --> LOGIN
 - [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 
 章节来源
+
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 - [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 
 ## 核心组件
+
 本节概述基础组件的设计理念、属性配置与使用方法，并结合页面示例说明组合模式与事件处理。
 
 - Button（按钮）
@@ -124,6 +131,7 @@ SPIN --> LOGIN
   - 示例路径：[加载指示器使用示例:165-168](file://apps/web/src/pages/Login.tsx#L165-L168)、[仪表盘加载:122-125](file://apps/web/src/pages/Dashboard.tsx#L122-L125)
 
 章节来源
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
@@ -133,6 +141,7 @@ SPIN --> LOGIN
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 ## 架构总览
+
 组件库整体由“样式与主题层”“工具层”“组件层”“页面示例层”构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。
 
 ```mermaid
@@ -150,6 +159,7 @@ LAYER1 ---|"Spinner"| SPIN["spinner.tsx"]
 ```
 
 图表来源
+
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
@@ -163,6 +173,7 @@ LAYER1 ---|"Spinner"| SPIN["spinner.tsx"]
 ## 详细组件分析
 
 ### Button 组件分析
+
 - 设计模式：变体系统 + 尺寸系统，支持 asChild 透传，便于与路由、链接等语义元素组合。
 - 数据结构与复杂度：变体映射为常数时间查找；类名合并为 O(n)（n 为传入类名数量）。
 - 依赖链：依赖 utils.cn、Radix Slot、class-variance-authority；样式依赖主题变量与 Tailwind 原子类。
@@ -192,14 +203,17 @@ Button --> RadixSlot : "asChild 透传"
 ```
 
 图表来源
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 章节来源
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 ### Input 组件分析
+
 - 设计模式：最小可用样式，强调一致性与可访问性；通过 data-slot 标记提升可测试性。
 - 数据结构与复杂度：纯样式拼接，O(1) 复杂度。
 - 依赖链：依赖 utils.cn；样式依赖主题变量与 Tailwind 原子类。
@@ -219,14 +233,17 @@ Input --> Utils : "合并类名"
 ```
 
 图表来源
+
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 章节来源
+
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 ### Card 组件分析
+
 - 设计模式：模块化布局容器，提供头部、标题、描述与内容区域，便于组合统计卡、设置卡等场景。
 - 数据结构与复杂度：纯样式拼接，O(1) 复杂度。
 - 依赖链：依赖 utils.cn；样式依赖主题变量与 Tailwind 原子类。
@@ -249,12 +266,15 @@ Card --> CardContent : "组合"
 ```
 
 图表来源
+
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 
 章节来源
+
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 
 ### Alert 组件分析
+
 - 设计模式：提供默认与破坏性两种变体，支持内联图标与标题/描述结构化内容；适合错误、警告、提示等场景。
 - 数据结构与复杂度：变体映射为常数时间查找；类名合并为 O(n)。
 - 依赖链：依赖 utils.cn、class-variance-authority；样式依赖主题变量与 Tailwind 原子类。
@@ -280,12 +300,15 @@ InlineAlert --> Alert : "封装"
 ```
 
 图表来源
+
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 章节来源
+
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 ### Spinner 组件分析
+
 - 设计模式：轻量旋转指示器，适配多种尺寸与主题色；适合加载、提交、异步数据刷新等场景。
 - 数据结构与复杂度：纯样式拼接，O(1) 复杂度。
 - 依赖链：依赖 utils.cn；样式依赖主题变量与 Tailwind 原子类。
@@ -300,12 +323,15 @@ class Spinner {
 ```
 
 图表来源
+
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 章节来源
+
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 ### API/服务组件调用流程（以登录页为例）
+
 ```mermaid
 sequenceDiagram
 participant U as "用户"
@@ -326,12 +352,14 @@ P-->>U : 跳转首页或显示错误提示
 ```
 
 图表来源
+
 - [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 ## 依赖分析
+
 - 样式与主题：Tailwind CSS、自定义 CSS 变量、动画库与字体资源。
 - 组件系统：class-variance-authority（变体系统）、Radix UI Slot（语义化与无障碍）、Lucide React（图标）。
 - 工具函数：clsx 与 tailwind-merge（类名合并与冲突修复）。
@@ -352,22 +380,26 @@ TM --> UTIL
 ```
 
 图表来源
+
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 章节来源
+
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
 - [pnpm-lock.yaml:1933-1950](file://pnpm-lock.yaml#L1933-L1950)
 
 ## 性能考虑
+
 - 类名合并：通过 utils.cn 合并多个类名，避免重复与冲突，减少样式抖动。
 - 变体系统：在组件外部预计算变体样式，降低渲染时的分支判断成本。
 - 渲染优化：Button 支持 asChild，避免不必要的 DOM 包裹；Input 与 Spinner 为纯样式组件，渲染成本极低。
 - 主题变量：CSS 变量与 Tailwind 原子类减少重复样式定义，提高构建与运行效率。
 
 ## 故障排查指南
+
 - 焦点与可访问性问题
   - 确认按钮与输入框具备正确的焦点环与禁用态表现。
   - 如需语义化链接或路由跳转，使用 Button 的 asChild 透传至 Radix Slot。
@@ -390,6 +422,7 @@ TM --> UTIL
   - 参考路径：[登录页图标使用:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)、[仪表盘图标使用:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 章节来源
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
@@ -398,9 +431,11 @@ TM --> UTIL
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 ## 结论
+
 该 UI 组件库以 Radix UI 与 Tailwind CSS 为基础，结合 class-variance-authority 实现了高内聚、低耦合的组件体系。通过统一的工具函数与主题变量，实现了良好的可访问性、可维护性与可扩展性。页面示例展示了组件在真实场景中的组合与交互，为后续扩展提供了参考范式。
 
 ## 附录
+
 - 组件使用示例路径
   - [按钮使用示例:187-213](file://apps/web/src/pages/Login.tsx#L187-L213)
   - [输入框使用示例:123-146](file://apps/web/src/pages/Login.tsx#L123-L146)

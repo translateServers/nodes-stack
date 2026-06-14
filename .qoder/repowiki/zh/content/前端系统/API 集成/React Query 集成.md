@@ -18,6 +18,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -30,10 +31,13 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件系统性梳理前端应用中基于 TanStack React Query 的集成方案，覆盖查询客户端配置、默认查询与变更选项、缓存策略、查询键设计、数据预取与失效、状态管理、乐观更新建议、错误边界处理以及性能优化实践。文档结合仓库现有实现进行说明，并给出可落地的最佳实践与改进建议。
 
 ## 项目结构
+
 前端采用模块化组织，围绕“查询客户端 → 核心 HTTP 层 → 模块 API 与 Hooks → 页面组件”的分层设计：
+
 - 查询客户端与 Provider：在入口文件中注入 React Query Provider，并通过统一的 QueryClient 实例提供全局缓存与重试策略。
 - 核心 HTTP 层：封装 axios、拦截器、鉴权刷新、响应解析与错误事件派发。
 - 模块 API 与 Hooks：按功能域拆分（如认证、用户），每个模块提供 API 方法与对应的 React Query Hooks。
@@ -83,6 +87,7 @@ AUTH_HOOKS --> QC
 ```
 
 图表来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/api/core/query-client.ts:1-32](file://apps/web/src/api/core/query-client.ts#L1-L32)
 - [apps/web/src/api/core/http.ts:1-236](file://apps/web/src/api/core/http.ts#L1-L236)
@@ -98,10 +103,12 @@ AUTH_HOOKS --> QC
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 
 章节来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/api/core/query-client.ts:1-32](file://apps/web/src/api/core/query-client.ts#L1-L32)
 
 ## 核心组件
+
 - 查询客户端与 Provider
   - 在入口文件中注册 QueryClientProvider，并挂载 ReactQueryDevtools 以便开发调试。
   - 查询客户端实例集中配置默认选项与缓存回调，确保全局一致的行为。
@@ -120,6 +127,7 @@ AUTH_HOOKS --> QC
   - 统一管理 API 基础路径与各模块端点，便于维护与替换。
 
 章节来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/api/core/query-client.ts:5-31](file://apps/web/src/api/core/query-client.ts#L5-L31)
 - [apps/web/src/api/core/http.ts:94-179](file://apps/web/src/api/core/http.ts#L94-L179)
@@ -127,6 +135,7 @@ AUTH_HOOKS --> QC
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 
 ## 架构总览
+
 下图展示了从页面组件到查询客户端的整体调用链路，包括错误事件派发与状态同步。
 
 ```mermaid
@@ -152,6 +161,7 @@ Hook->>QC : 使相关查询失效
 ```
 
 图表来源
+
 - [apps/web/src/pages/Login.tsx:60-92](file://apps/web/src/pages/Login.tsx#L60-L92)
 - [apps/web/src/api/modules/auth/hooks.ts:12-22](file://apps/web/src/api/modules/auth/hooks.ts#L12-L22)
 - [apps/web/src/api/modules/auth/api.ts:20-42](file://apps/web/src/api/modules/auth/api.ts#L20-L42)
@@ -163,6 +173,7 @@ Hook->>QC : 使相关查询失效
 ## 详细组件分析
 
 ### 查询客户端与默认选项
+
 - 配置要点
   - QueryCache.onError：统一派发错误事件，便于 UI 提示。
   - MutationCache.onError：同上，保证变更失败也能被感知。
@@ -175,9 +186,11 @@ Hook->>QC : 使相关查询失效
   - 适用于大多数列表与详情类查询；对强一致性的写操作，配合失效策略即可满足一致性需求。
 
 章节来源
+
 - [apps/web/src/api/core/query-client.ts:5-31](file://apps/web/src/api/core/query-client.ts#L5-L31)
 
 ### HTTP 层与鉴权刷新
+
 - 请求拦截器
   - 从 Zustand 认证状态读取访问令牌，统一注入 Authorization 头。
 - 响应拦截器
@@ -211,14 +224,17 @@ Queue --> Done
 ```
 
 图表来源
+
 - [apps/web/src/api/core/http.ts:94-179](file://apps/web/src/api/core/http.ts#L94-L179)
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 
 章节来源
+
 - [apps/web/src/api/core/http.ts:94-179](file://apps/web/src/api/core/http.ts#L94-L179)
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 
 ### 认证模块 Hooks 与状态联动
+
 - 查询
   - useCaptcha：获取验证码图片与标识，键名为固定字符串，便于独立刷新。
   - useProfile：根据访问令牌存在与否启用查询，避免无效请求。
@@ -246,18 +262,21 @@ QC-->>UI : 触发重渲染
 ```
 
 图表来源
+
 - [apps/web/src/api/modules/auth/hooks.ts:12-22](file://apps/web/src/api/modules/auth/hooks.ts#L12-L22)
 - [apps/web/src/api/modules/auth/api.ts:28-30](file://apps/web/src/api/modules/auth/api.ts#L28-L30)
 - [apps/web/src/store/auth.ts:36-38](file://apps/web/src/store/auth.ts#L36-L38)
 - [apps/web/src/pages/Login.tsx:60-92](file://apps/web/src/pages/Login.tsx#L60-L92)
 
 章节来源
+
 - [apps/web/src/api/modules/auth/hooks.ts:1-49](file://apps/web/src/api/modules/auth/hooks.ts#L1-L49)
 - [apps/web/src/api/modules/auth/api.ts:1-45](file://apps/web/src/api/modules/auth/api.ts#L1-L45)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/pages/Login.tsx:60-92](file://apps/web/src/pages/Login.tsx#L60-L92)
 
 ### 用户模块 Hooks 与缓存失效
+
 - 查询
   - useUsers：获取用户列表，键名固定，适合整体失效。
   - useUser：按用户 ID 查询详情，键名包含 ID，支持细粒度失效。
@@ -268,10 +287,12 @@ QC-->>UI : 触发重渲染
   - 对列表型查询采用扁平键名（如 ['users']），便于批量失效。
 
 章节来源
+
 - [apps/web/src/api/modules/user/hooks.ts:1-56](file://apps/web/src/api/modules/user/hooks.ts#L1-L56)
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
 
 ### 页面组件中的使用模式
+
 - 登录页
   - 使用 useCaptcha 获取验证码，useLogin 执行登录，根据状态渲染加载与错误提示。
   - 登录成功后导航至首页。
@@ -281,11 +302,13 @@ QC-->>UI : 触发重渲染
   - ApiErrorSnackbar 订阅错误事件，自动展示并定时消失。
 
 章节来源
+
 - [apps/web/src/pages/Login.tsx:60-221](file://apps/web/src/pages/Login.tsx#L60-L221)
 - [apps/web/src/pages/Users.tsx:1-34](file://apps/web/src/pages/Users.tsx#L1-L34)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 
 ## 依赖关系分析
+
 - 组件耦合
   - 页面组件仅依赖 Hooks，Hooks 依赖模块 API，模块 API 依赖 HTTP 层，形成清晰单向依赖。
   - QueryClient 作为全局单例，被所有 Hooks 间接依赖。
@@ -312,6 +335,7 @@ MAIN["main.tsx"] --> QC
 ```
 
 图表来源
+
 - [apps/web/src/pages/Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 - [apps/web/src/pages/Users.tsx:1-34](file://apps/web/src/pages/Users.tsx#L1-L34)
 - [apps/web/src/api/modules/auth/hooks.ts:1-49](file://apps/web/src/api/modules/auth/hooks.ts#L1-L49)
@@ -325,11 +349,13 @@ MAIN["main.tsx"] --> QC
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 
 章节来源
+
 - [apps/web/src/main.tsx:1-23](file://apps/web/src/main.tsx#L1-L23)
 - [apps/web/src/api/core/query-client.ts:1-32](file://apps/web/src/api/core/query-client.ts#L1-L32)
 - [apps/web/src/api/core/http.ts:1-236](file://apps/web/src/api/core/http.ts#L1-L236)
 
 ## 性能考虑
+
 - 缓存策略
   - 合理设置 staleTime，避免频繁请求；对高变化数据可缩短或关闭。
   - 对只读列表使用较长 staleTime，对详情页可按需缩短。
@@ -347,6 +373,7 @@ MAIN["main.tsx"] --> QC
   - 启用 ReactQueryDevtools，定位缓存命中率与失效时机。
 
 ## 故障排查指南
+
 - 常见问题
   - 401 未授权：确认是否已正确注入 Authorization 头；检查刷新流程是否被阻断。
   - 业务错误未显示：确认 QueryCache.onError 是否派发事件；检查 ApiErrorSnackbar 是否正常监听。
@@ -359,14 +386,17 @@ MAIN["main.tsx"] --> QC
   - 通过 emitApiError 的严重级别区分提示样式，便于快速识别问题类型。
 
 章节来源
+
 - [apps/web/src/api/core/query-client.ts:6-15](file://apps/web/src/api/core/query-client.ts#L6-L15)
 - [apps/web/src/api/core/api-error.ts:16-32](file://apps/web/src/api/core/api-error.ts#L16-L32)
 - [apps/web/src/components/ApiErrorSnackbar.tsx:1-58](file://apps/web/src/components/ApiErrorSnackbar.tsx#L1-L58)
 
 ## 结论
+
 本项目以统一的 QueryClient 为核心，结合严格的 HTTP 层与状态管理，实现了稳定可靠的前端数据流。通过合理的键设计、失效策略与错误事件派发，既保证了用户体验，也提升了系统的可观测性与可维护性。建议在后续迭代中引入乐观更新与更精细的预取策略，进一步优化交互与性能。
 
 ## 附录
+
 - 查询键设计清单
   - 列表：['users']
   - 详情：['users', id]

@@ -13,6 +13,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -25,7 +26,9 @@
 10. [附录](#附录)
 
 ## 简介
+
 本指南面向使用 NestJS 的开发者，系统讲解如何在本项目中启用、访问与维护 Swagger/OpenAPI 文档。内容涵盖：
+
 - 如何访问在线文档
 - 参数说明、请求示例与响应格式
 - 文档定制化配置、标签分类与描述信息设置
@@ -33,7 +36,9 @@
 - API 版本管理与文档更新流程
 
 ## 项目结构
+
 Swagger 在本项目的启用位置与关键配置如下：
+
 - 应用启动时按环境变量动态决定是否启用 Swagger，并在指定前缀路径下挂载在线文档界面
 - 使用装饰器为控制器与接口补充标签、摘要、描述与响应模型
 - 通过统一的成功响应装饰器与全局错误响应装饰器，保证文档与实际返回结构一致
@@ -50,14 +55,17 @@ F --> H["apiPrefix 前缀"]
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/main.ts:24-33](file://apps/nestjs-server/src/main.ts#L24-L33)
 - [apps/nestjs-server/src/config/schemas/app.schema.ts:3-9](file://apps/nestjs-server/src/config/schemas/app.schema.ts#L3-L9)
 
 章节来源
+
 - [apps/nestjs-server/src/main.ts:1-46](file://apps/nestjs-server/src/main.ts#L1-L46)
 - [apps/nestjs-server/src/config/schemas/app.schema.ts:1-12](file://apps/nestjs-server/src/config/schemas/app.schema.ts#L1-L12)
 
 ## 核心组件
+
 - 文档构建与挂载
   - 在应用启动时，根据配置决定是否启用 Swagger；若启用，则使用 DocumentBuilder 构建文档元信息（标题、描述、版本、认证方式），随后通过 SwaggerModule.createDocument 生成文档，并通过 SwaggerModule.setup 将在线文档路由挂载到 {apiPrefix}/docs
   - 文档在开发环境下默认开启，生产环境可通过配置关闭
@@ -71,12 +79,14 @@ F --> H["apiPrefix 前缀"]
   - 无数据响应（如删除、登出）通过 ApiSuccessNoDataResponse 自动填充 message 示例
 
 章节来源
+
 - [apps/nestjs-server/src/main.ts:24-33](file://apps/nestjs-server/src/main.ts#L24-L33)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:82-126](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L82-L126)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:136-148](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L136-L148)
 - [apps/nestjs-server/src/common/decorators/public.decorator.ts:1-4](file://apps/nestjs-server/src/common/decorators/public.decorator.ts#L1-L4)
 
 ## 架构总览
+
 下图展示 Swagger 文档从构建到对外提供的完整链路。
 
 ```mermaid
@@ -102,12 +112,14 @@ end
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/main.ts:24-33](file://apps/nestjs-server/src/main.ts#L24-L33)
 - [apps/nestjs-server/src/config/schemas/app.schema.ts:3-9](file://apps/nestjs-server/src/config/schemas/app.schema.ts#L3-L9)
 
 ## 详细组件分析
 
 ### 认证模块接口文档
+
 - 分类与权限
   - 使用 ApiTags('认证模块') 对接口进行分组
   - 部分接口使用 ApiBearerAuth 标注需要 Bearer Token
@@ -159,12 +171,15 @@ Ctrl-->>Client : 成功响应(用户信息)
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:28-115](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L28-L115)
 
 章节来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:1-115](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L1-L115)
 
 ### 健康检查接口文档
+
 - 分类与权限
   - 使用 ApiTags('health') 对接口进行分组
   - 使用 Public 与 SkipThrottle 标识公开且跳过速率限制
@@ -191,12 +206,15 @@ Ctrl-->>Client : 成功响应(ping)
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/modules/health/health.controller.ts:9-99](file://apps/nestjs-server/src/modules/health/health.controller.ts#L9-L99)
 
 章节来源
+
 - [apps/nestjs-server/src/modules/health/health.controller.ts:1-99](file://apps/nestjs-server/src/modules/health/health.controller.ts#L1-L99)
 
 ### 统一响应与错误文档
+
 - 成功响应
   - ApiSuccessResponse：为接口标注成功响应结构，支持单对象与数组两种形态
   - ApiSuccessNoDataResponse：为无数据响应（如删除、登出）标注 message 示例
@@ -217,14 +235,17 @@ ApplyNoData --> End
 ```
 
 图表来源
+
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:82-126](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L82-L126)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:136-148](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L136-L148)
 
 章节来源
+
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:1-149](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L1-L149)
 - [apps/nestjs-server/src/common/decorators/response-message.decorator.ts:1-5](file://apps/nestjs-server/src/common/decorators/response-message.decorator.ts#L1-L5)
 
 ## 依赖关系分析
+
 - Swagger 相关依赖
   - @nestjs/swagger：提供装饰器与文档生成能力
   - swagger-ui-express：提供在线文档界面
@@ -247,6 +268,7 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
 ```
 
 图表来源
+
 - [apps/nestjs-server/package.json:36-55](file://apps/nestjs-server/package.json#L36-L55)
 - [apps/nestjs-server/src/main.ts:24-33](file://apps/nestjs-server/src/main.ts#L24-L33)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:1-11](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L1-L11)
@@ -254,14 +276,17 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
 - [apps/nestjs-server/src/modules/health/health.controller.ts:9-99](file://apps/nestjs-server/src/modules/health/health.controller.ts#L9-L99)
 
 章节来源
+
 - [apps/nestjs-server/package.json:1-85](file://apps/nestjs-server/package.json#L1-L85)
 
 ## 性能考虑
+
 - 文档生成与挂载仅在应用启动阶段执行一次，对运行时性能影响极小
 - 在生产环境建议关闭 Swagger，避免暴露接口细节与潜在安全风险
 - 若接口较多，建议合理使用 ApiTags 进行模块化分组，提升文档可读性
 
 ## 故障排查指南
+
 - 无法访问在线文档
   - 检查配置项 enableSwagger 是否为 true
   - 确认 apiPrefix 是否正确，文档地址为 {host}/{apiPrefix}/docs
@@ -277,24 +302,29 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
   - 对于健康检查等高频接口，可使用 SkipThrottle 跳过限制
 
 章节来源
+
 - [apps/nestjs-server/src/main.ts:38-43](file://apps/nestjs-server/src/main.ts#L38-L43)
 - [apps/nestjs-server/src/common/decorators/public.decorator.ts:1-4](file://apps/nestjs-server/src/common/decorators/public.decorator.ts#L1-L4)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:136-148](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L136-L148)
 
 ## 结论
+
 本项目通过装饰器与统一响应包装，实现了与运行时一致的 Swagger 文档。开发者只需在控制器与接口上添加必要的装饰器，即可获得结构清晰、易于交互测试的在线文档。建议在开发与联调阶段开启 Swagger，在生产环境关闭以降低风险。
 
 ## 附录
 
 ### 如何访问在线文档
+
 - 开发环境默认开启 Swagger，启动应用后访问 {host}/{apiPrefix}/docs
 - 生产环境可通过配置关闭 Swagger，避免暴露接口详情
 
 章节来源
+
 - [apps/nestjs-server/src/main.ts:24-33](file://apps/nestjs-server/src/main.ts#L24-L33)
 - [apps/nestjs-server/src/config/schemas/app.schema.ts:3-9](file://apps/nestjs-server/src/config/schemas/app.schema.ts#L3-L9)
 
 ### 参数说明、请求示例与响应格式
+
 - 参数说明
   - 使用 ApiOperation 提供接口摘要与描述
   - 使用 ApiTags 对接口进行模块化分组
@@ -305,11 +335,13 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
   - 无数据响应仅包含 code 与 message
 
 章节来源
+
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:40-115](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L40-L115)
 - [apps/nestjs-server/src/modules/health/health.controller.ts:18-99](file://apps/nestjs-server/src/modules/health/health.controller.ts#L18-L99)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:20-68](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L20-L68)
 
 ### 文档定制化配置、标签分类与描述信息
+
 - 标题、描述与版本
   - 在 DocumentBuilder 中设置标题、描述与版本号
 - 认证方式
@@ -320,11 +352,13 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
   - 使用 ApiOperation(summary, description) 为接口提供简短与详细说明
 
 章节来源
+
 - [apps/nestjs-server/src/main.ts:25-30](file://apps/nestjs-server/src/main.ts#L25-L30)
 - [apps/nestjs-server/src/modules/auth/auth.controller.ts:28](file://apps/nestjs-server/src/modules/auth/auth.controller.ts#L28)
 - [apps/nestjs-server/src/modules/health/health.controller.ts:9](file://apps/nestjs-server/src/modules/health/health.controller.ts#L9)
 
 ### 交互式测试与调试技巧
+
 - 在线测试
   - 在 Swagger UI 中选择接口，填写参数，点击“Try it out”发送请求
   - 可直接在页面看到请求与响应的完整过程
@@ -334,11 +368,13 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
   - 使用统一的 ApiGlobalErrors 保证错误响应的一致性
 
 章节来源
+
 - [apps/nestjs-server/src/common/decorators/skip-throttle.decorator.ts:1-12](file://apps/nestjs-server/src/common/decorators/skip-throttle.decorator.ts#L1-L12)
 - [apps/nestjs-server/src/common/decorators/public.decorator.ts:1-4](file://apps/nestjs-server/src/common/decorators/public.decorator.ts#L1-L4)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:136-148](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L136-L148)
 
 ### API 版本管理与文档更新流程
+
 - 版本管理
   - 在 DocumentBuilder 中设置版本号，作为文档版本依据
 - 文档更新流程
@@ -347,5 +383,6 @@ Controllers["auth.controller.ts / health.controller.ts"] --> SW
   - 如需清理与 Zod schema 对齐的文档，可使用 nestjs-zod 的清理工具
 
 章节来源
+
 - [apps/nestjs-server/src/main.ts:25-30](file://apps/nestjs-server/src/main.ts#L25-L30)
 - [apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts:82-126](file://apps/nestjs-server/src/common/decorators/api-success-response.decorator.ts#L82-L126)

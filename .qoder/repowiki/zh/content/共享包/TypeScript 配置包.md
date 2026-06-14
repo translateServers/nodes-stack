@@ -14,6 +14,7 @@
 </cite>
 
 ## 目录
+
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -26,7 +27,9 @@
 10. [附录](#附录)
 
 ## 简介
+
 本文件系统化介绍 Nebula 工作区中的 TypeScript 配置包设计与使用方法，涵盖：
+
 - 基础配置、严格模式配置、模块解析配置与编译选项的设置策略
 - 配置文件的继承关系、环境特定配置与项目特定配置的管理机制
 - 具体配置示例、编译性能优化与类型检查策略
@@ -35,7 +38,9 @@
 该配置包通过统一的基础配置与面向场景的扩展配置，为 NestJS 服务端、React 前端与共享库提供一致且可演进的 TypeScript 编译体验。
 
 ## 项目结构
+
 配置包位于 packages/timestamp-config，包含三类预设配置：
+
 - base.json：通用基础配置（严格模式、模块解析、声明与映射等）
 - nestjs.json：Node 环境下服务端项目的扩展配置
 - react.json：浏览器/前端打包工具环境下的扩展配置
@@ -62,6 +67,7 @@ BASE -.extends.-> PKG_SHARED
 ```
 
 图表来源
+
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
@@ -70,12 +76,14 @@ BASE -.extends.-> PKG_SHARED
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 章节来源
+
 - [packages\typescript-config\package.json:1-11](file://packages/timestamp-config/package.json#L1-L11)
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
 
 ## 核心组件
+
 - 基础配置（base.json）
   - 统一目标版本、模块与解析策略，启用严格模式与声明产物
   - 关键点：严格空值检查、隐式 any 限制、跳过库检查以提升性能
@@ -87,11 +95,13 @@ BASE -.extends.-> PKG_SHARED
   - 保留 node 类型以便工具链兼容
 
 章节来源
+
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
 
 ## 架构总览
+
 配置包采用“基础层 + 场景扩展层”的分层设计，所有项目从基础配置派生，再按需叠加场景配置与本地定制。
 
 ```mermaid
@@ -104,6 +114,7 @@ F["packages/shared/tsconfig.json"] --> |extends| A
 ```
 
 图表来源
+
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
@@ -114,6 +125,7 @@ F["packages/shared/tsconfig.json"] --> |extends| A
 ## 详细组件分析
 
 ### 基础配置（base.json）设计要点
+
 - 目标与模块策略
   - 目标版本与模块/解析策略统一，确保跨平台一致性
 - 严格模式与类型安全
@@ -124,9 +136,11 @@ F["packages/shared/tsconfig.json"] --> |extends| A
   - 跳过库检查，降低大型依赖的类型检查开销
 
 章节来源
+
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 
 ### Node 服务端配置（nestjs.json）设计要点
+
 - 模块与解析
   - 使用 NodeNext 模块与解析，适配 NestJS 运行时生态
 - 装饰器与注释
@@ -137,9 +151,11 @@ F["packages/shared/tsconfig.json"] --> |extends| A
   - 明确 outDir 与 rootDir，配合构建脚本稳定产出
 
 章节来源
+
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 
 ### 前端配置（react.json）设计要点
+
 - 浏览器能力
   - 包含 DOM 与 DOM.Iterable 库，满足 React/Vite 环境需求
 - JSX 处理
@@ -148,9 +164,11 @@ F["packages/shared/tsconfig.json"] --> |extends| A
   - 保留 node 类型以兼容工具链
 
 章节来源
+
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
 
 ### 应用与包的本地配置与继承
+
 - NestJS 服务端
   - 通过 extends 引用服务端扩展；本地覆盖路径映射、包含范围与排除项
 - Web 前端
@@ -171,6 +189,7 @@ App-->>Dev : "合并后的编译选项生效"
 ```
 
 图表来源
+
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\web\tsconfig.json:1-15](file://apps/web/tsconfig.json#L1-L15)
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
@@ -179,6 +198,7 @@ App-->>Dev : "合并后的编译选项生效"
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 
 章节来源
+
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\nestjs-server\tsconfig.build.json:1-5](file://apps/nestjs-server/tsconfig.build.json#L1-L5)
 - [apps\nestjs-server\tsconfig.test.json:1-4](file://apps/nestjs-server/tsconfig.test.json#L1-L4)
@@ -186,6 +206,7 @@ App-->>Dev : "合并后的编译选项生效"
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 ### 编译流程与路径映射
+
 - NestJS 服务端
   - 本地定义多组路径别名，覆盖 include 排除项，构建与测试分别使用独立配置
 - Web 前端
@@ -203,6 +224,7 @@ Emit --> End(["结束"])
 ```
 
 图表来源
+
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\web\tsconfig.json:1-15](file://apps/web/tsconfig.json#L1-L15)
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
@@ -211,11 +233,13 @@ Emit --> End(["结束"])
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 
 章节来源
+
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\web\tsconfig.json:1-15](file://apps/web/tsconfig.json#L1-L15)
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 ## 依赖分析
+
 - 配置包内部依赖
   - base.json 作为根配置被 nestjs.json 与 react.json 扩展
 - 应用与包对配置包的依赖
@@ -234,6 +258,7 @@ A3["packages/shared/tsconfig.json"] --> F1
 ```
 
 图表来源
+
 - [packages\typescript-config\package.json:1-11](file://packages/timestamp-config/package.json#L1-L11)
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
@@ -243,12 +268,14 @@ A3["packages/shared/tsconfig.json"] --> F1
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 章节来源
+
 - [packages\typescript-config\package.json:1-11](file://packages/timestamp-config/package.json#L1-L11)
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\web\tsconfig.json:1-15](file://apps/web/tsconfig.json#L1-L15)
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 ## 性能考虑
+
 - 跳过库检查
   - 在基础配置中启用跳过库检查，显著降低大型依赖的类型检查时间
 - 严格模式与增量检查
@@ -261,6 +288,7 @@ A3["packages/shared/tsconfig.json"] --> F1
   - 精准控制 include/exclude，避免扫描无关目录，缩短编译时间
 
 章节来源
+
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
@@ -269,6 +297,7 @@ A3["packages/shared/tsconfig.json"] --> F1
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 ## 故障排除指南
+
 - 继承链问题
   - 若本地配置无法生效，请确认 extends 路径正确且配置包已安装
 - 路径映射冲突
@@ -281,6 +310,7 @@ A3["packages/shared/tsconfig.json"] --> F1
   - 如类型检查变慢，检查是否启用了不必要的严格选项或包含过多文件
 
 章节来源
+
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
@@ -288,11 +318,13 @@ A3["packages/shared/tsconfig.json"] --> F1
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 ## 结论
+
 该 TypeScript 配置包通过“基础 + 场景扩展 + 本地定制”的分层设计，实现了多项目的一致性与可维护性。建议在新增项目时优先复用现有扩展配置，仅在必要时进行本地微调；同时结合性能优化策略与严格的类型检查策略，持续提升开发体验与构建稳定性。
 
 ## 附录
 
 ### 配置示例与最佳实践
+
 - 服务端项目
   - 通过 extends 引用服务端扩展，本地补充路径映射与包含/排除规则
 - 前端项目
@@ -301,11 +333,13 @@ A3["packages/shared/tsconfig.json"] --> F1
   - 通过 extends 引用基础配置，本地覆盖输出目录与根目录，按需关闭声明映射
 
 章节来源
+
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\web\tsconfig.json:1-15](file://apps/web/tsconfig.json#L1-L15)
 - [packages\shared\tsconfig.json:1-11](file://packages/shared/tsconfig.json#L1-L11)
 
 ### 配置升级指南
+
 - 版本升级
   - 升级配置包版本后，先在本地验证继承链是否正常，再逐步迁移严格选项
 - 严格模式演进
@@ -314,19 +348,22 @@ A3["packages/shared/tsconfig.json"] --> F1
   - 从 CommonJS 渐进到 NodeNext/bundler，同步更新路径映射与打包器配置
 
 章节来源
+
 - [packages\typescript-config\base.json:1-23](file://packages/timestamp-config/base.json#L1-L23)
 - [packages\typescript-config\nestjs.json:1-15](file://packages/timestamp-config/nestjs.json#L1-L15)
 - [packages\typescript-config\react.json:1-11](file://packages/timestamp-config/react.json#L1-L11)
 
 ### 多项目共享配置实施方案
+
 - 工作区发布
-  - 将配置包纳入工作区，通过 workspace:* 引用，确保所有项目共享同一套配置
+  - 将配置包纳入工作区，通过 workspace:\* 引用，确保所有项目共享同一套配置
 - 分层治理
   - 基础配置集中维护，场景扩展按需扩展，本地配置最小化
 - 变更流程
   - 对基础配置的任何变更均需评估影响面，优先在测试项目验证后再推广
 
 章节来源
+
 - [packages\typescript-config\package.json:1-11](file://packages/timestamp-config/package.json#L1-L11)
 - [apps\nestjs-server\tsconfig.json:1-16](file://apps/nestjs-server/tsconfig.json#L1-L16)
 - [apps\web\tsconfig.json:1-15](file://apps/web/tsconfig.json#L1-L15)
