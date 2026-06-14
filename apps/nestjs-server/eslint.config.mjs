@@ -15,6 +15,14 @@ export default [
     },
   },
   {
-    ignores: ['eslint.config.mjs', 'jest.config.js', 'dist/**/*', 'coverage/**/*'],
+    ignores: [
+      'eslint.config.mjs',
+      'jest.config.js',
+      'dist/**/*',
+      'coverage/**/*',
+      'prisma/**/*',
+      'prisma.config.ts',
+      'scripts/**/*',
+    ],
   },
 ];

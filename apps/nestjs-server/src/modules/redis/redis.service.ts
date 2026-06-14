@@ -113,7 +113,7 @@ export class RedisService implements OnModuleDestroy {
       },
     }) as RedisClientType;
 
-    client.on('error', (err) => {
+    client.on('error', (err: Error) => {
       this.logger.error(`Redis client error: ${err.message}`);
     });
 

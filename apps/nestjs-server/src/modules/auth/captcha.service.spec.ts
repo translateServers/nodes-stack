@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CaptchaService } from '@/modules/auth/captcha.service';
 import { RedisService } from '@/modules/redis/redis.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
-import { BizCode } from '@/common/enums/biz-code.enum';
 
 const mockRedisClient = {
   set: jest.fn().mockResolvedValue('OK'),
