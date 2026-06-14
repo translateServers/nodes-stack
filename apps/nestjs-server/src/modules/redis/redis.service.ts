@@ -105,9 +105,7 @@ export class RedisService implements OnModuleDestroy {
         connectTimeout,
         reconnectStrategy(retries: number) {
           if (retries > maxRetries) {
-            return new Error(
-              `Redis max reconnection attempts reached (${maxRetries})`,
-            );
+            return new Error(`Redis max reconnection attempts reached (${maxRetries})`);
           }
           // 指数退避，上限 2s
           return Math.min(retries * 500, 2000);

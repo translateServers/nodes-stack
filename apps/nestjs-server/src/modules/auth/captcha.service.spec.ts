@@ -22,10 +22,7 @@ describe('CaptchaService', () => {
     jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CaptchaService,
-        { provide: RedisService, useValue: mockRedisService },
-      ],
+      providers: [CaptchaService, { provide: RedisService, useValue: mockRedisService }],
     }).compile();
 
     service = module.get<CaptchaService>(CaptchaService);
@@ -88,9 +85,7 @@ describe('CaptchaService', () => {
     it('should throw BusinessException for wrong captcha code', async () => {
       mockRedisClient.get.mockResolvedValue('abcd');
 
-      await expect(service.verifyCaptcha('test-id', 'wrong')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(service.verifyCaptcha('test-id', 'wrong')).rejects.toThrow(BusinessException);
     });
 
     it('should delete captcha after successful verification', async () => {
