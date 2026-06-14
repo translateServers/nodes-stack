@@ -14,7 +14,7 @@ function BrandPanel() {
   return (
     <aside className="relative hidden overflow-hidden bg-primary lg:flex lg:w-[45%]">
       {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-indigo-400 dark:to-indigo-500" />
+      <div className="absolute inset-0 bg-linear-to-br from-primary via-primary/90 to-indigo-400 dark:to-indigo-500" />
 
       {/* Floating orbs */}
       <div className="absolute top-[15%] left-[20%] h-64 w-64 rounded-full bg-white/10 blur-2xl" />
@@ -51,7 +51,7 @@ function BrandPanel() {
       </div>
 
       {/* Bottom decoration */}
-      <div className="absolute right-0 bottom-0 left-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+      <div className="absolute right-0 bottom-0 left-0 h-px bg-linear-to-r from-transparent via-white/20 to-transparent" />
     </aside>
   );
 }
