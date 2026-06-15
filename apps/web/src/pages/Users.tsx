@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Controller } from 'react-hook-form';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/api';
 import { DataTable, createColumnHelper } from '@/components/data-table';
@@ -12,14 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Alert } from '@/components/ui/alert';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
@@ -49,60 +43,74 @@ function UserForm({ user, onSubmit, onCancel, isSubmitting }: UserFormProps) {
   });
 
   return (
-    <Form {...form}>
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-        <FormField
-          control={form.control}
+    <form onSubmit={(e) => void handleSubmit(e)}>
+      <FieldGroup>
+        <Controller
           name="username"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>用户名</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入用户名" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>用户名</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="请输入用户名"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
-        <FormField
-          control={form.control}
+        <Controller
           name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>邮箱</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="请输入邮箱" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>邮箱</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                type="email"
+                placeholder="请输入邮箱"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
         {!isEdit && (
-          <FormField
-            control={form.control}
+          <Controller
             name="password"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>密码</FormLabel>
-                <FormControl>
-                  <Input type="password" placeholder="请输入密码" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>密码</FieldLabel>
+                <Input
+                  {...field}
+                  id={field.name}
+                  type="password"
+                  placeholder="请输入密码"
+                  aria-invalid={fieldState.invalid}
+                />
+                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+              </Field>
             )}
           />
         )}
-        <FormField
-          control={form.control}
+        <Controller
           name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>显示名称</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入显示名称（可选）" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>显示名称</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="请输入显示名称（可选）"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
         <DialogFooter>
@@ -113,8 +121,8 @@ function UserForm({ user, onSubmit, onCancel, isSubmitting }: UserFormProps) {
             {isSubmitting ? '提交中...' : isEdit ? '更新' : '创建'}
           </Button>
         </DialogFooter>
-      </form>
-    </Form>
+      </FieldGroup>
+    </form>
   );
 }
 

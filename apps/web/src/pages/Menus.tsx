@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Controller } from 'react-hook-form';
 import {
   ChevronDown,
   ChevronRight,
@@ -25,14 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -104,162 +98,192 @@ function MenuForm({ menu, parentId, onSubmit, onCancel, isSubmitting }: MenuForm
   });
 
   return (
-    <Form {...form}>
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-        <FormField
-          control={form.control}
+    <form onSubmit={(e) => void handleSubmit(e)}>
+      <FieldGroup>
+        {/* 菜单名称 */}
+        <Controller
           name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>菜单名称</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入菜单名称" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>菜单名称</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="请输入菜单名称"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
-        <FormField
-          control={form.control}
+
+        {/* 菜单类型 */}
+        <Controller
           name="type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>菜单类型</FormLabel>
-              <FormControl>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择菜单类型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MENU_TYPE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        <span className="flex items-center gap-1.5">
-                          <opt.icon className="size-3.5" />
-                          {opt.label}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>菜单类型</FieldLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <SelectTrigger id={field.name} aria-invalid={fieldState.invalid}>
+                  <SelectValue placeholder="选择菜单类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MENU_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span className="flex items-center gap-1.5">
+                        <opt.icon className="size-3.5" />
+                        {opt.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
-        <FormField
-          control={form.control}
+
+        {/* 父级菜单 */}
+        <Controller
           name="parentId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>父级菜单</FormLabel>
-              <FormControl>
-                <Select
-                  value={field.value ?? 'root'}
-                  onValueChange={(v) => field.onChange(v === 'root' ? null : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择父级菜单（可选）" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="root">作为一级菜单</SelectItem>
-                    {flattenTreeForSelect(treeData ?? []).map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.indent}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>父级菜单</FieldLabel>
+              <Select
+                value={field.value ?? 'root'}
+                onValueChange={(v) => field.onChange(v === 'root' ? null : v)}
+              >
+                <SelectTrigger id={field.name} aria-invalid={fieldState.invalid}>
+                  <SelectValue placeholder="选择父级菜单（可选）" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="root">作为一级菜单</SelectItem>
+                  {flattenTreeForSelect(treeData ?? []).map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.indent}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
-        <FormField
-          control={form.control}
+
+        {/* 路由路径 */}
+        <Controller
           name="path"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>路由路径</FormLabel>
-              <FormControl>
-                <Input placeholder="/users（可选）" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>路由路径</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="/users（可选）"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
-        <FormField
-          control={form.control}
+
+        {/* 图标 */}
+        <Controller
           name="icon"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>图标</FormLabel>
-              <FormControl>
-                <Input placeholder="Users（lucide 图标名，可选）" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
           control={form.control}
-          name="component"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>组件路径</FormLabel>
-              <FormControl>
-                <Input placeholder="/pages/Users.tsx（可选）" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>图标</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="Users（lucide 图标名，可选）"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
+
+        {/* 组件路径 */}
+        <Controller
+          name="component"
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>组件路径</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="/pages/Users.tsx（可选）"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
+          )}
+        />
+
+        {/* 排序 + 显示 */}
         <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
+          <Controller
             name="sort"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>排序</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={String(field.value ?? 0)}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor={field.name}>排序</FieldLabel>
+                <Input
+                  id={field.name}
+                  type="number"
+                  min={0}
+                  value={String(field.value ?? 0)}
+                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  aria-invalid={fieldState.invalid}
+                />
+                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+              </Field>
             )}
           />
-          <FormField
-            control={form.control}
+          <Controller
             name="isVisible"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 pt-6">
-                <FormControl>
-                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel className="font-normal">显示菜单</FormLabel>
-                </div>
-              </FormItem>
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field orientation="horizontal" data-invalid={fieldState.invalid}>
+                <Checkbox
+                  id={field.name}
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  aria-invalid={fieldState.invalid}
+                />
+                <FieldLabel htmlFor={field.name} className="font-normal">
+                  显示菜单
+                </FieldLabel>
+              </Field>
             )}
           />
         </div>
-        <FormField
-          control={form.control}
+
+        {/* 权限标识 */}
+        <Controller
           name="permission"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>权限标识</FormLabel>
-              <FormControl>
-                <Input placeholder="system:user:read（可选）" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>权限标识</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="system:user:read（可选）"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
+
         <div className="flex justify-end gap-2 border-t pt-4">
           <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
             取消
@@ -268,8 +292,8 @@ function MenuForm({ menu, parentId, onSubmit, onCancel, isSubmitting }: MenuForm
             {isSubmitting ? '提交中...' : isEdit ? '更新' : '创建'}
           </Button>
         </div>
-      </form>
-    </Form>
+      </FieldGroup>
+    </form>
   );
 }
 

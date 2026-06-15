@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Controller } from 'react-hook-form';
 import type { z } from 'zod';
 import { CreateRoleSchema, UpdateRoleSchema, type RoleResponse } from '@nebula/shared';
 import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from '@/api';
@@ -12,14 +13,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Alert } from '@/components/ui/alert';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
@@ -52,32 +46,38 @@ function RoleForm({ role, onSubmit, onCancel, isSubmitting }: RoleFormProps) {
   });
 
   return (
-    <Form {...form}>
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-        <FormField
-          control={form.control}
+    <form onSubmit={(e) => void handleSubmit(e)}>
+      <FieldGroup>
+        <Controller
           name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>角色名称</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入角色名称" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>角色名称</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="请输入角色名称"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
-        <FormField
-          control={form.control}
+        <Controller
           name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>角色描述</FormLabel>
-              <FormControl>
-                <Input placeholder="请输入角色描述（可选）" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+          control={form.control}
+          render={({ field, fieldState }) => (
+            <Field data-invalid={fieldState.invalid}>
+              <FieldLabel htmlFor={field.name}>角色描述</FieldLabel>
+              <Input
+                {...field}
+                id={field.name}
+                placeholder="请输入角色描述（可选）"
+                aria-invalid={fieldState.invalid}
+              />
+              {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+            </Field>
           )}
         />
         <DialogFooter>
@@ -88,8 +88,8 @@ function RoleForm({ role, onSubmit, onCancel, isSubmitting }: RoleFormProps) {
             {isSubmitting ? '提交中...' : isEdit ? '更新' : '创建'}
           </Button>
         </DialogFooter>
-      </form>
-    </Form>
+      </FieldGroup>
+    </form>
   );
 }
 

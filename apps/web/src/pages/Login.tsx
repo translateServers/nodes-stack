@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
+import { z } from 'zod';
 import { Moon, RefreshCw, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
+import { Controller } from 'react-hook-form';
 import { useCaptcha, useLogin } from '@/api';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
 
@@ -78,14 +82,23 @@ function ThemeToggle() {
   );
 }
 
+/* ── Login form schema ────────────────────────────────── */
+const LoginFormSchema = z.object({
+  account: z.string().min(1, '账号不能为空'),
+  password: z.string().min(1, '密码不能为空'),
+  captchaCode: z.string().min(1, '验证码不能为空'),
+});
+
 /* ── Login page ───────────────────────────────────────── */
 export default function LoginPage() {
   const navigate = useNavigate();
   const captchaQuery = useCaptcha();
   const loginMutation = useLogin();
-  const [account, setAccount] = useState('');
-  const [password, setPassword] = useState('');
-  const [captchaCode, setCaptchaCode] = useState('');
+
+  const form = useNebulaForm({
+    schema: LoginFormSchema,
+    defaultValues: { account: '', password: '', captchaCode: '' },
+  });
 
   useEffect(() => {
     if (useAuthStore.getState().accessToken) {
@@ -98,20 +111,14 @@ export default function LoginPage() {
     [captchaQuery.data?.captchaImage],
   );
 
-  const handleSubmit = async (event: { preventDefault: () => void }) => {
-    event.preventDefault();
-    if (!captchaQuery.data?.captchaId) {
-      return;
-    }
-
+  const onSubmit = form.handleSubmit(async (data) => {
+    if (!captchaQuery.data?.captchaId) return;
     await loginMutation.mutateAsync({
-      account,
-      password,
+      ...data,
       captchaId: captchaQuery.data.captchaId,
-      captchaCode,
     });
     void navigate('/', { replace: true });
-  };
+  });
 
   return (
     <div className="flex min-h-screen">
@@ -134,111 +141,118 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent>
-            <form
-              className="space-y-5"
-              onSubmit={(event) => {
-                void handleSubmit(event);
-              }}
-            >
-              {/* Account */}
-              <div className="space-y-2">
-                <label htmlFor="account" className="text-sm font-medium leading-none">
-                  账号
-                </label>
-                <Input
-                  id="account"
-                  placeholder="请输入账号"
-                  autoComplete="username"
-                  value={account}
-                  onChange={(event) => setAccount(event.target.value)}
-                  required
-                />
-              </div>
-
-              {/* Password */}
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm font-medium leading-none">
-                  密码
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="请输入密码"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-              </div>
-
-              {/* Captcha */}
-              <div className="space-y-2">
-                <label htmlFor="captchaCode" className="text-sm font-medium leading-none">
-                  验证码
-                </label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="captchaCode"
-                    placeholder="请输入验证码"
-                    autoComplete="off"
-                    value={captchaCode}
-                    onChange={(event) => setCaptchaCode(event.target.value)}
-                    className="h-10 flex-1"
-                    required
-                  />
-                  {captchaQuery.isLoading ? (
-                    <div className="flex h-10 items-center justify-center rounded-lg border border-border px-3">
-                      <Spinner />
-                    </div>
-                  ) : captchaQuery.error ? (
-                    <div className="flex h-10 items-center justify-center rounded-lg border border-destructive px-3 text-xs text-destructive">
-                      加载失败
-                    </div>
-                  ) : (
-                    <div
-                      className="flex h-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border transition-colors hover:border-primary/40"
-                      onClick={() => void captchaQuery.refetch()}
-                      role="button"
-                      tabIndex={0}
-                      aria-label="点击刷新验证码"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          void captchaQuery.refetch();
-                        }
-                      }}
-                      dangerouslySetInnerHTML={captchaMarkup}
-                    />
+            <form onSubmit={(e) => void onSubmit(e)}>
+              <FieldGroup>
+                {/* Account */}
+                <Controller
+                  name="account"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor={field.name}>账号</FieldLabel>
+                      <Input
+                        {...field}
+                        id={field.name}
+                        placeholder="请输入账号"
+                        autoComplete="username"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
                   )}
-                </div>
-              </div>
+                />
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mx-auto flex items-center gap-1.5 text-muted-foreground"
-                onClick={() => void captchaQuery.refetch()}
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                刷新验证码
-              </Button>
+                {/* Password */}
+                <Controller
+                  name="password"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor={field.name}>密码</FieldLabel>
+                      <Input
+                        {...field}
+                        id={field.name}
+                        type="password"
+                        placeholder="请输入密码"
+                        autoComplete="current-password"
+                        aria-invalid={fieldState.invalid}
+                      />
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
 
-              {/* Error from login mutation */}
-              {loginMutation.isError && (
-                <Alert variant="destructive">
-                  登录失败，请检查账号、密码或验证码是否正确
-                </Alert>
-              )}
+                {/* Captcha */}
+                <Controller
+                  name="captchaCode"
+                  control={form.control}
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor={field.name}>验证码</FieldLabel>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          {...field}
+                          id={field.name}
+                          placeholder="请输入验证码"
+                          autoComplete="off"
+                          className="h-10 flex-1"
+                          aria-invalid={fieldState.invalid}
+                        />
+                        {captchaQuery.isLoading ? (
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-border px-3">
+                            <Spinner />
+                          </div>
+                        ) : captchaQuery.error ? (
+                          <div className="flex h-10 items-center justify-center rounded-lg border border-destructive px-3 text-xs text-destructive">
+                            加载失败
+                          </div>
+                        ) : (
+                          <div
+                            className="flex h-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border transition-colors hover:border-primary/40"
+                            onClick={() => void captchaQuery.refetch()}
+                            role="button"
+                            tabIndex={0}
+                            aria-label="点击刷新验证码"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                void captchaQuery.refetch();
+                              }
+                            }}
+                            dangerouslySetInnerHTML={captchaMarkup}
+                          />
+                        )}
+                      </div>
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
 
-              {/* Submit */}
-              <Button
-                type="submit"
-                size="lg"
-                className="h-11 w-full text-sm font-semibold"
-                disabled={loginMutation.isPending}
-              >
-                {loginMutation.isPending ? '登录中...' : '登录'}
-              </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mx-auto flex items-center gap-1.5 text-muted-foreground"
+                  onClick={() => void captchaQuery.refetch()}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  刷新验证码
+                </Button>
+
+                {/* Error from login mutation */}
+                {loginMutation.isError && (
+                  <Alert variant="destructive">登录失败，请检查账号、密码或验证码是否正确</Alert>
+                )}
+
+                {/* Submit */}
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="h-11 w-full text-sm font-semibold"
+                  disabled={loginMutation.isPending}
+                >
+                  {loginMutation.isPending ? '登录中...' : '登录'}
+                </Button>
+              </FieldGroup>
             </form>
           </CardContent>
         </Card>
