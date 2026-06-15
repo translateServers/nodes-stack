@@ -2,11 +2,11 @@ model DictType {
   id          String      @id @default(uuid())
   code        String      @unique
   name        String
-  description String?
-  isActive    Boolean     @default(true)
+  remark      String?
   sort        Int         @default(0)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
+  isActive    Boolean     @default(true)
   values      DictValue[] @relation("DictTypeValues")
 
   @@index([code])
@@ -22,10 +22,10 @@ model DictValue {
   value       String
   color       String?
   sort        Int      @default(0)
-  isActive    Boolean  @default(true)
   remark      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  isActive    Boolean  @default(true)
 
   @@unique([dictTypeId, code])
   @@index([dictTypeId])

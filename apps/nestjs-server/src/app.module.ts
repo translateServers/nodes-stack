@@ -7,6 +7,7 @@ import { AuthModule } from '@/modules/auth/auth.module';
 import { UserModule } from '@/modules/user/user.module';
 import { MenuModule } from '@/modules/menu/menu.module';
 import { RoleModule } from '@/modules/role/role.module';
+import { DictModule } from '@/modules/dict/dict.module';
 import { HealthModule } from '@/modules/health/health.module';
 import { CacheModule } from '@/modules/cache/cache.module';
 import { RedisModule } from '@/modules/redis/redis.module';
@@ -33,6 +34,7 @@ import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
     UserModule,
     MenuModule,
     RoleModule,
+    DictModule,
     HealthModule,
     LoggerModule,
   ],

@@ -6,10 +6,7 @@ import LoginPage from '@/pages/Login';
 import UsersPage from '@/pages/Users';
 import MenusPage from '@/pages/Menus';
 import RolesPage from '@/pages/Roles';
-
-function ComingSoonPage() {
-  return <div className="text-xl font-semibold">该功能未上线</div>;
-}
+import DictsPage from '@/pages/Dicts';
 
 const router = createBrowserRouter([
   {
@@ -41,7 +38,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'dict',
-            element: <ComingSoonPage />,
+            element: <DictsPage />,
           },
         ],
       },
