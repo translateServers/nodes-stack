@@ -11,7 +11,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "clean": "turbo run clean",
-    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\" --ignore-path .prettierignore"
+    "format": "prettier --write \"**/*.{ts,tsx,js,json}\" --ignore-path .prettierignore"
   },
   "devDependencies": {
     "turbo": "^2.3.0",
