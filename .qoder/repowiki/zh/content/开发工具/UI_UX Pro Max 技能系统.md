@@ -19,7 +19,6 @@
 </cite>
 
 ## 目录
-
 1. [简介](#简介)
 2. [项目结构](#项目结构)
 3. [核心组件](#核心组件)
@@ -35,7 +34,6 @@
 UI/UX Pro Max 技能系统是一个基于 React + NestJS 构建的企业级管理系统，专注于提供卓越的用户体验和界面设计。该系统采用现代化的技术栈，包括 TypeScript、Zod 数据验证、React Hook Form、TanStack Table 等，实现了完整的用户管理和角色管理功能。
 
 系统的核心特色包括：
-
 - **响应式设计**：支持桌面端和移动端的无缝体验
 - **主题系统**：内置明暗主题切换功能
 - **数据表格**：高性能的数据展示和交互能力
@@ -76,12 +74,10 @@ C --> A2
 ```
 
 **图表来源**
-
 - [apps/web/src/pages/Users.tsx:1-241](file://apps/web/src/pages/Users.tsx#L1-L241)
 - [apps/nestjs-server/src/modules/user/user.service.ts:1-113](file://apps/nestjs-server/src/modules/user/user.service.ts#L1-L113)
 
 **章节来源**
-
 - [apps/web/src/pages/Users.tsx:1-241](file://apps/web/src/pages/Users.tsx#L1-L241)
 - [apps/nestjs-server/src/modules/user/user.service.ts:1-113](file://apps/nestjs-server/src/modules/user/user.service.ts#L1-L113)
 
@@ -124,7 +120,6 @@ UsersPage --> UserService : "业务逻辑"
 ```
 
 **图表来源**
-
 - [apps/nestjs-server/src/modules/user/user.service.ts:14-113](file://apps/nestjs-server/src/modules/user/user.service.ts#L14-L113)
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
 - [apps/web/src/pages/Users.tsx:129-241](file://apps/web/src/pages/Users.tsx#L129-L241)
@@ -163,13 +158,11 @@ RolesPage --> RoleService : "业务逻辑"
 ```
 
 **图表来源**
-
 - [apps/nestjs-server/src/modules/role/role.service.ts:14-128](file://apps/nestjs-server/src/modules/role/role.service.ts#L14-L128)
 - [apps/web/src/api/modules/role/api.ts:1-32](file://apps/web/src/api/modules/role/api.ts#L1-L32)
 - [apps/web/src/pages/Roles.tsx:96-202](file://apps/web/src/pages/Roles.tsx#L96-L202)
 
 **章节来源**
-
 - [apps/web/src/pages/Users.tsx:1-241](file://apps/web/src/pages/Users.tsx#L1-L241)
 - [apps/web/src/pages/Roles.tsx:1-202](file://apps/web/src/pages/Roles.tsx#L1-L202)
 
@@ -211,7 +204,6 @@ G --> L
 ```
 
 **图表来源**
-
 - [apps/web/src/components/data-table.tsx:64-246](file://apps/web/src/components/data-table.tsx#L64-L246)
 - [apps/web/src/hooks/use-nebula-form.ts:16-31](file://apps/web/src/hooks/use-nebula-form.ts#L16-L31)
 - [apps/nestjs-server/src/modules/user/user.service.ts:14-113](file://apps/nestjs-server/src/modules/user/user.service.ts#L14-L113)
@@ -247,7 +239,6 @@ Hooks-->>Table : 刷新表格
 ```
 
 **图表来源**
-
 - [apps/web/src/components/data-table.tsx:83-99](file://apps/web/src/components/data-table.tsx#L83-L99)
 - [apps/web/src/pages/Users.tsx:130-133](file://apps/web/src/pages/Users.tsx#L130-L133)
 
@@ -260,7 +251,6 @@ Hooks-->>Table : 刷新表格
 5. **加载状态**：友好的加载指示器
 
 **章节来源**
-
 - [apps/web/src/components/data-table.tsx:1-298](file://apps/web/src/components/data-table.tsx#L1-L298)
 
 ### 表单系统 (Nebula Form)
@@ -284,7 +274,6 @@ M[字段变更] --> E
 ```
 
 **图表来源**
-
 - [apps/web/src/hooks/use-nebula-form.ts:16-31](file://apps/web/src/hooks/use-nebula-form.ts#L16-L31)
 - [apps/web/src/pages/Users.tsx:34-43](file://apps/web/src/pages/Users.tsx#L34-L43)
 
@@ -296,7 +285,6 @@ M[字段变更] --> E
 4. **提交处理**：统一的提交和错误处理
 
 **章节来源**
-
 - [apps/web/src/hooks/use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [apps/web/src/pages/Users.tsx:31-127](file://apps/web/src/pages/Users.tsx#L31-L127)
 
@@ -332,11 +320,9 @@ DialogContent --> DialogFooter : "包含"
 ```
 
 **图表来源**
-
 - [apps/web/src/components/ui/dialog.tsx:10-146](file://apps/web/src/components/ui/dialog.tsx#L10-L146)
 
 **章节来源**
-
 - [apps/web/src/components/ui/dialog.tsx:1-146](file://apps/web/src/components/ui/dialog.tsx#L1-L146)
 
 ### 布局系统 (MainLayout)
@@ -361,11 +347,9 @@ E --> E2[版本信息]
 ```
 
 **图表来源**
-
 - [apps/web/src/layouts/MainLayout.tsx:190-338](file://apps/web/src/layouts/MainLayout.tsx#L190-L338)
 
 **章节来源**
-
 - [apps/web/src/layouts/MainLayout.tsx:1-338](file://apps/web/src/layouts/MainLayout.tsx#L1-L338)
 
 ## 依赖关系分析
@@ -413,13 +397,11 @@ K --> N
 ```
 
 **图表来源**
-
 - [apps/web/src/pages/Users.tsx:1-241](file://apps/web/src/pages/Users.tsx#L1-L241)
 - [apps/web/src/pages/Roles.tsx:1-202](file://apps/web/src/pages/Roles.tsx#L1-L202)
 - [apps/web/src/api/modules/user/api.ts:1-34](file://apps/web/src/api/modules/user/api.ts#L1-L34)
 
 **章节来源**
-
 - [apps/web/src/router/index.tsx:1-53](file://apps/web/src/router/index.tsx#L1-L53)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/store/ui.ts:1-88](file://apps/web/src/store/ui.ts#L1-L88)
@@ -445,25 +427,21 @@ K --> N
 ### 常见问题及解决方案
 
 #### 表单验证错误
-
 - **症状**：表单提交时报验证错误
 - **原因**：Zod Schema 验证失败
 - **解决**：检查字段类型和必填项配置
 
 #### 数据加载失败
-
 - **症状**：页面显示加载错误
 - **原因**：API 请求失败或网络问题
 - **解决**：检查网络连接和服务器状态
 
 #### 认证失效
-
 - **症状**：页面重定向到登录页
 - **原因**：Token 过期或无效
 - **解决**：重新登录或刷新 Token
 
 **章节来源**
-
 - [apps/web/src/pages/Users.tsx:213-214](file://apps/web/src/pages/Users.tsx#L213-L214)
 - [apps/web/src/pages/Roles.tsx:177-178](file://apps/web/src/pages/Roles.tsx#L177-L178)
 

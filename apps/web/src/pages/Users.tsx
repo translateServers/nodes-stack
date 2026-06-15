@@ -1,8 +1,24 @@
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  getFilteredRowModel,
+  flexRender,
+  type ColumnDef,
+  type SortingState,
+  type ColumnFiltersState,
+  type VisibilityState,
+} from '@tanstack/react-table';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/api';
-import { DataTable, createColumnHelper } from '@/components/data-table';
+import {
+  DataTableColumnHeader,
+  DataTablePagination,
+  DataTableViewOptions,
+} from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -15,11 +31,18 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Alert } from '@/components/ui/alert';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
-
-const columnHelper = createColumnHelper<UserResponse>();
 
 interface UserFormProps {
   user?: UserResponse;
@@ -134,6 +157,9 @@ export default function UsersPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | undefined>();
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   const handleCreate = () => {
     setEditingUser(undefined);
@@ -164,44 +190,76 @@ export default function UsersPage() {
     setDialogOpen(false);
   };
 
-  const columns = [
-    columnHelper.accessor('username', { header: '用户名', size: 150 }),
-    columnHelper.accessor('email', { header: '邮箱', size: 200 }),
-    columnHelper.accessor('name', {
-      header: '显示名称',
+  const columns: ColumnDef<UserResponse, unknown>[] = [
+    {
+      accessorKey: 'username',
       size: 150,
-      cell: (value) => value ?? '-',
-    }),
-    columnHelper.accessor('isActive', {
-      header: '状态',
+      header: ({ column }) => <DataTableColumnHeader column={column} title="用户名" />,
+    },
+    {
+      accessorKey: 'email',
+      size: 200,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="邮箱" />,
+    },
+    {
+      accessorKey: 'name',
+      size: 150,
+      header: ({ column }) => <DataTableColumnHeader column={column} title="显示名称" />,
+      cell: ({ row }) => {
+        const name = row.getValue('name');
+        return name || '-';
+      },
+    },
+    {
+      accessorKey: 'isActive',
       size: 100,
-      cell: (value) =>
-        value ? <Badge variant="default">启用</Badge> : <Badge variant="destructive">禁用</Badge>,
-    }),
-    columnHelper.display({
+      header: ({ column }) => <DataTableColumnHeader column={column} title="状态" />,
+      cell: ({ row }) =>
+        row.getValue('isActive') ? (
+          <Badge variant="default">启用</Badge>
+        ) : (
+          <Badge variant="destructive">禁用</Badge>
+        ),
+    },
+    {
       id: 'actions',
       header: '操作',
       size: 120,
-      cell: (row) => (
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row)}>
+          <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
             <Pencil className="size-3.5" />
           </Button>
           <Button
             variant="ghost"
             size="icon-xs"
-            onClick={() => void handleDelete(row)}
+            onClick={() => void handleDelete(row.original)}
             className="text-destructive hover:text-destructive"
           >
             <Trash2 className="size-3.5" />
           </Button>
         </div>
       ),
-    }),
+    },
   ];
 
+  const table = useReactTable({
+    data: users ?? [],
+    columns,
+    state: { sorting, columnFilters, columnVisibility },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  });
+
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">用户管理</h1>
         <Button onClick={handleCreate}>
@@ -212,12 +270,61 @@ export default function UsersPage() {
 
       {error && <Alert variant="destructive">加载用户列表失败</Alert>}
 
-      <DataTable
-        columns={columns}
-        data={users ?? []}
-        isLoading={isLoading}
-        emptyMessage="暂无用户数据"
-      />
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="搜索用户名或邮箱..."
+          value={(table.getColumn('username')?.getFilterValue() as string) ?? ''}
+          onChange={(event) => table.getColumn('username')?.setFilterValue(event.target.value)}
+          className="max-w-sm"
+        />
+        <DataTableViewOptions table={table} />
+      </div>
+
+      {/* Table */}
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-32 text-center">
+                  <Spinner className="mx-auto size-6" />
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-32 text-center">
+                  暂无用户数据
+                </TableCell>
+              </TableRow>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+        <DataTablePagination table={table} />
+      </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

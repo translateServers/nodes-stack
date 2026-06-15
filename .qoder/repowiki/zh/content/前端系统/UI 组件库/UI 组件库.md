@@ -9,7 +9,7 @@
 - [badge.tsx](file://apps/web/src/components/ui/badge.tsx)
 - [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
 - [dialog.tsx](file://apps/web/src/components/ui/dialog.tsx)
-- [form.tsx](file://apps/web/src/components/ui/form.tsx)
+- [field.tsx](file://apps/web/src/components/ui/field.tsx)
 - [label.tsx](file://apps/web/src/components/ui/label.tsx)
 - [radio-group.tsx](file://apps/web/src/components/ui/radio-group.tsx)
 - [select.tsx](file://apps/web/src/components/ui/select.tsx)
@@ -20,7 +20,6 @@
 - [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
 - [avatar.tsx](file://apps/web/src/components/ui/avatar.tsx)
 - [dropdown-menu.tsx](file://apps/web/src/components/ui/dropdown-menu.tsx)
-- [field.tsx](file://apps/web/src/components/ui/field.tsx)
 - [spinner.tsx](file://apps/web/src/components/ui/spinner.tsx)
 - [data-table.tsx](file://apps/web/src/components/data-table.tsx)
 - [ApiErrorSnackbar.tsx](file://apps/web/src/components/ApiErrorSnackbar.tsx)
@@ -30,6 +29,7 @@
 - [package.json](file://apps/web/package.json)
 - [Dashboard.tsx](file://apps/web/src/pages/Dashboard.tsx)
 - [Login.tsx](file://apps/web/src/pages/Login.tsx)
+- [use-nebula-form.ts](file://apps/web/src/hooks/use-nebula-form.ts)
 - [pnpm-lock.yaml](file://pnpm-lock.yaml)
 </cite>
 
@@ -48,7 +48,9 @@
 
 ## 简介
 
-本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、新增组件（Badge、Checkbox、Dialog、Form、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等）、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
+本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、新增组件（Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等）、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
+
+**重要更新**：表单组件系统已完成重大重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统，包括 Field、FieldGroup、FieldLabel、FieldError 等组件，以及 useNebulaForm 钩子。Login 页面已完全迁移到新的表单架构。
 
 ## 项目结构
 
@@ -57,7 +59,8 @@
 - 样式与主题：通过 Tailwind CSS 与自定义 CSS 变量构建主题系统，并引入动画与字体资源。
 - 工具函数：统一的类名合并工具，确保变体与用户传入类名的合并逻辑稳定可靠。
 - 页面示例：Dashboard 与 Login 页面展示了组件的实际组合与交互用法。
-- 新增组件：Badge、Checkbox、Dialog、Form、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件丰富了组件库的功能体系。
+- 新增组件：Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件丰富了组件库的功能体系。
+- 表单系统：全新的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。
 
 ```mermaid
 graph TB
@@ -74,12 +77,11 @@ SPIN["components/ui/spinner.tsx"]
 AVATAR["components/ui/avatar.tsx"]
 DROPDOWN["components/ui/dropdown-menu.tsx"]
 FIELD["components/ui/field.tsx"]
-end
+END
 subgraph "新增组件"
 BADGE["components/ui/badge.tsx"]
 CHECKBOX["components/ui/checkbox.tsx"]
 DIALOG["components/ui/dialog.tsx"]
-FORM["components/ui/form.tsx"]
 LABEL["components/ui/label.tsx"]
 RADIO["components/ui/radio-group.tsx"]
 SELECT["components/ui/select.tsx"]
@@ -89,12 +91,15 @@ SWITCH["components/ui/switch.tsx"]
 TABLE["components/ui/table.tsx"]
 SONNER["components/ui/sonner.tsx"]
 END
+subgraph "表单系统"
+USEFORM["hooks/use-nebula-form.ts"]
+LOGIN["pages/Login.tsx"]
+END
 subgraph "工具"
 UTIL["lib/utils.ts"]
 END
 subgraph "页面示例"
 DASH["pages/Dashboard.tsx"]
-LOGIN["pages/Login.tsx"]
 DATATABLE["components/data-table.tsx"]
 ERRORSNACK["components/ApiErrorSnackbar.tsx"]
 AUTH["components/RequireAuth.tsx"]
@@ -110,7 +115,6 @@ CSS --> FIELD
 CSS --> BADGE
 CSS --> CHECKBOX
 CSS --> DIALOG
-CSS --> FORM
 CSS --> LABEL
 CSS --> RADIO
 CSS --> SELECT
@@ -130,7 +134,6 @@ UTIL --> FIELD
 UTIL --> BADGE
 UTIL --> CHECKBOX
 UTIL --> DIALOG
-UTIL --> FORM
 UTIL --> LABEL
 UTIL --> RADIO
 UTIL --> SELECT
@@ -146,7 +149,6 @@ SPIN --> DASH
 BADGE --> DASH
 CHECKBOX --> DASH
 DIALOG --> DASH
-FORM --> DASH
 LABEL --> DASH
 RADIO --> DASH
 SELECT --> DASH
@@ -163,10 +165,11 @@ INP --> LOGIN
 CARD --> LOGIN
 ALERT --> LOGIN
 SPIN --> LOGIN
+FIELD --> LOGIN
+USEFORM --> LOGIN
 ```
 
 **图表来源**
-
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
@@ -175,26 +178,15 @@ SPIN --> LOGIN
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
-- [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
-- [badge.tsx](file://apps/web/src/components/ui/badge.tsx)
-- [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
-- [dialog.tsx](file://apps/web/src/components/ui/dialog.tsx)
-- [form.tsx](file://apps/web/src/components/ui/form.tsx)
-- [label.tsx](file://apps/web/src/components/ui/label.tsx)
-- [radio-group.tsx](file://apps/web/src/components/ui/radio-group.tsx)
-- [select.tsx](file://apps/web/src/components/ui/select.tsx)
-- [separator.tsx](file://apps/web/src/components/ui/separator.tsx)
-- [sheet.tsx](file://apps/web/src/components/ui/sheet.tsx)
-- [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
-- [table.tsx](file://apps/web/src/components/ui/table.tsx)
-- [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
+- [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
+- [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 
 **章节来源**
-
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
-- [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
+- [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 
 ## 核心组件
 
@@ -206,27 +198,27 @@ SPIN --> LOGIN
   - 设计理念：通过变体与尺寸变体系统提供一致的视觉与交互反馈；支持 asChild 透传至 Radix Slot，便于语义化与无障碍场景复用。
   - 关键属性：variant（默认/描边/次要/幽灵/破坏/链接）、size（默认/xs/sm/lg/icon 及其尺寸族）、asChild（是否渲染为 Slot Root）、className。
   - 可访问性：自动聚焦环与禁用态处理，支持键盘交互与屏幕阅读器识别。
-  - 示例路径：[按钮使用示例:187-213](file://apps/web/src/pages/Login.tsx#L187-L213)、[按钮组合示例:65-77](file://apps/web/src/pages/Dashboard.tsx#L65-L77)
+  - 示例路径：[按钮使用示例:230-254](file://apps/web/src/pages/Login.tsx#L230-L254)、[按钮组合示例:65-77](file://apps/web/src/pages/Dashboard.tsx#L65-L77)
 
 - **Input（输入框）**
   - 设计理念：最小可用样式，强调焦点态与禁用态的一致性；通过 data-slot 标记便于主题与测试选择器。
   - 关键属性：type、className。
-  - 示例路径：[输入框使用示例:123-146](file://apps/web/src/pages/Login.tsx#L123-L146)
+  - 示例路径：[输入框使用示例:153-179](file://apps/web/src/pages/Login.tsx#L153-L179)
 
 - **Card（卡片）**
   - 设计理念：模块化布局容器，提供头部、标题、描述与内容区域，便于组合统计卡、设置卡等场景。
   - 关键属性：className。
-  - 示例路径：[卡片使用示例:98-193](file://apps/web/src/pages/Dashboard.tsx#L98-L193)、[登录页卡片:101-216](file://apps/web/src/pages/Login.tsx#L101-L216)
+  - 示例路径：[卡片使用示例:133-258](file://apps/web/src/pages/Login.tsx#L133-L258)、[仪表盘卡片使用示例:98-193](file://apps/web/src/pages/Dashboard.tsx#L98-L193)
 
 - **Alert（提示）**
   - 设计理念：提供默认与破坏性两种变体，支持内联图标与标题/描述结构化内容。
   - 关键属性：variant、title、children。
-  - 示例路径：[内联提示使用示例:199-203](file://apps/web/src/pages/Login.tsx#L199-L203)、[服务状态提示:122-128](file://apps/web/src/pages/Dashboard.tsx#L122-L128)
+  - 示例路径：[登录页错误提示:242-244](file://apps/web/src/pages/Login.tsx#L242-L244)、[服务状态提示:122-128](file://apps/web/src/pages/Dashboard.tsx#L122-L128)
 
 - **Spinner（加载指示器）**
   - 设计理念：轻量旋转指示器，适配多种尺寸与主题色。
   - 关键属性：className。
-  - 示例路径：[加载指示器使用示例:165-168](file://apps/web/src/pages/Login.tsx#L165-L168)、[仪表盘加载:122-125](file://apps/web/src/pages/Dashboard.tsx#L122-L125)
+  - 示例路径：[验证码加载指示器:201-204](file://apps/web/src/pages/Login.tsx#L201-L204)、[仪表盘加载:122-125](file://apps/web/src/pages/Dashboard.tsx#L122-L125)
 
 ### 新增组件
 
@@ -245,15 +237,16 @@ SPIN --> LOGIN
   - 关键属性：open、onOpenChange、className。
   - 示例路径：[对话框使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
-- **Form（表单）**
-  - 设计理念：完整的表单解决方案，包括字段验证、错误处理和提交管理。
-  - 关键属性：onSubmit、resolver、values、className。
-  - 示例路径：[表单使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+- **Field（字段容器）**
+  - 设计理念：全新的表单字段容器组件，提供灵活的布局系统和响应式支持。支持垂直、水平和响应式三种布局模式，内置错误处理和可访问性支持。
+  - 关键属性：orientation（vertical/horizontal/responsive）、className、data-invalid（错误状态）。
+  - 特殊功能：与 FieldGroup、FieldLabel、FieldError 等子组件协同工作，提供完整的表单字段解决方案。
+  - 示例路径：[Field 使用示例:151-161](file://apps/web/src/pages/Login.tsx#L151-L161)、[Field 使用示例:170-182](file://apps/web/src/pages/Login.tsx#L170-L182)
 
 - **Label（标签）**
   - 设计理念：为表单控件提供可点击的标签文本，支持无障碍关联。
   - 关键属性：for、className。
-  - 示例路径：[标签使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - 示例路径：[标签使用示例:152](file://apps/web/src/pages/Login.tsx#L152)、[标签使用示例:171](file://apps/web/src/pages/Login.tsx#L171)
 
 - **RadioGroup（单选组）**
   - 设计理念：一组互斥的单选按钮，支持键盘导航和无障碍访问。
@@ -268,7 +261,7 @@ SPIN --> LOGIN
 - **Separator（分隔符）**
   - 设计理念：用于分组内容的视觉分隔线，支持水平和垂直方向。
   - 关键属性：orientation（水平/垂直）、className。
-  - 示例路径：[分隔符使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - 示例路径：[分隔符使用示例:152-153](file://apps/web/src/pages/Login.tsx#L152-L153)、[分隔符使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
 - **Sheet（工作面板）**
   - 设计理念：从侧边滑出的工作面板，支持拖拽、键盘导航和无障碍访问。
@@ -281,7 +274,7 @@ SPIN --> LOGIN
   - 示例路径：[开关使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
 - **Table（表格）**
-  - 设计念：数据表格组件，支持排序、筛选和分页功能。
+  - 设计理念：数据表格组件，支持排序、筛选和分页功能。
   - 关键属性：columns、data、className。
   - 示例路径：[表格使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
@@ -290,45 +283,43 @@ SPIN --> LOGIN
   - 关键属性：toast、position、duration、className。
   - 示例路径：[通知使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
-**章节来源**
+### 表单系统
 
+- **useNebulaForm 钩子**
+  - 设计理念：基于 React Hook Form 的类型安全表单钩子，集成了 Zod 验证器，提供自动类型推导和完整的表单状态管理。
+  - 关键特性：自动类型推导、Zod 验证集成、完整的表单生命周期管理。
+  - 使用示例：[useNebulaForm 使用示例:98-101](file://apps/web/src/pages/Login.tsx#L98-L101)
+  - 类型安全：通过泛型参数确保表单数据类型与 Zod 模式严格匹配。
+
+**章节来源**
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
-- [badge.tsx](file://apps/web/src/components/ui/badge.tsx)
-- [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
-- [dialog.tsx](file://apps/web/src/components/ui/dialog.tsx)
-- [form.tsx](file://apps/web/src/components/ui/form.tsx)
-- [label.tsx](file://apps/web/src/components/ui/label.tsx)
-- [radio-group.tsx](file://apps/web/src/components/ui/radio-group.tsx)
-- [select.tsx](file://apps/web/src/components/ui/select.tsx)
-- [separator.tsx](file://apps/web/src/components/ui/separator.tsx)
-- [sheet.tsx](file://apps/web/src/components/ui/sheet.tsx)
-- [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
-- [table.tsx](file://apps/web/src/components/ui/table.tsx)
-- [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
-- [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
+- [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
+- [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 ## 架构总览
 
-组件库整体由"样式与主题层""工具层""组件层""页面示例层"构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。新增组件进一步完善了组件库的功能体系。
+组件库整体由"样式与主题层""工具层""组件层""表单系统层""页面示例层"构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。新增的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。
 
 ```mermaid
 graph TB
-THEME["主题与样式<br/>index.css"] --> LAYER1["组件层<br/>基础组件<br/>button/input/card/alert/spinner<br/>新增组件<br/>badge/checkbox/dialog/form/label<br/>radio/select/separator/sheet/switch<br/>table/sonner"]
+THEME["主题与样式<br/>index.css"] --> LAYER1["组件层<br/>基础组件<br/>button/input/card/alert/spinner<br/>新增组件<br/>badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>table/sonner<br/>表单组件<br/>field"]
 UTIL["工具层<br/>utils/cn"] --> LAYER1
 RADIX["@radix-ui/react-slot"] --> LAYER1
 CVAVA["class-variance-authority"] --> LAYER1
+LAYER1 --> FORM["表单系统层<br/>useNebulaForm 钩子<br/>Field 组件系统"]
 LAYER1 --> PAGES["页面示例层<br/>Dashboard/Login/data-table<br/>ApiErrorSnackbar/RequireAuth"]
 LAYER1 ---|"基础组件"| BASE["button/input/card/alert/spinner"]
-LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/form/label<br/>radio/select/separator/sheet/switch<br/>table/sonner"]
+LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>table/sonner"]
+FORM ---|"表单组件"| FIELDCOMP["field.tsx<br/>Field/FieldGroup/FieldLabel<br/>FieldError 等"]
 ```
 
 **图表来源**
-
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
@@ -336,20 +327,10 @@ LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/form/label<br/>radio/selec
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
-- [badge.tsx](file://apps/web/src/components/ui/badge.tsx)
-- [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
-- [dialog.tsx](file://apps/web/src/components/ui/dialog.tsx)
-- [form.tsx](file://apps/web/src/components/ui/form.tsx)
-- [label.tsx](file://apps/web/src/components/ui/label.tsx)
-- [radio-group.tsx](file://apps/web/src/components/ui/radio-group.tsx)
-- [select.tsx](file://apps/web/src/components/ui/select.tsx)
-- [separator.tsx](file://apps/web/src/components/ui/separator.tsx)
-- [sheet.tsx](file://apps/web/src/components/ui/sheet.tsx)
-- [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
-- [table.tsx](file://apps/web/src/components/ui/table.tsx)
-- [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
+- [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
-- [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
+- [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 
 ## 详细组件分析
 
@@ -384,12 +365,10 @@ Button --> RadixSlot : "asChild 透传"
 ```
 
 **图表来源**
-
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 **章节来源**
-
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
@@ -414,12 +393,10 @@ Input --> Utils : "合并类名"
 ```
 
 **图表来源**
-
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 **章节来源**
-
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
@@ -447,11 +424,9 @@ Card --> CardContent : "组合"
 ```
 
 **图表来源**
-
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 
 **章节来源**
-
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 
 ### Alert 组件分析
@@ -481,11 +456,9 @@ InlineAlert --> Alert : "封装"
 ```
 
 **图表来源**
-
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 **章节来源**
-
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 ### Spinner 组件分析
@@ -504,11 +477,9 @@ class Spinner {
 ```
 
 **图表来源**
-
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 **章节来源**
-
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 ### Badge 组件分析
@@ -520,7 +491,6 @@ class Spinner {
 - 性能影响：变体计算在组件渲染前完成，无额外开销。
 
 **章节来源**
-
 - [badge.tsx](file://apps/web/src/components/ui/badge.tsx)
 
 ### Checkbox 组件分析
@@ -532,7 +502,6 @@ class Spinner {
 - 性能影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
-
 - [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
 
 ### Dialog 组件分析
@@ -544,20 +513,97 @@ class Spinner {
 - 性能影响：模态状态切换为纯前端操作，无额外开销。
 
 **章节来源**
-
 - [dialog.tsx](file://apps/web/src/components/ui/dialog.tsx)
 
-### Form 组件分析
+### Field 组件系统分析
 
-- 设计模式：完整的表单解决方案，包括字段验证、错误处理和提交管理。
-- 数据结构与复杂度：验证逻辑根据字段数量动态计算；类名合并为 O(n)。
-- 依赖链：依赖 utils.cn、Zod 验证库；样式依赖主题变量与 Tailwind 原子类。
-- 错误处理：通过 formState 和 errors 对象管理验证状态；支持实时验证。
-- 性能影响：验证逻辑在用户输入时触发，可根据需求优化。
+- 设计理念：全新的表单字段容器系统，提供灵活的布局支持和响应式设计。通过组合 Field、FieldGroup、FieldLabel、FieldError 等组件，实现完整的表单字段解决方案。
+- 核心组件：
+  - Field：主容器组件，支持三种布局模式（vertical/horizontal/responsive）
+  - FieldGroup：字段分组容器，支持响应式布局
+  - FieldLabel：字段标签，与表单控件关联
+  - FieldError：错误信息显示，支持单个和多个错误
+  - FieldContent：字段内容容器
+  - FieldDescription：字段描述文本
+  - FieldSet/Legend：表单集合和标题
+  - FieldSeparator：字段分隔符
+- 响应式设计：支持 @media 查询，提供移动端和桌面端的不同布局效果
+- 可访问性：内置 aria-invalid 属性，支持屏幕阅读器识别
+- 错误处理：通过 data-invalid 属性和 FieldError 组件提供完整的错误显示机制
+
+```mermaid
+classDiagram
+class Field {
++orientation : "vertical|horizontal|responsive"
++className : string
++dataInvalid : boolean
+}
+class FieldGroup {
++className : string
+}
+class FieldLabel {
++className : string
++htmlFor : string
+}
+class FieldError {
++className : string
++errors : Array
++children : ReactNode
+}
+class FieldContent {
++className : string
+}
+class FieldDescription {
++className : string
+}
+Field --> FieldGroup : "组合"
+Field --> FieldLabel : "组合"
+Field --> FieldError : "组合"
+Field --> FieldContent : "组合"
+Field --> FieldDescription : "组合"
+```
+
+**图表来源**
+- [field.tsx:67-223](file://apps/web/src/components/ui/field.tsx#L67-L223)
 
 **章节来源**
+- [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
 
-- [form.tsx](file://apps/web/src/components/ui/form.tsx)
+### useNebulaForm 钩子分析
+
+- 设计理念：基于 React Hook Form 的类型安全表单钩子，集成了 Zod 验证器，提供自动类型推导和完整的表单状态管理。
+- 核心特性：
+  - 类型安全：通过泛型参数确保表单数据类型与 Zod 模式严格匹配
+  - 自动推导：根据 Zod Schema 自动推导表单数据类型
+  - 验证集成：内置 Zod 验证器，支持实时验证和提交验证
+  - 生命周期管理：完整的表单状态管理，包括加载、提交、错误处理
+- 使用方式：`const form = useNebulaForm({ schema: YourSchema, defaultValues })`
+- 类型安全保证：handleSubmit 回调函数的参数类型与 Zod Schema 推导的类型完全一致
+
+```mermaid
+sequenceDiagram
+participant U as "用户"
+participant F as "useNebulaForm 钩子"
+participant V as "Zod 验证器"
+U->>F : 创建表单实例
+F->>V : 初始化验证器
+U->>F : 设置默认值
+F->>U : 返回表单实例
+U->>F : 用户输入
+F->>V : 实时验证
+V-->>F : 验证结果
+F-->>U : 更新表单状态
+U->>F : 提交表单
+F->>V : 提交验证
+V-->>F : 验证结果
+F-->>U : 调用 handleSubmit
+```
+
+**图表来源**
+- [use-nebula-form.ts:16-31](file://apps/web/src/hooks/use-nebula-form.ts#L16-L31)
+
+**章节来源**
+- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 
 ### Label 组件分析
 
@@ -568,7 +614,6 @@ class Spinner {
 - 性能影响：无运行时计算，渲染成本极低。
 
 **章节来源**
-
 - [label.tsx](file://apps/web/src/components/ui/label.tsx)
 
 ### RadioGroup 组件分析
@@ -580,7 +625,6 @@ class Spinner {
 - 性能影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
-
 - [radio-group.tsx](file://apps/web/src/components/ui/radio-group.tsx)
 
 ### Select 组件分析
@@ -592,7 +636,6 @@ class Spinner {
 - 性能影响：选项渲染为虚拟滚动时可优化到 O(1)。
 
 **章节来源**
-
 - [select.tsx](file://apps/web/src/components/ui/select.tsx)
 
 ### Separator 组件分析
@@ -604,7 +647,6 @@ class Spinner {
 - 性能影响：无运行时计算，渲染成本极低。
 
 **章节来源**
-
 - [separator.tsx](file://apps/web/src/components/ui/separator.tsx)
 
 ### Sheet 组件分析
@@ -616,7 +658,6 @@ class Spinner {
 - 性能影响：滑出动画为 CSS 过渡，无额外开销。
 
 **章节来源**
-
 - [sheet.tsx](file://apps/web/src/components/ui/sheet.tsx)
 
 ### Switch 组件分析
@@ -628,7 +669,6 @@ class Spinner {
 - 性能影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
-
 - [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
 
 ### Table 组件分析
@@ -640,7 +680,6 @@ class Spinner {
 - 性能影响：大数据量时可采用虚拟滚动优化。
 
 **章节来源**
-
 - [table.tsx](file://apps/web/src/components/ui/table.tsx)
 
 ### Sonner 组件分析
@@ -652,7 +691,6 @@ class Spinner {
 - 性能影响：通知渲染为轻量级操作，无额外开销。
 
 **章节来源**
-
 - [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
 
 ### API/服务组件调用流程（以登录页为例）
@@ -661,24 +699,30 @@ class Spinner {
 sequenceDiagram
 participant U as "用户"
 participant P as "Login 页面"
+participant F as "useNebulaForm 钩子"
+participant C as "Controller"
 participant I as "Input 组件"
 participant B as "Button 组件"
 participant Q as "验证码查询"
 participant M as "登录变更"
 U->>P : 打开登录页
+P->>F : 创建表单实例
+F-->>P : 返回表单实例
 P->>Q : 加载验证码
 Q-->>P : 返回验证码图片与标识
 U->>I : 输入账号/密码/验证码
-I-->>P : 受控值变化
+I-->>C : 受控值变化
+C-->>F : 更新表单状态
 U->>B : 点击登录
-B->>M : 触发登录变更
+B->>F : 触发 handleSubmit
+F->>M : 验证并通过数据
 M-->>P : 登录成功/失败
 P-->>U : 跳转首页或显示错误提示
 ```
 
 **图表来源**
-
-- [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
+- [Login.tsx:93-263](file://apps/web/src/pages/Login.tsx#L93-L263)
+- [use-nebula-form.ts:16-31](file://apps/web/src/hooks/use-nebula-form.ts#L16-L31)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
@@ -688,7 +732,8 @@ P-->>U : 跳转首页或显示错误提示
 - 样式与主题：Tailwind CSS、自定义 CSS 变量、动画库与字体资源。
 - 组件系统：class-variance-authority（变体系统）、Radix UI Slot（语义化与无障碍）、Lucide React（图标）。
 - 工具函数：clsx 与 tailwind-merge（类名合并与冲突修复）。
-- 新增依赖：Zod（表单验证）、React Hook Form（表单管理）、@radix-ui/react-\*（新增组件的基础 UI 库）。
+- 新增依赖：Zod（表单验证）、React Hook Form（表单管理）、@radix-ui/react-*（新增组件的基础 UI 库）。
+- 表单系统：useNebulaForm 钩子基于 React Hook Form 和 Zod，提供类型安全的表单管理。
 
 ```mermaid
 graph LR
@@ -705,20 +750,20 @@ CVA --> BTN["button.tsx 变体系统"]
 RADIX --> BTN
 CLSX --> UTIL["utils.ts cn(...)"]
 TM --> UTIL
-ZOD --> FORM["form.tsx 验证"]
-RHF --> FORM
+ZOD --> USEFORM["use-nebula-form.ts"]
+RHF --> USEFORM
+USEFORM --> FIELD["field.tsx 表单组件"]
 ```
 
 **图表来源**
-
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
-- [form.tsx](file://apps/web/src/components/ui/form.tsx)
+- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
+- [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
 
 **章节来源**
-
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
 - [pnpm-lock.yaml:1933-1950](file://pnpm-lock.yaml#L1933-L1950)
 
@@ -729,7 +774,8 @@ RHF --> FORM
 - 渲染优化：Button 支持 asChild，避免不必要的 DOM 包裹；Input 与 Spinner 为纯样式组件，渲染成本极低。
 - 主题变量：CSS 变量与 Tailwind 原子类减少重复样式定义，提高构建与运行效率。
 - 新增组件优化：Dialog、Sheet、Select 等组件采用虚拟滚动和懒加载技术，优化大数据量场景。
-- 表单性能：Form 组件支持防抖和节流，减少频繁验证带来的性能开销。
+- 表单性能：useNebulaForm 钩子提供高效的表单状态管理，支持防抖和节流，减少频繁验证带来的性能开销。
+- Field 组件：通过响应式布局优化，在不同屏幕尺寸下提供最佳的用户体验。
 
 ## 故障排查指南
 
@@ -750,47 +796,67 @@ RHF --> FORM
   - 确认 variant 与 size 参数是否在组件支持范围内；检查 data-slot 与 data-variant/data-size 是否被正确传递。
   - 参考路径：[按钮变体系统:7-42](file://apps/web/src/components/ui/button.tsx#L7-L42)
 
+- 表单组件问题
+  - 确保 useNebulaForm 钩子正确初始化，schema 参数与表单数据类型匹配。
+  - Field 组件的 data-invalid 属性需要与表单状态同步更新。
+  - 参考路径：[useNebulaForm 钩子:16-31](file://apps/web/src/hooks/use-nebula-form.ts#L16-L31)、[Field 组件:67-81](file://apps/web/src/components/ui/field.tsx#L67-L81)
+
 - 新增组件问题
   - Dialog/Sonner 等组件需确保 Radix UI Provider 正确包裹应用根节点。
   - 表单组件需正确配置 resolver 和默认值。
-  - 参考路径：[表单组件:1-200](file://apps/web/src/components/ui/form.tsx)
+  - Field 组件系统需要正确使用 Controller 包装受控组件。
+  - 参考路径：[Login 页面表单实现:147-228](file://apps/web/src/pages/Login.tsx#L147-L228)
 
 - 图标与尺寸不匹配
   - 确保图标尺寸与组件 size 对应；必要时手动调整图标尺寸类名。
-  - 参考路径：[登录页图标使用:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)、[仪表盘图标使用:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
+  - 参考路径：[登录页图标使用:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)、[仪表盘图标使用:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 **章节来源**
-
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [index.css:51-118](file://apps/web/src/styles/index.css#L51-L118)
-- [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
+- [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
+- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
+- [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
 
 ## 结论
 
-该 UI 组件库以 Radix UI 与 Tailwind CSS 为基础，结合 class-variance-authority 实现了高内聚、低耦合的组件体系。通过统一的工具函数与主题变量，实现了良好的可访问性、可维护性与可扩展性。新增的 Badge、Checkbox、Dialog、Form、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件进一步完善了组件库的功能体系，满足了更复杂的业务场景需求。页面示例展示了组件在真实场景中的组合与交互，为后续扩展提供了参考范式。
+该 UI 组件库以 Radix UI 与 Tailwind CSS 为基础，结合 class-variance-authority 实现了高内聚、低耦合的组件体系。通过统一的工具函数与主题变量，实现了良好的可访问性、可维护性与可扩展性。新增的 Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件进一步完善了组件库的功能体系，满足了更复杂的业务场景需求。
+
+**重大更新**：表单组件系统已完成全面重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统。新的系统提供了更灵活的布局支持、更好的响应式设计和更强的类型安全性。useNebulaForm 钩子集成了 Zod 验证器，提供自动类型推导和完整的表单状态管理。Login 页面已完全迁移到新的表单架构，展示了新系统的强大功能和易用性。
+
+页面示例展示了组件在真实场景中的组合与交互，特别是 Login 页面中表单系统的完整实现，为后续扩展提供了优秀的参考范式。
 
 ## 附录
 
 - 组件使用示例路径
-  - [按钮使用示例:187-213](file://apps/web/src/pages/Login.tsx#L187-L213)
-  - [输入框使用示例:123-146](file://apps/web/src/pages/Login.tsx#L123-L146)
-  - [卡片使用示例:98-193](file://apps/web/src/pages/Dashboard.tsx#L98-L193)
-  - [内联提示使用示例:199-203](file://apps/web/src/pages/Login.tsx#L199-L203)
-  - [加载指示器使用示例:165-168](file://apps/web/src/pages/Login.tsx#L165-L168)
+  - [按钮使用示例:230-254](file://apps/web/src/pages/Login.tsx#L230-L254)
+  - [输入框使用示例:153-179](file://apps/web/src/pages/Login.tsx#L153-L179)
+  - [卡片使用示例:133-258](file://apps/web/src/pages/Login.tsx#L133-L258)
+  - [登录页错误提示:242-244](file://apps/web/src/pages/Login.tsx#L242-L244)
+  - [验证码加载指示器:201-204](file://apps/web/src/pages/Login.tsx#L201-L204)
   - [徽章使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
   - [复选框使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
   - [对话框使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
-  - [表单使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
-  - [标签使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [标签使用示例:152](file://apps/web/src/pages/Login.tsx#L152)
+  - [标签使用示例:171](file://apps/web/src/pages/Login.tsx#L171)
+
+- 表单系统使用示例路径
+  - [useNebulaForm 钩子使用:98-101](file://apps/web/src/pages/Login.tsx#L98-L101)
+  - [Field 组件使用:151-161](file://apps/web/src/pages/Login.tsx#L151-L161)
+  - [Field 组件使用:170-182](file://apps/web/src/pages/Login.tsx#L170-L182)
+  - [FieldError 组件使用:160](file://apps/web/src/pages/Login.tsx#L160)
+  - [FieldError 组件使用:180](file://apps/web/src/pages/Login.tsx#L180)
 
 - 设计规范建议
   - 使用 data-slot 标记组件，便于主题与测试选择器。
   - 在需要语义化链接或路由跳转时，优先使用 Button 的 asChild。
   - 保持 variant 与 size 的一致性，避免在同一页面出现过多变体混用。
   - 错误与警告场景优先使用 Alert 的破坏性变体，并配合图标与标题明确语义。
-  - 新增组件需遵循无障碍标准，正确设置 aria-\* 属性。
-  - 表单组件需提供清晰的错误提示和验证反馈。
+  - 新增组件需遵循无障碍标准，正确设置 aria-* 属性。
+  - 表单组件需提供清晰的错误提示和验证反馈，使用 FieldError 组件统一处理。
   - 大数据量场景优先考虑虚拟滚动和懒加载优化。
+  - 新的 Field 组件系统提供了更好的响应式支持，建议充分利用其布局能力。
+  - useNebulaForm 钩子提供了完整的类型安全保障，建议在所有表单中使用。
