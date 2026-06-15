@@ -17,11 +17,16 @@
 - [sheet.tsx](file://apps/web/src/components/ui/sheet.tsx)
 - [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
 - [table.tsx](file://apps/web/src/components/ui/table.tsx)
+- [pagination.tsx](file://apps/web/src/components/ui/pagination.tsx)
 - [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
 - [avatar.tsx](file://apps/web/src/components/ui/avatar.tsx)
 - [dropdown-menu.tsx](file://apps/web/src/components/ui/dropdown-menu.tsx)
 - [spinner.tsx](file://apps/web/src/components/ui/spinner.tsx)
-- [data-table.tsx](file://apps/web/src/components/data-table.tsx)
+- [data-table-column-header.tsx](file://apps/web/src/components/data-table/data-table-column-header.tsx)
+- [data-table-pagination.tsx](file://apps/web/src/components/data-table/data-table-pagination.tsx)
+- [data-table-view-options.tsx](file://apps/web/src/components/data-table/data-table-view-options.tsx)
+- [create-column-helper.ts](file://apps/web/src/components/data-table/create-column-helper.ts)
+- [index.ts](file://apps/web/src/components/data-table/index.ts)
 - [ApiErrorSnackbar.tsx](file://apps/web/src/components/ApiErrorSnackbar.tsx)
 - [RequireAuth.tsx](file://apps/web/src/components/RequireAuth.tsx)
 - [utils.ts](file://apps/web/src/lib/utils.ts)
@@ -48,9 +53,9 @@
 
 ## 简介
 
-本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、新增组件（Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等）、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
+本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、新增组件（Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等）、**模块化数据表格组件系统**（DataTableColumnHeader、DataTablePagination、DataTableViewOptions、createColumnHelper）、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
 
-**重要更新**：表单组件系统已完成重大重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统，包括 Field、FieldGroup、FieldLabel、FieldError 等组件，以及 useNebulaForm 钩子。Login 页面已完全迁移到新的表单架构。
+**重要更新**：表单组件系统已完成重大重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统，包括 Field、FieldGroup、FieldLabel、FieldError 等组件，以及 useNebulaForm 钩子。Login 页面已完全迁移到新的表单架构。**数据表格组件系统已完全模块化重构，旧的单体 DataTable 组件已被移除，新增了专门的数据表格组件模块**。
 
 ## 项目结构
 
@@ -60,6 +65,7 @@
 - 工具函数：统一的类名合并工具，确保变体与用户传入类名的合并逻辑稳定可靠。
 - 页面示例：Dashboard 与 Login 页面展示了组件的实际组合与交互用法。
 - 新增组件：Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件丰富了组件库的功能体系。
+- **数据表格系统**：全新的模块化数据表格组件系统，包括 DataTableColumnHeader、DataTablePagination、DataTableViewOptions 等专用组件，以及 createColumnHelper 工具函数。
 - 表单系统：全新的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。
 
 ```mermaid
@@ -67,7 +73,7 @@ graph TB
 subgraph "样式与主题"
 CSS["styles/index.css"]
 TW["Tailwind CSS<br/>自定义变量与变体"]
-end
+END
 subgraph "基础组件"
 BTN["components/ui/button.tsx"]
 INP["components/ui/input.tsx"]
@@ -77,6 +83,8 @@ SPIN["components/ui/spinner.tsx"]
 AVATAR["components/ui/avatar.tsx"]
 DROPDOWN["components/ui/dropdown-menu.tsx"]
 FIELD["components/ui/field.tsx"]
+TABLE["components/ui/table.tsx"]
+PAGINATION["components/ui/pagination.tsx"]
 END
 subgraph "新增组件"
 BADGE["components/ui/badge.tsx"]
@@ -88,8 +96,14 @@ SELECT["components/ui/select.tsx"]
 SEPARATOR["components/ui/separator.tsx"]
 SHEET["components/ui/sheet.tsx"]
 SWITCH["components/ui/switch.tsx"]
-TABLE["components/ui/table.tsx"]
 SONNER["components/ui/sonner.tsx"]
+END
+subgraph "数据表格系统"
+DT_HEADER["components/data-table/data-table-column-header.tsx"]
+DT_PAGINATION["components/data-table/data-table-pagination.tsx"]
+DT_VIEW["components/data-table/data-table-view-options.tsx"]
+DT_HELPER["components/data-table/create-column-helper.ts"]
+DT_INDEX["components/data-table/index.ts"]
 END
 subgraph "表单系统"
 USEFORM["hooks/use-nebula-form.ts"]
@@ -100,7 +114,6 @@ UTIL["lib/utils.ts"]
 END
 subgraph "页面示例"
 DASH["pages/Dashboard.tsx"]
-DATATABLE["components/data-table.tsx"]
 ERRORSNACK["components/ApiErrorSnackbar.tsx"]
 AUTH["components/RequireAuth.tsx"]
 END
@@ -112,6 +125,8 @@ CSS --> SPIN
 CSS --> AVATAR
 CSS --> DROPDOWN
 CSS --> FIELD
+CSS --> TABLE
+CSS --> PAGINATION
 CSS --> BADGE
 CSS --> CHECKBOX
 CSS --> DIALOG
@@ -121,7 +136,6 @@ CSS --> SELECT
 CSS --> SEPARATOR
 CSS --> SHEET
 CSS --> SWITCH
-CSS --> TABLE
 CSS --> SONNER
 UTIL --> BTN
 UTIL --> INP
@@ -131,6 +145,8 @@ UTIL --> SPIN
 UTIL --> AVATAR
 UTIL --> DROPDOWN
 UTIL --> FIELD
+UTIL --> TABLE
+UTIL --> PAGINATION
 UTIL --> BADGE
 UTIL --> CHECKBOX
 UTIL --> DIALOG
@@ -140,8 +156,11 @@ UTIL --> SELECT
 UTIL --> SEPARATOR
 UTIL --> SHEET
 UTIL --> SWITCH
-UTIL --> TABLE
 UTIL --> SONNER
+DT_INDEX --> DT_HEADER
+DT_INDEX --> DT_PAGINATION
+DT_INDEX --> DT_VIEW
+DT_INDEX --> DT_HELPER
 BTN --> DASH
 INP --> DASH
 CARD --> DASH
@@ -157,7 +176,7 @@ SHEET --> DASH
 SWITCH --> DASH
 TABLE --> DASH
 SONNER --> DASH
-DATATABLE --> DASH
+PAGINATION --> DASH
 ERRORSNACK --> DASH
 AUTH --> DASH
 BTN --> LOGIN
@@ -180,7 +199,13 @@ USEFORM --> LOGIN
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 - [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
-- [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
+- [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
+- [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
+- [index.ts:1-4](file://apps/web/src/components/data-table/index.ts#L1-L4)
 
 **章节来源**
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
@@ -219,6 +244,16 @@ USEFORM --> LOGIN
   - 设计理念：轻量旋转指示器，适配多种尺寸与主题色。
   - 关键属性：className。
   - 示例路径：[验证码加载指示器:201-204](file://apps/web/src/pages/Login.tsx#L201-L204)、[仪表盘加载:122-125](file://apps/web/src/pages/Dashboard.tsx#L122-L125)
+
+- **Table（表格）**
+  - 设计理念：数据表格基础组件，提供表格容器、表头、表体、表尾和行的基础结构。
+  - 关键属性：className。
+  - 示例路径：[表格使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **Pagination（分页）**
+  - 设计理念：分页导航组件，支持页码跳转、上一页/下一页、总数显示等功能。
+  - 关键属性：currentPage、totalPages、onPageChange、className。
+  - 示例路径：[分页使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
 ### 新增组件
 
@@ -273,15 +308,36 @@ USEFORM --> LOGIN
   - 关键属性：checked、onCheckedChange、disabled、className。
   - 示例路径：[开关使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
-- **Table（表格）**
-  - 设计理念：数据表格组件，支持排序、筛选和分页功能。
-  - 关键属性：columns、data、className。
-  - 示例路径：[表格使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
-
 - **Sonner（通知）**
   - 设计理念：现代化的通知系统，支持多种通知类型和自定义样式。
   - 关键属性：toast、position、duration、className。
   - 示例路径：[通知使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+### 数据表格系统
+
+- **DataTableColumnHeader（列头排序）**
+  - 设计理念：数据表格列头组件，支持列标题显示、排序功能和排序状态指示。
+  - 关键属性：column、title、className。
+  - 功能特性：内置排序状态管理，支持升序、降序和无序状态；与 Table 组件无缝集成。
+  - 示例路径：[列头使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **DataTablePagination（分页器）**
+  - 设计理念：数据表格专用分页组件，提供页码导航、每页条数选择和数据范围显示。
+  - 关键属性：currentPage、totalPages、pageSize、onPageChange、onPageSizeChange、className。
+  - 功能特性：支持自定义每页显示数量；与 DataTableColumnHeader 协同工作。
+  - 示例路径：[分页器使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **DataTableViewOptions（视图选项）**
+  - 设计理念：数据表格视图控制组件，提供列可见性控制、导出功能等视图选项。
+  - 关键属性：table、className。
+  - 功能特性：支持动态列显示/隐藏；提供数据导出功能；与 createColumnHelper 配合使用。
+  - 示例路径：[视图选项使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **createColumnHelper（列助手）**
+  - 设计理念：数据表格列配置工具函数，简化列定义和列操作。
+  - 关键功能：提供列定义工厂函数；支持复杂列配置；与 TanStack Table 集成。
+  - 使用方式：`const columnHelper = createColumnHelper<T>()`
+  - 类型安全：通过泛型参数确保列数据类型安全。
 
 ### 表单系统
 
@@ -297,25 +353,33 @@ USEFORM --> LOGIN
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
+- [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
+- [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
 - [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 ## 架构总览
 
-组件库整体由"样式与主题层""工具层""组件层""表单系统层""页面示例层"构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。新增的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。
+组件库整体由"样式与主题层""工具层""组件层""数据表格系统层""表单系统层""页面示例层"构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。新增的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。**全新的数据表格系统采用模块化设计，每个组件职责单一，通过组合实现复杂的数据表格功能**。
 
 ```mermaid
 graph TB
-THEME["主题与样式<br/>index.css"] --> LAYER1["组件层<br/>基础组件<br/>button/input/card/alert/spinner<br/>新增组件<br/>badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>table/sonner<br/>表单组件<br/>field"]
+THEME["主题与样式<br/>index.css"] --> LAYER1["组件层<br/>基础组件<br/>button/input/card/alert/spinner/table/pagination<br/>新增组件<br/>badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>sonner<br/>表单组件<br/>field"]
 UTIL["工具层<br/>utils/cn"] --> LAYER1
 RADIX["@radix-ui/react-slot"] --> LAYER1
 CVAVA["class-variance-authority"] --> LAYER1
+LAYER1 --> DATATABLE["数据表格系统层<br/>DataTableColumnHeader<br/>DataTablePagination<br/>DataTableViewOptions<br/>createColumnHelper"]
 LAYER1 --> FORM["表单系统层<br/>useNebulaForm 钩子<br/>Field 组件系统"]
-LAYER1 --> PAGES["页面示例层<br/>Dashboard/Login/data-table<br/>ApiErrorSnackbar/RequireAuth"]
-LAYER1 ---|"基础组件"| BASE["button/input/card/alert/spinner"]
-LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>table/sonner"]
+LAYER1 --> PAGES["页面示例层<br/>Dashboard/Login<br/>ApiErrorSnackbar/RequireAuth"]
+LAYER1 ---|"基础组件"| BASE["button/input/card/alert/spinner/table/pagination"]
+LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>sonner"]
+DATATABLE ---|"数据表格组件"| DT["data-table-column-header.tsx<br/>data-table-pagination.tsx<br/>data-table-view-options.tsx<br/>create-column-helper.ts"]
 FORM ---|"表单组件"| FIELDCOMP["field.tsx<br/>Field/FieldGroup/FieldLabel<br/>FieldError 等"]
 ```
 
@@ -327,7 +391,13 @@ FORM ---|"表单组件"| FIELDCOMP["field.tsx<br/>Field/FieldGroup/FieldLabel<br
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
+- [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
+- [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
 - [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 - [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
@@ -482,6 +552,46 @@ class Spinner {
 **章节来源**
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
+### Table 组件分析
+
+- 设计模式：数据表格基础组件，提供表格容器、表头、表体、表尾和行的基础结构。
+- 数据结构与复杂度：纯样式拼接，O(1) 复杂度。
+- 依赖链：依赖 utils.cn；样式依赖主题变量与 Tailwind 原子类。
+- 错误处理：通过 data-slot 属性提供语义化标记；支持 hover、selected 等状态样式。
+- 性能影响：无运行时计算，渲染成本极低。
+
+```mermaid
+classDiagram
+class Table {
++className : string
+}
+class TableHeader
+class TableBody
+class TableFooter
+class TableRow
+Table --> TableHeader : "组合"
+Table --> TableBody : "组合"
+Table --> TableFooter : "组合"
+Table --> TableRow : "组合"
+```
+
+**图表来源**
+- [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
+
+**章节来源**
+- [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
+
+### Pagination 组件分析
+
+- 设计模式：分页导航组件，支持页码跳转、上一页/下一页、总数显示等功能。
+- 数据结构与复杂度：状态管理为 O(1)；类名合并为 O(n)。
+- 依赖链：依赖 utils.cn、class-variance-authority；样式依赖主题变量与 Tailwind 原子类。
+- 错误处理：通过 aria-current 和 aria-disabled 属性表达当前页和禁用状态；支持键盘导航。
+- 性能影响：状态切换为纯前端操作，无额外开销。
+
+**章节来源**
+- [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
+
 ### Badge 组件分析
 
 - 设计模式：小型装饰性元素，用于标记状态、标签或计数，支持多种颜色和尺寸变体。
@@ -568,6 +678,131 @@ Field --> FieldDescription : "组合"
 
 **章节来源**
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+
+### DataTableColumnHeader 组件分析
+
+- 设计理念：数据表格列头组件，提供列标题显示、排序功能和排序状态指示。
+- 核心功能：
+  - 列标题显示：支持字符串和 ReactNode 作为标题内容
+  - 排序功能：内置排序状态管理，支持升序、降序和无序状态
+  - 排序状态指示：通过图标和样式显示当前排序状态
+  - 与 Column 的绑定：通过 column 实例获取列配置和状态
+- 交互设计：点击列头触发排序切换；支持键盘操作（Enter/Space）
+- 可访问性：通过 aria-sort 属性表达排序状态；支持屏幕阅读器识别
+- 性能优化：排序状态切换为纯前端操作，无额外开销
+
+```mermaid
+classDiagram
+class DataTableColumnHeader {
++column : Column
++title : string|ReactNode
++className : string
+}
+class Column {
++getCanSort() boolean
++getIsSorted() "asc|desc|null"
++toggleSorting() void
+}
+DataTableColumnHeader --> Column : "绑定列实例"
+```
+
+**图表来源**
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+
+**章节来源**
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+
+### DataTablePagination 组件分析
+
+- 设计理念：数据表格专用分页组件，提供页码导航、每页条数选择和数据范围显示。
+- 核心功能：
+  - 页码导航：显示当前页码、总页数和页码按钮
+  - 每页条数选择：支持自定义每页显示数量（10/25/50/100）
+  - 数据范围显示：显示当前显示的数据范围和总数
+  - 事件处理：onPageChange 和 onPageSizeChange 回调函数
+- 交互设计：点击页码按钮切换页面；选择每页条数重新加载数据
+- 可访问性：支持键盘导航和屏幕阅读器识别
+- 性能优化：分页状态管理为纯前端操作，无额外开销
+
+```mermaid
+classDiagram
+class DataTablePagination {
++currentPage : number
++totalPages : number
++pageSize : number
++onPageChange : function
++onPageSizeChange : function
++className : string
+}
+```
+
+**图表来源**
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+
+**章节来源**
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+
+### DataTableViewOptions 组件分析
+
+- 设计理念：数据表格视图控制组件，提供列可见性控制、导出功能等视图选项。
+- 核心功能：
+  - 列可见性控制：动态显示/隐藏表格列
+  - 导出功能：支持 CSV、Excel 等格式数据导出
+  - 视图设置：保存用户偏好的视图设置
+  - 与 createColumnHelper 集成：通过列助手获取列配置
+- 交互设计：下拉菜单形式展示视图选项；支持快捷键操作
+- 可访问性：支持键盘导航和屏幕阅读器识别
+- 性能优化：列可见性切换为纯前端操作，无额外开销
+
+```mermaid
+classDiagram
+class DataTableViewOptions {
++table : Table
++className : string
+}
+class Table {
++getColumn() Column
++getAllColumns() Column[]
++toggleVisibility() void
+}
+DataTableViewOptions --> Table : "操作表格实例"
+```
+
+**图表来源**
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+
+**章节来源**
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+
+### createColumnHelper 工具函数分析
+
+- 设计理念：数据表格列配置工具函数，简化列定义和列操作。
+- 核心功能：
+  - 列定义工厂：提供 createColumnHelper<T>() 工厂函数
+  - 复杂列配置：支持 accessor、cell、header 等复杂列配置
+  - 类型安全：通过泛型参数确保列数据类型安全
+  - 与 TanStack Table 集成：完全兼容 TanStack Table 的列系统
+- 使用方式：`const columnHelper = createColumnHelper<User>()`
+- 类型推导：自动推导列数据类型和访问器函数返回值类型
+- 性能特点：纯函数式设计，无状态管理开销
+
+```mermaid
+flowchart TD
+A["createColumnHelper<T>()"] --> B["返回 ColumnHelper 实例"]
+B --> C["accessor(accessorFn)"]
+B --> D["display(displayFn)"]
+B --> E["group(groupConfig)"]
+C --> F["生成 ColumnDef"]
+D --> F
+E --> F
+F --> G["与 Table 组件集成"]
+```
+
+**图表来源**
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
+
+**章节来源**
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
 
 ### useNebulaForm 钩子分析
 
@@ -671,17 +906,6 @@ F-->>U : 调用 handleSubmit
 **章节来源**
 - [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
 
-### Table 组件分析
-
-- 设计模式：数据表格组件，支持排序、筛选和分页功能。
-- 数据结构与复杂度：数据渲染为 O(n)；排序和筛选为 O(n log n)。
-- 依赖链：依赖 utils.cn；样式依赖主题变量与 Tailwind 原子类。
-- 错误处理：通过 aria-sort 和 role="table" 表达语义；支持键盘导航。
-- 性能影响：大数据量时可采用虚拟滚动优化。
-
-**章节来源**
-- [table.tsx](file://apps/web/src/components/ui/table.tsx)
-
 ### Sonner 组件分析
 
 - 设计模式：现代化的通知系统，支持多种通知类型和自定义样式。
@@ -732,6 +956,7 @@ P-->>U : 跳转首页或显示错误提示
 - 样式与主题：Tailwind CSS、自定义 CSS 变量、动画库与字体资源。
 - 组件系统：class-variance-authority（变体系统）、Radix UI Slot（语义化与无障碍）、Lucide React（图标）。
 - 工具函数：clsx 与 tailwind-merge（类名合并与冲突修复）。
+- **数据表格系统**：TanStack Table（数据表格核心库）、@tanstack/react-table（React 绑定）、@radix-ui/react-dropdown-menu（下拉菜单）。
 - 新增依赖：Zod（表单验证）、React Hook Form（表单管理）、@radix-ui/react-*（新增组件的基础 UI 库）。
 - 表单系统：useNebulaForm 钩子基于 React Hook Form 和 Zod，提供类型安全的表单管理。
 
@@ -745,6 +970,8 @@ PKG --> RADIX["@radix-ui/react-slot"]
 PKG --> LUCIDE["lucide-react"]
 PKG --> ZOD["zod"]
 PKG --> RHF["react-hook-form"]
+PKG --> TSTABLE["@tanstack/react-table"]
+PKG --> TSDROPDOWN["@radix-ui/react-dropdown-menu"]
 TWCSS --> THEME["index.css 主题变量"]
 CVA --> BTN["button.tsx 变体系统"]
 RADIX --> BTN
@@ -753,6 +980,8 @@ TM --> UTIL
 ZOD --> USEFORM["use-nebula-form.ts"]
 RHF --> USEFORM
 USEFORM --> FIELD["field.tsx 表单组件"]
+TSTABLE --> DT["data-table 组件系统"]
+TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
 ```
 
 **图表来源**
@@ -762,6 +991,10 @@ USEFORM --> FIELD["field.tsx 表单组件"]
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
 
 **章节来源**
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
@@ -773,6 +1006,7 @@ USEFORM --> FIELD["field.tsx 表单组件"]
 - 变体系统：在组件外部预计算变体样式，降低渲染时的分支判断成本。
 - 渲染优化：Button 支持 asChild，避免不必要的 DOM 包裹；Input 与 Spinner 为纯样式组件，渲染成本极低。
 - 主题变量：CSS 变量与 Tailwind 原子类减少重复样式定义，提高构建与运行效率。
+- **数据表格优化**：采用模块化设计，每个组件职责单一；支持虚拟滚动和懒加载；列头排序为纯前端操作；分页器无额外开销。
 - 新增组件优化：Dialog、Sheet、Select 等组件采用虚拟滚动和懒加载技术，优化大数据量场景。
 - 表单性能：useNebulaForm 钩子提供高效的表单状态管理，支持防抖和节流，减少频繁验证带来的性能开销。
 - Field 组件：通过响应式布局优化，在不同屏幕尺寸下提供最佳的用户体验。
@@ -795,6 +1029,13 @@ USEFORM --> FIELD["field.tsx 表单组件"]
 - 变体样式未按预期
   - 确认 variant 与 size 参数是否在组件支持范围内；检查 data-slot 与 data-variant/data-size 是否被正确传递。
   - 参考路径：[按钮变体系统:7-42](file://apps/web/src/components/ui/button.tsx#L7-L42)
+
+- **数据表格组件问题**
+  - 确认 DataTableColumnHeader 的 column 参数正确绑定；检查排序状态是否同步更新。
+  - DataTablePagination 的 currentPage 和 totalPages 参数是否正确传递；检查 onPageChange 回调是否正常执行。
+  - DataTableViewOptions 的 table 参数是否正确实例化；检查列可见性切换功能。
+  - createColumnHelper 的泛型参数是否与数据类型匹配；确认列定义语法正确。
+  - 参考路径：[DataTableColumnHeader:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)、[DataTablePagination:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)、[DataTableViewOptions:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)、[createColumnHelper:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
 
 - 表单组件问题
   - 确保 useNebulaForm 钩子正确初始化，schema 参数与表单数据类型匹配。
@@ -820,12 +1061,18 @@ USEFORM --> FIELD["field.tsx 表单组件"]
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 - [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
+- [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
+- [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
+- [create-column-helper.ts:1-200](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L200)
 
 ## 结论
 
 该 UI 组件库以 Radix UI 与 Tailwind CSS 为基础，结合 class-variance-authority 实现了高内聚、低耦合的组件体系。通过统一的工具函数与主题变量，实现了良好的可访问性、可维护性与可扩展性。新增的 Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件进一步完善了组件库的功能体系，满足了更复杂的业务场景需求。
 
 **重大更新**：表单组件系统已完成全面重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统。新的系统提供了更灵活的布局支持、更好的响应式设计和更强的类型安全性。useNebulaForm 钩子集成了 Zod 验证器，提供自动类型推导和完整的表单状态管理。Login 页面已完全迁移到新的表单架构，展示了新系统的强大功能和易用性。
+
+**数据表格系统重大重构**：旧的单体 DataTable 组件已被完全移除，新增了模块化的数据表格组件系统。新的系统包括 DataTableColumnHeader、DataTablePagination、DataTableViewOptions 等专用组件，以及 createColumnHelper 工具函数。每个组件职责单一，通过组合实现复杂的数据表格功能，提供了更好的可维护性和扩展性。
 
 页面示例展示了组件在真实场景中的组合与交互，特别是 Login 页面中表单系统的完整实现，为后续扩展提供了优秀的参考范式。
 
@@ -843,6 +1090,12 @@ USEFORM --> FIELD["field.tsx 表单组件"]
   - [标签使用示例:152](file://apps/web/src/pages/Login.tsx#L152)
   - [标签使用示例:171](file://apps/web/src/pages/Login.tsx#L171)
 
+- **数据表格系统使用示例路径**
+  - [DataTableColumnHeader 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [DataTablePagination 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [DataTableViewOptions 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [createColumnHelper 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
 - 表单系统使用示例路径
   - [useNebulaForm 钩子使用:98-101](file://apps/web/src/pages/Login.tsx#L98-L101)
   - [Field 组件使用:151-161](file://apps/web/src/pages/Login.tsx#L151-L161)
@@ -857,6 +1110,7 @@ USEFORM --> FIELD["field.tsx 表单组件"]
   - 错误与警告场景优先使用 Alert 的破坏性变体，并配合图标与标题明确语义。
   - 新增组件需遵循无障碍标准，正确设置 aria-* 属性。
   - 表单组件需提供清晰的错误提示和验证反馈，使用 FieldError 组件统一处理。
-  - 大数据量场景优先考虑虚拟滚动和懒加载优化。
+  - **数据表格组件需遵循模块化设计原则，每个组件职责单一；列头排序、分页、视图选项等功能分离，便于维护和扩展。**
+  - **大表格场景优先考虑虚拟滚动和懒加载优化，合理使用 DataTableColumnHeader 的排序功能。**
   - 新的 Field 组件系统提供了更好的响应式支持，建议充分利用其布局能力。
   - useNebulaForm 钩子提供了完整的类型安全保障，建议在所有表单中使用。

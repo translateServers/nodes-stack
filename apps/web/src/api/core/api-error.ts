@@ -1,22 +1,15 @@
+import { toast } from 'sonner';
 import { BusinessError, getBizMessage, isBusinessError } from '@nebula/shared/errors';
 
-export type ApiErrorEventDetail = {
-  message: string;
-  code?: number;
-  severity?: 'error' | 'warning';
-};
+export type ApiErrorSeverity = 'error' | 'warning';
 
-const API_ERROR_EVENT = 'nebula:api-error';
 const notifiedErrors = new WeakSet<object>();
 
 function isObject(value: unknown): value is object {
   return typeof value === 'object' && value !== null;
 }
 
-export function emitApiError(
-  error: unknown,
-  severity: ApiErrorEventDetail['severity'] = 'error',
-): void {
+export function emitApiError(error: unknown, severity: ApiErrorSeverity = 'error'): void {
   if (isObject(error)) {
     if (notifiedErrors.has(error)) {
       return;
@@ -24,21 +17,15 @@ export function emitApiError(
     notifiedErrors.add(error);
   }
 
-  const detail: ApiErrorEventDetail = isBusinessError(error)
-    ? { code: error.code, message: error.message || getBizMessage(error.code), severity }
-    : { message: '请求失败，请稍后重试', severity };
+  const message = isBusinessError(error)
+    ? error.message || getBizMessage(error.code)
+    : '请求失败，请稍后重试';
 
-  window.dispatchEvent(new CustomEvent<ApiErrorEventDetail>(API_ERROR_EVENT, { detail }));
-}
-
-export function listenApiError(listener: (detail: ApiErrorEventDetail) => void): () => void {
-  const handler = (event: Event) => {
-    const customEvent = event as CustomEvent<ApiErrorEventDetail>;
-    listener(customEvent.detail);
-  };
-
-  window.addEventListener(API_ERROR_EVENT, handler);
-  return () => window.removeEventListener(API_ERROR_EVENT, handler);
+  if (severity === 'warning') {
+    toast.warning(message);
+  } else {
+    toast.error(message);
+  }
 }
 
 export { BusinessError };
