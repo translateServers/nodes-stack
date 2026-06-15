@@ -41,8 +41,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Alert } from '@/components/ui/alert';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users } from 'lucide-react';
 
 interface UserFormProps {
   user?: UserResponse;
@@ -306,8 +313,18 @@ export default function UsersPage() {
               </TableRow>
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-32 text-center">
-                  暂无用户数据
+                <TableCell colSpan={columns.length} className="p-0">
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Users />
+                      </EmptyMedia>
+                      <EmptyTitle>暂无用户数据</EmptyTitle>
+                      <EmptyDescription>
+                        还没有任何用户，点击上方按钮创建第一个用户
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 </TableCell>
               </TableRow>
             ) : (

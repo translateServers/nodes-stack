@@ -9,6 +9,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Menu,
 } from 'lucide-react';
 import {
   CreateMenuSchema,
@@ -37,6 +38,13 @@ import {
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert } from '@/components/ui/alert';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -501,8 +509,18 @@ export default function MenusPage() {
                 </tr>
               ) : !tree?.length ? (
                 <tr>
-                  <td colSpan={6} className="h-32 text-center text-muted-foreground">
-                    暂无菜单数据
+                  <td colSpan={6} className="p-0">
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <Menu />
+                        </EmptyMedia>
+                        <EmptyTitle>暂无菜单数据</EmptyTitle>
+                        <EmptyDescription>
+                          还没有任何菜单，点击上方按钮创建第一个菜单
+                        </EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
                   </td>
                 </tr>
               ) : (

@@ -41,8 +41,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Alert } from '@/components/ui/alert';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield } from 'lucide-react';
 
 type CreateRoleInput = z.infer<typeof CreateRoleSchema>;
 type UpdateRoleInput = z.infer<typeof UpdateRoleSchema>;
@@ -266,8 +273,18 @@ export default function RolesPage() {
               </TableRow>
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-32 text-center">
-                  暂无角色数据
+                <TableCell colSpan={columns.length} className="p-0">
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Shield />
+                      </EmptyMedia>
+                      <EmptyTitle>暂无角色数据</EmptyTitle>
+                      <EmptyDescription>
+                        还没有任何角色，点击上方按钮创建第一个角色
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 </TableCell>
               </TableRow>
             ) : (
