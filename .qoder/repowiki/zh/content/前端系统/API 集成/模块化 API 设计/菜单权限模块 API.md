@@ -15,7 +15,9 @@
 </cite>
 
 ## 更新摘要
+
 **所做更改**
+
 - 新增完整的菜单管理模块实现，包含树形结构支持和 CRUD 操作
 - 新增角色管理模块实现，包含权限分配功能
 - 更新路由配置，添加菜单和角色管理页面
@@ -72,6 +74,7 @@ AUTHAPI --> SHARED
 ```
 
 **图表来源**
+
 - [apps/web/src/router/index.tsx:1-53](file://apps/web/src/router/index.tsx#L1-L53)
 - [apps/web/src/layouts/MainLayout.tsx:1-338](file://apps/web/src/layouts/MainLayout.tsx#L1-L338)
 - [apps/web/src/components/RequireAuth.tsx:1-14](file://apps/web/src/components/RequireAuth.tsx#L1-L14)
@@ -84,6 +87,7 @@ AUTHAPI --> SHARED
 - [packages/shared/src/index.ts:1-15](file://packages/shared/src/index.ts#L1-L15)
 
 **章节来源**
+
 - [apps/web/src/router/index.tsx:1-53](file://apps/web/src/router/index.tsx#L1-L53)
 - [apps/web/src/layouts/MainLayout.tsx:1-338](file://apps/web/src/layouts/MainLayout.tsx#L1-L338)
 - [apps/web/src/components/RequireAuth.tsx:1-14](file://apps/web/src/components/RequireAuth.tsx#L1-L14)
@@ -109,6 +113,7 @@ AUTHAPI --> SHARED
 **更新** 新增菜单管理页面组件，提供完整的树形菜单编辑界面和权限控制功能。
 
 **章节来源**
+
 - [apps/web/src/api/modules/menu/api.ts:14-32](file://apps/web/src/api/modules/menu/api.ts#L14-L32)
 - [apps/web/src/api/modules/role/api.ts:13-31](file://apps/web/src/api/modules/role/api.ts#L13-L31)
 - [apps/web/src/api/modules/auth/api.ts:20-44](file://apps/web/src/api/modules/auth/api.ts#L20-L44)
@@ -147,6 +152,7 @@ end
 ```
 
 **图表来源**
+
 - [apps/web/src/router/index.tsx:14-49](file://apps/web/src/router/index.tsx#L14-L49)
 - [apps/web/src/components/RequireAuth.tsx:4-12](file://apps/web/src/components/RequireAuth.tsx#L4-L12)
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
@@ -184,11 +190,13 @@ Validate --> Done
 ```
 
 **图表来源**
+
 - [apps/web/src/api/modules/menu/api.ts:14-32](file://apps/web/src/api/modules/menu/api.ts#L14-L32)
 - [apps/web/src/api/core/endpoints.ts:17](file://apps/web/src/api/core/endpoints.ts#L17)
 - [packages/shared/src/index.ts:6](file://packages/shared/src/index.ts#L6)
 
 **章节来源**
+
 - [apps/web/src/api/modules/menu/api.ts:14-32](file://apps/web/src/api/modules/menu/api.ts#L14-L32)
 - [apps/web/src/api/core/endpoints.ts:17](file://apps/web/src/api/core/endpoints.ts#L17)
 - [packages/shared/src/index.ts:6](file://packages/shared/src/index.ts#L6)
@@ -215,11 +223,13 @@ API-->>UI : 返回成功/错误
 ```
 
 **图表来源**
+
 - [apps/web/src/api/modules/role/api.ts:25-27](file://apps/web/src/api/modules/role/api.ts#L25-L27)
 - [apps/web/src/api/core/endpoints.ts:18](file://apps/web/src/api/core/endpoints.ts#L18)
 - [packages/shared/src/index.ts:7](file://packages/shared/src/index.ts#L7)
 
 **章节来源**
+
 - [apps/web/src/api/modules/role/api.ts:13-31](file://apps/web/src/api/modules/role/api.ts#L13-L31)
 - [apps/web/src/api/core/endpoints.ts:18](file://apps/web/src/api/core/endpoints.ts#L18)
 - [packages/shared/src/index.ts:7](file://packages/shared/src/index.ts#L7)
@@ -243,6 +253,7 @@ API-->>UI : 返回成功/错误
 **新增** 完整的菜单管理页面实现，提供可视化的菜单编辑界面和权限控制功能。
 
 **章节来源**
+
 - [apps/web/src/pages/Menus.tsx:1-550](file://apps/web/src/pages/Menus.tsx#L1-L550)
 
 ### 认证与路由守卫
@@ -271,11 +282,13 @@ end
 ```
 
 **图表来源**
+
 - [apps/web/src/components/RequireAuth.tsx:4-12](file://apps/web/src/components/RequireAuth.tsx#L4-L12)
 - [apps/web/src/store/auth.ts:30-63](file://apps/web/src/store/auth.ts#L30-L63)
 - [apps/web/src/api/modules/auth/api.ts:24-44](file://apps/web/src/api/modules/auth/api.ts#L24-L44)
 
 **章节来源**
+
 - [apps/web/src/components/RequireAuth.tsx:1-14](file://apps/web/src/components/RequireAuth.tsx#L1-L14)
 - [apps/web/src/store/auth.ts:1-64](file://apps/web/src/store/auth.ts#L1-L64)
 - [apps/web/src/api/modules/auth/api.ts:1-45](file://apps/web/src/api/modules/auth/api.ts#L1-L45)
@@ -300,11 +313,13 @@ Interact --> Done["完成渲染"]
 ```
 
 **图表来源**
+
 - [apps/web/src/layouts/MainLayout.tsx:34-48](file://apps/web/src/layouts/MainLayout.tsx#L34-L48)
 - [apps/web/src/layouts/MainLayout.tsx:51-74](file://apps/web/src/layouts/MainLayout.tsx#L51-L74)
 - [apps/web/src/layouts/MainLayout.tsx:190-337](file://apps/web/src/layouts/MainLayout.tsx#L190-L337)
 
 **章节来源**
+
 - [apps/web/src/layouts/MainLayout.tsx:1-338](file://apps/web/src/layouts/MainLayout.tsx#L1-L338)
 
 ### 端点常量与共享类型
@@ -316,6 +331,7 @@ Interact --> Done["完成渲染"]
   - 通过 @nebula/shared 导出认证、用户、菜单、角色、字典等 Schema 与类型，保证前后端一致性。
 
 **章节来源**
+
 - [apps/web/src/api/core/endpoints.ts:1-21](file://apps/web/src/api/core/endpoints.ts#L1-L21)
 - [packages/shared/src/index.ts:1-15](file://packages/shared/src/index.ts#L1-L15)
 
@@ -346,6 +362,7 @@ L["MainLayout"] --> R
 ```
 
 **图表来源**
+
 - [apps/web/src/api/modules/menu/api.ts:1-10](file://apps/web/src/api/modules/menu/api.ts#L1-L10)
 - [apps/web/src/api/modules/role/api.ts:1-10](file://apps/web/src/api/modules/role/api.ts#L1-L10)
 - [apps/web/src/api/modules/auth/api.ts:8-18](file://apps/web/src/api/modules/auth/api.ts#L8-L18)
@@ -357,6 +374,7 @@ L["MainLayout"] --> R
 - [apps/web/src/layouts/MainLayout.tsx:1-338](file://apps/web/src/layouts/MainLayout.tsx#L1-L338)
 
 **章节来源**
+
 - [apps/web/src/api/modules/menu/api.ts:1-33](file://apps/web/src/api/modules/menu/api.ts#L1-L33)
 - [apps/web/src/api/modules/role/api.ts:1-32](file://apps/web/src/api/modules/role/api.ts#L1-L32)
 - [apps/web/src/api/modules/auth/api.ts:1-45](file://apps/web/src/api/modules/auth/api.ts#L1-L45)
@@ -400,6 +418,7 @@ L["MainLayout"] --> R
 **更新** 新增菜单管理页面相关的故障排查指导。
 
 **章节来源**
+
 - [apps/web/src/components/RequireAuth.tsx:4-12](file://apps/web/src/components/RequireAuth.tsx#L4-L12)
 - [apps/web/src/store/auth.ts:48-63](file://apps/web/src/store/auth.ts#L48-L63)
 - [apps/web/src/api/modules/menu/api.ts:14-20](file://apps/web/src/api/modules/menu/api.ts#L14-L20)
@@ -439,4 +458,5 @@ L["MainLayout"] --> R
 **更新** 新增菜单和角色模块的完整 API 端点列表。
 
 **章节来源**
+
 - [apps/web/src/api/core/endpoints.ts:3-20](file://apps/web/src/api/core/endpoints.ts#L3-L20)

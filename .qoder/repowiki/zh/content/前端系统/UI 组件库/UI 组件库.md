@@ -166,6 +166,7 @@ SPIN --> LOGIN
 ```
 
 **图表来源**
+
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
@@ -189,6 +190,7 @@ SPIN --> LOGIN
 - [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
 
 **章节来源**
+
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
@@ -289,6 +291,7 @@ SPIN --> LOGIN
   - 示例路径：[通知使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
 **章节来源**
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
@@ -325,6 +328,7 @@ LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/form/label<br/>radio/selec
 ```
 
 **图表来源**
+
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
@@ -380,10 +384,12 @@ Button --> RadixSlot : "asChild 透传"
 ```
 
 **图表来源**
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 **章节来源**
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
@@ -408,10 +414,12 @@ Input --> Utils : "合并类名"
 ```
 
 **图表来源**
+
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
 **章节来源**
+
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 
@@ -439,9 +447,11 @@ Card --> CardContent : "组合"
 ```
 
 **图表来源**
+
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 
 **章节来源**
+
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 
 ### Alert 组件分析
@@ -471,9 +481,11 @@ InlineAlert --> Alert : "封装"
 ```
 
 **图表来源**
+
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 **章节来源**
+
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 
 ### Spinner 组件分析
@@ -492,9 +504,11 @@ class Spinner {
 ```
 
 **图表来源**
+
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 **章节来源**
+
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
 
 ### Badge 组件分析
@@ -506,6 +520,7 @@ class Spinner {
 - 性能影响：变体计算在组件渲染前完成，无额外开销。
 
 **章节来源**
+
 - [badge.tsx](file://apps/web/src/components/ui/badge.tsx)
 
 ### Checkbox 组件分析
@@ -517,6 +532,7 @@ class Spinner {
 - 性能影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
+
 - [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
 
 ### Dialog 组件分析
@@ -528,6 +544,7 @@ class Spinner {
 - 性能影响：模态状态切换为纯前端操作，无额外开销。
 
 **章节来源**
+
 - [dialog.tsx](file://apps/web/src/components/ui/dialog.tsx)
 
 ### Form 组件分析
@@ -539,6 +556,7 @@ class Spinner {
 - 性能影响：验证逻辑在用户输入时触发，可根据需求优化。
 
 **章节来源**
+
 - [form.tsx](file://apps/web/src/components/ui/form.tsx)
 
 ### Label 组件分析
@@ -550,6 +568,7 @@ class Spinner {
 - 性能影响：无运行时计算，渲染成本极低。
 
 **章节来源**
+
 - [label.tsx](file://apps/web/src/components/ui/label.tsx)
 
 ### RadioGroup 组件分析
@@ -561,6 +580,7 @@ class Spinner {
 - 性能影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
+
 - [radio-group.tsx](file://apps/web/src/components/ui/radio-group.tsx)
 
 ### Select 组件分析
@@ -572,6 +592,7 @@ class Spinner {
 - 性能影响：选项渲染为虚拟滚动时可优化到 O(1)。
 
 **章节来源**
+
 - [select.tsx](file://apps/web/src/components/ui/select.tsx)
 
 ### Separator 组件分析
@@ -583,6 +604,7 @@ class Spinner {
 - 性能影响：无运行时计算，渲染成本极低。
 
 **章节来源**
+
 - [separator.tsx](file://apps/web/src/components/ui/separator.tsx)
 
 ### Sheet 组件分析
@@ -594,6 +616,7 @@ class Spinner {
 - 性能影响：滑出动画为 CSS 过渡，无额外开销。
 
 **章节来源**
+
 - [sheet.tsx](file://apps/web/src/components/ui/sheet.tsx)
 
 ### Switch 组件分析
@@ -605,6 +628,7 @@ class Spinner {
 - 性能影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
+
 - [switch.tsx](file://apps/web/src/components/ui/switch.tsx)
 
 ### Table 组件分析
@@ -616,6 +640,7 @@ class Spinner {
 - 性能影响：大数据量时可采用虚拟滚动优化。
 
 **章节来源**
+
 - [table.tsx](file://apps/web/src/components/ui/table.tsx)
 
 ### Sonner 组件分析
@@ -627,6 +652,7 @@ class Spinner {
 - 性能影响：通知渲染为轻量级操作，无额外开销。
 
 **章节来源**
+
 - [sonner.tsx](file://apps/web/src/components/ui/sonner.tsx)
 
 ### API/服务组件调用流程（以登录页为例）
@@ -651,6 +677,7 @@ P-->>U : 跳转首页或显示错误提示
 ```
 
 **图表来源**
+
 - [Login.tsx:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
@@ -661,7 +688,7 @@ P-->>U : 跳转首页或显示错误提示
 - 样式与主题：Tailwind CSS、自定义 CSS 变量、动画库与字体资源。
 - 组件系统：class-variance-authority（变体系统）、Radix UI Slot（语义化与无障碍）、Lucide React（图标）。
 - 工具函数：clsx 与 tailwind-merge（类名合并与冲突修复）。
-- 新增依赖：Zod（表单验证）、React Hook Form（表单管理）、@radix-ui/react-*（新增组件的基础 UI 库）。
+- 新增依赖：Zod（表单验证）、React Hook Form（表单管理）、@radix-ui/react-\*（新增组件的基础 UI 库）。
 
 ```mermaid
 graph LR
@@ -683,6 +710,7 @@ RHF --> FORM
 ```
 
 **图表来源**
+
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
 - [index.css:1-130](file://apps/web/src/styles/index.css#L1-L130)
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
@@ -690,6 +718,7 @@ RHF --> FORM
 - [form.tsx](file://apps/web/src/components/ui/form.tsx)
 
 **章节来源**
+
 - [package.json:14-29](file://apps/web/package.json#L14-L29)
 - [pnpm-lock.yaml:1933-1950](file://pnpm-lock.yaml#L1933-L1950)
 
@@ -731,6 +760,7 @@ RHF --> FORM
   - 参考路径：[登录页图标使用:1-221](file://apps/web/src/pages/Login.tsx#L1-L221)、[仪表盘图标使用:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 
 **章节来源**
+
 - [button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
 - [input.tsx:1-19](file://apps/web/src/components/ui/input.tsx#L1-L19)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
@@ -761,6 +791,6 @@ RHF --> FORM
   - 在需要语义化链接或路由跳转时，优先使用 Button 的 asChild。
   - 保持 variant 与 size 的一致性，避免在同一页面出现过多变体混用。
   - 错误与警告场景优先使用 Alert 的破坏性变体，并配合图标与标题明确语义。
-  - 新增组件需遵循无障碍标准，正确设置 aria-* 属性。
+  - 新增组件需遵循无障碍标准，正确设置 aria-\* 属性。
   - 表单组件需提供清晰的错误提示和验证反馈。
   - 大数据量场景优先考虑虚拟滚动和懒加载优化。
