@@ -4,17 +4,37 @@ import { devtools, persist } from 'zustand/middleware';
 // ── Theme ──────────────────────────────────────────────
 export type Theme = 'light' | 'dark' | 'system';
 
+function disableTransitionsTemporarily(): () => void {
+  const style = document.createElement('style');
+  style.appendChild(
+    document.createTextNode(
+      '*,*::before,*::after{-webkit-transition:none!important;transition:none!important}',
+    ),
+  );
+  document.head.appendChild(style);
+
+  return () => {
+    window.getComputedStyle(document.body);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        style.remove();
+      });
+    });
+  };
+}
+
 function applyTheme(theme: Theme): void {
   const root = document.documentElement;
   const isDark =
     theme === 'dark' ||
     (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-  if (isDark) {
-    root.classList.add('dark');
-  } else {
-    root.classList.remove('dark');
-  }
+  const restoreTransitions = disableTransitionsTemporarily();
+
+  root.classList.remove('light', 'dark');
+  root.classList.add(isDark ? 'dark' : 'light');
+
+  restoreTransitions();
 }
 
 // ── State ──────────────────────────────────────────────
