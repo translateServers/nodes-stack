@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { InlineAlert } from '@/components/ui/alert';
+import { Alert } from '@/components/ui/alert';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -453,7 +453,7 @@ export default function MenusPage() {
         </Button>
       </div>
 
-      {error && <InlineAlert variant="destructive">加载菜单列表失败</InlineAlert>}
+      {error && <Alert variant="destructive">加载菜单列表失败</Alert>}
 
       <div className="rounded-lg border">
         <div className="overflow-x-auto">

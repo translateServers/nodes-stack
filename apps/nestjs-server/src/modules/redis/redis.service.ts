@@ -6,14 +6,16 @@ import { TypedConfigService } from '@/config/typed-config.service';
  * Redis 服务
  *
  * - **懒加载**：客户端实例在首次访问 `client` 时才创建，不在构造函数中执行。
+ * - **自动重建**：客户端关闭后再次访问 `client` 时自动重建连接，实现容灾。
  * - **非阻塞启动**：`onModuleInit` 在后台发起连接，不阻塞应用初始化流程。
  * - **最大重试限制**：超过 `maxRetries` 后停止重连，避免无限等待。
  * - **连接超时控制**：通过 `connectTimeout` 控制单次连接尝试的超时时间。
  *
  * 使用方式：
- *   - `redisService.client` — 获取原始 node-redis 客户端（首次访问时触发懒加载）
+ *   - `redisService.client` — 获取原始 node-redis 客户端（首次访问时触发懒加载，关闭后自动重建）
  *   - `redisService.isConnected` — 查询当前连接状态
  *   - `redisService.ready` — Promise，等待连接就绪（适用于需要确保连接可用的场景）
+ *   - `redisService.safeExec(fn, fallback)` — 安全执行 Redis 操作，失败时返回降级值
  */
 @Injectable()
 export class RedisService implements OnModuleDestroy {
@@ -22,6 +24,10 @@ export class RedisService implements OnModuleDestroy {
   private _client: RedisClientType | null = null;
   private _isConnected = false;
   private _connectPromise: Promise<void> | null = null;
+  /** 标记客户端是否已被主动关闭（onModuleDestroy），避免重建 */
+  private _destroyed = false;
+  /** 标记连接尝试是否已完成（成功/失败），防止未连接的新客户端被误判为已关闭 */
+  private _connectSettled = false;
 
   /** 缓存配置，避免每次访问 client 都重新读取 */
   private readonly redisConfig: {
@@ -41,9 +47,20 @@ export class RedisService implements OnModuleDestroy {
 
   /**
    * 懒加载获取 Redis 客户端。
-   * 首次调用时创建实例并触发连接（若 lazyConnect=false）。
+   *
+   * - 首次调用时创建实例并触发连接（若 lazyConnect=false）。
+   * - 客户端已关闭（isOpen=false）且非主动销毁时，自动重建连接。
    */
   get client(): RedisClientType {
+    // 客户端存在、连接尝试已结束、客户端已关闭（连接断开/重连耗尽），自动重建
+    if (this._client && this._connectSettled && !this._client.isOpen && !this._destroyed) {
+      this.logger.warn('Redis client is closed, recreating...');
+      this._client = null;
+      this._isConnected = false;
+      this._connectPromise = null;
+      this._connectSettled = false;
+    }
+
     if (!this._client) {
       this._client = this.createClient();
       // 非 lazyConnect 模式：创建后立即在后台发起连接
@@ -73,10 +90,34 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    this._destroyed = true;
     if (this._client && this._isConnected) {
       await this._client.quit();
       this._isConnected = false;
       this.logger.log('Redis disconnected');
+    }
+  }
+
+  /**
+   * 安全执行 Redis 操作，失败时返回降级值。
+   *
+   * 用于非关键路径（如验证码），当 Redis 不可用时不影响核心业务流程。
+   *
+   * @param fn  要执行的 Redis 操作（接收 client 参数）
+   * @param fallback  Redis 不可用或操作失败时的降级返回值
+   * @returns 操作结果或降级值
+   */
+  async safeExec<T>(fn: (client: RedisClientType) => Promise<T>, fallback: T): Promise<T> {
+    try {
+      const client = this.client;
+      if (!client.isOpen) {
+        this.logger.warn('Redis client not open, returning fallback value');
+        return fallback;
+      }
+      return await fn(client);
+    } catch (err) {
+      this.logger.warn(`Redis safeExec fallback: ${(err as Error).message}`);
+      return fallback;
     }
   }
 
@@ -119,6 +160,7 @@ export class RedisService implements OnModuleDestroy {
 
     client.on('end', () => {
       this._isConnected = false;
+      this.logger.warn('Redis client connection ended');
     });
 
     // 用 console 打印，因为 NestJS 启动阶段 bufferLogs=true 会缓冲 Logger 输出
@@ -136,11 +178,13 @@ export class RedisService implements OnModuleDestroy {
       .connect()
       .then(() => {
         this._isConnected = true;
+        this._connectSettled = true;
         console.log(`[RedisService] Redis connected: ${host}:${port}/${db}`);
         this.logger.log(`Redis connected: ${host}:${port}/${db}`);
       })
       .catch((err) => {
         this._isConnected = false;
+        this._connectSettled = true;
         console.error(`[RedisService] Redis connection failed: ${(err as Error).message}`);
         this.logger.error(`Redis connection failed: ${(err as Error).message}`);
       });

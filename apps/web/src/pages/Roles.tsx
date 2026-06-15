@@ -21,7 +21,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { InlineAlert } from '@/components/ui/alert';
+import { Alert } from '@/components/ui/alert';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
@@ -174,7 +174,7 @@ export default function RolesPage() {
         </Button>
       </div>
 
-      {error && <InlineAlert variant="destructive">加载角色列表失败</InlineAlert>}
+      {error && <Alert variant="destructive">加载角色列表失败</Alert>}
 
       <DataTable
         columns={columns}

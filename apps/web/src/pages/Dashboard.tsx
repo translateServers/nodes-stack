@@ -1,5 +1,5 @@
 import { useHealth, useProfile } from '@/api';
-import { InlineAlert } from '@/components/ui/alert';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import {
@@ -124,7 +124,7 @@ export default function DashboardPage() {
                 <Spinner />
               </div>
             ) : healthQuery.error ? (
-              <InlineAlert variant="destructive">健康检查失败</InlineAlert>
+              <Alert variant="destructive">健康检查失败</Alert>
             ) : (
               <div className="space-y-4">
                 {/* Status Row */}

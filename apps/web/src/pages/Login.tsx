@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Moon, RefreshCw, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
 import { useCaptcha, useLogin } from '@/api';
-import { InlineAlert } from '@/components/ui/alert';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -225,9 +225,9 @@ export default function LoginPage() {
 
               {/* Error from login mutation */}
               {loginMutation.isError && (
-                <InlineAlert variant="destructive">
+                <Alert variant="destructive">
                   登录失败，请检查账号、密码或验证码是否正确
-                </InlineAlert>
+                </Alert>
               )}
 
               {/* Submit */}
