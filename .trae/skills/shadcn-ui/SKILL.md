@@ -1,633 +1,267 @@
 ---
-name: shadcn-ui
-description: Use when building UI with shadcn/ui components, Tailwind CSS layouts, form patterns with react-hook-form and zod, theming, dark mode, sidebar layouts, mobile navigation, or any shadcn component question.
+name: shadcn
+description: Manages shadcn components and projects — adding, searching, fixing, debugging, styling, and composing UI. Provides project context, component docs, and usage examples. Applies when working with shadcn/ui, component registries, presets, --preset codes, or any project with a components.json file. Also triggers for "shadcn init", "create an app with --preset", or "switch to --preset".
+user-invocable: false
+allowed-tools: Bash(npx shadcn@latest *), Bash(pnpm dlx shadcn@latest *), Bash(bunx --bun shadcn@latest *)
 ---
 
-# shadcn/ui Expert
+# shadcn/ui
 
-Comprehensive guide for building production UIs with shadcn/ui, Tailwind CSS, react-hook-form, and zod.
+A framework for building ui, components and design systems. Components are added as source code to the user's project via the CLI.
 
-## Core Concepts
+> **IMPORTANT:** Run all CLI commands using the project's package runner: `npx shadcn@latest`, `pnpm dlx shadcn@latest`, or `bunx --bun shadcn@latest` — based on the project's `packageManager`. Examples below use `npx shadcn@latest` but substitute the correct runner for the project.
 
-shadcn/ui is **not** a component library — it's a collection of copy-paste components built on Radix UI primitives. You own the code. Components are added to your project, not installed as dependencies.
+## Current Project Context
 
-## Installation
+```json
+!`npx shadcn@latest info --json`
+```
+
+The JSON above contains the project config and installed components. Use `npx shadcn@latest docs <component>` to get documentation and example URLs for any component.
+
+## Principles
+
+1. **Use existing components first.** Use `npx shadcn@latest search` to check registries before writing custom UI. Check community registries too.
+2. **Compose, don't reinvent.** Settings page = Tabs + Card + form controls. Dashboard = Sidebar + Card + Chart + Table.
+3. **Use built-in variants before custom styles.** `variant="outline"`, `size="sm"`, etc.
+4. **Use semantic colors.** `bg-primary`, `text-muted-foreground` — never raw values like `bg-blue-500`.
+
+## Critical Rules
+
+These rules are **always enforced**. Each links to a file with Incorrect/Correct code pairs.
+
+### Styling & Tailwind → [styling.md](./rules/styling.md)
+
+- **`className` for layout, not styling.** Never override component colors or typography.
+- **No `space-x-*` or `space-y-*`.** Use `flex` with `gap-*`. For vertical stacks, `flex flex-col gap-*`.
+- **Use `size-*` when width and height are equal.** `size-10` not `w-10 h-10`.
+- **Use `truncate` shorthand.** Not `overflow-hidden text-ellipsis whitespace-nowrap`.
+- **No manual `dark:` color overrides.** Use semantic tokens (`bg-background`, `text-muted-foreground`).
+- **Use `cn()` for conditional classes.** Don't write manual template literal ternaries.
+- **No manual `z-index` on overlay components.** Dialog, Sheet, Popover, etc. handle their own stacking.
+
+### Forms & Inputs → [forms.md](./rules/forms.md)
+
+- **Forms use `FieldGroup` + `Field`.** Never use raw `div` with `space-y-*` or `grid gap-*` for form layout.
+- **`InputGroup` uses `InputGroupInput`/`InputGroupTextarea`.** Never raw `Input`/`Textarea` inside `InputGroup`.
+- **Buttons inside inputs use `InputGroup` + `InputGroupAddon`.**
+- **Option sets (2–7 choices) use `ToggleGroup`.** Don't loop `Button` with manual active state.
+- **`FieldSet` + `FieldLegend` for grouping related checkboxes/radios.** Don't use a `div` with a heading.
+- **Field validation uses `data-invalid` + `aria-invalid`.** `data-invalid` on `Field`, `aria-invalid` on the control. For disabled: `data-disabled` on `Field`, `disabled` on the control.
+
+### Component Structure → [composition.md](./rules/composition.md)
+
+- **Items always inside their Group.** `SelectItem` → `SelectGroup`. `DropdownMenuItem` → `DropdownMenuGroup`. `CommandItem` → `CommandGroup`.
+- **Use `asChild` (radix) or `render` (base) for custom triggers.** Check `base` field from `npx shadcn@latest info`. → [base-vs-radix.md](./rules/base-vs-radix.md)
+- **Dialog, Sheet, and Drawer always need a Title.** `DialogTitle`, `SheetTitle`, `DrawerTitle` required for accessibility. Use `className="sr-only"` if visually hidden.
+- **Use full Card composition.** `CardHeader`/`CardTitle`/`CardDescription`/`CardContent`/`CardFooter`. Don't dump everything in `CardContent`.
+- **Button has no `isPending`/`isLoading`.** Compose with `Spinner` + `data-icon` + `disabled`.
+- **`TabsTrigger` must be inside `TabsList`.** Never render triggers directly in `Tabs`.
+- **`Avatar` always needs `AvatarFallback`.** For when the image fails to load.
+
+### Use Components, Not Custom Markup → [composition.md](./rules/composition.md)
+
+- **Use existing components before custom markup.** Check if a component exists before writing a styled `div`.
+- **Callouts use `Alert`.** Don't build custom styled divs.
+- **Empty states use `Empty`.** Don't build custom empty state markup.
+- **Toast via `sonner`.** Use `toast()` from `sonner`.
+- **Use `Separator`** instead of `<hr>` or `<div className="border-t">`.
+- **Use `Skeleton`** for loading placeholders. No custom `animate-pulse` divs.
+- **Use `Badge`** instead of custom styled spans.
+
+### Icons → [icons.md](./rules/icons.md)
+
+- **Icons in `Button` use `data-icon`.** `data-icon="inline-start"` or `data-icon="inline-end"` on the icon.
+- **No sizing classes on icons inside components.** Components handle icon sizing via CSS. No `size-4` or `w-4 h-4`.
+- **Pass icons as objects, not string keys.** `icon={CheckIcon}`, not a string lookup.
+
+### CLI
+
+- **Never decode preset codes or build preset URLs manually.** Use `npx shadcn@latest preset decode <code>`, `preset url <code>`, or `preset open <code>`. For project-aware preset detection, use `npx shadcn@latest preset resolve`.
+- **Apply preset codes directly with the CLI.** Use `npx shadcn@latest apply <code>` for existing projects, or `npx shadcn@latest init --preset <code>` when initializing.
+
+## Key Patterns
+
+These are the most common patterns that differentiate correct shadcn/ui code. For edge cases, see the linked rule files above.
+
+```tsx
+// Form layout: FieldGroup + Field, not div + Label.
+<FieldGroup>
+  <Field>
+    <FieldLabel htmlFor="email">Email</FieldLabel>
+    <Input id="email" />
+  </Field>
+</FieldGroup>
+
+// Validation: data-invalid on Field, aria-invalid on the control.
+<Field data-invalid>
+  <FieldLabel>Email</FieldLabel>
+  <Input aria-invalid />
+  <FieldDescription>Invalid email.</FieldDescription>
+</Field>
+
+// Icons in buttons: data-icon, no sizing classes.
+<Button>
+  <SearchIcon data-icon="inline-start" />
+  Search
+</Button>
+
+// Spacing: gap-*, not space-y-*.
+<div className="flex flex-col gap-4">  // correct
+<div className="space-y-4">           // wrong
+
+// Equal dimensions: size-*, not w-* h-*.
+<Avatar className="size-10">   // correct
+<Avatar className="w-10 h-10"> // wrong
+
+// Status colors: Badge variants or semantic tokens, not raw colors.
+<Badge variant="secondary">+20.1%</Badge>    // correct
+<span className="text-emerald-600">+20.1%</span> // wrong
+```
+
+## Component Selection
+
+| Need                       | Use                                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------------- |
+| Button/action              | `Button` with appropriate variant                                                                   |
+| Form inputs                | `Input`, `Select`, `Combobox`, `Switch`, `Checkbox`, `RadioGroup`, `Textarea`, `InputOTP`, `Slider` |
+| Toggle between 2–5 options | `ToggleGroup` + `ToggleGroupItem`                                                                   |
+| Data display               | `Table`, `Card`, `Badge`, `Avatar`                                                                  |
+| Navigation                 | `Sidebar`, `NavigationMenu`, `Breadcrumb`, `Tabs`, `Pagination`                                     |
+| Overlays                   | `Dialog` (modal), `Sheet` (side panel), `Drawer` (bottom sheet), `AlertDialog` (confirmation)       |
+| Feedback                   | `sonner` (toast), `Alert`, `Progress`, `Skeleton`, `Spinner`                                        |
+| Command palette            | `Command` inside `Dialog`                                                                           |
+| Charts                     | `Chart` (wraps Recharts)                                                                            |
+| Layout                     | `Card`, `Separator`, `Resizable`, `ScrollArea`, `Accordion`, `Collapsible`                          |
+| Empty states               | `Empty`                                                                                             |
+| Menus                      | `DropdownMenu`, `ContextMenu`, `Menubar`                                                            |
+| Tooltips/info              | `Tooltip`, `HoverCard`, `Popover`                                                                   |
+
+## Key Fields
+
+The injected project context contains these key fields:
+
+- **`aliases`** → use the actual alias prefix for imports (e.g. `@/`, `~/`), never hardcode.
+- **`isRSC`** → when `true`, components using `useState`, `useEffect`, event handlers, or browser APIs need `"use client"` at the top of the file. Always reference this field when advising on the directive.
+- **`tailwindVersion`** → `"v4"` uses `@theme inline` blocks; `"v3"` uses `tailwind.config.js`.
+- **`tailwindCssFile`** → the global CSS file where custom CSS variables are defined. Always edit this file, never create a new one.
+- **`style`** → component visual treatment (e.g. `nova`, `vega`).
+- **`base`** → primitive library (`radix` or `base`). Affects component APIs and available props.
+- **`iconLibrary`** → determines icon imports. Use `lucide-react` for `lucide`, `@tabler/icons-react` for `tabler`, etc. Never assume `lucide-react`.
+- **`resolvedPaths`** → exact file-system destinations for components, utils, hooks, etc.
+- **`framework`** → routing and file conventions (e.g. Next.js App Router vs Vite SPA).
+- **`packageManager`** → use this for any non-shadcn dependency installs (e.g. `pnpm add date-fns` vs `npm install date-fns`).
+- **`preset`** → resolved preset code and values for the current project. Use `npx shadcn@latest preset resolve --json` when you only need preset information.
+
+See [cli.md — `info` command](./cli.md) for the full field reference.
+
+## Component Docs, Examples, and Usage
+
+Run `npx shadcn@latest docs <component>` to get the URLs for a component's documentation, examples, and API reference. Fetch these URLs to get the actual content.
 
 ```bash
-# Initialize shadcn/ui in a Next.js project
-npx shadcn@latest init
-
-# Add individual components
-npx shadcn@latest add button
-npx shadcn@latest add card
-npx shadcn@latest add dialog
-npx shadcn@latest add form
-npx shadcn@latest add input
-npx shadcn@latest add select
-npx shadcn@latest add table
-npx shadcn@latest add toast
-npx shadcn@latest add dropdown-menu
-npx shadcn@latest add sheet
-npx shadcn@latest add tabs
-npx shadcn@latest add sidebar
-
-# Add multiple at once
-npx shadcn@latest add button card input label textarea select checkbox
+npx shadcn@latest docs button dialog select
 ```
 
----
+**When creating, fixing, debugging, or using a component, always run `npx shadcn@latest docs` and fetch the URLs first.** This ensures you're working with the correct API and usage patterns rather than guessing.
 
-## Component Categories & When to Use
+## Workflow
 
-### Layout & Navigation
+1. **Get project context** — already injected above. Run `npx shadcn@latest info` again if you need to refresh.
+2. **Check installed components first** — before running `add`, always check the `components` list from project context or list the `resolvedPaths.ui` directory. Don't import components that haven't been added, and don't re-add ones already installed.
+3. **Find components** — `npx shadcn@latest search`.
+4. **Get docs and examples** — run `npx shadcn@latest docs <component>` to get URLs, then fetch them. Use `npx shadcn@latest view` to browse registry items you haven't installed. To preview changes to installed components, use `npx shadcn@latest add --diff`.
+5. **Install or update** — `npx shadcn@latest add`. When updating existing components, use `--dry-run` and `--diff` to preview changes first (see [Updating Components](#updating-components) below).
+6. **Fix imports in third-party components** — After adding components from community registries (e.g. `@bundui`, `@magicui`), check the added non-UI files for hardcoded import paths like `@/components/ui/...`. These won't match the project's actual aliases. Use `npx shadcn@latest info` to get the correct `ui` alias (e.g. `@workspace/ui/components`) and rewrite the imports accordingly. The CLI rewrites imports for its own UI files, but third-party registry components may use default paths that don't match the project.
+7. **Review added components** — After adding a component or block from any registry, **always read the added files and verify they are correct**. Check for missing sub-components (e.g. `SelectItem` without `SelectGroup`), missing imports, incorrect composition, or violations of the [Critical Rules](#critical-rules). Also replace any icon imports with the project's `iconLibrary` from the project context (e.g. if the registry item uses `lucide-react` but the project uses `hugeicons`, swap the imports and icon names accordingly). Fix all issues before moving on.
+8. **Registry must be explicit** — When the user asks to add a block or component, **do not guess the registry**. If no registry is specified (e.g. user says "add a login block" without specifying `@shadcn`, `@tailark`, `owner/repo`, etc.), ask which registry to use. Never default to a registry on behalf of the user.
+9. **Switching presets** — Ask the user first: **overwrite**, **partial**, **merge**, or **skip**?
+   - **Inspect current preset**: `npx shadcn@latest preset resolve`. Use `--json` when you need structured values.
+   - **Inspect incoming preset**: `npx shadcn@latest preset decode <code>`. Use `preset url <code>` or `preset open <code>` to share or open the preset builder.
+   - **Overwrite**: `npx shadcn@latest apply <code>`. Overwrites detected components, fonts, and CSS variables.
+   - **Partial**: `npx shadcn@latest apply <code> --only theme,font`. Updates only the selected preset parts without reinstalling UI components. Supported values are `theme` and `font`; comma-separated combinations are allowed. `icon` is intentionally not supported, because icon changes may require full component reinstall and transforms.
+   - **Merge**: `npx shadcn@latest init --preset <code> --force --no-reinstall`, then run `npx shadcn@latest info` to list installed components, then for each installed component use `--dry-run` and `--diff` to [smart merge](#updating-components) it individually.
+   - **Skip**: `npx shadcn@latest init --preset <code> --force --no-reinstall`. Only updates config and CSS, leaves components as-is.
+   - **Important**: Always run preset commands inside the user's project directory. `apply` only works in an existing project with a `components.json` file. The CLI automatically preserves the current base (`base` vs `radix`) from `components.json`. If you must use a scratch/temp directory (e.g. for `--dry-run` comparisons), pass `--base <current-base>` explicitly — preset codes do not encode the base.
 
-| Component         | Use When                                            |
-| ----------------- | --------------------------------------------------- |
-| `sidebar`         | App-level navigation with collapsible sections      |
-| `navigation-menu` | Top-level site navigation with dropdowns            |
-| `breadcrumb`      | Showing page hierarchy/location                     |
-| `tabs`            | Switching between related views in same context     |
-| `separator`       | Visual divider between content sections             |
-| `sheet`           | Slide-out panel (mobile nav, filters, detail views) |
-| `resizable`       | Adjustable panel layouts                            |
+## Updating Components
 
-### Forms & Input
+When the user asks to update a component from upstream while keeping their local changes, use `--dry-run` and `--diff` to intelligently merge. **NEVER fetch raw files from GitHub manually — always use the CLI.**
 
-| Component     | Use When                                         |
-| ------------- | ------------------------------------------------ |
-| `form`        | Any form with validation (wraps react-hook-form) |
-| `input`       | Text, email, password, number inputs             |
-| `textarea`    | Multi-line text input                            |
-| `select`      | Choosing from a list (native-like)               |
-| `combobox`    | Searchable select (uses `command` + `popover`)   |
-| `checkbox`    | Boolean or multi-select toggles                  |
-| `radio-group` | Single selection from small set                  |
-| `switch`      | On/off toggle (settings, preferences)            |
-| `slider`      | Numeric range selection                          |
-| `date-picker` | Date selection (uses `calendar` + `popover`)     |
-| `toggle`      | Pressed/unpressed state (toolbar buttons)        |
+1. Run `npx shadcn@latest add <component> --dry-run` to see all files that would be affected.
+2. For each file, run `npx shadcn@latest add <component> --diff <file>` to see what changed upstream vs local.
+3. Decide per file based on the diff:
+   - No local changes → safe to overwrite.
+   - Has local changes → read the local file, analyze the diff, and apply upstream updates while preserving local modifications.
+   - User says "just update everything" → use `--overwrite`, but confirm first.
+4. **Never use `--overwrite` without the user's explicit approval.**
 
-### Feedback & Overlay
-
-| Component      | Use When                                            |
-| -------------- | --------------------------------------------------- |
-| `dialog`       | Modal confirmation, forms, or detail views          |
-| `alert-dialog` | Destructive action confirmation ("Are you sure?")   |
-| `sheet`        | Side panel for forms, filters, mobile nav           |
-| `toast`        | Brief non-blocking notifications (via `sonner`)     |
-| `alert`        | Inline status messages (info, warning, error)       |
-| `tooltip`      | Hover hints for icons/buttons                       |
-| `popover`      | Rich content on click (color pickers, date pickers) |
-| `hover-card`   | Preview content on hover (user profiles, links)     |
-| `skeleton`     | Loading placeholders                                |
-| `progress`     | Task completion indicators                          |
-
-### Data Display
-
-| Component     | Use When                                                                  |
-| ------------- | ------------------------------------------------------------------------- |
-| `table`       | Tabular data display                                                      |
-| `data-table`  | Tables with sorting, filtering, pagination (uses `@tanstack/react-table`) |
-| `card`        | Content containers with header, body, footer                              |
-| `badge`       | Status labels, tags, counts                                               |
-| `avatar`      | User profile images                                                       |
-| `accordion`   | Collapsible FAQ or settings sections                                      |
-| `carousel`    | Image/content slideshows                                                  |
-| `scroll-area` | Custom scrollable containers                                              |
-
-### Actions
-
-| Component       | Use When                          |
-| --------------- | --------------------------------- |
-| `button`        | Primary actions, form submissions |
-| `dropdown-menu` | Context menus, action menus       |
-| `context-menu`  | Right-click menus                 |
-| `menubar`       | Application menu bars             |
-| `command`       | Command palette / search (⌘K)     |
-
----
-
-## Form Patterns (react-hook-form + zod)
-
-### Complete Form Example
+## Quick Reference
 
 ```bash
-npx shadcn@latest add form input select textarea checkbox button
+# Create a new project.
+npx shadcn@latest init --name my-app --preset base-nova
+npx shadcn@latest init --name my-app --preset a2r6bw --template vite
+
+# Create a monorepo project.
+npx shadcn@latest init --name my-app --preset base-nova --monorepo
+npx shadcn@latest init --name my-app --preset base-nova --template next --monorepo
+
+# Initialize existing project.
+npx shadcn@latest init --preset base-nova
+npx shadcn@latest init --defaults  # shortcut: --template=next --preset=nova (base style implied)
+
+# Apply a preset to an existing project.
+npx shadcn@latest apply a2r6bw
+npx shadcn@latest apply a2r6bw --only theme
+npx shadcn@latest apply a2r6bw --only font
+npx shadcn@latest apply a2r6bw --only theme,font
+
+# Inspect preset codes and project preset state.
+npx shadcn@latest preset decode a2r6bw
+npx shadcn@latest preset url a2r6bw
+npx shadcn@latest preset open a2r6bw
+npx shadcn@latest preset resolve
+npx shadcn@latest preset resolve --json
+
+# Add components.
+npx shadcn@latest add button card dialog
+npx shadcn@latest add @magicui/shimmer-button
+npx shadcn@latest add owner/repo/item
+npx shadcn@latest add --all
+
+# Preview changes before adding/updating.
+npx shadcn@latest add button --dry-run
+npx shadcn@latest add button --diff button.tsx
+npx shadcn@latest add @acme/form --view button.tsx
+npx shadcn@latest add owner/repo/item --dry-run
+
+# Search registries.
+npx shadcn@latest search @shadcn -q "sidebar"
+npx shadcn@latest search @tailark -q "stats"
+npx shadcn@latest search owner/repo -q "login"
+npx shadcn@latest search                          # all configured registries
+npx shadcn@latest search @shadcn -q "menu" -t ui  # filter by item type
+
+# Get component docs and example URLs.
+npx shadcn@latest docs button dialog select
+
+# View registry item details (for items not yet installed).
+npx shadcn@latest view @shadcn/button
+npx shadcn@latest view owner/repo/item
 ```
 
-```tsx
-'use client';
-
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { toast } from 'sonner';
-
-const formSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
-  role: z.enum(['admin', 'user', 'editor'], { required_error: 'Select a role' }),
-  bio: z.string().max(500).optional(),
-  notifications: z.boolean().default(false),
-});
-
-type FormValues = z.infer<typeof formSchema>;
-
-export function UserForm() {
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      bio: '',
-      notifications: false,
-    },
-  });
-
-  async function onSubmit(values: FormValues) {
-    try {
-      await createUser(values);
-      toast.success('User created successfully');
-      form.reset();
-    } catch (error) {
-      toast.error('Failed to create user');
-    }
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input placeholder="John Doe" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input type="email" placeholder="john@example.com" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="role"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="editor">Editor</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="bio"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Bio</FormLabel>
-              <FormControl>
-                <Textarea placeholder="Tell us about yourself..." {...field} />
-              </FormControl>
-              <FormDescription>Max 500 characters</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="notifications"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-              <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel>Email notifications</FormLabel>
-                <FormDescription>Receive emails about account activity</FormDescription>
-              </div>
-            </FormItem>
-          )}
-        />
-
-        <Button type="submit" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? 'Creating...' : 'Create User'}
-        </Button>
-      </form>
-    </Form>
-  );
-}
-```
-
-### Form with Server Action
-
-```tsx
-'use client';
-
-import { useFormState } from 'react-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-
-export function ContactForm() {
-  const form = useForm<FormValues>({
-    resolver: zodResolver(schema),
-  });
-
-  async function onSubmit(values: FormValues) {
-    const formData = new FormData();
-    Object.entries(values).forEach(([key, value]) => formData.append(key, String(value)));
-    await submitContact(formData);
-  }
-
-  return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {/* fields */}
-      </form>
-    </Form>
-  );
-}
-```
-
----
-
-## Theming & Dark Mode
-
-### Setup with next-themes
-
-```bash
-npm install next-themes
-npx shadcn@latest add dropdown-menu
-```
-
-```tsx
-// app/providers.tsx
-'use client';
-import { ThemeProvider } from 'next-themes';
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      {children}
-    </ThemeProvider>
-  );
-}
-```
-
-```tsx
-// components/theme-toggle.tsx
-'use client';
-import { Moon, Sun } from 'lucide-react';
-import { useTheme } from 'next-themes';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-
-export function ThemeToggle() {
-  const { setTheme } = useTheme();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon">
-          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme('system')}>System</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-```
-
-### Custom Colors in `globals.css`
-
-```css
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    /* ... etc */
-  }
-}
-```
-
----
-
-## Common Layouts
-
-### App Shell with Sidebar
-
-```tsx
-import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-import { AppSidebar } from '@/components/app-sidebar';
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <SidebarProvider>
-      <AppSidebar />
-      <main className="flex-1">
-        <header className="flex h-14 items-center gap-4 border-b px-6">
-          <SidebarTrigger />
-          <h1 className="text-lg font-semibold">Dashboard</h1>
-        </header>
-        <div className="p-6">{children}</div>
-      </main>
-    </SidebarProvider>
-  );
-}
-```
-
-### Responsive Header with Mobile Nav
-
-```tsx
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
-import { Menu } from 'lucide-react';
-
-export function Header() {
-  return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur">
-      <div className="container flex h-14 items-center">
-        <div className="mr-4 hidden md:flex">
-          <Logo />
-          <nav className="flex items-center gap-6 text-sm ml-6">
-            <Link href="/dashboard">Dashboard</Link>
-            <Link href="/settings">Settings</Link>
-          </nav>
-        </div>
-
-        {/* Mobile hamburger */}
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="md:hidden">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-[300px]">
-            <nav className="flex flex-col gap-4 mt-8">
-              <Link href="/dashboard">Dashboard</Link>
-              <Link href="/settings">Settings</Link>
-            </nav>
-          </SheetContent>
-        </Sheet>
-
-        <div className="flex flex-1 items-center justify-end gap-2">
-          <ThemeToggle />
-          <UserMenu />
-        </div>
-      </div>
-    </header>
-  );
-}
-```
-
-### Card Grid
-
-```tsx
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-
-export function StatsGrid({ stats }: { stats: Stat[] }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {stats.map((stat) => (
-        <Card key={stat.label}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-            <stat.icon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stat.value}</div>
-            <p className="text-xs text-muted-foreground">{stat.description}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
-}
-```
-
----
-
-## Tailwind CSS Patterns
-
-### Common Utility Patterns
-
-```tsx
-// Centering
-<div className="flex items-center justify-center min-h-screen">
-
-// Container with max-width
-<div className="container mx-auto px-4">
-
-// Responsive grid
-<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-// Sticky header
-<header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-
-// Truncated text
-<p className="truncate">Very long text...</p>
-
-// Line clamp
-<p className="line-clamp-3">Multi-line truncation...</p>
-
-// Aspect ratio
-<div className="aspect-video rounded-lg overflow-hidden">
-
-// Animations
-<div className="animate-pulse">    {/* Loading skeleton */}
-<div className="animate-spin">     {/* Spinner */}
-<div className="transition-all duration-200 hover:scale-105">
-```
-
-### Button Variants
-
-```tsx
-<Button>Default</Button>
-<Button variant="secondary">Secondary</Button>
-<Button variant="outline">Outline</Button>
-<Button variant="ghost">Ghost</Button>
-<Button variant="link">Link</Button>
-<Button variant="destructive">Delete</Button>
-<Button size="sm">Small</Button>
-<Button size="lg">Large</Button>
-<Button size="icon"><Plus className="h-4 w-4" /></Button>
-<Button disabled>Disabled</Button>
-<Button asChild><Link href="/page">As Link</Link></Button>
-```
-
----
-
-## Toast Notifications
-
-```bash
-npx shadcn@latest add sonner
-```
-
-```tsx
-// app/layout.tsx
-import { Toaster } from '@/components/ui/sonner';
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        {children}
-        <Toaster />
-      </body>
-    </html>
-  );
-}
-
-// Usage anywhere
-import { toast } from 'sonner';
-
-toast.success('User created');
-toast.error('Something went wrong');
-toast.info('New update available');
-toast.warning('This action cannot be undone');
-toast.promise(asyncAction(), {
-  loading: 'Creating...',
-  success: 'Created!',
-  error: 'Failed to create',
-});
-```
-
----
-
-## Command Palette (⌘K)
-
-```tsx
-'use client';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
-  const router = useRouter();
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen((open) => !open);
-      }
-    };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
-  }, []);
-
-  return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search..." />
-      <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        <CommandGroup heading="Navigation">
-          <CommandItem
-            onSelect={() => {
-              router.push('/dashboard');
-              setOpen(false);
-            }}
-          >
-            Dashboard
-          </CommandItem>
-          <CommandItem
-            onSelect={() => {
-              router.push('/settings');
-              setOpen(false);
-            }}
-          >
-            Settings
-          </CommandItem>
-        </CommandGroup>
-      </CommandList>
-    </CommandDialog>
-  );
-}
-```
+**Named presets:** `nova`, `vega`, `maia`, `lyra`, `mira`, `luma`
+**Templates:** `next`, `vite`, `start`, `react-router`, `astro` (all support `--monorepo`) and `laravel` (not supported for monorepo)
+**Preset codes:** Version-prefixed base62 strings (e.g. `a2r6bw` or `b0`), from [ui.shadcn.com](https://ui.shadcn.com).
+
+## Detailed References
+
+- [rules/forms.md](./rules/forms.md) — FieldGroup, Field, InputGroup, ToggleGroup, FieldSet, validation states
+- [rules/composition.md](./rules/composition.md) — Groups, overlays, Card, Tabs, Avatar, Alert, Empty, Toast, Separator, Skeleton, Badge, Button loading
+- [rules/icons.md](./rules/icons.md) — data-icon, icon sizing, passing icons as objects
+- [rules/styling.md](./rules/styling.md) — Semantic colors, variants, className, spacing, size, truncate, dark mode, cn(), z-index
+- [rules/base-vs-radix.md](./rules/base-vs-radix.md) — asChild vs render, Select, ToggleGroup, Slider, Accordion
+- [cli.md](./cli.md) — Commands, flags, presets, templates
+- [registry.md](./registry.md) — Authoring source registries, `include`, item definitions, dependencies, GitHub registry rules
+- [customization.md](./customization.md) — Theming, CSS variables, extending components
