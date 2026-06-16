@@ -30,7 +30,7 @@ export class CaptchaService {
 
   constructor(private readonly redisService: RedisService) {}
 
-  generateCaptcha(): CaptchaResponse {
+  async generateCaptcha(): Promise<CaptchaResponse> {
     const captcha = create({
       size: 4,
       noise: 3,
@@ -45,20 +45,21 @@ export class CaptchaService {
 
     // 优先写入 Redis，失败时降级到内存
     const redisKey = `${CAPTCHA_KEY_PREFIX}${captchaId}`;
-    this.redisService
-      .safeExec((client) => client.set(redisKey, code, { EX: CAPTCHA_EXPIRES_SECONDS }), null)
-      .then((result) => {
-        if (result === null) {
-          // Redis 不可用，降级到内存
-          this.logger.warn('Redis unavailable, storing captcha in memory fallback');
-          this.memoryCache.set(captchaId, {
-            code,
-            expiresAt: Date.now() + CAPTCHA_EXPIRES_SECONDS * 1000,
-          });
-        }
-      })
-      .catch((err) => this.logger.error(`Failed to store captcha: ${(err as Error).message}`));
+    const result = await this.redisService.safeExec(
+      (client) => client.set(redisKey, code, { EX: CAPTCHA_EXPIRES_SECONDS }),
+      null, // fallback: Redis 不可用时返回 null
+    );
 
+    if (result === null) {
+      // Redis 不可用，降级到内存
+      this.logger.warn('Redis unavailable, storing captcha in memory fallback');
+      this.memoryCache.set(captchaId, {
+        code,
+        expiresAt: Date.now() + CAPTCHA_EXPIRES_SECONDS * 1000,
+      });
+    }
+
+    // 确保存储完成后再返回
     return {
       captchaId,
       captchaImage: captcha.data,

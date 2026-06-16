@@ -12,6 +12,13 @@ const mockRedisClient = {
 const mockRedisService = {
   client: mockRedisClient,
   ping: jest.fn().mockResolvedValue(true),
+  safeExec: jest.fn().mockImplementation(async (fn: (client: any) => Promise<any>, fallback: any) => {
+    try {
+      return await fn(mockRedisClient);
+    } catch {
+      return fallback;
+    }
+  }),
 };
 
 describe('CaptchaService', () => {
@@ -28,8 +35,8 @@ describe('CaptchaService', () => {
   });
 
   describe('generateCaptcha', () => {
-    it('should generate captcha with valid id and image', () => {
-      const result = service.generateCaptcha();
+    it('should generate captcha with valid id and image', async () => {
+      const result = await service.generateCaptcha();
 
       expect(result.captchaId).toBeDefined();
       expect(result.captchaImage).toBeDefined();
@@ -37,18 +44,15 @@ describe('CaptchaService', () => {
       expect(typeof result.captchaImage).toBe('string');
     });
 
-    it('should generate unique captcha IDs', () => {
-      const result1 = service.generateCaptcha();
-      const result2 = service.generateCaptcha();
+    it('should generate unique captcha IDs', async () => {
+      const result1 = await service.generateCaptcha();
+      const result2 = await service.generateCaptcha();
 
       expect(result1.captchaId).not.toBe(result2.captchaId);
     });
 
     it('should store captcha code in Redis with TTL', async () => {
-      service.generateCaptcha();
-
-      // Redis set 是异步触发的，等待 microtask 完成
-      await new Promise((resolve) => setImmediate(resolve));
+      await service.generateCaptcha();
 
       expect(mockRedisClient.set).toHaveBeenCalledTimes(1);
       expect(mockRedisClient.set).toHaveBeenCalledWith(

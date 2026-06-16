@@ -43,7 +43,7 @@ export class AuthController {
     description: '生成一张SVG格式的验证码图片，返回验证码ID和图片内容。登录时需要携带此验证码ID。',
   })
   @ApiSuccessResponse(CaptchaResponseDto)
-  getCaptcha(): CaptchaResponseDto {
+  async getCaptcha(): Promise<CaptchaResponseDto> {
     return this.captchaService.generateCaptcha();
   }
 
