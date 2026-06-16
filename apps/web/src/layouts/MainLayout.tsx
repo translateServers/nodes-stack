@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { NavLink, Outlet, useLocation, useMatch } from 'react-router';
 import {
   ChevronRight,
   LayoutDashboard,
@@ -15,6 +15,8 @@ import {
   BookOpen,
   Shield,
   FileText,
+  Bell,
+  Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -27,10 +29,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUiStore } from '@/store';
 
-// ── Menu Config ─────────────────────────────────────────
 const menuGroups = [
   {
     label: '概览',
@@ -47,7 +49,6 @@ const menuGroups = [
   },
 ];
 
-// ── Breadcrumb ──────────────────────────────────────────
 const pathLabels: Record<string, string> = {
   '/': '仪表盘',
   '/users': '用户管理',
@@ -73,7 +74,6 @@ function Breadcrumb() {
   );
 }
 
-// ── Sidebar Nav Item ────────────────────────────────────
 function SidebarNavItem({
   item,
   collapsed,
@@ -84,23 +84,27 @@ function SidebarNavItem({
   onClose?: () => void;
 }) {
   const Icon = item.icon;
+  const match = useMatch(item.path);
+  const isActive = match !== null;
+
   const link = (
     <NavLink
       to={item.path}
       end={item.path === '/'}
       onClick={onClose}
-      className={({ isActive }) =>
-        cn(
-          'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-          isActive
-            ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/25'
-            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-          collapsed && 'justify-center px-2',
-        )
-      }
+      className={cn(
+        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+        isActive
+          ? 'bg-primary text-primary-foreground shadow-md shadow-primary/25'
+          : 'text-muted-foreground hover:bg-primary/5 hover:text-foreground',
+        collapsed && 'justify-center px-2',
+      )}
     >
-      <Icon className="size-[18px] shrink-0" />
+      <Icon className="size-4 shrink-0" />
       {!collapsed && <span>{item.text}</span>}
+      {!collapsed && isActive && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-primary-foreground" />
+      )}
     </NavLink>
   );
 
@@ -108,7 +112,9 @@ function SidebarNavItem({
     return (
       <Tooltip>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right">{item.text}</TooltipContent>
+        <TooltipContent side="right" className="w-auto">
+          {item.text}
+        </TooltipContent>
       </Tooltip>
     );
   }
@@ -116,7 +122,6 @@ function SidebarNavItem({
   return link;
 }
 
-// ── Theme Toggle ────────────────────────────────────────
 function ThemeToggle() {
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
@@ -132,7 +137,17 @@ function ThemeToggle() {
   );
 }
 
-// ── User Menu ───────────────────────────────────────────
+function NotificationButton() {
+  return (
+    <Button type="button" variant="ghost" size="icon-sm" className="relative">
+      <Bell className="size-4" />
+      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-medium text-white">
+        3
+      </span>
+    </Button>
+  );
+}
+
 function UserMenu() {
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -143,9 +158,9 @@ function UserMenu() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2.5 rounded-lg p-1 transition-colors hover:bg-muted cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex items-center gap-2.5 rounded-xl p-1.5 transition-all hover:bg-muted cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          <Avatar size="sm">
+          <Avatar size="sm" className="border-2 border-primary/20">
             <AvatarFallback className="bg-primary/10 text-primary font-semibold">
               {initials}
             </AvatarFallback>
@@ -158,8 +173,8 @@ function UserMenu() {
           </div>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" className="w-56">
-        <DropdownMenuLabel>
+      <DropdownMenuContent align="end" side="bottom" className="w-56 border-border/60">
+        <DropdownMenuLabel className="p-4">
           <div className="flex flex-col">
             <span className="font-medium">{user?.name ?? '管理员'}</span>
             <span className="text-muted-foreground text-xs font-normal">
@@ -168,17 +183,17 @@ function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <User />
+        <DropdownMenuItem className="gap-2">
+          <User className="size-4" />
           <span>个人资料</span>
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings />
+        <DropdownMenuItem className="gap-2">
+          <Settings className="size-4" />
           <span>系统设置</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={clearAuth}>
-          <LogOut />
+        <DropdownMenuItem variant="destructive" onClick={clearAuth} className="gap-2">
+          <LogOut className="size-4" />
           <span>退出登录</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -186,7 +201,6 @@ function UserMenu() {
   );
 }
 
-// ── Main Layout ─────────────────────────────────────────
 export default function MainLayout() {
   const mobileOpen = useUiStore((s) => s.mobileSidebarOpen);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -195,8 +209,7 @@ export default function MainLayout() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   return (
-    <div className="bg-muted/20 min-h-screen text-foreground">
-      {/* Mobile overlay */}
+    <div className="min-h-screen bg-background text-foreground">
       {mobileOpen && (
         <button
           type="button"
@@ -206,29 +219,29 @@ export default function MainLayout() {
         />
       )}
 
-      {/* ── Sidebar ──────────────────────────────────── */}
       <aside
         className={cn(
-          'bg-background fixed inset-y-0 left-0 z-50 flex flex-col border-r transition-[width,transform] duration-300 ease-in-out',
-          // Desktop: show + collapsible
+          'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-border/60 bg-card/80 backdrop-blur-md transition-all duration-300 ease-in-out',
           'lg:translate-x-0',
-          collapsed ? 'lg:w-[4.5rem]' : 'lg:w-64',
-          // Mobile: slide in/out
+          collapsed ? 'lg:w-16' : 'lg:w-64',
           mobileOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full',
         )}
       >
-        {/* Brand */}
         <div
           className={cn(
-            'flex h-16 shrink-0 items-center border-b px-5 transition-all',
+            'flex h-16 shrink-0 items-center border-b border-border/60 px-5 transition-all',
             collapsed && 'lg:justify-center lg:px-3',
           )}
         >
           <div className="flex items-center gap-2.5">
-            <div className="bg-primary flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-primary-foreground">
+            <div className="bg-gradient-to-br from-primary to-primary/70 flex size-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25">
               N
             </div>
-            {!collapsed && <span className="text-lg font-semibold tracking-tight">Nebula</span>}
+            {!collapsed && (
+              <span className="text-lg font-semibold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                Nebula
+              </span>
+            )}
           </div>
           <Button
             type="button"
@@ -241,16 +254,15 @@ export default function MainLayout() {
           </Button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-6 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-6 overflow-y-auto p-4">
           {menuGroups.map((group) => (
             <div key={group.label} className="space-y-1">
               {!collapsed && (
-                <div className="text-muted-foreground/70 mb-2 px-3 text-xs font-semibold uppercase tracking-wider">
+                <div className="text-muted-foreground/60 mb-3 px-3 text-xs font-semibold uppercase tracking-wider">
                   {group.label}
                 </div>
               )}
-              {collapsed && <div className="mx-auto mb-2 h-px w-6 bg-border" />}
+              {collapsed && <div className="mx-auto mb-3 h-px w-8 bg-border/60" />}
               {group.items.map((item) => (
                 <SidebarNavItem
                   key={item.text}
@@ -263,26 +275,25 @@ export default function MainLayout() {
           ))}
         </nav>
 
-        {/* Collapse toggle (desktop only) */}
-        <div className="hidden shrink-0 border-t p-3 lg:block">
+        <div className="hidden shrink-0 border-t border-border/60 p-4 lg:block">
           <button
             type="button"
             onClick={toggleSidebar}
             className={cn(
-              'text-muted-foreground flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground cursor-pointer',
+              'text-muted-foreground flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted hover:text-foreground cursor-pointer',
               collapsed && 'justify-center px-2',
             )}
           >
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <PanelLeftOpen className="size-[18px] shrink-0" />
+                  <PanelLeftOpen className="size-4 shrink-0" />
                 </TooltipTrigger>
                 <TooltipContent side="right">展开侧边栏</TooltipContent>
               </Tooltip>
             ) : (
               <>
-                <PanelLeftClose className="size-[18px] shrink-0" />
+                <PanelLeftClose className="size-4 shrink-0" />
                 <span>收起侧边栏</span>
               </>
             )}
@@ -290,15 +301,13 @@ export default function MainLayout() {
         </div>
       </aside>
 
-      {/* ── Main Content ─────────────────────────────── */}
       <div
         className={cn(
-          'flex min-h-screen flex-col transition-[padding-left] duration-300 ease-in-out',
-          collapsed ? 'lg:pl-18' : 'lg:pl-64',
+          'flex min-h-screen flex-col transition-all duration-300 ease-in-out',
+          collapsed ? 'lg:pl-16' : 'lg:pl-64',
         )}
       >
-        {/* Header */}
-        <header className="bg-background/95 sticky top-0 z-30 flex h-16 items-center justify-between border-b px-4 backdrop-blur-md lg:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/60 bg-card/90 px-4 backdrop-blur-xl lg:px-6">
           <div className="flex items-center gap-3">
             <Button
               type="button"
@@ -311,21 +320,32 @@ export default function MainLayout() {
             </Button>
             <Breadcrumb />
           </div>
+
+          <div className="hidden items-center gap-3 lg:flex">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground size-4" />
+              <Input
+                type="text"
+                placeholder="搜索..."
+                className="w-64 pl-10 rounded-xl border-border/60 bg-muted/50 focus:bg-card"
+              />
+            </div>
+          </div>
+
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <NotificationButton />
             <UserMenu />
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 p-4 lg:p-6">
           <div className="mx-auto max-w-7xl">
             <Outlet />
           </div>
         </main>
 
-        {/* Footer */}
-        <footer className="border-t px-4 py-4 lg:px-6">
+        <footer className="border-t border-border/60 px-4 py-4 lg:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between text-xs text-muted-foreground">
             <span>&copy; 2024 Nebula Admin</span>
             <span>v1.0.0</span>

@@ -1,24 +1,9 @@
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  getFilteredRowModel,
-  flexRender,
-  type ColumnDef,
-  type SortingState,
-  type ColumnFiltersState,
-  type VisibilityState,
-} from '@tanstack/react-table';
+import { type ColumnDef } from '@tanstack/react-table';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/api';
-import {
-  DataTableColumnHeader,
-  DataTablePagination,
-  DataTableViewOptions,
-} from '@/components/data-table';
+import { DataTable, createColumnHelper } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -31,23 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Alert } from '@/components/ui/alert';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Plus, Pencil, Trash2, Users } from 'lucide-react';
 
@@ -164,9 +133,6 @@ export default function UsersPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | undefined>();
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   const handleCreate = () => {
     setEditingUser(undefined);
@@ -183,6 +149,12 @@ export default function UsersPage() {
     await deleteUserMutation.mutateAsync(user.id);
   };
 
+  const handleBatchDelete = async (selectedUsers: UserResponse[]) => {
+    for (const user of selectedUsers) {
+      await deleteUserMutation.mutateAsync(user.id);
+    }
+  };
+
   const handleFormSubmit = async (data: unknown) => {
     if (editingUser) {
       await updateUserMutation.mutateAsync({
@@ -197,43 +169,38 @@ export default function UsersPage() {
     setDialogOpen(false);
   };
 
+  const columnHelper = createColumnHelper<UserResponse>();
+
   const columns: ColumnDef<UserResponse, unknown>[] = [
-    {
-      accessorKey: 'username',
+    columnHelper.accessor('username', {
+      header: '用户名',
       size: 150,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="用户名" />,
-    },
-    {
-      accessorKey: 'email',
+      enableResizing: true,
+    }),
+    columnHelper.accessor('email', {
+      header: '邮箱',
       size: 200,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="邮箱" />,
-    },
-    {
-      accessorKey: 'name',
+      enableResizing: true,
+    }),
+    columnHelper.accessor('name', {
+      header: '显示名称',
       size: 150,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="显示名称" />,
-      cell: ({ row }) => {
-        const name = row.getValue('name');
-        return name || '-';
-      },
-    },
-    {
-      accessorKey: 'isActive',
+      enableResizing: true,
+      cell: (value) => (value as string) || '-',
+    }),
+    columnHelper.accessor('isActive', {
+      header: '状态',
       size: 100,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="状态" />,
-      cell: ({ row }) =>
-        row.getValue('isActive') ? (
-          <Badge variant="default">启用</Badge>
-        ) : (
-          <Badge variant="destructive">禁用</Badge>
-        ),
-    },
+      cell: (value) =>
+        value ? <Badge variant="default">启用</Badge> : <Badge variant="destructive">禁用</Badge>,
+    }),
     {
       id: 'actions',
       header: '操作',
       size: 120,
       enableSorting: false,
       enableHiding: false,
+      enableResizing: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
@@ -252,19 +219,6 @@ export default function UsersPage() {
     },
   ];
 
-  const table = useReactTable({
-    data: users ?? [],
-    columns,
-    state: { sorting, columnFilters, columnVisibility },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-  });
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -277,71 +231,26 @@ export default function UsersPage() {
 
       {error && <Alert variant="destructive">加载用户列表失败</Alert>}
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="搜索用户名或邮箱..."
-          value={(table.getColumn('username')?.getFilterValue() as string) ?? ''}
-          onChange={(event) => table.getColumn('username')?.setFilterValue(event.target.value)}
-          className="max-w-sm"
-        />
-        <DataTableViewOptions table={table} />
-      </div>
-
-      {/* Table */}
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-32 text-center">
-                  <Spinner className="mx-auto size-6" />
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="p-0">
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <Users />
-                      </EmptyMedia>
-                      <EmptyTitle>暂无用户数据</EmptyTitle>
-                      <EmptyDescription>
-                        还没有任何用户，点击上方按钮创建第一个用户
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-        <DataTablePagination table={table} />
-      </div>
+      <DataTable
+        data={users ?? []}
+        columns={columns}
+        isLoading={isLoading}
+        searchPlaceholder="搜索用户名或邮箱..."
+        searchColumnId="username"
+        enableRowSelection
+        enableColumnResize
+        onBatchDelete={(selectedUsers) => void handleBatchDelete(selectedUsers)}
+        batchDeleteConfirmMessage="确定要删除选中的用户吗？"
+        emptyIcon={<Users className="size-12" />}
+        emptyTitle="暂无用户数据"
+        emptyDescription="还没有任何用户，点击上方按钮创建第一个用户"
+        toolbarRightContent={
+          <Button variant="outline" size="sm" onClick={handleCreate}>
+            <Plus className="mr-1.5 size-4" />
+            新建
+          </Button>
+        }
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

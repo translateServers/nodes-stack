@@ -44,7 +44,8 @@
 
 ## 生成代码验证
 
-- 每次生成代码后必须运行 `pnpm typecheck` 和 `pnpm lint` 验证无报错
+- 类型检查（`pnpm typecheck`）和 ESLint 检查（`pnpm lint`）由专门的任务负责，日常代码生成不强制要求运行
+- 仅当用户明确要求做校验时，才运行 `pnpm typecheck` 和 `pnpm lint` 验证
 - 如果验证失败，必须修复后再输出，不允许交付带类型错误或 lint 错误的代码
 
 ## 快速模式（Quick Mode）

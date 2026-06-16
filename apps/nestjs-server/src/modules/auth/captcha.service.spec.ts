@@ -12,13 +12,17 @@ const mockRedisClient = {
 const mockRedisService = {
   client: mockRedisClient,
   ping: jest.fn().mockResolvedValue(true),
-  safeExec: jest.fn().mockImplementation(async (fn: (client: any) => Promise<any>, fallback: any) => {
-    try {
-      return await fn(mockRedisClient);
-    } catch {
-      return fallback;
-    }
-  }),
+  safeExec: jest
+    .fn()
+    .mockImplementation(
+      async <T>(fn: (client: typeof mockRedisClient) => Promise<T>, fallback: T): Promise<T> => {
+        try {
+          return await fn(mockRedisClient);
+        } catch {
+          return fallback;
+        }
+      },
+    ),
 };
 
 describe('CaptchaService', () => {

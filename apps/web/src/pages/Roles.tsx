@@ -1,25 +1,10 @@
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
-  getFilteredRowModel,
-  flexRender,
-  type ColumnDef,
-  type SortingState,
-  type ColumnFiltersState,
-  type VisibilityState,
-} from '@tanstack/react-table';
+import { type ColumnDef } from '@tanstack/react-table';
 import type { z } from 'zod';
 import { CreateRoleSchema, UpdateRoleSchema, type RoleResponse } from '@nebula/shared';
 import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from '@/api';
-import {
-  DataTableColumnHeader,
-  DataTablePagination,
-  DataTableViewOptions,
-} from '@/components/data-table';
+import { DataTable, createColumnHelper } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -31,23 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Alert } from '@/components/ui/alert';
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { Plus, Pencil, Trash2, Shield } from 'lucide-react';
 
@@ -131,9 +100,6 @@ export default function RolesPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleResponse | undefined>();
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   const handleCreate = () => {
     setEditingRole(undefined);
@@ -150,6 +116,12 @@ export default function RolesPage() {
     await deleteRoleMutation.mutateAsync(role.id);
   };
 
+  const handleBatchDelete = async (selectedRoles: RoleResponse[]) => {
+    for (const role of selectedRoles) {
+      await deleteRoleMutation.mutateAsync(role.id);
+    }
+  };
+
   const handleFormSubmit = async (data: unknown) => {
     if (editingRole) {
       await updateRoleMutation.mutateAsync({
@@ -162,38 +134,33 @@ export default function RolesPage() {
     setDialogOpen(false);
   };
 
+  const columnHelper = createColumnHelper<RoleResponse>();
+
   const columns: ColumnDef<RoleResponse, unknown>[] = [
-    {
-      accessorKey: 'name',
+    columnHelper.accessor('name', {
+      header: '角色名称',
       size: 200,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="角色名称" />,
-    },
-    {
-      accessorKey: 'description',
+      enableResizing: true,
+    }),
+    columnHelper.accessor('description', {
+      header: '描述',
       size: 300,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="描述" />,
-      cell: ({ row }) => {
-        const description = row.getValue('description');
-        return description || '-';
-      },
-    },
-    {
-      accessorKey: 'isActive',
+      enableResizing: true,
+      cell: (value) => (value as string) || '-',
+    }),
+    columnHelper.accessor('isActive', {
+      header: '状态',
       size: 100,
-      header: ({ column }) => <DataTableColumnHeader column={column} title="状态" />,
-      cell: ({ row }) =>
-        row.getValue('isActive') ? (
-          <Badge variant="default">启用</Badge>
-        ) : (
-          <Badge variant="destructive">禁用</Badge>
-        ),
-    },
+      cell: (value) =>
+        value ? <Badge variant="default">启用</Badge> : <Badge variant="destructive">禁用</Badge>,
+    }),
     {
       id: 'actions',
       header: '操作',
       size: 120,
       enableSorting: false,
       enableHiding: false,
+      enableResizing: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
@@ -212,19 +179,6 @@ export default function RolesPage() {
     },
   ];
 
-  const table = useReactTable({
-    data: roles ?? [],
-    columns,
-    state: { sorting, columnFilters, columnVisibility },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-  });
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -237,71 +191,20 @@ export default function RolesPage() {
 
       {error && <Alert variant="destructive">加载角色列表失败</Alert>}
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="搜索角色名称..."
-          value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}
-          onChange={(event) => table.getColumn('name')?.setFilterValue(event.target.value)}
-          className="max-w-sm"
-        />
-        <DataTableViewOptions table={table} />
-      </div>
-
-      {/* Table */}
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-32 text-center">
-                  <Spinner className="mx-auto size-6" />
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="p-0">
-                  <Empty>
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <Shield />
-                      </EmptyMedia>
-                      <EmptyTitle>暂无角色数据</EmptyTitle>
-                      <EmptyDescription>
-                        还没有任何角色，点击上方按钮创建第一个角色
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                </TableCell>
-              </TableRow>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-        <DataTablePagination table={table} />
-      </div>
+      <DataTable
+        data={roles ?? []}
+        columns={columns}
+        isLoading={isLoading}
+        searchPlaceholder="搜索角色名称..."
+        searchColumnId="name"
+        enableRowSelection
+        enableColumnResize
+        onBatchDelete={(selectedRoles) => void handleBatchDelete(selectedRoles)}
+        batchDeleteConfirmMessage="确定要删除选中的角色吗？"
+        emptyIcon={<Shield className="size-12" />}
+        emptyTitle="暂无角色数据"
+        emptyDescription="还没有任何角色，点击上方按钮创建第一个角色"
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
