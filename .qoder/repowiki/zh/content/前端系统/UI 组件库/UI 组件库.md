@@ -22,11 +22,17 @@
 - [avatar.tsx](file://apps/web/src/components/ui/avatar.tsx)
 - [dropdown-menu.tsx](file://apps/web/src/components/ui/dropdown-menu.tsx)
 - [spinner.tsx](file://apps/web/src/components/ui/spinner.tsx)
+- [empty.tsx](file://apps/web/src/components/ui/empty.tsx)
 - [data-table-column-header.tsx](file://apps/web/src/components/data-table/data-table-column-header.tsx)
 - [data-table-pagination.tsx](file://apps/web/src/components/data-table/data-table-pagination.tsx)
 - [data-table-view-options.tsx](file://apps/web/src/components/data-table/data-table-view-options.tsx)
 - [create-column-helper.ts](file://apps/web/src/components/data-table/create-column-helper.ts)
 - [index.ts](file://apps/web/src/components/data-table/index.ts)
+- [stat-card.tsx](file://apps/web/src/components/dashboard/stat-card.tsx)
+- [mini-chart.tsx](file://apps/web/src/components/dashboard/mini-chart.tsx)
+- [quick-action.tsx](file://apps/web/src/components/dashboard/quick-action.tsx)
+- [status-indicator.tsx](file://apps/web/src/components/dashboard/status-indicator.tsx)
+- [dashboard/index.ts](file://apps/web/src/components/dashboard/index.ts)
 - [ApiErrorSnackbar.tsx](file://apps/web/src/components/ApiErrorSnackbar.tsx)
 - [RequireAuth.tsx](file://apps/web/src/components/RequireAuth.tsx)
 - [utils.ts](file://apps/web/src/lib/utils.ts)
@@ -53,9 +59,9 @@
 
 ## 简介
 
-本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、新增组件（Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等）、**模块化数据表格组件系统**（DataTableColumnHeader、DataTablePagination、DataTableViewOptions、createColumnHelper）、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
+本文件为基于 Radix UI 与自定义样式的 UI 组件库的系统化文档，覆盖基础组件（Button、Input、Card 等）、新增组件（Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等）、**模块化数据表格组件系统**（DataTableColumnHeader、DataTablePagination、DataTableViewOptions、createColumnHelper）、**仪表板组件套件**（StatCard、MiniChart、QuickAction、StatusIndicator）、**Empty 组件系统**、可访问性支持、主题定制与样式系统、组件组合模式、事件处理机制以及响应式设计实践。文档同时提供组件使用示例与设计规范指导，帮助开发者在保持一致性的前提下进行扩展与集成。
 
-**重要更新**：表单组件系统已完成重大重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统，包括 Field、FieldGroup、FieldLabel、FieldError 等组件，以及 useNebulaForm 钩子。Login 页面已完全迁移到新的表单架构。**数据表格组件系统已完全模块化重构，旧的单体 DataTable 组件已被移除，新增了专门的数据表格组件模块**。
+**重要更新**：表单组件系统已完成重大重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统，包括 Field、FieldGroup、FieldLabel、FieldError 等组件，以及 useNebulaForm 钩子。Login 页面已完全迁移到新的表单架构。**数据表格组件系统已完全模块化重构，旧的单体 DataTable 组件已被移除，新增了专门的数据表格组件模块**。**新增仪表板组件套件提供了完整的仪表板构建能力，包括统计数据卡片、迷你图表、快速操作按钮和状态指示器**。
 
 ## 项目结构
 
@@ -65,6 +71,8 @@
 - 工具函数：统一的类名合并工具，确保变体与用户传入类名的合并逻辑稳定可靠。
 - 页面示例：Dashboard 与 Login 页面展示了组件的实际组合与交互用法。
 - 新增组件：Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件丰富了组件库的功能体系。
+- **仪表板组件套件**：StatCard（统计数据卡片）、MiniChart（迷你图表）、QuickAction（快速操作）、StatusIndicator（状态指示器）提供完整的仪表板构建能力。
+- **Empty 组件系统**：提供空状态占位符组件，支持多种空状态场景。
 - **数据表格系统**：全新的模块化数据表格组件系统，包括 DataTableColumnHeader、DataTablePagination、DataTableViewOptions 等专用组件，以及 createColumnHelper 工具函数。
 - 表单系统：全新的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。
 
@@ -85,6 +93,7 @@ DROPDOWN["components/ui/dropdown-menu.tsx"]
 FIELD["components/ui/field.tsx"]
 TABLE["components/ui/table.tsx"]
 PAGINATION["components/ui/pagination.tsx"]
+EMPTY["components/ui/empty.tsx"]
 END
 subgraph "新增组件"
 BADGE["components/ui/badge.tsx"]
@@ -97,6 +106,13 @@ SEPARATOR["components/ui/separator.tsx"]
 SHEET["components/ui/sheet.tsx"]
 SWITCH["components/ui/switch.tsx"]
 SONNER["components/ui/sonner.tsx"]
+END
+subgraph "仪表板组件套件"
+STATCARD["components/dashboard/stat-card.tsx"]
+MINICHART["components/dashboard/mini-chart.tsx"]
+QUICKACTION["components/dashboard/quick-action.tsx"]
+STATUSINDICATOR["components/dashboard/status-indicator.tsx"]
+DASHBOARDINDEX["components/dashboard/index.ts"]
 END
 subgraph "数据表格系统"
 DT_HEADER["components/data-table/data-table-column-header.tsx"]
@@ -127,6 +143,7 @@ CSS --> DROPDOWN
 CSS --> FIELD
 CSS --> TABLE
 CSS --> PAGINATION
+CSS --> EMPTY
 CSS --> BADGE
 CSS --> CHECKBOX
 CSS --> DIALOG
@@ -147,6 +164,7 @@ UTIL --> DROPDOWN
 UTIL --> FIELD
 UTIL --> TABLE
 UTIL --> PAGINATION
+UTIL --> EMPTY
 UTIL --> BADGE
 UTIL --> CHECKBOX
 UTIL --> DIALOG
@@ -157,6 +175,10 @@ UTIL --> SEPARATOR
 UTIL --> SHEET
 UTIL --> SWITCH
 UTIL --> SONNER
+DASHBOARDINDEX --> STATCARD
+DASHBOARDINDEX --> MINICHART
+DASHBOARDINDEX --> QUICKACTION
+DASHBOARDINDEX --> STATUSINDICATOR
 DT_INDEX --> DT_HEADER
 DT_INDEX --> DT_PAGINATION
 DT_INDEX --> DT_VIEW
@@ -165,6 +187,7 @@ BTN --> DASH
 INP --> DASH
 CARD --> DASH
 SPIN --> DASH
+EMPTY --> DASH
 BADGE --> DASH
 CHECKBOX --> DASH
 DIALOG --> DASH
@@ -177,6 +200,10 @@ SWITCH --> DASH
 TABLE --> DASH
 SONNER --> DASH
 PAGINATION --> DASH
+STATCARD --> DASH
+MINICHART --> DASH
+QUICKACTION --> DASH
+STATUSINDICATOR --> DASH
 ERRORSNACK --> DASH
 AUTH --> DASH
 BTN --> LOGIN
@@ -195,12 +222,18 @@ USEFORM --> LOGIN
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
+- [empty.tsx](file://apps/web/src/components/ui/empty.tsx)
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 - [Login.tsx:1-263](file://apps/web/src/pages/Login.tsx#L1-L263)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
 - [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
 - [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
+- [stat-card.tsx:1-71](file://apps/web/src/components/dashboard/stat-card.tsx#L1-L71)
+- [mini-chart.tsx:1-26](file://apps/web/src/components/dashboard/mini-chart.tsx#L1-L26)
+- [quick-action.tsx:1-30](file://apps/web/src/components/dashboard/quick-action.tsx#L1-L30)
+- [status-indicator.tsx:1-65](file://apps/web/src/components/dashboard/status-indicator.tsx#L1-L65)
+- [dashboard/index.ts:1-5](file://apps/web/src/components/dashboard/index.ts#L1-L5)
 - [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
 - [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
 - [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
@@ -254,6 +287,11 @@ USEFORM --> LOGIN
   - 设计理念：分页导航组件，支持页码跳转、上一页/下一页、总数显示等功能。
   - 关键属性：currentPage、totalPages、onPageChange、className。
   - 示例路径：[分页使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **Empty（空状态）**
+  - 设计理念：为空状态提供统一的占位符组件，支持多种空状态场景和自定义内容。
+  - 关键属性：image、title、description、action、className。
+  - 示例路径：[空状态使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
 ### 新增组件
 
@@ -313,6 +351,35 @@ USEFORM --> LOGIN
   - 关键属性：toast、position、duration、className。
   - 示例路径：[通知使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
+### 仪表板组件套件
+
+- **StatCard（统计数据卡片）**
+  - 设计理念：专为仪表板设计的统计卡片组件，支持图标、趋势标识、颜色主题和悬停动画效果。
+  - 关键属性：title（标题）、value（数值）、description（描述）、icon（图标组件）、trend（趋势值）、trendUp（趋势方向）、color（颜色主题）。
+  - 颜色主题：primary（主要）、secondary（次要）、accent（强调）、success（成功）、warning（警告）。
+  - 交互效果：悬停时的渐变背景、缩放动画和阴影增强。
+  - 示例路径：[统计数据卡片使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **MiniChart（迷你图表）**
+  - 设计理念：轻量级的迷你图表组件，用于展示简要的趋势数据，支持自定义颜色和数据范围。
+  - 关键属性：data（数据数组）、color（渐变颜色）。
+  - 数据处理：自动计算最大值、最小值和范围，实现数据归一化。
+  - 视觉效果：柱状图样式，支持悬停透明度变化。
+  - 示例路径：[迷你图表使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **QuickAction（快速操作）**
+  - 设计理念：仪表板中的快速操作按钮，提供简洁的操作入口，支持图标、标题、描述和点击回调。
+  - 关键属性：title（标题）、description（描述）、icon（图标组件）、onClick（点击回调）。
+  - 交互设计：悬停时的颜色变化、图标缩放和箭头动画。
+  - 示例路径：[快速操作使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
+- **StatusIndicator（状态指示器）**
+  - 设计理念：状态指示组件，提供四种状态（成功、警告、错误、加载中）的可视化表示。
+  - 关键属性：status（状态类型）、label（标签）、description（描述）。
+  - 状态配置：success（对勾图标、绿色主题）、warning（警告图标、琥珀色主题、脉冲动画）、error（警告图标、红色主题）、loading（点状图标、蓝色主题、脉冲动画）。
+  - 本地化文本：支持中文状态文本显示。
+  - 示例路径：[状态指示器使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+
 ### 数据表格系统
 
 - **DataTableColumnHeader（列头排序）**
@@ -353,9 +420,15 @@ USEFORM --> LOGIN
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
+- [empty.tsx](file://apps/web/src/components/ui/empty.tsx)
 - [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
 - [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [stat-card.tsx:1-71](file://apps/web/src/components/dashboard/stat-card.tsx#L1-L71)
+- [mini-chart.tsx:1-26](file://apps/web/src/components/dashboard/mini-chart.tsx#L1-L26)
+- [quick-action.tsx:1-30](file://apps/web/src/components/dashboard/quick-action.tsx#L1-L30)
+- [status-indicator.tsx:1-65](file://apps/web/src/components/dashboard/status-indicator.tsx#L1-L65)
+- [dashboard/index.ts:1-5](file://apps/web/src/components/dashboard/index.ts#L1-L5)
 - [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
 - [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
 - [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
@@ -366,19 +439,21 @@ USEFORM --> LOGIN
 
 ## 架构总览
 
-组件库整体由"样式与主题层""工具层""组件层""数据表格系统层""表单系统层""页面示例层"构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。新增的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。**全新的数据表格系统采用模块化设计，每个组件职责单一，通过组合实现复杂的数据表格功能**。
+组件库整体由"样式与主题层""工具层""组件层""仪表板组件套件层""数据表格系统层""表单系统层""页面示例层"构成，形成清晰的分层与职责边界。Radix UI 的 Slot 提供语义化与无障碍能力，class-variance-authority 提供变体系统，Tailwind CSS 与自定义 CSS 变量支撑主题与响应式。新增的 Field 组件系统替代了原有的 Form 组件，提供更灵活的表单构建能力。**全新的数据表格系统采用模块化设计，每个组件职责单一，通过组合实现复杂的数据表格功能**。**新增的仪表板组件套件提供了完整的仪表板构建能力，包括统计数据展示、趋势图表、快速操作和状态监控**。
 
 ```mermaid
 graph TB
-THEME["主题与样式<br/>index.css"] --> LAYER1["组件层<br/>基础组件<br/>button/input/card/alert/spinner/table/pagination<br/>新增组件<br/>badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>sonner<br/>表单组件<br/>field"]
+THEME["主题与样式<br/>index.css"] --> LAYER1["组件层<br/>基础组件<br/>button/input/card/alert/spinner/table/pagination<br/>新增组件<br/>badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>sonner/empty<br/>表单组件<br/>field"]
 UTIL["工具层<br/>utils/cn"] --> LAYER1
 RADIX["@radix-ui/react-slot"] --> LAYER1
 CVAVA["class-variance-authority"] --> LAYER1
+LAYER1 --> DASHBOARD["仪表板组件套件层<br/>StatCard<br/>MiniChart<br/>QuickAction<br/>StatusIndicator"]
 LAYER1 --> DATATABLE["数据表格系统层<br/>DataTableColumnHeader<br/>DataTablePagination<br/>DataTableViewOptions<br/>createColumnHelper"]
 LAYER1 --> FORM["表单系统层<br/>useNebulaForm 钩子<br/>Field 组件系统"]
 LAYER1 --> PAGES["页面示例层<br/>Dashboard/Login<br/>ApiErrorSnackbar/RequireAuth"]
-LAYER1 ---|"基础组件"| BASE["button/input/card/alert/spinner/table/pagination"]
+LAYER1 ---|"基础组件"| BASE["button/input/card/alert/spinner/table/pagination/empty"]
 LAYER1 ---|"新增组件"| NEW["badge/checkbox/dialog/label<br/>radio/select/separator/sheet/switch<br/>sonner"]
+DASHBOARD ---|"仪表板组件"| DBCOMP["stat-card.tsx<br/>mini-chart.tsx<br/>quick-action.tsx<br/>status-indicator.tsx"]
 DATATABLE ---|"数据表格组件"| DT["data-table-column-header.tsx<br/>data-table-pagination.tsx<br/>data-table-view-options.tsx<br/>create-column-helper.ts"]
 FORM ---|"表单组件"| FIELDCOMP["field.tsx<br/>Field/FieldGroup/FieldLabel<br/>FieldError 等"]
 ```
@@ -391,6 +466,12 @@ FORM ---|"表单组件"| FIELDCOMP["field.tsx<br/>Field/FieldGroup/FieldLabel<br
 - [card.tsx:1-49](file://apps/web/src/components/ui/card.tsx#L1-L49)
 - [alert.tsx:1-62](file://apps/web/src/components/ui/alert.tsx#L1-L62)
 - [spinner.tsx:1-13](file://apps/web/src/components/ui/spinner.tsx#L1-L13)
+- [empty.tsx](file://apps/web/src/components/ui/empty.tsx)
+- [stat-card.tsx:1-71](file://apps/web/src/components/dashboard/stat-card.tsx#L1-L71)
+- [mini-chart.tsx:1-26](file://apps/web/src/components/dashboard/mini-chart.tsx#L1-L26)
+- [quick-action.tsx:1-30](file://apps/web/src/components/dashboard/quick-action.tsx#L1-L30)
+- [status-indicator.tsx:1-65](file://apps/web/src/components/dashboard/status-indicator.tsx#L1-L65)
+- [dashboard/index.ts:1-5](file://apps/web/src/components/dashboard/index.ts#L1-L5)
 - [table.tsx:1-52](file://apps/web/src/components/ui/table.tsx#L1-L52)
 - [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
@@ -592,6 +673,167 @@ Table --> TableRow : "组合"
 **章节来源**
 - [pagination.tsx:1-200](file://apps/web/src/components/ui/pagination.tsx#L1-L200)
 
+### Empty 组件分析
+
+- 设计理念：为空状态提供统一的占位符组件，支持多种空状态场景和自定义内容。
+- 核心功能：
+  - 图像占位符：支持自定义图像组件
+  - 标题文本：支持自定义标题
+  - 描述文本：支持自定义描述
+  - 操作按钮：支持自定义操作按钮
+  - 响应式设计：适配不同屏幕尺寸
+- 交互设计：支持点击事件和键盘导航
+- 可访问性：提供适当的 ARIA 属性和语义化标记
+- 性能优化：纯组件设计，无状态管理开销
+
+**章节来源**
+- [empty.tsx](file://apps/web/src/components/ui/empty.tsx)
+
+### StatCard 组件分析
+
+- 设计理念：专为仪表板设计的统计卡片组件，支持图标、趋势标识、颜色主题和悬停动画效果。
+- 核心功能：
+  - 数据展示：标题、数值、描述三段式信息展示
+  - 图标支持：支持任意 Lucide 图标组件
+  - 趋势标识：可选的趋势值和方向标识
+  - 颜色主题：五种预设颜色主题
+  - 动画效果：悬停时的渐变背景和缩放动画
+- 颜色配置：primary（主要）、secondary（次要）、accent（强调）、success（成功）、warning（警告）
+- 交互设计：悬停时的阴影增强、背景渐变和图标缩放
+- 性能优化：CSS 动画优于 JavaScript 动画，无额外计算开销
+
+```mermaid
+classDiagram
+class StatCard {
++title : string
++value : string|number
++description : string
++icon : ComponentType
++trend : string
++trendUp : boolean
++color : "primary|secondary|accent|success|warning"
+}
+class ColorClasses {
++"primary" : "bg-primary/10 text-primary"
++"secondary" : "bg-secondary text-secondary-foreground"
++"accent" : "bg-accent text-accent-foreground"
++"success" : "bg-emerald-500/10 text-emerald-600"
++"warning" : "bg-amber-500/10 text-amber-600"
+}
+StatCard --> ColorClasses : "使用颜色配置"
+```
+
+**图表来源**
+- [stat-card.tsx:15-21](file://apps/web/src/components/dashboard/stat-card.tsx#L15-L21)
+
+**章节来源**
+- [stat-card.tsx:1-71](file://apps/web/src/components/dashboard/stat-card.tsx#L1-L71)
+
+### MiniChart 组件分析
+
+- 设计理念：轻量级的迷你图表组件，用于展示简要的趋势数据，支持自定义颜色和数据范围。
+- 核心功能：
+  - 数据归一化：自动计算最大值、最小值和范围
+  - 柱状图渲染：基于数据数组生成柱状图
+  - 渐变色彩：支持自定义渐变颜色方案
+  - 动态高度：根据数据值计算柱状高度
+  - 悬停效果：支持悬停时的透明度变化
+- 数据处理：`height = ((value - min) / range) * 100 + 10`
+- 性能优化：纯函数式组件，无状态管理开销
+- 可访问性：提供适当的视觉层次和对比度
+
+```mermaid
+classDiagram
+class MiniChart {
++data : number[]
++color : string
++max : number
++min : number
++range : number
+}
+MiniChart : 计算公式
+MiniChart : "height = ((value - min) / range) * 100 + 10"
+```
+
+**图表来源**
+- [mini-chart.tsx:7-9](file://apps/web/src/components/dashboard/mini-chart.tsx#L7-L9)
+
+**章节来源**
+- [mini-chart.tsx:1-26](file://apps/web/src/components/dashboard/mini-chart.tsx#L1-L26)
+
+### QuickAction 组件分析
+
+- 设计理念：仪表板中的快速操作按钮，提供简洁的操作入口，支持图标、标题、描述和点击回调。
+- 核心功能：
+  - 操作入口：提供清晰的操作目标
+  - 图标标识：支持任意图标组件
+  - 文本描述：支持标题和描述文本
+  - 点击回调：支持自定义点击处理
+  - 动画效果：悬停时的颜色变化、图标缩放和箭头动画
+- 交互设计：完整的悬停状态管理，包括颜色、尺寸和位置变化
+- 性能优化：CSS 过渡动画，无 JavaScript 计算开销
+- 可访问性：支持键盘导航和屏幕阅读器识别
+
+```mermaid
+classDiagram
+class QuickAction {
++title : string
++description : string
++icon : ComponentType
++onClick : function
+}
+class HoverEffects {
++"scale-110" : "图标缩放"
++"text-primary" : "文字颜色变化"
++"translate-x-1" : "箭头移动"
+}
+QuickAction --> HoverEffects : "悬停效果"
+```
+
+**图表来源**
+- [quick-action.tsx:17-26](file://apps/web/src/components/dashboard/quick-action.tsx#L17-L26)
+
+**章节来源**
+- [quick-action.tsx:1-30](file://apps/web/src/components/dashboard/quick-action.tsx#L1-L30)
+
+### StatusIndicator 组件分析
+
+- 设计理念：状态指示组件，提供四种状态（成功、警告、错误、加载中）的可视化表示。
+- 核心功能：
+  - 状态分类：success（成功）、warning（警告）、error（错误）、loading（加载中）
+  - 图标系统：每种状态对应特定图标和颜色方案
+  - 动画效果：警告和加载状态支持脉冲动画
+  - 本地化文本：中文状态文本显示
+  - 配置对象：集中管理状态配置
+- 状态配置：
+  - success：对勾图标、绿色主题、"正常"文本
+  - warning：警告图标、琥珀色主题、脉冲动画、"警告"文本
+  - error：警告图标、红色主题、"异常"文本
+  - loading：点状图标、蓝色主题、脉冲动画、"加载中"文本
+- 性能优化：静态配置对象，无运行时计算开销
+
+```mermaid
+classDiagram
+class StatusIndicator {
++status : "success|warning|error|loading"
++label : string
++description : string
+}
+class Config {
++success : Object
++warning : Object
++error : Object
++loading : Object
+}
+StatusIndicator --> Config : "使用配置"
+```
+
+**图表来源**
+- [status-indicator.tsx:9-42](file://apps/web/src/components/dashboard/status-indicator.tsx#L9-L42)
+
+**章节来源**
+- [status-indicator.tsx:1-65](file://apps/web/src/components/dashboard/status-indicator.tsx#L1-L65)
+
 ### Badge 组件分析
 
 - 设计模式：小型装饰性元素，用于标记状态、标签或计数，支持多种颜色和尺寸变体。
@@ -609,7 +851,7 @@ Table --> TableRow : "组合"
 - 数据结构与复杂度：状态管理为 O(1)；类名合并为 O(n)。
 - 依赖链：依赖 utils.cn、Radix UI Checkbox；样式依赖主题变量与 Tailwind 原子类。
 - 错误处理：通过 aria-checked 和 disabled 属性表达状态；支持键盘操作。
-- 性能影响：状态切换为纯前端操作，无额外开销。
+- 性承影响：状态切换为纯前端操作，无额外开销。
 
 **章节来源**
 - [checkbox.tsx](file://apps/web/src/components/ui/checkbox.tsx)
@@ -956,6 +1198,7 @@ P-->>U : 跳转首页或显示错误提示
 - 样式与主题：Tailwind CSS、自定义 CSS 变量、动画库与字体资源。
 - 组件系统：class-variance-authority（变体系统）、Radix UI Slot（语义化与无障碍）、Lucide React（图标）。
 - 工具函数：clsx 与 tailwind-merge（类名合并与冲突修复）。
+- **仪表板组件套件**：StatCard 依赖 Card、Badge 组件；MiniChart 依赖 Lucide 图标；QuickAction 依赖 Lucide 图标；StatusIndicator 依赖 Lucide 图标。
 - **数据表格系统**：TanStack Table（数据表格核心库）、@tanstack/react-table（React 绑定）、@radix-ui/react-dropdown-menu（下拉菜单）。
 - 新增依赖：Zod（表单验证）、React Hook Form（表单管理）、@radix-ui/react-*（新增组件的基础 UI 库）。
 - 表单系统：useNebulaForm 钩子基于 React Hook Form 和 Zod，提供类型安全的表单管理。
@@ -982,6 +1225,10 @@ RHF --> USEFORM
 USEFORM --> FIELD["field.tsx 表单组件"]
 TSTABLE --> DT["data-table 组件系统"]
 TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
+LUCIDE --> STATCARD["stat-card.tsx 图标"]
+LUCIDE --> MINICHART["mini-chart.tsx 图标"]
+LUCIDE --> QUICKACTION["quick-action.tsx 图标"]
+LUCIDE --> STATUSINDICATOR["status-indicator.tsx 图标"]
 ```
 
 **图表来源**
@@ -991,6 +1238,10 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
 - [utils.ts:1-7](file://apps/web/src/lib/utils.ts#L1-L7)
 - [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [stat-card.tsx:1-71](file://apps/web/src/components/dashboard/stat-card.tsx#L1-L71)
+- [mini-chart.tsx:1-26](file://apps/web/src/components/dashboard/mini-chart.tsx#L1-L26)
+- [quick-action.tsx:1-30](file://apps/web/src/components/dashboard/quick-action.tsx#L1-L30)
+- [status-indicator.tsx:1-65](file://apps/web/src/components/dashboard/status-indicator.tsx#L1-L65)
 - [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
 - [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
 - [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
@@ -1004,8 +1255,9 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
 
 - 类名合并：通过 utils.cn 合并多个类名，避免重复与冲突，减少样式抖动。
 - 变体系统：在组件外部预计算变体样式，降低渲染时的分支判断成本。
-- 渲染优化：Button 支持 asChild，避免不必要的 DOM 包裹；Input 与 Spinner 为纯样式组件，渲染成本极低。
+- 渲染优化：Button 支持 asChild，避免不必要的 DOM 包裹；Input、Spinner、Empty 为纯样式组件，渲染成本极低。
 - 主题变量：CSS 变量与 Tailwind 原子类减少重复样式定义，提高构建与运行效率。
+- **仪表板组件优化**：StatCard 使用 CSS 渐变和过渡动画，性能优于 JavaScript 动画；MiniChart 通过数学计算实现数据归一化，无额外内存开销；QuickAction 和 StatusIndicator 使用纯 CSS 动画，无状态管理成本。
 - **数据表格优化**：采用模块化设计，每个组件职责单一；支持虚拟滚动和懒加载；列头排序为纯前端操作；分页器无额外开销。
 - 新增组件优化：Dialog、Sheet、Select 等组件采用虚拟滚动和懒加载技术，优化大数据量场景。
 - 表单性能：useNebulaForm 钩子提供高效的表单状态管理，支持防抖和节流，减少频繁验证带来的性能开销。
@@ -1029,6 +1281,13 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
 - 变体样式未按预期
   - 确认 variant 与 size 参数是否在组件支持范围内；检查 data-slot 与 data-variant/data-size 是否被正确传递。
   - 参考路径：[按钮变体系统:7-42](file://apps/web/src/components/ui/button.tsx#L7-L42)
+
+- **仪表板组件问题**
+  - StatCard：确认 color 参数在支持范围内；检查图标组件是否正确导入；验证趋势值格式。
+  - MiniChart：确认 data 数组不为空且包含有效数字；检查颜色配置格式。
+  - QuickAction：确认 onClick 回调函数正确绑定；验证图标组件是否支持 className 属性。
+  - StatusIndicator：确认 status 参数为有效枚举值；检查配置对象是否正确加载。
+  - 参考路径：[StatCard:15-21](file://apps/web/src/components/dashboard/stat-card.tsx#L15-L21)、[MiniChart:7-9](file://apps/web/src/components/dashboard/mini-chart.tsx#L7-L9)、[QuickAction:17-26](file://apps/web/src/components/dashboard/quick-action.tsx#L17-L26)、[StatusIndicator:44-45](file://apps/web/src/components/dashboard/status-indicator.tsx#L44-L45)
 
 - **数据表格组件问题**
   - 确认 DataTableColumnHeader 的 column 参数正确绑定；检查排序状态是否同步更新。
@@ -1061,6 +1320,10 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
 - [Dashboard.tsx:1-205](file://apps/web/src/pages/Dashboard.tsx#L1-L205)
 - [use-nebula-form.ts:1-31](file://apps/web/src/hooks/use-nebula-form.ts#L1-L31)
 - [field.tsx:1-223](file://apps/web/src/components/ui/field.tsx#L1-L223)
+- [stat-card.tsx:1-71](file://apps/web/src/components/dashboard/stat-card.tsx#L1-L71)
+- [mini-chart.tsx:1-26](file://apps/web/src/components/dashboard/mini-chart.tsx#L1-L26)
+- [quick-action.tsx:1-30](file://apps/web/src/components/dashboard/quick-action.tsx#L1-L30)
+- [status-indicator.tsx:1-65](file://apps/web/src/components/dashboard/status-indicator.tsx#L1-L65)
 - [data-table-column-header.tsx:1-200](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L200)
 - [data-table-pagination.tsx:1-200](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L200)
 - [data-table-view-options.tsx:1-200](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L200)
@@ -1068,13 +1331,15 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
 
 ## 结论
 
-该 UI 组件库以 Radix UI 与 Tailwind CSS 为基础，结合 class-variance-authority 实现了高内聚、低耦合的组件体系。通过统一的工具函数与主题变量，实现了良好的可访问性、可维护性与可扩展性。新增的 Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner 等组件进一步完善了组件库的功能体系，满足了更复杂的业务场景需求。
+该 UI 组件库以 Radix UI 与 Tailwind CSS 为基础，结合 class-variance-authority 实现了高内聚、低耦合的组件体系。通过统一的工具函数与主题变量，实现了良好的可访问性、可维护性与可扩展性。新增的 Badge、Checkbox、Dialog、Field、Label、RadioGroup、Select、Separator、Sheet、Switch、Table、Sonner、Empty 等组件进一步完善了组件库的功能体系，满足了更复杂的业务场景需求。
 
 **重大更新**：表单组件系统已完成全面重构，原有的 Form.tsx 已被移除，替换为全新的 Field 组件系统。新的系统提供了更灵活的布局支持、更好的响应式设计和更强的类型安全性。useNebulaForm 钩子集成了 Zod 验证器，提供自动类型推导和完整的表单状态管理。Login 页面已完全迁移到新的表单架构，展示了新系统的强大功能和易用性。
 
 **数据表格系统重大重构**：旧的单体 DataTable 组件已被完全移除，新增了模块化的数据表格组件系统。新的系统包括 DataTableColumnHeader、DataTablePagination、DataTableViewOptions 等专用组件，以及 createColumnHelper 工具函数。每个组件职责单一，通过组合实现复杂的数据表格功能，提供了更好的可维护性和扩展性。
 
-页面示例展示了组件在真实场景中的组合与交互，特别是 Login 页面中表单系统的完整实现，为后续扩展提供了优秀的参考范式。
+**新增仪表板组件套件**：本次更新引入了完整的仪表板组件套件，包括 StatCard（统计数据卡片）、MiniChart（迷你图表）、QuickAction（快速操作）和 StatusIndicator（状态指示器）。这些组件提供了专业的仪表板构建能力，支持数据可视化、状态监控和快速操作入口。StatCard 具备丰富的颜色主题和动画效果；MiniChart 提供轻量级的数据趋势展示；QuickAction 支持便捷的操作入口；StatusIndicator 提供四种状态的可视化表示。
+
+页面示例展示了组件在真实场景中的组合与交互，特别是 Login 页面中表单系统的完整实现，以及 Dashboard 页面中仪表板组件的综合应用，为后续扩展提供了优秀的参考范式。
 
 ## 附录
 
@@ -1089,6 +1354,12 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
   - [对话框使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
   - [标签使用示例:152](file://apps/web/src/pages/Login.tsx#L152)
   - [标签使用示例:171](file://apps/web/src/pages/Login.tsx#L171)
+
+- **仪表板组件套件使用示例路径**
+  - [StatCard 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [MiniChart 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [QuickAction 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
+  - [StatusIndicator 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
 
 - **数据表格系统使用示例路径**
   - [DataTableColumnHeader 使用示例:1-200](file://apps/web/src/pages/Dashboard.tsx#L1-L200)
@@ -1112,5 +1383,7 @@ TSDROPDOWN --> DTVIEW["DataTableViewOptions"]
   - 表单组件需提供清晰的错误提示和验证反馈，使用 FieldError 组件统一处理。
   - **数据表格组件需遵循模块化设计原则，每个组件职责单一；列头排序、分页、视图选项等功能分离，便于维护和扩展。**
   - **大表格场景优先考虑虚拟滚动和懒加载优化，合理使用 DataTableColumnHeader 的排序功能。**
+  - **仪表板组件套件应统一颜色主题和动画风格，确保视觉一致性。StatCard 的颜色选择应与品牌色彩协调，MiniChart 的数据范围应合理设置，QuickAction 的操作入口应清晰明确，StatusIndicator 的状态切换应及时准确。**
+  - **新增 Empty 组件应提供合适的占位符内容，避免空状态造成用户体验下降。**
   - 新的 Field 组件系统提供了更好的响应式支持，建议充分利用其布局能力。
   - useNebulaForm 钩子提供了完整的类型安全保障，建议在所有表单中使用。

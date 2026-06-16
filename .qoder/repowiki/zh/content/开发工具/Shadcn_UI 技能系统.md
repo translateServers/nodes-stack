@@ -11,6 +11,14 @@
 - [apps/web/src/components/data-table/data-table-column-header.tsx](file://apps/web/src/components/data-table/data-table-column-header.tsx)
 - [apps/web/src/components/data-table/data-table-pagination.tsx](file://apps/web/src/components/data-table/data-table-pagination.tsx)
 - [apps/web/src/components/data-table/data-table-view-options.tsx](file://apps/web/src/components/data-table/data-table-view-options.tsx)
+- [apps/web/src/components/data-table/data-table.tsx](file://apps/web/src/components/data-table/data-table.tsx)
+- [apps/web/src/components/data-table/create-column-helper.ts](file://apps/web/src/components/data-table/create-column-helper.ts)
+- [apps/web/src/components/data-table/data-table-toolbar.tsx](file://apps/web/src/components/data-table/data-table-toolbar.tsx)
+- [apps/web/src/components/data-table/data-table-checkbox.tsx](file://apps/web/src/components/data-table/data-table-checkbox.tsx)
+- [apps/web/src/components/data-table/data-table-resizer.tsx](file://apps/web/src/components/data-table/data-table-resizer.tsx)
+- [apps/web/src/components/data-table/use-column-resize.ts](file://apps/web/src/components/data-table/use-column-resize.ts)
+- [apps/web/src/components/data-table/use-row-selection.ts](file://apps/web/src/components/data-table/use-row-selection.ts)
+- [apps/web/src/components/data-table/index.ts](file://apps/web/src/components/data-table/index.ts)
 - [apps/web/src/hooks/use-nebula-form.ts](file://apps/web/src/hooks/use-nebula-form.ts)
 - [apps/web/src/store/auth.ts](file://apps/web/src/store/auth.ts)
 - [apps/web/src/api/modules/auth/api.ts](file://apps/web/src/api/modules/auth/api.ts)
@@ -32,11 +40,11 @@
 
 ## 更新摘要
 **所做更改**
-- 新增数据表格组件模块化架构文档
-- 更新分页组件系统从 DataTablePagination 到新的 Pagination 组件
-- 新增数据表格专用组件的详细说明
-- 更新架构概览以反映模块化设计
-- 增强数据表格组件系统的依赖关系分析
+- 新增数据表格系统模块化架构文档
+- 更新 createColumnHelper 工具函数的详细说明
+- 新增 DataTableToolbar、DataTableCheckbox、DataTableResizer 等专用组件说明
+- 更新数据表格组件系统的依赖关系分析
+- 增强数据表格组件的职责分离和可维护性说明
 
 ## 目录
 1. [简介](#简介)
@@ -60,7 +68,7 @@
 - 实现了完整的 CRUD 操作和数据验证
 - 提供了丰富的 UI 组件和交互体验
 - **新增**：完整的菜单权限管理系统和表单验证框架
-- **新增**：模块化的数据表格组件架构和新的分页组件系统
+- **新增**：模块化的数据表格组件架构和 createColumnHelper 工具函数
 
 ## 项目结构
 
@@ -124,12 +132,15 @@ B -.-> C
 - **useNebulaForm**: 新增的自定义表单钩子，提供统一的表单处理模式和验证系统
 
 #### 数据表格组件系统
-**更新** 数据表格组件已重构为模块化架构，包含多个专用组件：
+**更新** 数据表格组件已重构为模块化架构，包含多个专用组件和工具函数：
 
-- **DataTableColumnHeader**: 列标题组件，支持排序和列操作
-- **DataTablePagination**: 分页组件，支持服务器端和客户端分页
-- **DataTableViewOptions**: 视图选项组件，支持列可见性和显示设置
 - **DataTable**: 主数据表格组件，集成所有专用组件
+- **DataTableToolbar**: 工具栏组件，支持搜索、批量操作和视图设置
+- **DataTableCheckbox**: 复选框组件，支持表头全选和行选择
+- **DataTableResizer**: 列宽调整组件，提供拖拽调整功能
+- **createColumnHelper**: 工具函数，提供类型安全的列定义创建
+- **useColumnResize**: 自定义 Hook，封装列宽调整状态管理
+- **useRowSelection**: 自定义 Hook，封装行选择状态管理
 
 **章节来源**
 - [apps/web/src/components/ui/button.tsx:1-68](file://apps/web/src/components/ui/button.tsx#L1-L68)
@@ -138,9 +149,13 @@ B -.-> C
 - [apps/web/src/components/ui/table.tsx:1-90](file://apps/web/src/components/ui/table.tsx#L1-L90)
 - [apps/web/src/components/ui/field.tsx:1-120](file://apps/web/src/components/ui/field.tsx#L1-L120)
 - [apps/web/src/components/ui/pagination.tsx:1-150](file://apps/web/src/components/ui/pagination.tsx#L1-L150)
-- [apps/web/src/components/data-table/data-table-column-header.tsx:1-120](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L120)
-- [apps/web/src/components/data-table/data-table-pagination.tsx:1-180](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L180)
-- [apps/web/src/components/data-table/data-table-view-options.tsx:1-140](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L140)
+- [apps/web/src/components/data-table/data-table.tsx:1-217](file://apps/web/src/components/data-table/data-table.tsx#L1-L217)
+- [apps/web/src/components/data-table/data-table-toolbar.tsx:1-93](file://apps/web/src/components/data-table/data-table-toolbar.tsx#L1-L93)
+- [apps/web/src/components/data-table/data-table-checkbox.tsx:1-38](file://apps/web/src/components/data-table/data-table-checkbox.tsx#L1-L38)
+- [apps/web/src/components/data-table/data-table-resizer.tsx:1-29](file://apps/web/src/components/data-table/data-table-resizer.tsx#L1-L29)
+- [apps/web/src/components/data-table/create-column-helper.ts:1-105](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L105)
+- [apps/web/src/components/data-table/use-column-resize.ts:1-41](file://apps/web/src/components/data-table/use-column-resize.ts#L1-L41)
+- [apps/web/src/components/data-table/use-row-selection.ts:1-41](file://apps/web/src/components/data-table/use-row-selection.ts#L1-L41)
 - [apps/web/src/hooks/use-nebula-form.ts:1-200](file://apps/web/src/hooks/use-nebula-form.ts#L1-L200)
 
 ### 状态管理
@@ -360,92 +375,173 @@ F --> K[配置菜单]
 ```mermaid
 graph TB
 subgraph "数据表格模块化架构"
-A[DataTable 主组件] --> B[DataTableColumnHeader 列头]
+A[DataTable 主组件] --> B[DataTableToolbar 工具栏]
 A --> C[DataTablePagination 分页]
 A --> D[DataTableViewOptions 视图选项]
-A --> E[React Table 核心]
+A --> E[DataTableCheckbox 复选框]
+A --> F[DataTableResizer 列宽调整]
+A --> G[React Table 核心]
+end
+subgraph "工具函数和 Hook"
+H[createColumnHelper 列定义工具]
+I[useColumnResize 列宽管理]
+J[useRowSelection 行选择管理]
 end
 subgraph "专用组件"
-B --> F[排序控制]
-B --> G[列操作菜单]
-C --> H[页面导航]
-C --> I[页面大小选择]
-D --> J[列可见性控制]
-D --> K[显示设置]
+B --> K[搜索功能]
+B --> L[批量操作]
+B --> M[视图设置]
+E --> N[表头全选]
+E --> O[行选择]
+F --> P[拖拽调整]
 end
 ```
 
 **图表来源**
-- [apps/web/src/components/data-table/data-table-column-header.tsx:1-120](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L120)
-- [apps/web/src/components/data-table/data-table-pagination.tsx:1-180](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L180)
-- [apps/web/src/components/data-table/data-table-view-options.tsx:1-140](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L140)
+- [apps/web/src/components/data-table/data-table.tsx:1-217](file://apps/web/src/components/data-table/data-table.tsx#L1-L217)
+- [apps/web/src/components/data-table/data-table-toolbar.tsx:1-93](file://apps/web/src/components/data-table/data-table-toolbar.tsx#L1-L93)
+- [apps/web/src/components/data-table/data-table-checkbox.tsx:1-38](file://apps/web/src/components/data-table/data-table-checkbox.tsx#L1-L38)
+- [apps/web/src/components/data-table/data-table-resizer.tsx:1-29](file://apps/web/src/components/data-table/data-table-resizer.tsx#L1-L29)
+- [apps/web/src/components/data-table/create-column-helper.ts:1-105](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L105)
+- [apps/web/src/components/data-table/use-column-resize.ts:1-41](file://apps/web/src/components/data-table/use-column-resize.ts#L1-L41)
+- [apps/web/src/components/data-table/use-row-selection.ts:1-41](file://apps/web/src/components/data-table/use-row-selection.ts#L1-L41)
 
-#### DataTableColumnHeader 组件
+#### DataTable 组件
 
-列标题组件支持排序功能和列操作菜单：
+主数据表格组件整合了所有专用组件，提供完整的数据展示功能：
 
 ```mermaid
 flowchart TD
-Start([列标题渲染]) --> CheckSort{"支持排序?"}
-CheckSort --> |是| SortIcon["显示排序图标"]
-CheckSort --> |否| StaticHeader["静态标题"]
-SortIcon --> CheckDirection{"当前排序方向"}
-CheckDirection --> |升序| Ascending["高亮升序状态"]
-CheckDirection --> |降序| Descending["高亮降序状态"]
-CheckDirection --> |无| Default["默认状态"]
-Ascending --> ClickHandler["绑定点击事件"]
-Descending --> ClickHandler
-Default --> ClickHandler
-ClickHandler --> SortAction["触发排序回调"]
+Start([DataTable 渲染]) --> StateInit["初始化状态"]
+StateInit --> SelectionCheck{"启用行选择?"}
+SelectionCheck --> |是| AddSelectionCol["添加选择列"]
+SelectionCheck --> |否| SkipSelection["跳过选择列"]
+AddSelectionCol --> TableSetup["配置 React Table"]
+SkipSelection --> TableSetup
+TableSetup --> ToolbarRender["渲染工具栏"]
+TableSetup --> TableRender["渲染表格主体"]
+TableSetup --> PaginationRender["渲染分页组件"]
+ToolbarRender --> RenderComplete["渲染完成"]
+TableRender --> RenderComplete
+PaginationRender --> RenderComplete
 ```
 
 **图表来源**
-- [apps/web/src/components/data-table/data-table-column-header.tsx:25-80](file://apps/web/src/components/data-table/data-table-column-header.tsx#L25-L80)
+- [apps/web/src/components/data-table/data-table.tsx:69-217](file://apps/web/src/components/data-table/data-table.tsx#L69-L217)
 
-#### DataTablePagination 组件
+#### DataTableToolbar 组件
 
-**更新** 分页组件已重构为新的 Pagination 组件系统，支持更灵活的分页控制：
-
-```mermaid
-stateDiagram-v2
-[*] --> 初始化
-初始化 --> 显示页面信息 : 设置总页数
-显示页面信息 --> 用户交互 : 监听分页事件
-用户交互 --> 切换页面 : 点击页码
-用户交互 --> 切换页面 : 上一页/下一页
-用户交互 --> 更改页面大小 : 选择页面大小
-切换页面 --> 更新状态 : onPageChange
-更改页面大小 --> 更新状态 : onPageSizeChange
-更新状态 --> 重新渲染 : 重新计算分页
-重新渲染 --> 显示页面信息
-```
-
-**图表来源**
-- [apps/web/src/components/data-table/data-table-pagination.tsx:15-120](file://apps/web/src/components/data-table/data-table-pagination.tsx#L15-L120)
-
-#### DataTableViewOptions 组件
-
-视图选项组件提供列可见性和显示设置功能：
+工具栏组件提供搜索、批量操作和视图设置功能：
 
 ```mermaid
 flowchart LR
-Start([渲染视图选项]) --> MenuTrigger["显示下拉菜单"]
-MenuTrigger --> ColumnVisibility["列可见性控制"]
-MenuTrigger --> DisplaySettings["显示设置"]
-ColumnVisibility --> ToggleColumn["切换列显示"]
-DisplaySettings --> PageSize["页面大小设置"]
-ToggleColumn --> UpdateTable["更新表格配置"]
-PageSize --> UpdateTable
-UpdateTable --> ReRender["重新渲染表格"]
+Start([工具栏渲染]) --> LeftSection["左侧区域"]
+Start --> RightSection["右侧区域"]
+LeftSection --> SearchBox["搜索框"]
+LeftSection --> BatchOps["批量操作"]
+BatchOps --> SelectedCount["显示选中数量"]
+BatchOps --> DeleteBtn["删除按钮"]
+BatchOps --> CancelBtn["取消选择"]
+RightSection --> ViewOptions["视图选项"]
+RightSection --> CustomContent["自定义内容"]
 ```
 
 **图表来源**
-- [apps/web/src/components/data-table/data-table-view-options.tsx:20-100](file://apps/web/src/components/data-table/data-table-view-options.tsx#L20-L100)
+- [apps/web/src/components/data-table/data-table-toolbar.tsx:29-93](file://apps/web/src/components/data-table/data-table-toolbar.tsx#L29-L93)
+
+#### DataTableCheckbox 组件
+
+复选框组件支持表头全选和行选择两种模式：
+
+```mermaid
+stateDiagram-v2
+[*] --> 渲染
+渲染 --> 表头模式 : 传入 table 参数
+渲染 --> 行模式 : 传入 row 参数
+表头模式 --> 全选状态 : 获取全选状态
+表头模式 --> 事件绑定 : 绑定全选事件
+行模式 --> 行选中状态 : 获取行选中状态
+行模式 --> 行事件绑定 : 绑定行选择事件
+全选状态 --> 更新 : 用户交互
+行选中状态 --> 更新 : 用户交互
+更新 --> [*]
+```
+
+**图表来源**
+- [apps/web/src/components/data-table/data-table-checkbox.tsx:13-38](file://apps/web/src/components/data-table/data-table-checkbox.tsx#L13-L38)
+
+#### DataTableResizer 组件
+
+列宽调整组件提供拖拽调整功能：
+
+```mermaid
+flowchart TD
+Start([列宽调整渲染]) --> CheckResize{"允许调整?"}
+CheckResize --> |是| RenderHandle["渲染调整手柄"]
+CheckResize --> |否| NoHandle["不渲染"]
+RenderHandle --> DragEvent["绑定拖拽事件"]
+DragEvent --> DoubleClick["双击重置"]
+DoubleClick --> MouseDown["鼠标按下"]
+MouseDown --> TouchStart["触摸开始"]
+MouseUp["鼠标抬起"] --> UpdateWidth["更新列宽"]
+TouchEnd["触摸结束"] --> UpdateWidth
+UpdateWidth --> RenderComplete["渲染完成"]
+```
+
+**图表来源**
+- [apps/web/src/components/data-table/data-table-resizer.tsx:11-29](file://apps/web/src/components/data-table/data-table-resizer.tsx#L11-L29)
+
+#### createColumnHelper 工具函数
+
+提供类型安全的列定义创建功能：
+
+```mermaid
+flowchart TD
+Start([createColumnHelper 调用]) --> ReturnObj["返回工具对象"]
+ReturnObj --> AccessorMethod["accessor 方法"]
+ReturnObj --> DisplayMethod["display 方法"]
+AccessorMethod --> ConfigValidation["验证配置"]
+ConfigValidation --> CreateColumn["创建数据访问列"]
+DisplayMethod --> DisplayConfig["验证显示配置"]
+DisplayConfig --> CreateDisplay["创建显示列"]
+CreateColumn --> ColumnDef["返回 ColumnDef"]
+CreateDisplay --> ColumnDef
+ColumnDef --> TypeSafe["类型安全"]
+```
+
+**图表来源**
+- [apps/web/src/components/data-table/create-column-helper.ts:61-105](file://apps/web/src/components/data-table/create-column-helper.ts#L61-L105)
+
+#### 自定义 Hook 系统
+
+**更新** 新增 useColumnResize 和 useRowSelection 自定义 Hook：
+
+```mermaid
+flowchart TD
+HookStart([Hook 调用]) --> ColumnResize["useColumnResize"]
+HookStart --> RowSelection["useRowSelection"]
+ColumnResize --> StateInit["初始化列宽状态"]
+StateInit --> SetHandler["设置列宽处理器"]
+SetHandler --> ResetHandler["设置重置处理器"]
+ResetHandler --> ReturnObj["返回状态和处理器"]
+RowSelection --> RowStateInit["初始化行选择状态"]
+RowStateInit --> RowSetHandler["设置行选择处理器"]
+RowSetHandler --> RowResetHandler["设置行选择重置处理器"]
+RowResetHandler --> RowReturnObj["返回行选择状态和处理器"]
+```
+
+**图表来源**
+- [apps/web/src/components/data-table/use-column-resize.ts:18-41](file://apps/web/src/components/data-table/use-column-resize.ts#L18-L41)
+- [apps/web/src/components/data-table/use-row-selection.ts:18-41](file://apps/web/src/components/data-table/use-row-selection.ts#L18-L41)
 
 **章节来源**
-- [apps/web/src/components/data-table/data-table-column-header.tsx:1-120](file://apps/web/src/components/data-table/data-table-column-header.tsx#L1-L120)
-- [apps/web/src/components/data-table/data-table-pagination.tsx:1-180](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L180)
-- [apps/web/src/components/data-table/data-table-view-options.tsx:1-140](file://apps/web/src/components/data-table/data-table-view-options.tsx#L1-L140)
+- [apps/web/src/components/data-table/data-table.tsx:1-217](file://apps/web/src/components/data-table/data-table.tsx#L1-L217)
+- [apps/web/src/components/data-table/data-table-toolbar.tsx:1-93](file://apps/web/src/components/data-table/data-table-toolbar.tsx#L1-L93)
+- [apps/web/src/components/data-table/data-table-checkbox.tsx:1-38](file://apps/web/src/components/data-table/data-table-checkbox.tsx#L1-L38)
+- [apps/web/src/components/data-table/data-table-resizer.tsx:1-29](file://apps/web/src/components/data-table/data-table-resizer.tsx#L1-L29)
+- [apps/web/src/components/data-table/create-column-helper.ts:1-105](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L105)
+- [apps/web/src/components/data-table/use-column-resize.ts:1-41](file://apps/web/src/components/data-table/use-column-resize.ts#L1-L41)
+- [apps/web/src/components/data-table/use-row-selection.ts:1-41](file://apps/web/src/components/data-table/use-row-selection.ts#L1-L41)
 
 ### 页面组件
 
@@ -466,14 +562,14 @@ Menus 页面实现了完整的菜单权限管理功能，支持菜单的层级�
 Login 页面已完全迁移到新的表单架构，使用 useNebulaForm 钩子提供更好的表单处理模式和验证系统。
 
 **章节来源**
-- [apps/web/src/pages/Users.tsx:1-241](file://apps/web/src/pages/Users.tsx#L1-L241)
-- [apps/web/src/pages/Roles.tsx:1-202](file://apps/web/src/pages/Roles.tsx#L1-L202)
+- [apps/web/src/pages/Users.tsx:1-274](file://apps/web/src/pages/Users.tsx#L1-L274)
+- [apps/web/src/pages/Roles.tsx:1-225](file://apps/web/src/pages/Roles.tsx#L1-L225)
 - [apps/web/src/pages/Menus.tsx:255-441](file://apps/web/src/pages/Menus.tsx#L255-L441)
 - [apps/web/src/pages/Login.tsx:1-300](file://apps/web/src/pages/Login.tsx#L1-L300)
 
 ## 依赖关系分析
 
-**更新** 依赖关系已更新以反映模块化架构和新的分页组件系统：
+**更新** 依赖关系已更新以反映模块化架构和新的数据表格组件系统：
 
 ```mermaid
 graph TB
@@ -487,10 +583,13 @@ F --> H[tw-merge]
 I[useNebulaForm] --> D
 J[Field 组件] --> K[react-hook-form]
 L[模块化数据表格] --> B
-L --> M[DataTableColumnHeader]
-L --> N[DataTablePagination]
-L --> O[DataTableViewOptions]
-P[Pagination 组件] --> B
+L --> M[DataTableToolbar]
+L --> N[DataTableCheckbox]
+L --> O[DataTableResizer]
+L --> P[createColumnHelper]
+L --> Q[useColumnResize]
+L --> R[useRowSelection]
+S[Pagination 组件] --> B
 end
 subgraph "后端依赖"
 Q[@nestjs/common] --> R[@nestjs/jwt]
@@ -513,7 +612,10 @@ Q --> Z
 - [apps/web/src/hooks/use-nebula-form.ts:1-200](file://apps/web/src/hooks/use-nebula-form.ts#L1-L200)
 - [apps/web/src/components/ui/field.tsx:1-120](file://apps/web/src/components/ui/field.tsx#L1-L120)
 - [apps/web/src/components/ui/pagination.tsx:1-150](file://apps/web/src/components/ui/pagination.tsx#L1-L150)
-- [apps/web/src/components/data-table/data-table-pagination.tsx:1-180](file://apps/web/src/components/data-table/data-table-pagination.tsx#L1-L180)
+- [apps/web/src/components/data-table/data-table.tsx:1-217](file://apps/web/src/components/data-table/data-table.tsx#L1-L217)
+- [apps/web/src/components/data-table/create-column-helper.ts:1-105](file://apps/web/src/components/data-table/create-column-helper.ts#L1-L105)
+- [apps/web/src/components/data-table/use-column-resize.ts:1-41](file://apps/web/src/components/data-table/use-column-resize.ts#L1-L41)
+- [apps/web/src/components/data-table/use-row-selection.ts:1-41](file://apps/web/src/components/data-table/use-row-selection.ts#L1-L41)
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:1-151](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L1-L151)
 - [apps/nestjs-server/src/modules/menu/menu.service.ts:1-121](file://apps/nestjs-server/src/modules/menu/menu.service.ts#L1-L121)
 - [packages/shared/src/index.ts:1-15](file://packages/shared/src/index.ts#L1-L15)
@@ -535,6 +637,9 @@ Q --> Z
 5. **表单优化**: useNebulaForm 钩子提供高效的表单状态管理和验证
 6. **模块化优化**: 数据表格组件模块化架构减少不必要的重渲染
 7. **分页优化**: 新的 Pagination 组件系统提供更高效的分页控制
+8. **虚拟滚动**: React Table 支持大数据集的虚拟滚动优化
+9. **状态隔离**: 自定义 Hook 将状态管理逻辑隔离，提高组件复用性
+10. **类型安全**: createColumnHelper 提供编译时类型检查，减少运行时错误
 
 ### 后端性能优化
 
@@ -572,19 +677,34 @@ Q --> Z
 **更新** 新增数据表格组件相关的故障排除：
 
 1. **数据表格渲染异常**
-   - 检查 DataTableColumnHeader 组件的列定义
-   - 验证 DataTablePagination 组件的分页状态
-   - 确认 DataTableViewOptions 组件的配置
+   - 检查 DataTable 组件的 props 传递
+   - 验证 createColumnHelper 的列定义
+   - 确认 React Table 版本兼容性
 
-2. **分页功能失效**
-   - 检查 Pagination 组件的事件处理器
-   - 验证分页参数传递是否正确
-   - 确认服务器端分页接口响应
+2. **工具栏功能失效**
+   - 检查 DataTableToolbar 组件的事件处理器
+   - 验证搜索功能的列 ID 配置
+   - 确认批量操作的回调函数
 
-3. **模块化组件导入错误**
-   - 检查数据表格组件的导入路径
-   - 验证组件导出接口是否完整
-   - 确认组件依赖关系正确
+3. **复选框选择异常**
+   - 检查 DataTableCheckbox 组件的状态绑定
+   - 验证行选择的启用配置
+   - 确认选择状态的同步
+
+4. **列宽调整失效**
+   - 检查 DataTableResizer 组件的事件绑定
+   - 验证列宽调整的启用配置
+   - 确认 CSS 样式覆盖
+
+5. **自定义 Hook 问题**
+   - 检查 useColumnResize 的状态管理
+   - 验证 useRowSelection 的选择逻辑
+   - 确认 Hook 的依赖数组配置
+
+6. **模块化组件导入错误**
+   - 检查数据表格组件的导出路径
+   - 验证 index.ts 导出接口的完整性
+   - 确认组件依赖关系的正确性
 
 #### 菜单权限问题
 
@@ -600,7 +720,11 @@ Q --> Z
 
 **章节来源**
 - [apps/nestjs-server/src/modules/auth/auth.service.ts:29-84](file://apps/nestjs-server/src/modules/auth/auth.service.ts#L29-L84)
-- [apps/web/src/components/data-table/data-table-pagination.tsx:15-120](file://apps/web/src/components/data-table/data-table-pagination.tsx#L15-L120)
+- [apps/web/src/components/data-table/data-table.tsx:69-217](file://apps/web/src/components/data-table/data-table.tsx#L69-L217)
+- [apps/web/src/components/data-table/data-table-toolbar.tsx:29-93](file://apps/web/src/components/data-table/data-table-toolbar.tsx#L29-L93)
+- [apps/web/src/components/data-table/data-table-checkbox.tsx:13-38](file://apps/web/src/components/data-table/data-table-checkbox.tsx#L13-L38)
+- [apps/web/src/components/data-table/data-table-resizer.tsx:11-29](file://apps/web/src/components/data-table/data-table-resizer.tsx#L11-L29)
+- [apps/web/src/components/data-table/create-column-helper.ts:61-105](file://apps/web/src/components/data-table/create-column-helper.ts#L61-L105)
 - [apps/web/src/hooks/use-nebula-form.ts:1-200](file://apps/web/src/hooks/use-nebula-form.ts#L1-L200)
 - [apps/nestjs-server/src/modules/menu/menu.service.ts:50-83](file://apps/nestjs-server/src/modules/menu/menu.service.ts#L50-L83)
 
@@ -616,6 +740,9 @@ Q --> Z
 6. **表单系统**: 新增的 useNebulaForm 钩子提供统一的表单处理模式
 7. **权限管理**: 完整的菜单权限管理系统支持细粒度的权限控制
 8. **数据表格系统**: 模块化的数据表格组件架构提供更好的可维护性和扩展性
-9. **分页组件**: 新的 Pagination 组件系统提供更灵活的分页控制和更好的用户体验
+9. **工具函数**: createColumnHelper 提供类型安全的列定义创建
+10. **自定义 Hook**: useColumnResize 和 useRowSelection 提供状态管理抽象
+11. **组件解耦**: 专用组件实现职责分离，提高代码复用性
+12. **性能优化**: 虚拟滚动和状态隔离提升大数据集处理能力
 
 通过使用 Shadcn/UI 组件库、现代化的表单架构、模块化的数据表格系统和菜单权限管理功能，该系统为开发者提供了一个高质量的起点，可以在此基础上快速构建企业级应用。
