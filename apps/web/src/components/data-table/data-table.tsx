@@ -11,6 +11,7 @@ import {
   type ColumnFiltersState,
   type VisibilityState,
 } from '@tanstack/react-table';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -30,7 +31,8 @@ interface DataTableProps<TData> {
   /** 表格数据 */
   data: TData[];
   /** 列定义 */
-  columns: ColumnDef<TData, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  columns: ColumnDef<TData, any>[];
   /** 是否加载中 */
   isLoading?: boolean;
   /** 搜索占位符 */
@@ -98,7 +100,8 @@ export function DataTable<TData>({
   const columnsWithSelection = useMemo(() => {
     if (!enableRowSelection) return columns;
 
-    const selectionColumn: ColumnDef<TData, unknown> = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const selectionColumn: ColumnDef<TData, any> = {
       id: 'selection',
       header: ({ table }) => <DataTableCheckbox table={table} />,
       cell: ({ row }) => <DataTableCheckbox row={row} />,
@@ -132,6 +135,7 @@ export function DataTable<TData>({
     getFilteredRowModel: getFilteredRowModel(),
     enableRowSelection,
     enableColumnResizing: enableColumnResize,
+    columnResizeMode: 'onChange',
   });
 
   return (
@@ -157,13 +161,29 @@ export function DataTable<TData>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
+                    colSpan={header.colSpan}
                     style={{
-                      width: header.getSize() !== 150 ? header.getSize() : undefined,
+                      width: header.getSize(),
+                      position: 'relative',
                     }}
                   >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
+                    {/* 列宽拖拽手柄 */}
+                    {enableColumnResize && header.column.getCanResize() && (
+                      <div
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                        onMouseDown={header.getResizeHandler()}
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                        onTouchStart={header.getResizeHandler()}
+                        className={cn(
+                          'absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none touch-none opacity-0 hover:opacity-100',
+                          header.column.getIsResizing() && 'opacity-100 bg-primary',
+                          'hover:bg-primary/50 transition-colors',
+                        )}
+                      />
+                    )}
                   </TableHead>
                 ))}
               </TableRow>

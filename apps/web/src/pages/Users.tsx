@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
-import { type ColumnDef } from '@tanstack/react-table';
+import { createColumnHelper } from '@tanstack/react-table';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '@/api';
-import { DataTable, createColumnHelper } from '@/components/data-table';
+import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -171,7 +171,7 @@ export default function UsersPage() {
 
   const columnHelper = createColumnHelper<UserResponse>();
 
-  const columns: ColumnDef<UserResponse, unknown>[] = [
+  const columns = [
     columnHelper.accessor('username', {
       header: '用户名',
       size: 150,
@@ -186,15 +186,19 @@ export default function UsersPage() {
       header: '显示名称',
       size: 150,
       enableResizing: true,
-      cell: (value) => (value as string) || '-',
+      cell: (info) => info.getValue() || '-',
     }),
     columnHelper.accessor('isActive', {
       header: '状态',
       size: 100,
-      cell: (value) =>
-        value ? <Badge variant="default">启用</Badge> : <Badge variant="destructive">禁用</Badge>,
+      cell: (info) =>
+        info.getValue() ? (
+          <Badge variant="default">启用</Badge>
+        ) : (
+          <Badge variant="destructive">禁用</Badge>
+        ),
     }),
-    {
+    columnHelper.display({
       id: 'actions',
       header: '操作',
       size: 120,
@@ -216,7 +220,7 @@ export default function UsersPage() {
           </Button>
         </div>
       ),
-    },
+    }),
   ];
 
   return (

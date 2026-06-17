@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useMatch } from 'react-router';
+import { createFileRoute, Link, Outlet, redirect, useLocation } from '@tanstack/react-router';
 import {
   ChevronRight,
   LayoutDashboard,
@@ -32,6 +32,21 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUiStore } from '@/store';
+
+export const Route = createFileRoute('/_app')({
+  beforeLoad: () => {
+    // 直接检查 accessToken 而非 isAuthenticated 标志，
+    // 因为 Zustand persist 中间件的 onRehydrateStorage 回调是异步执行的，
+    // 首次 beforeLoad 时 isAuthenticated 可能尚未被设置为 true，
+    // 但 accessToken 已在水合阶段同步恢复。
+    const accessToken = useAuthStore.getState().accessToken;
+    if (!accessToken) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw redirect({ to: '/login' });
+    }
+  },
+  component: AppLayout,
+});
 
 const menuGroups = [
   {
@@ -84,13 +99,12 @@ function SidebarNavItem({
   onClose?: () => void;
 }) {
   const Icon = item.icon;
-  const match = useMatch(item.path);
-  const isActive = match !== null;
+  const { pathname } = useLocation();
+  const isActive = item.path === '/' ? pathname === '/' : pathname === item.path;
 
   const link = (
-    <NavLink
+    <Link
       to={item.path}
-      end={item.path === '/'}
       onClick={onClose}
       className={cn(
         'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
@@ -105,7 +119,7 @@ function SidebarNavItem({
       {!collapsed && isActive && (
         <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-primary-foreground" />
       )}
-    </NavLink>
+    </Link>
   );
 
   if (collapsed) {
@@ -201,7 +215,7 @@ function UserMenu() {
   );
 }
 
-export default function MainLayout() {
+function AppLayout() {
   const mobileOpen = useUiStore((s) => s.mobileSidebarOpen);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleMobileSidebar = useUiStore((s) => s.toggleMobileSidebar);

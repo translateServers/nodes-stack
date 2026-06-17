@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Moon, RefreshCw, ShieldCheck, Sparkles, Sun, UserRound } from 'lucide-react';
 import { Controller } from 'react-hook-form';
@@ -13,6 +13,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { useNebulaForm } from '@/hooks/use-nebula-form';
 import { useAuthStore } from '@/store/auth';
 import { useUiStore } from '@/store/ui';
+
+export const Route = createFileRoute('/login')({
+  component: LoginPage,
+});
 
 /* ── Decorative orbs for the brand panel ──────────────── */
 function BrandPanel() {
@@ -102,7 +106,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (useAuthStore.getState().accessToken) {
-      void navigate('/', { replace: true });
+      void navigate({ to: '/', replace: true });
     }
   }, [navigate]);
 
@@ -117,7 +121,7 @@ export default function LoginPage() {
       ...data,
       captchaId: captchaQuery.data.captchaId,
     });
-    void navigate('/', { replace: true });
+    void navigate({ to: '/', replace: true });
   });
 
   return (

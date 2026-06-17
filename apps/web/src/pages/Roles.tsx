@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Controller } from 'react-hook-form';
-import { type ColumnDef } from '@tanstack/react-table';
+import { createColumnHelper } from '@tanstack/react-table';
 import type { z } from 'zod';
 import { CreateRoleSchema, UpdateRoleSchema, type RoleResponse } from '@nebula/shared';
 import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from '@/api';
-import { DataTable, createColumnHelper } from '@/components/data-table';
+import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -136,7 +136,7 @@ export default function RolesPage() {
 
   const columnHelper = createColumnHelper<RoleResponse>();
 
-  const columns: ColumnDef<RoleResponse, unknown>[] = [
+  const columns = [
     columnHelper.accessor('name', {
       header: '角色名称',
       size: 200,
@@ -146,15 +146,19 @@ export default function RolesPage() {
       header: '描述',
       size: 300,
       enableResizing: true,
-      cell: (value) => (value as string) || '-',
+      cell: (info) => info.getValue() || '-',
     }),
     columnHelper.accessor('isActive', {
       header: '状态',
       size: 100,
-      cell: (value) =>
-        value ? <Badge variant="default">启用</Badge> : <Badge variant="destructive">禁用</Badge>,
+      cell: (info) =>
+        info.getValue() ? (
+          <Badge variant="default">启用</Badge>
+        ) : (
+          <Badge variant="destructive">禁用</Badge>
+        ),
     }),
-    {
+    columnHelper.display({
       id: 'actions',
       header: '操作',
       size: 120,
@@ -176,7 +180,7 @@ export default function RolesPage() {
           </Button>
         </div>
       ),
-    },
+    }),
   ];
 
   return (
