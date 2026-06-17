@@ -6,30 +6,19 @@ import { DataTableViewOptions } from './data-table-view-options';
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
-  /** 搜索框占位符 */
   searchPlaceholder?: string;
-  /** 搜索框绑定的列 ID */
-  searchColumnId?: string;
-  /** 是否显示批量操作按钮 */
+  searchColumnIds?: string[];
   showBatchActions?: boolean;
-  /** 批量删除回调 */
   onBatchDelete?: (rows: TData[]) => void;
-  /** 批量删除确认提示 */
   batchDeleteConfirmMessage?: string;
-  /** 自定义工具栏左侧内容 */
   leftContent?: React.ReactNode;
-  /** 自定义工具栏右侧内容 */
   rightContent?: React.ReactNode;
 }
 
-/**
- * 数据表格工具栏组件
- * 包含搜索、批量操作、列设置等功能
- */
 export function DataTableToolbar<TData>({
   table,
   searchPlaceholder = '搜索...',
-  searchColumnId,
+  searchColumnIds,
   showBatchActions = true,
   onBatchDelete,
   batchDeleteConfirmMessage = '确定要删除选中的项目吗？',
@@ -39,6 +28,17 @@ export function DataTableToolbar<TData>({
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   const selectedCount = selectedRows.length;
   const hasSelection = selectedCount > 0;
+
+  const primarySearchColumn = searchColumnIds?.[0];
+  const searchValue = primarySearchColumn
+    ? ((table.getColumn(primarySearchColumn)?.getFilterValue() as string | undefined) ?? '')
+    : '';
+
+  const handleSearchChange = (value: string) => {
+    searchColumnIds?.forEach((columnId) => {
+      table.getColumn(columnId)?.setFilterValue(value);
+    });
+  };
 
   const handleBatchDelete = () => {
     if (!onBatchDelete || !hasSelection) return;
@@ -53,17 +53,13 @@ export function DataTableToolbar<TData>({
     <div className="flex items-center justify-between gap-2">
       <div className="flex flex-1 items-center gap-2">
         {leftContent}
-        {searchColumnId && (
+        {primarySearchColumn && (
           <div className="relative max-w-sm">
             <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
             <Input
               placeholder={searchPlaceholder}
-              value={
-                (table.getColumn(searchColumnId)?.getFilterValue() as string | undefined) ?? ''
-              }
-              onChange={(event) =>
-                table.getColumn(searchColumnId)?.setFilterValue(event.target.value)
-              }
+              value={searchValue}
+              onChange={(event) => handleSearchChange(event.target.value)}
               className="h-8 pl-8"
             />
           </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import type { z } from 'zod';
 import {
@@ -19,6 +19,8 @@ import {
   useUpdateDictValue,
   useDeleteDictValue,
 } from './hooks';
+import { createColumnHelper } from '@tanstack/react-table';
+import { DataTable } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -31,14 +33,6 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Alert } from '@/components/ui/alert';
 import {
   Select,
@@ -357,8 +351,6 @@ function DictValueForm({
 
 // ──────────────────────── 主页面 ────────────────────────
 
-const PAGE_SIZE = 10;
-
 export default function DictsPage() {
   // 字典类型
   const { data: dictTypes, isLoading: typesLoading, error: typesError } = useDictTypes();
@@ -375,10 +367,6 @@ export default function DictsPage() {
 
   // 搜索状态
   const [typeSearch, setTypeSearch] = useState('');
-  const [valueSearch, setValueSearch] = useState('');
-
-  // 分页状态
-  const [currentPage, setCurrentPage] = useState(1);
 
   // 对话框状态
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
@@ -399,53 +387,30 @@ export default function DictsPage() {
     );
   }, [dictTypes, typeSearch]);
 
-  // 过滤后的字典值
-  const filteredValues = useMemo(() => {
-    if (!dictValues) return [];
-    if (!valueSearch.trim()) return dictValues;
-    const keyword = valueSearch.toLowerCase();
-    return dictValues.filter(
-      (value) =>
-        value.label.toLowerCase().includes(keyword) ||
-        value.code.toLowerCase().includes(keyword) ||
-        value.value.toLowerCase().includes(keyword),
-    );
-  }, [dictValues, valueSearch]);
-
-  // 分页计算
-  const totalPages = Math.ceil(filteredValues.length / PAGE_SIZE);
-  const paginatedValues = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredValues.slice(start, start + PAGE_SIZE);
-  }, [filteredValues, currentPage]);
-
-  // 当选中类型改变时，重置分页和搜索
-  const handleSelectType = (typeId: string) => {
+  const handleSelectType = useCallback((typeId: string) => {
     setSelectedTypeId(typeId);
-    setCurrentPage(1);
-    setValueSearch('');
-  };
+  }, []);
 
   // 字典类型操作
-  const handleCreateType = () => {
+  const handleCreateType = useCallback(() => {
     setEditingType(undefined);
     setTypeDialogOpen(true);
-  };
+  }, []);
 
-  const handleEditType = (dictType: DictTypeResponse) => {
+  const handleEditType = useCallback((dictType: DictTypeResponse) => {
     setEditingType(dictType);
     setTypeDialogOpen(true);
-  };
+  }, []);
 
-  const handleDeleteType = async (dictType: DictTypeResponse) => {
+  const handleDeleteType = useCallback(async (dictType: DictTypeResponse) => {
     if (!confirm(`确定要删除字典类型 "${dictType.name}" 及其所有字典值吗？`)) return;
     await deleteTypeMutation.mutateAsync(dictType.id);
     if (selectedTypeId === dictType.id) {
       setSelectedTypeId('');
     }
-  };
+  }, [deleteTypeMutation, selectedTypeId]);
 
-  const handleTypeFormSubmit = async (data: unknown) => {
+  const handleTypeFormSubmit = useCallback(async (data: unknown) => {
     if (editingType) {
       await updateTypeMutation.mutateAsync({
         id: editingType.id,
@@ -455,25 +420,25 @@ export default function DictsPage() {
       await createTypeMutation.mutateAsync(data as CreateDictTypeInput);
     }
     setTypeDialogOpen(false);
-  };
+  }, [editingType, createTypeMutation, updateTypeMutation]);
 
   // 字典值操作
-  const handleCreateValue = () => {
+  const handleCreateValue = useCallback(() => {
     setEditingValue(undefined);
     setValueDialogOpen(true);
-  };
+  }, []);
 
-  const handleEditValue = (dictValue: DictValueResponse) => {
+  const handleEditValue = useCallback((dictValue: DictValueResponse) => {
     setEditingValue(dictValue);
     setValueDialogOpen(true);
-  };
+  }, []);
 
-  const handleDeleteValue = async (dictValue: DictValueResponse) => {
+  const handleDeleteValue = useCallback(async (dictValue: DictValueResponse) => {
     if (!confirm(`确定要删除字典值 "${dictValue.label}" 吗？`)) return;
     await deleteValueMutation.mutateAsync(dictValue.id);
-  };
+  }, [deleteValueMutation]);
 
-  const handleValueFormSubmit = async (data: unknown) => {
+  const handleValueFormSubmit = useCallback(async (data: unknown) => {
     if (editingValue) {
       await updateValueMutation.mutateAsync({
         id: editingValue.id,
@@ -486,7 +451,73 @@ export default function DictsPage() {
       });
     }
     setValueDialogOpen(false);
-  };
+  }, [editingValue, selectedTypeId, createValueMutation, updateValueMutation]);
+
+  const valueColumnHelper = createColumnHelper<DictValueResponse>();
+
+  const valueColumns = useMemo(() => [
+    valueColumnHelper.accessor('code', {
+      header: '编码',
+      cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+    }),
+    valueColumnHelper.accessor('label', {
+      header: '标签',
+    }),
+    valueColumnHelper.accessor('value', {
+      header: '值',
+      cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+    }),
+    valueColumnHelper.accessor('color', {
+      header: '颜色',
+      cell: (info) => {
+        const color = info.getValue();
+        if (!color) return '-';
+        return (
+          <div className="flex items-center gap-2">
+            <div
+              className="size-4 rounded border"
+              style={{ backgroundColor: color }}
+            />
+            <span className="text-xs">{color}</span>
+          </div>
+        );
+      },
+    }),
+    valueColumnHelper.accessor('sort', {
+      header: '排序',
+    }),
+    valueColumnHelper.accessor('isActive', {
+      header: '状态',
+      cell: (info) =>
+        info.getValue() ? (
+          <Badge variant="default">启用</Badge>
+        ) : (
+          <Badge variant="secondary">禁用</Badge>
+        ),
+    }),
+    valueColumnHelper.display({
+      id: 'actions',
+      header: '操作',
+      size: 100,
+      enableSorting: false,
+      enableHiding: false,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon-xs" onClick={() => handleEditValue(row.original)}>
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => void handleDeleteValue(row.original)}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      ),
+    }),
+  ], [handleEditValue, handleDeleteValue]);
 
   const selectedType = dictTypes?.find((t) => t.id === selectedTypeId);
 
@@ -596,23 +627,6 @@ export default function DictsPage() {
                 新建
               </Button>
             </div>
-            {/* 搜索框 */}
-            {selectedTypeId && (
-              <div className="border-b px-3 py-2">
-                <div className="relative">
-                  <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
-                  <Input
-                    placeholder="搜索标签/编码/值..."
-                    value={valueSearch}
-                    onChange={(e) => {
-                      setValueSearch(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="h-8 pl-8 text-xs"
-                  />
-                </div>
-              </div>
-            )}
             {!selectedTypeId ? (
               <Empty>
                 <EmptyHeader>
@@ -624,122 +638,19 @@ export default function DictsPage() {
                 </EmptyHeader>
               </Empty>
             ) : (
-              <>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>编码</TableHead>
-                      <TableHead>标签</TableHead>
-                      <TableHead>值</TableHead>
-                      <TableHead>颜色</TableHead>
-                      <TableHead>排序</TableHead>
-                      <TableHead>状态</TableHead>
-                      <TableHead className="w-[100px]">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {valuesLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-32 text-center">
-                          <Spinner className="mx-auto size-6" />
-                        </TableCell>
-                      </TableRow>
-                    ) : paginatedValues.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="p-0">
-                          <Empty>
-                            <EmptyHeader>
-                              <EmptyMedia variant="icon">
-                                <FileText />
-                              </EmptyMedia>
-                              <EmptyTitle>
-                                {valueSearch ? '未找到匹配的字典值' : '暂无字典值'}
-                              </EmptyTitle>
-                              <EmptyDescription>
-                                {valueSearch ? '尝试其他关键词' : '点击上方按钮创建第一个字典值'}
-                              </EmptyDescription>
-                            </EmptyHeader>
-                          </Empty>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      paginatedValues.map((value) => (
-                        <TableRow key={value.id}>
-                          <TableCell className="font-mono text-xs">{value.code}</TableCell>
-                          <TableCell>{value.label}</TableCell>
-                          <TableCell className="font-mono text-xs">{value.value}</TableCell>
-                          <TableCell>
-                            {value.color ? (
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="size-4 rounded border"
-                                  style={{ backgroundColor: value.color }}
-                                />
-                                <span className="text-xs">{value.color}</span>
-                              </div>
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                          <TableCell>{value.sort}</TableCell>
-                          <TableCell>
-                            {value.isActive ? (
-                              <Badge variant="default">启用</Badge>
-                            ) : (
-                              <Badge variant="secondary">禁用</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => handleEditValue(value)}
-                              >
-                                <Pencil className="size-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => void handleDeleteValue(value)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                {/* 分页 */}
-                {filteredValues.length > PAGE_SIZE && (
-                  <div className="flex items-center justify-between border-t px-4 py-3">
-                    <div className="text-muted-foreground text-xs">
-                      共 {filteredValues.length} 条，第 {currentPage}/{totalPages} 页
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage((p) => p - 1)}
-                      >
-                        上一页
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage((p) => p + 1)}
-                      >
-                        下一页
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
+              <div className="p-4">
+                <DataTable
+                  data={dictValues ?? []}
+                  columns={valueColumns}
+                  getRowId={(row) => row.id}
+                  isLoading={valuesLoading}
+                  searchPlaceholder="搜索标签/编码/值..."
+                  searchColumnIds={['label', 'code', 'value']}
+                  emptyIcon={<FileText className="size-12" />}
+                  emptyTitle="暂无字典值"
+                  emptyDescription="点击上方按钮创建第一个字典值"
+                />
+              </div>
             )}
           </div>
         </div>

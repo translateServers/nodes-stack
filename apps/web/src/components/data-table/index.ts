@@ -5,5 +5,3 @@ export { DataTableToolbar } from './data-table-toolbar';
 export { DataTableCheckbox } from './data-table-checkbox';
 export { DataTable } from './data-table';
 export { createColumnHelper } from './create-column-helper';
-export { useColumnResize } from './use-column-resize';
-export { useRowSelection } from './use-row-selection';

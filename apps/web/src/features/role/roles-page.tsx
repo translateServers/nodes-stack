@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Controller } from 'react-hook-form';
 import { createColumnHelper } from '@tanstack/react-table';
 import type { z } from 'zod';
@@ -101,28 +102,35 @@ export default function RolesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleResponse | undefined>();
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditingRole(undefined);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleEdit = (role: RoleResponse) => {
+  const handleEdit = useCallback((role: RoleResponse) => {
     setEditingRole(role);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (role: RoleResponse) => {
+  const handleDelete = useCallback(async (role: RoleResponse) => {
     if (!confirm(`确定要删除角色 "${role.name}" 吗？`)) return;
     await deleteRoleMutation.mutateAsync(role.id);
-  };
+  }, [deleteRoleMutation]);
 
-  const handleBatchDelete = async (selectedRoles: RoleResponse[]) => {
-    for (const role of selectedRoles) {
-      await deleteRoleMutation.mutateAsync(role.id);
+  const handleBatchDelete = useCallback(async (selectedRoles: RoleResponse[]) => {
+    const results = await Promise.allSettled(
+      selectedRoles.map((role) => deleteRoleMutation.mutateAsync(role.id)),
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    const succeeded = results.length - failed;
+    if (failed > 0) {
+      toast.error(`删除完成：成功 ${succeeded} 个，失败 ${failed} 个`);
+    } else {
+      toast.success(`成功删除 ${succeeded} 个角色`);
     }
-  };
+  }, [deleteRoleMutation]);
 
-  const handleFormSubmit = async (data: unknown) => {
+  const handleFormSubmit = useCallback(async (data: unknown) => {
     if (editingRole) {
       await updateRoleMutation.mutateAsync({
         id: editingRole.id,
@@ -132,11 +140,11 @@ export default function RolesPage() {
       await createRoleMutation.mutateAsync(data as CreateRoleInput);
     }
     setDialogOpen(false);
-  };
+  }, [editingRole, createRoleMutation, updateRoleMutation]);
 
   const columnHelper = createColumnHelper<RoleResponse>();
 
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.accessor('name', {
       header: '角色名称',
       size: 200,
@@ -181,7 +189,7 @@ export default function RolesPage() {
         </div>
       ),
     }),
-  ];
+  ], [handleEdit, handleDelete]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -198,9 +206,10 @@ export default function RolesPage() {
       <DataTable
         data={roles ?? []}
         columns={columns}
+        getRowId={(row) => row.id}
         isLoading={isLoading}
         searchPlaceholder="搜索角色名称..."
-        searchColumnId="name"
+        searchColumnIds={['name']}
         enableRowSelection
         enableColumnResize
         onBatchDelete={(selectedRoles) => void handleBatchDelete(selectedRoles)}

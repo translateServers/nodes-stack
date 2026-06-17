@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { Controller } from 'react-hook-form';
 import { createColumnHelper } from '@tanstack/react-table';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
@@ -134,28 +135,35 @@ export default function UsersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | undefined>();
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     setEditingUser(undefined);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleEdit = (user: UserResponse) => {
+  const handleEdit = useCallback((user: UserResponse) => {
     setEditingUser(user);
     setDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = async (user: UserResponse) => {
+  const handleDelete = useCallback(async (user: UserResponse) => {
     if (!confirm(`确定要删除用户 "${user.username}" 吗？`)) return;
     await deleteUserMutation.mutateAsync(user.id);
-  };
+  }, [deleteUserMutation]);
 
-  const handleBatchDelete = async (selectedUsers: UserResponse[]) => {
-    for (const user of selectedUsers) {
-      await deleteUserMutation.mutateAsync(user.id);
+  const handleBatchDelete = useCallback(async (selectedUsers: UserResponse[]) => {
+    const results = await Promise.allSettled(
+      selectedUsers.map((user) => deleteUserMutation.mutateAsync(user.id)),
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    const succeeded = results.length - failed;
+    if (failed > 0) {
+      toast.error(`删除完成：成功 ${succeeded} 个，失败 ${failed} 个`);
+    } else {
+      toast.success(`成功删除 ${succeeded} 个用户`);
     }
-  };
+  }, [deleteUserMutation]);
 
-  const handleFormSubmit = async (data: unknown) => {
+  const handleFormSubmit = useCallback(async (data: unknown) => {
     if (editingUser) {
       await updateUserMutation.mutateAsync({
         id: editingUser.id,
@@ -167,11 +175,11 @@ export default function UsersPage() {
       );
     }
     setDialogOpen(false);
-  };
+  }, [editingUser, createUserMutation, updateUserMutation]);
 
   const columnHelper = createColumnHelper<UserResponse>();
 
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.accessor('username', {
       header: '用户名',
       size: 150,
@@ -221,7 +229,7 @@ export default function UsersPage() {
         </div>
       ),
     }),
-  ];
+  ], [handleEdit, handleDelete]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -238,9 +246,10 @@ export default function UsersPage() {
       <DataTable
         data={users ?? []}
         columns={columns}
+        getRowId={(row) => row.id}
         isLoading={isLoading}
         searchPlaceholder="搜索用户名或邮箱..."
-        searchColumnId="username"
+        searchColumnIds={['username', 'email']}
         enableRowSelection
         enableColumnResize
         onBatchDelete={(selectedUsers) => void handleBatchDelete(selectedUsers)}

@@ -10,6 +10,8 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
+  type ColumnSizingState,
+  type RowSelectionState,
 } from '@tanstack/react-table';
 import { cn } from '@/lib/utils';
 import {
@@ -24,21 +26,20 @@ import { Spinner } from '@/components/ui/spinner';
 import { DataTableToolbar } from './data-table-toolbar';
 import { DataTablePagination } from './data-table-pagination';
 import { DataTableCheckbox } from './data-table-checkbox';
-import { useColumnResize } from './use-column-resize';
-import { useRowSelection } from './use-row-selection';
 
 interface DataTableProps<TData> {
   /** 表格数据 */
   data: TData[];
   /** 列定义 */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  columns: ColumnDef<TData, any>[];
+  columns: ColumnDef<TData, unknown>[];
+  /** 行 ID 提取函数，默认为 (row) => row.id */
+  getRowId?: (row: TData) => string;
   /** 是否加载中 */
   isLoading?: boolean;
   /** 搜索占位符 */
   searchPlaceholder?: string;
-  /** 搜索列 ID */
-  searchColumnId?: string;
+  /** 搜索绑定的列 ID 列表，支持多列同时搜索 */
+  searchColumnIds?: string[];
   /** 是否显示行选择 */
   enableRowSelection?: boolean;
   /** 是否显示列宽调整 */
@@ -63,16 +64,13 @@ interface DataTableProps<TData> {
   className?: string;
 }
 
-/**
- * 统一数据表格组件
- * 封装了搜索、分页、排序、行选择、列宽调整等功能
- */
 export function DataTable<TData>({
   data,
   columns,
+  getRowId,
   isLoading = false,
   searchPlaceholder,
-  searchColumnId,
+  searchColumnIds,
   enableRowSelection = false,
   enableColumnResize = false,
   onBatchDelete,
@@ -85,23 +83,16 @@ export function DataTable<TData>({
   onRowClick,
   className,
 }: DataTableProps<TData>) {
-  // 状态管理
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-  // 列宽调整
-  const { columnSizing, setColumnSizing } = useColumnResize();
-
-  // 行选择
-  const { rowSelection, setRowSelection } = useRowSelection();
-
-  // 构建带选择框的列
   const columnsWithSelection = useMemo(() => {
     if (!enableRowSelection) return columns;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const selectionColumn: ColumnDef<TData, any> = {
+    const selectionColumn: ColumnDef<TData, unknown> = {
       id: 'selection',
       header: ({ table }) => <DataTableCheckbox table={table} />,
       cell: ({ row }) => <DataTableCheckbox row={row} />,
@@ -113,10 +104,10 @@ export function DataTable<TData>({
     return [selectionColumn, ...columns];
   }, [columns, enableRowSelection]);
 
-  // 创建表格实例
   const table = useReactTable({
     data,
     columns: columnsWithSelection,
+    getRowId,
     state: {
       sorting,
       columnFilters,
@@ -140,11 +131,10 @@ export function DataTable<TData>({
 
   return (
     <div className={className}>
-      {/* 工具栏 */}
       <DataTableToolbar
         table={table}
         searchPlaceholder={searchPlaceholder}
-        searchColumnId={searchColumnId}
+        searchColumnIds={searchColumnIds}
         showBatchActions={enableRowSelection}
         onBatchDelete={onBatchDelete}
         batchDeleteConfirmMessage={batchDeleteConfirmMessage}
@@ -152,7 +142,6 @@ export function DataTable<TData>({
         rightContent={toolbarRightContent}
       />
 
-      {/* 表格 */}
       <div className="mt-4 rounded-lg border">
         <Table>
           <TableHeader>
@@ -170,13 +159,10 @@ export function DataTable<TData>({
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
-                    {/* 列宽拖拽手柄 */}
                     {enableColumnResize && header.column.getCanResize() && (
                       <div
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                        onMouseDown={header.getResizeHandler()}
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                        onTouchStart={header.getResizeHandler()}
+                        onMouseDown={header.getResizeHandler() as React.MouseEventHandler}
+                        onTouchStart={header.getResizeHandler() as React.TouchEventHandler}
                         className={cn(
                           'absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none touch-none opacity-0 hover:opacity-100',
                           header.column.getIsResizing() && 'opacity-100 bg-primary',
