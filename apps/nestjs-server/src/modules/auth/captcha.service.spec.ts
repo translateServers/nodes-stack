@@ -116,4 +116,63 @@ describe('CaptchaService', () => {
       expect(mockRedisClient.del).toHaveBeenCalledWith('captcha:test-id');
     });
   });
+
+  describe('memory fallback (Redis unavailable)', () => {
+    beforeEach(() => {
+      mockRedisService.safeExec.mockImplementation(
+        async <T>(_fn: (client: typeof mockRedisClient) => Promise<T>, fallback: T): Promise<T> => {
+          return fallback;
+        },
+      );
+    });
+
+    afterEach(() => {
+      mockRedisService.safeExec.mockImplementation(
+        async <T>(fn: (client: typeof mockRedisClient) => Promise<T>, fallback: T): Promise<T> => {
+          try {
+            return await fn(mockRedisClient);
+          } catch {
+            return fallback;
+          }
+        },
+      );
+    });
+
+    it('should store captcha in memory when Redis is unavailable during generate', async () => {
+      const result = await service.generateCaptcha();
+
+      expect(result.captchaId).toBeDefined();
+      expect(result.captchaImage).toBeDefined();
+      expect(mockRedisClient.set).not.toHaveBeenCalled();
+    });
+
+    it('should verify captcha from memory cache when Redis is unavailable', async () => {
+      const genResult = await service.generateCaptcha();
+      const captchaId = genResult.captchaId;
+
+      const memCache = (service as unknown as { memoryCache: Map<string, { code: string }> }).memoryCache;
+      const stored = memCache.get(captchaId);
+      expect(stored).toBeDefined();
+
+      const result = await service.verifyCaptcha(captchaId, stored!.code);
+      expect(result).toBe(true);
+    });
+
+    it('should reject expired memory cache entries', async () => {
+      const genResult = await service.generateCaptcha();
+      const captchaId = genResult.captchaId;
+
+      const memCache = (service as unknown as { memoryCache: Map<string, { code: string; expiresAt: number }> }).memoryCache;
+      const entry = memCache.get(captchaId);
+      if (entry) {
+        entry.expiresAt = Date.now() - 1000;
+      }
+
+      await expect(service.verifyCaptcha(captchaId, 'any')).rejects.toThrow(BusinessException);
+    });
+
+    it('should throw when captcha not in Redis or memory', async () => {
+      await expect(service.verifyCaptcha('unknown-id', 'code')).rejects.toThrow(BusinessException);
+    });
+  });
 });

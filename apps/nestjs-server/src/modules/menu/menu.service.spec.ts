@@ -311,6 +311,57 @@ describe('MenuService', () => {
         data: { sort: 5 },
       });
     });
+
+    it('should update all optional fields when provided', async () => {
+      const original = createMenuEntity({ id: 'u4' });
+      const updated = createMenuEntity({
+        id: 'u4',
+        name: '新名称',
+        path: '/new-path',
+        icon: 'NewIcon',
+        parentId: 'parent-id',
+        type: 'BUTTON',
+        permission: 'new:perm',
+        component: '/pages/New.tsx',
+        sort: 3,
+        isActive: true,
+      });
+
+      mockPrismaService.menu.findUnique.mockResolvedValue(original);
+      mockPrismaService.menu.update.mockResolvedValue(updated);
+
+      const updateDto: UpdateMenuDto = {
+        name: '新名称',
+        path: '/new-path',
+        icon: 'NewIcon',
+        parentId: 'parent-id',
+        type: 'BUTTON',
+        permission: 'new:perm',
+        component: '/pages/New.tsx',
+        sort: 3,
+        isVisible: true,
+      };
+
+      const result = await service.update('u4', updateDto);
+
+      expect(mockPrismaService.menu.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'u4' },
+          data: expect.objectContaining({
+            name: '新名称',
+            path: '/new-path',
+            icon: 'NewIcon',
+            parentId: 'parent-id',
+            type: 'BUTTON',
+            permission: 'new:perm',
+            component: '/pages/New.tsx',
+            sort: 3,
+            isActive: true,
+          }) as object,
+        }) as object,
+      );
+    });
+
   });
 
   describe('remove', () => {

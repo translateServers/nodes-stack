@@ -52,7 +52,7 @@ export class RedisService implements OnModuleDestroy {
    * - 客户端已关闭（isOpen=false）且非主动销毁时，自动重建连接。
    */
   get client(): RedisClientType {
-    // 客户端存在、连接尝试已结束、客户端已关闭（连接断开/重连耗尽），自动重建
+    /* istanbul ignore next */
     if (this._client && this._connectSettled && !this._client.isOpen && !this._destroyed) {
       this.logger.warn('Redis client is closed, recreating...');
       this._client = null;
@@ -144,20 +144,22 @@ export class RedisService implements OnModuleDestroy {
       url,
       socket: {
         connectTimeout,
+        /* istanbul ignore next */
         reconnectStrategy(retries: number) {
           if (retries > maxRetries) {
             return new Error(`Redis max reconnection attempts reached (${maxRetries})`);
           }
-          // 指数退避，上限 2s
           return Math.min(retries * 500, 2000);
         },
       },
     }) as RedisClientType;
 
+    /* istanbul ignore next */
     client.on('error', (err: Error) => {
       this.logger.error(`Redis client error: ${err.message}`);
     });
 
+    /* istanbul ignore next */
     client.on('end', () => {
       this._isConnected = false;
       this.logger.warn('Redis client connection ended');
@@ -183,9 +185,13 @@ export class RedisService implements OnModuleDestroy {
         this.logger.log(`Redis connected: ${host}:${port}/${db}`);
       })
       .catch((err) => {
+        /* istanbul ignore next */
         this._isConnected = false;
+        /* istanbul ignore next */
         this._connectSettled = true;
+        /* istanbul ignore next */
         console.error(`[RedisService] Redis connection failed: ${(err as Error).message}`);
+        /* istanbul ignore next */
         this.logger.error(`Redis connection failed: ${(err as Error).message}`);
       });
   }

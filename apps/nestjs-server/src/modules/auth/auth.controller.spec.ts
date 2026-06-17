@@ -44,14 +44,14 @@ describe('AuthController', () => {
   });
 
   describe('getCaptcha', () => {
-    it('should return captcha response', () => {
+    it('should return captcha response', async () => {
       const mockCaptchaResponse = {
         captchaId: 'captcha-id',
         captchaImage: 'svg-image-data',
       };
-      mockCaptchaService.generateCaptcha.mockReturnValue(mockCaptchaResponse);
+      mockCaptchaService.generateCaptcha.mockResolvedValue(mockCaptchaResponse);
 
-      const result = controller.getCaptcha();
+      const result = await controller.getCaptcha();
 
       expect(mockCaptchaService.generateCaptcha).toHaveBeenCalled();
       expect(result).toEqual(mockCaptchaResponse);

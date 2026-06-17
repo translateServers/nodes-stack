@@ -186,6 +186,46 @@ describe('DictService', () => {
 
       await expect(service.updateType('test-id', dto)).rejects.toThrow(BusinessException);
     });
+
+    it('should skip duplicate check when code is empty string', async () => {
+      const dto: UpdateDictTypeDto = { code: '' };
+      mockPrismaService.dictType.findUnique.mockResolvedValue(makeDictType({ id: 'test-id' }));
+      mockPrismaService.dictType.update.mockResolvedValue(makeDictType({ id: 'test-id', code: '' }));
+
+      await service.updateType('test-id', dto);
+
+      expect(mockPrismaService.dictType.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should update all fields when provided', async () => {
+      const dto: UpdateDictTypeDto = {
+        code: 'new_code',
+        name: '新名称',
+        remark: '新备注',
+        isActive: false,
+        sort: 10,
+      };
+      mockPrismaService.dictType.findUnique.mockResolvedValue(makeDictType({ id: 'test-id' }));
+      mockPrismaService.dictType.findFirst.mockResolvedValue(null);
+      mockPrismaService.dictType.update.mockResolvedValue(
+        makeDictType({ id: 'test-id', ...dto }),
+      );
+
+      const result = await service.updateType('test-id', dto);
+
+      expect(mockPrismaService.dictType.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'test-id' },
+          data: expect.objectContaining({
+            code: 'new_code',
+            name: '新名称',
+            remark: '新备注',
+            isActive: false,
+            sort: 10,
+          }) as object,
+        }) as object,
+      );
+    });
   });
 
   describe('removeType', () => {
@@ -292,6 +332,62 @@ describe('DictService', () => {
       mockPrismaService.dictValue.findUnique.mockResolvedValue(null);
 
       await expect(service.updateValue('non-existent', {})).rejects.toThrow(BusinessException);
+    });
+
+    it('should check for duplicate code when code is provided in update', async () => {
+      const dto: UpdateDictValueDto = { code: 'dup_code' };
+      mockPrismaService.dictValue.findUnique.mockResolvedValue(
+        makeDictValue({ id: 'v1', dictTypeId: 't1' }),
+      );
+      mockPrismaService.dictValue.findFirst.mockResolvedValue(
+        makeDictValue({ id: 'v2', code: 'dup_code' }),
+      );
+
+      await expect(service.updateValue('v1', dto)).rejects.toThrow(BusinessException);
+    });
+
+    it('should skip duplicate check when code is empty string', async () => {
+      const dto: UpdateDictValueDto = { code: '' };
+      mockPrismaService.dictValue.findUnique.mockResolvedValue(makeDictValue({ id: 'v1' }));
+      mockPrismaService.dictValue.update.mockResolvedValue(makeDictValue({ id: 'v1', code: '' }));
+
+      await service.updateValue('v1', dto);
+
+      expect(mockPrismaService.dictValue.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should update all fields when all are provided', async () => {
+      const dto: UpdateDictValueDto = {
+        code: 'new_code',
+        label: '新标签',
+        value: '2',
+        color: '#ff0000',
+        remark: '备注',
+        isActive: false,
+        sort: 5,
+      };
+      mockPrismaService.dictValue.findUnique.mockResolvedValue(makeDictValue({ id: 'v1' }));
+      mockPrismaService.dictValue.findFirst.mockResolvedValue(null);
+      mockPrismaService.dictValue.update.mockResolvedValue(
+        makeDictValue({ id: 'v1', ...dto }),
+      );
+
+      const result = await service.updateValue('v1', dto);
+
+      expect(mockPrismaService.dictValue.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'v1' },
+          data: expect.objectContaining({
+            code: 'new_code',
+            label: '新标签',
+            value: '2',
+            color: '#ff0000',
+            remark: '备注',
+            isActive: false,
+            sort: 5,
+          }) as object,
+        }) as object,
+      );
     });
   });
 

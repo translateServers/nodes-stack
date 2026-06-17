@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { BusinessException } from '../exceptions/business.exception';
 
 jest.mock('@nestjs/passport', () => ({
   AuthGuard: jest.fn(() => {
@@ -91,6 +92,26 @@ describe('JwtAuthGuard', () => {
         mockContext.getClass(),
       ]);
       expect(result).toBe(true);
+    });
+  });
+
+  describe('handleRequest', () => {
+    it('should return user when no error and user exists', () => {
+      const user = { id: 'user-1', roles: [] };
+
+      const result = guard.handleRequest(null, user);
+
+      expect(result).toBe(user);
+    });
+
+    it('should throw BusinessException when err is present', () => {
+      expect(() => guard.handleRequest(new Error('auth error'), undefined)).toThrow(
+        BusinessException,
+      );
+    });
+
+    it('should throw BusinessException when user is undefined', () => {
+      expect(() => guard.handleRequest(null, undefined)).toThrow(BusinessException);
     });
   });
 });

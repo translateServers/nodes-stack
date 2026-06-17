@@ -61,13 +61,13 @@ export class MenuService {
     const updateData: Partial<Menu> = {};
     if (dto.name !== undefined) updateData.name = dto.name;
     if (dto.parentId !== undefined) updateData.parentId = dto.parentId;
-    if (dto.path !== undefined) updateData.path = dto.path ?? null;
-    if (dto.icon !== undefined) updateData.icon = dto.icon ?? null;
+    if (dto.path !== undefined) updateData.path = dto.path;
+    if (dto.icon !== undefined) updateData.icon = dto.icon;
     if (dto.type !== undefined) updateData.type = dto.type;
     if (dto.sort !== undefined) updateData.sort = dto.sort;
     if (dto.isVisible !== undefined) updateData.isActive = dto.isVisible;
-    if (dto.permission !== undefined) updateData.permission = dto.permission ?? null;
-    if (dto.component !== undefined) updateData.component = dto.component ?? null;
+    if (dto.permission !== undefined) updateData.permission = dto.permission;
+    if (dto.component !== undefined) updateData.component = dto.component;
 
     const updated = await this.prisma.menu.update({
       where: { id },

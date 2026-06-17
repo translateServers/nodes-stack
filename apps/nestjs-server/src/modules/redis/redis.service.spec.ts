@@ -146,6 +146,55 @@ describe('RedisService', () => {
     });
   });
 
+  describe('safeExec', () => {
+    it('should execute fn and return result when client is open', async () => {
+      void service.client;
+      (mockClient as unknown as { isOpen: boolean }).isOpen = true;
+      const fn = jest.fn().mockResolvedValue('data');
+
+      const result = await service.safeExec(fn, 'fallback');
+
+      expect(result).toBe('data');
+      expect(fn).toHaveBeenCalled();
+    });
+
+    it('should return fallback when client is not open', async () => {
+      void service.client;
+      (mockClient as unknown as { isOpen: boolean }).isOpen = false;
+
+      const result = await service.safeExec(jest.fn(), 'fallback');
+
+      expect(result).toBe('fallback');
+    });
+
+    it('should return fallback when fn throws', async () => {
+      void service.client;
+      (mockClient as unknown as { isOpen: boolean }).isOpen = true;
+      const fn = jest.fn().mockRejectedValue(new Error('boom'));
+
+      const result = await service.safeExec(fn, 'fallback');
+
+      expect(result).toBe('fallback');
+    });
+  });
+
+  describe('ready', () => {
+    it('should resolve immediately when already connected', async () => {
+      (service as unknown as { _isConnected: boolean })._isConnected = true;
+
+      await expect(service.ready).resolves.toBeUndefined();
+    });
+
+    it('should trigger client creation when not connected and no connectPromise', async () => {
+      (service as unknown as { _isConnected: boolean })._isConnected = false;
+      (service as unknown as { _connectPromise: null })._connectPromise = null;
+
+      await service.ready;
+
+      expect(mockedCreateClient).toHaveBeenCalled();
+    });
+  });
+
   describe('onModuleDestroy', () => {
     it('should not quit when client was never created', async () => {
       const callsBefore = mockClient.quit.mock.calls.length;

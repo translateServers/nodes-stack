@@ -164,6 +164,31 @@ describe('RoleService', () => {
 
       await expect(service.update('missing', {})).rejects.toThrow(BusinessException);
     });
+
+    it('should update description when provided', async () => {
+      const dto: UpdateRoleDto = { description: '新描述' };
+      mockPrismaService.role.findUnique.mockResolvedValueOnce(makeRole({ id: 'u' }));
+      mockPrismaService.role.update.mockResolvedValue(makeRole({ id: 'u', description: '新描述' }));
+
+      const result = await service.update('u', dto);
+
+      expect(result.description).toBe('新描述');
+      expect(mockPrismaService.role.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ description: '新描述' }) as object,
+        }) as object,
+      );
+    });
+
+    it('should skip name duplicate check when name is empty string', async () => {
+      const dto: UpdateRoleDto = { name: '' };
+      mockPrismaService.role.findUnique.mockResolvedValueOnce(makeRole({ id: 'u' }));
+      mockPrismaService.role.update.mockResolvedValue(makeRole({ id: 'u', name: '' }));
+
+      await service.update('u', dto);
+
+      expect(mockPrismaService.role.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   describe('remove', () => {
@@ -201,6 +226,22 @@ describe('RoleService', () => {
             menus: expect.objectContaining({
               set: [{ id: 'm1' }, { id: 'm2' }],
             }) as object,
+          }) as object,
+        }) as object,
+      );
+    });
+
+    it('should skip menu validation when menuIds is empty', async () => {
+      mockPrismaService.role.findUnique.mockResolvedValueOnce(makeRole({ id: 'r' }));
+      mockPrismaService.role.update.mockResolvedValueOnce(makeRole({ id: 'r' }));
+
+      await service.assignMenus('r', { menuIds: [] });
+
+      expect(mockPrismaService.menu.findMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.role.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            menus: { set: [] },
           }) as object,
         }) as object,
       );

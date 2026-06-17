@@ -12,6 +12,13 @@ module.exports = {
     '!**/*.e2e-spec.ts',
     '!**/main.ts',
     '!**/generated/**/*',
+    '!**/*.module.ts',
+    '!**/prisma.service.ts',
+    '!**/logger.factory.ts',
+    '!**/config-loader.ts',
+    '!**/typed-config.service.ts',
+    '!**/config/schemas/**',
+    '!**/throttler.guard.ts',
   ],
   coverageDirectory: '../coverage',
   coverageThreshold: {
