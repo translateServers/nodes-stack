@@ -150,7 +150,8 @@ describe('CaptchaService', () => {
       const genResult = await service.generateCaptcha();
       const captchaId = genResult.captchaId;
 
-      const memCache = (service as unknown as { memoryCache: Map<string, { code: string }> }).memoryCache;
+      const memCache = (service as unknown as { memoryCache: Map<string, { code: string }> })
+        .memoryCache;
       const stored = memCache.get(captchaId);
       expect(stored).toBeDefined();
 
@@ -162,7 +163,9 @@ describe('CaptchaService', () => {
       const genResult = await service.generateCaptcha();
       const captchaId = genResult.captchaId;
 
-      const memCache = (service as unknown as { memoryCache: Map<string, { code: string; expiresAt: number }> }).memoryCache;
+      const memCache = (
+        service as unknown as { memoryCache: Map<string, { code: string; expiresAt: number }> }
+      ).memoryCache;
       const entry = memCache.get(captchaId);
       if (entry) {
         entry.expiresAt = Date.now() - 1000;

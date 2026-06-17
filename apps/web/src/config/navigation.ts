@@ -1,10 +1,4 @@
-import {
-  LayoutDashboard,
-  Users,
-  BookOpen,
-  Shield,
-  FileText,
-} from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Shield, FileText } from 'lucide-react';
 
 export interface NavItem {
   text: string;

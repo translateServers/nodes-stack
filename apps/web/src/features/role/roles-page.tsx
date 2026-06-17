@@ -6,6 +6,7 @@ import type { z } from 'zod';
 import { CreateRoleSchema, UpdateRoleSchema, type RoleResponse } from '@nebula/shared';
 import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from './hooks';
 import { DataTable } from '@/components/data-table';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -101,6 +102,7 @@ export default function RolesPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleResponse | undefined>();
+  const [deleteTarget, setDeleteTarget] = useState<RoleResponse | null>(null);
 
   const handleCreate = useCallback(() => {
     setEditingRole(undefined);
@@ -112,84 +114,98 @@ export default function RolesPage() {
     setDialogOpen(true);
   }, []);
 
-  const handleDelete = useCallback(async (role: RoleResponse) => {
-    if (!confirm(`确定要删除角色 "${role.name}" 吗？`)) return;
-    await deleteRoleMutation.mutateAsync(role.id);
-  }, [deleteRoleMutation]);
+  const handleDelete = useCallback((role: RoleResponse) => {
+    setDeleteTarget(role);
+  }, []);
 
-  const handleBatchDelete = useCallback(async (selectedRoles: RoleResponse[]) => {
-    const results = await Promise.allSettled(
-      selectedRoles.map((role) => deleteRoleMutation.mutateAsync(role.id)),
-    );
-    const failed = results.filter((r) => r.status === 'rejected').length;
-    const succeeded = results.length - failed;
-    if (failed > 0) {
-      toast.error(`删除完成：成功 ${succeeded} 个，失败 ${failed} 个`);
-    } else {
-      toast.success(`成功删除 ${succeeded} 个角色`);
-    }
-  }, [deleteRoleMutation]);
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    await deleteRoleMutation.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
+  }, [deleteTarget, deleteRoleMutation]);
 
-  const handleFormSubmit = useCallback(async (data: unknown) => {
-    if (editingRole) {
-      await updateRoleMutation.mutateAsync({
-        id: editingRole.id,
-        params: data as UpdateRoleInput,
-      });
-    } else {
-      await createRoleMutation.mutateAsync(data as CreateRoleInput);
-    }
-    setDialogOpen(false);
-  }, [editingRole, createRoleMutation, updateRoleMutation]);
+  const handleBatchDelete = useCallback(
+    async (selectedRoles: RoleResponse[]) => {
+      const results = await Promise.allSettled(
+        selectedRoles.map((role) => deleteRoleMutation.mutateAsync(role.id)),
+      );
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const succeeded = results.length - failed;
+      if (failed > 0) {
+        toast.error(`删除完成：成功 ${succeeded} 个，失败 ${failed} 个`);
+      } else {
+        toast.success(`成功删除 ${succeeded} 个角色`);
+      }
+    },
+    [deleteRoleMutation],
+  );
+
+  const handleFormSubmit = useCallback(
+    async (data: unknown) => {
+      if (editingRole) {
+        await updateRoleMutation.mutateAsync({
+          id: editingRole.id,
+          params: data as UpdateRoleInput,
+        });
+      } else {
+        await createRoleMutation.mutateAsync(data as CreateRoleInput);
+      }
+      setDialogOpen(false);
+    },
+    [editingRole, createRoleMutation, updateRoleMutation],
+  );
 
   const columnHelper = createColumnHelper<RoleResponse>();
 
-  const columns = useMemo(() => [
-    columnHelper.accessor('name', {
-      header: '角色名称',
-      size: 200,
-      enableResizing: true,
-    }),
-    columnHelper.accessor('description', {
-      header: '描述',
-      size: 300,
-      enableResizing: true,
-      cell: (info) => info.getValue() || '-',
-    }),
-    columnHelper.accessor('isActive', {
-      header: '状态',
-      size: 100,
-      cell: (info) =>
-        info.getValue() ? (
-          <Badge variant="default">启用</Badge>
-        ) : (
-          <Badge variant="destructive">禁用</Badge>
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('name', {
+        header: '角色名称',
+        size: 200,
+        enableResizing: true,
+      }),
+      columnHelper.accessor('description', {
+        header: '描述',
+        size: 300,
+        enableResizing: true,
+        cell: (info) => info.getValue() || '-',
+      }),
+      columnHelper.accessor('isActive', {
+        header: '状态',
+        size: 100,
+        cell: (info) =>
+          info.getValue() ? (
+            <Badge variant="default">启用</Badge>
+          ) : (
+            <Badge variant="destructive">禁用</Badge>
+          ),
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: '操作',
+        size: 120,
+        enableSorting: false,
+        enableHiding: false,
+        enableResizing: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => handleDelete(row.original)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
         ),
-    }),
-    columnHelper.display({
-      id: 'actions',
-      header: '操作',
-      size: 120,
-      enableSorting: false,
-      enableHiding: false,
-      enableResizing: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
-            <Pencil className="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => void handleDelete(row.original)}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-      ),
-    }),
-  ], [handleEdit, handleDelete]);
+      }),
+    ],
+    [handleEdit, handleDelete],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -232,6 +248,21 @@ export default function RolesPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        title="删除角色"
+        description={
+          <>
+            确定要删除角色 <strong>"{deleteTarget?.name}"</strong> 吗？此操作不可撤销。
+          </>
+        }
+        onConfirm={confirmDelete}
+        loading={deleteRoleMutation.isPending}
+      />
     </div>
   );
 }

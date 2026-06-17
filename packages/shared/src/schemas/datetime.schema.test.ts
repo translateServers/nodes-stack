@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  DateTimeStringSchema,
-  DATETIME_REGEX,
-} from './datetime.schema.js';
+import { DateTimeStringSchema, DATETIME_REGEX } from './datetime.schema.js';
 
 describe('DateTimeStringSchema', () => {
   it('should accept valid datetime string', () => {

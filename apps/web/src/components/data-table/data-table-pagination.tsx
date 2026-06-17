@@ -15,7 +15,7 @@ interface DataTablePaginationProps<TData> {
 
 export function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex items-center justify-between px-2">
+    <div className="flex items-center justify-between border-t px-3 py-2.5">
       <div className="flex-1 text-sm text-muted-foreground">
         共 {table.getFilteredRowModel().rows.length} 条，第{' '}
         {table.getState().pagination.pageIndex + 1}/{table.getPageCount()} 页

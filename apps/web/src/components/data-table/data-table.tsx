@@ -22,7 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Spinner } from '@/components/ui/spinner';
 import { DataTableToolbar } from './data-table-toolbar';
 import { DataTablePagination } from './data-table-pagination';
 import { DataTableCheckbox } from './data-table-checkbox';
@@ -142,7 +141,7 @@ export function DataTable<TData>({
         rightContent={toolbarRightContent}
       />
 
-      <div className="mt-4 rounded-lg border">
+      <div className="mt-4 rounded-xl ring-1 ring-foreground/10">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -164,11 +163,20 @@ export function DataTable<TData>({
                         onMouseDown={header.getResizeHandler() as React.MouseEventHandler}
                         onTouchStart={header.getResizeHandler() as React.TouchEventHandler}
                         className={cn(
-                          'absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none touch-none opacity-0 hover:opacity-100',
-                          header.column.getIsResizing() && 'opacity-100 bg-primary',
-                          'hover:bg-primary/50 transition-colors',
+                          'absolute top-0 -right-1 z-20 flex h-full w-3 cursor-col-resize select-none touch-none justify-center opacity-0 hover:opacity-100',
+                          header.column.getIsResizing() && 'opacity-100',
+                          'transition-opacity',
                         )}
-                      />
+                      >
+                        <div
+                          className={cn(
+                            'h-full w-0.5 rounded-full transition-colors',
+                            header.column.getIsResizing()
+                              ? 'bg-primary'
+                              : 'bg-foreground/20 hover:bg-primary/60',
+                          )}
+                        />
+                      </div>
                     )}
                   </TableHead>
                 ))}
@@ -177,16 +185,20 @@ export function DataTable<TData>({
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={columnsWithSelection.length} className="h-32 text-center">
-                  <Spinner className="mx-auto size-6" />
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 3 }).map((_, i) => (
+                <TableRow key={i} className="hover:bg-transparent">
+                  {Array.from({ length: columnsWithSelection.length }).map((_, j) => (
+                    <TableCell key={j}>
+                      <div className="h-4 w-full max-w-[120px] animate-pulse rounded bg-muted" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columnsWithSelection.length} className="h-32 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    {emptyIcon && <div className="text-muted-foreground">{emptyIcon}</div>}
+                <TableCell colSpan={columnsWithSelection.length} className="h-48 text-center">
+                  <div className="flex animate-in fade-in zoom-in-95 flex-col items-center gap-3 duration-300">
+                    {emptyIcon && <div className="text-muted-foreground/60">{emptyIcon}</div>}
                     <div className="font-medium">{emptyTitle}</div>
                     {emptyDescription && (
                       <div className="text-sm text-muted-foreground">{emptyDescription}</div>

@@ -361,7 +361,6 @@ describe('MenuService', () => {
         }) as object,
       );
     });
-
   });
 
   describe('remove', () => {

@@ -22,7 +22,18 @@ describe('useDictTypes', () => {
   });
 
   it('should fetch dict types', async () => {
-    const mockTypes = [{ id: '1', code: 'user_status', name: '用户状态', sort: 0, isActive: true, remark: null, createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00' }];
+    const mockTypes = [
+      {
+        id: '1',
+        code: 'user_status',
+        name: '用户状态',
+        sort: 0,
+        isActive: true,
+        remark: null,
+        createdAt: '2025-06-01 10:00:00',
+        updatedAt: '2025-06-01 10:00:00',
+      },
+    ];
     vi.mocked(dictApi.getDictTypes).mockResolvedValue(mockTypes);
 
     const { result } = renderHook(() => useDictTypes(), {
@@ -42,7 +53,21 @@ describe('useDictValues', () => {
   });
 
   it('should fetch dict values for a type', async () => {
-    const mockValues = [{ id: '1', dictTypeId: 't1', code: 'active', label: '启用', value: '1', color: null, sort: 0, remark: null, isActive: true, createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00' }];
+    const mockValues = [
+      {
+        id: '1',
+        dictTypeId: 't1',
+        code: 'active',
+        label: '启用',
+        value: '1',
+        color: null,
+        sort: 0,
+        remark: null,
+        isActive: true,
+        createdAt: '2025-06-01 10:00:00',
+        updatedAt: '2025-06-01 10:00:00',
+      },
+    ];
     vi.mocked(dictApi.getDictValues).mockResolvedValue(mockValues);
 
     const { result } = renderHook(() => useDictValues('t1'), {
@@ -71,8 +96,14 @@ describe('useCreateDictType', () => {
 
   it('should create a dict type', async () => {
     vi.mocked(dictApi.createDictType).mockResolvedValue({
-      id: '2', code: 'new_type', name: '新类型', sort: 0, isActive: true, remark: null,
-      createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00',
+      id: '2',
+      code: 'new_type',
+      name: '新类型',
+      sort: 0,
+      isActive: true,
+      remark: null,
+      createdAt: '2025-06-01 10:00:00',
+      updatedAt: '2025-06-01 10:00:00',
     });
 
     const { result } = renderHook(() => useCreateDictType(), {

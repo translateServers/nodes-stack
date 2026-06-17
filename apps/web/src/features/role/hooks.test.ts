@@ -18,7 +18,16 @@ describe('useRoles', () => {
   });
 
   it('should fetch roles list', async () => {
-    const mockRoles = [{ id: '1', name: 'admin', description: null, isActive: true, createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00' }];
+    const mockRoles = [
+      {
+        id: '1',
+        name: 'admin',
+        description: null,
+        isActive: true,
+        createdAt: '2025-06-01 10:00:00',
+        updatedAt: '2025-06-01 10:00:00',
+      },
+    ];
     vi.mocked(roleApi.getRoles).mockResolvedValue(mockRoles);
 
     const { result } = renderHook(() => useRoles(), {
@@ -39,8 +48,12 @@ describe('useCreateRole', () => {
 
   it('should create a role', async () => {
     vi.mocked(roleApi.createRole).mockResolvedValue({
-      id: '2', name: 'viewer', description: 'Viewer', isActive: true,
-      createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00',
+      id: '2',
+      name: 'viewer',
+      description: 'Viewer',
+      isActive: true,
+      createdAt: '2025-06-01 10:00:00',
+      updatedAt: '2025-06-01 10:00:00',
     });
 
     const { result } = renderHook(() => useCreateRole(), {

@@ -92,8 +92,6 @@ describe('MenuResponseSchema', () => {
   });
 
   it('should reject invalid datetime', () => {
-    expect(() =>
-      MenuResponseSchema.parse({ ...valid, createdAt: 'bad-date' }),
-    ).toThrow();
+    expect(() => MenuResponseSchema.parse({ ...valid, createdAt: 'bad-date' })).toThrow();
   });
 });

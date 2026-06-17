@@ -5,6 +5,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from './hooks';
 import { DataTable } from '@/components/data-table';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -134,6 +135,7 @@ export default function UsersPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | undefined>();
+  const [deleteTarget, setDeleteTarget] = useState<UserResponse | null>(null);
 
   const handleCreate = useCallback(() => {
     setEditingUser(undefined);
@@ -145,91 +147,105 @@ export default function UsersPage() {
     setDialogOpen(true);
   }, []);
 
-  const handleDelete = useCallback(async (user: UserResponse) => {
-    if (!confirm(`确定要删除用户 "${user.username}" 吗？`)) return;
-    await deleteUserMutation.mutateAsync(user.id);
-  }, [deleteUserMutation]);
+  const handleDelete = useCallback((user: UserResponse) => {
+    setDeleteTarget(user);
+  }, []);
 
-  const handleBatchDelete = useCallback(async (selectedUsers: UserResponse[]) => {
-    const results = await Promise.allSettled(
-      selectedUsers.map((user) => deleteUserMutation.mutateAsync(user.id)),
-    );
-    const failed = results.filter((r) => r.status === 'rejected').length;
-    const succeeded = results.length - failed;
-    if (failed > 0) {
-      toast.error(`删除完成：成功 ${succeeded} 个，失败 ${failed} 个`);
-    } else {
-      toast.success(`成功删除 ${succeeded} 个用户`);
-    }
-  }, [deleteUserMutation]);
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    await deleteUserMutation.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
+  }, [deleteTarget, deleteUserMutation]);
 
-  const handleFormSubmit = useCallback(async (data: unknown) => {
-    if (editingUser) {
-      await updateUserMutation.mutateAsync({
-        id: editingUser.id,
-        params: data as Parameters<typeof updateUserMutation.mutateAsync>[0]['params'],
-      });
-    } else {
-      await createUserMutation.mutateAsync(
-        data as Parameters<typeof createUserMutation.mutateAsync>[0],
+  const handleBatchDelete = useCallback(
+    async (selectedUsers: UserResponse[]) => {
+      const results = await Promise.allSettled(
+        selectedUsers.map((user) => deleteUserMutation.mutateAsync(user.id)),
       );
-    }
-    setDialogOpen(false);
-  }, [editingUser, createUserMutation, updateUserMutation]);
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      const succeeded = results.length - failed;
+      if (failed > 0) {
+        toast.error(`删除完成：成功 ${succeeded} 个，失败 ${failed} 个`);
+      } else {
+        toast.success(`成功删除 ${succeeded} 个用户`);
+      }
+    },
+    [deleteUserMutation],
+  );
+
+  const handleFormSubmit = useCallback(
+    async (data: unknown) => {
+      if (editingUser) {
+        await updateUserMutation.mutateAsync({
+          id: editingUser.id,
+          params: data as Parameters<typeof updateUserMutation.mutateAsync>[0]['params'],
+        });
+      } else {
+        await createUserMutation.mutateAsync(
+          data as Parameters<typeof createUserMutation.mutateAsync>[0],
+        );
+      }
+      setDialogOpen(false);
+    },
+    [editingUser, createUserMutation, updateUserMutation],
+  );
 
   const columnHelper = createColumnHelper<UserResponse>();
 
-  const columns = useMemo(() => [
-    columnHelper.accessor('username', {
-      header: '用户名',
-      size: 150,
-      enableResizing: true,
-    }),
-    columnHelper.accessor('email', {
-      header: '邮箱',
-      size: 200,
-      enableResizing: true,
-    }),
-    columnHelper.accessor('name', {
-      header: '显示名称',
-      size: 150,
-      enableResizing: true,
-      cell: (info) => info.getValue() || '-',
-    }),
-    columnHelper.accessor('isActive', {
-      header: '状态',
-      size: 100,
-      cell: (info) =>
-        info.getValue() ? (
-          <Badge variant="default">启用</Badge>
-        ) : (
-          <Badge variant="destructive">禁用</Badge>
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor('username', {
+        header: '用户名',
+        size: 150,
+        enableResizing: true,
+      }),
+      columnHelper.accessor('email', {
+        header: '邮箱',
+        size: 200,
+        enableResizing: true,
+      }),
+      columnHelper.accessor('name', {
+        header: '显示名称',
+        size: 150,
+        enableResizing: true,
+        cell: (info) => info.getValue() || '-',
+      }),
+      columnHelper.accessor('isActive', {
+        header: '状态',
+        size: 100,
+        cell: (info) =>
+          info.getValue() ? (
+            <Badge variant="default">启用</Badge>
+          ) : (
+            <Badge variant="destructive">禁用</Badge>
+          ),
+      }),
+      columnHelper.display({
+        id: 'actions',
+        header: '操作',
+        size: 120,
+        enableSorting: false,
+        enableHiding: false,
+        enableResizing: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => handleDelete(row.original)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
         ),
-    }),
-    columnHelper.display({
-      id: 'actions',
-      header: '操作',
-      size: 120,
-      enableSorting: false,
-      enableHiding: false,
-      enableResizing: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={() => handleEdit(row.original)}>
-            <Pencil className="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => void handleDelete(row.original)}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-      ),
-    }),
-  ], [handleEdit, handleDelete]);
+      }),
+    ],
+    [handleEdit, handleDelete],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -281,6 +297,21 @@ export default function UsersPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        title="删除用户"
+        description={
+          <>
+            确定要删除用户 <strong>"{deleteTarget?.username}"</strong> 吗？此操作不可撤销。
+          </>
+        }
+        onConfirm={confirmDelete}
+        loading={deleteUserMutation.isPending}
+      />
     </div>
   );
 }

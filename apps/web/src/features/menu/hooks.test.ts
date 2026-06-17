@@ -18,7 +18,17 @@ describe('useMenus', () => {
   });
 
   it('should fetch menus', async () => {
-    const mockMenus = [{ id: '1', name: 'Dashboard', type: 'MENU' as const, sort: 0, isVisible: true, createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00' }];
+    const mockMenus = [
+      {
+        id: '1',
+        name: 'Dashboard',
+        type: 'MENU' as const,
+        sort: 0,
+        isVisible: true,
+        createdAt: '2025-06-01 10:00:00',
+        updatedAt: '2025-06-01 10:00:00',
+      },
+    ];
     vi.mocked(menuApi.getMenus).mockResolvedValue(mockMenus);
 
     const { result } = renderHook(() => useMenus(), {
@@ -37,7 +47,18 @@ describe('useMenuTree', () => {
   });
 
   it('should fetch menu tree', async () => {
-    const mockTree = [{ id: '1', name: 'System', type: 'DIRECTORY' as const, sort: 0, isVisible: true, children: [], createdAt: '2025-06-01 10:00:00', updatedAt: '2025-06-01 10:00:00' }];
+    const mockTree = [
+      {
+        id: '1',
+        name: 'System',
+        type: 'DIRECTORY' as const,
+        sort: 0,
+        isVisible: true,
+        children: [],
+        createdAt: '2025-06-01 10:00:00',
+        updatedAt: '2025-06-01 10:00:00',
+      },
+    ];
     vi.mocked(menuApi.getMenuTree).mockResolvedValue(mockTree);
 
     const { result } = renderHook(() => useMenuTree(), {

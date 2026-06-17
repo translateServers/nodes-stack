@@ -50,9 +50,7 @@ describe('RoleResponseSchema', () => {
   });
 
   it('should reject invalid datetime format', () => {
-    expect(() =>
-      RoleResponseSchema.parse({ ...valid, createdAt: '2025/06/01' }),
-    ).toThrow();
+    expect(() => RoleResponseSchema.parse({ ...valid, createdAt: '2025/06/01' })).toThrow();
   });
 
   it('should reject missing required fields', () => {

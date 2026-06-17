@@ -190,7 +190,9 @@ describe('DictService', () => {
     it('should skip duplicate check when code is empty string', async () => {
       const dto: UpdateDictTypeDto = { code: '' };
       mockPrismaService.dictType.findUnique.mockResolvedValue(makeDictType({ id: 'test-id' }));
-      mockPrismaService.dictType.update.mockResolvedValue(makeDictType({ id: 'test-id', code: '' }));
+      mockPrismaService.dictType.update.mockResolvedValue(
+        makeDictType({ id: 'test-id', code: '' }),
+      );
 
       await service.updateType('test-id', dto);
 
@@ -207,9 +209,7 @@ describe('DictService', () => {
       };
       mockPrismaService.dictType.findUnique.mockResolvedValue(makeDictType({ id: 'test-id' }));
       mockPrismaService.dictType.findFirst.mockResolvedValue(null);
-      mockPrismaService.dictType.update.mockResolvedValue(
-        makeDictType({ id: 'test-id', ...dto }),
-      );
+      mockPrismaService.dictType.update.mockResolvedValue(makeDictType({ id: 'test-id', ...dto }));
 
       const result = await service.updateType('test-id', dto);
 
@@ -368,9 +368,7 @@ describe('DictService', () => {
       };
       mockPrismaService.dictValue.findUnique.mockResolvedValue(makeDictValue({ id: 'v1' }));
       mockPrismaService.dictValue.findFirst.mockResolvedValue(null);
-      mockPrismaService.dictValue.update.mockResolvedValue(
-        makeDictValue({ id: 'v1', ...dto }),
-      );
+      mockPrismaService.dictValue.update.mockResolvedValue(makeDictValue({ id: 'v1', ...dto }));
 
       const result = await service.updateValue('v1', dto);
 

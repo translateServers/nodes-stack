@@ -19,6 +19,7 @@ import {
 } from '@nebula/shared';
 import { useMenuTree, useCreateMenu, useUpdateMenu, useDeleteMenu } from './hooks';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -390,7 +391,7 @@ function TreeNode({ node, depth, expandedIds, onToggle, onEdit, onDelete }: Tree
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={() => void onDelete(node)}
+              onClick={() => onDelete(node)}
               className="text-destructive hover:text-destructive"
               title="删除"
             >
@@ -427,6 +428,7 @@ export default function MenusPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMenu, setEditingMenu] = useState<MenuResponse | undefined>();
   const [parentId, setParentId] = useState<string | null | undefined>();
+  const [deleteTarget, setDeleteTarget] = useState<MenuResponse | null>(null);
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
@@ -443,8 +445,13 @@ export default function MenusPage() {
   };
 
   const handleDelete = (menu: MenuResponse) => {
-    if (!confirm(`确定要删除菜单「${menu.name}」吗？子菜单也会一并删除。`)) return;
-    void deleteMutation.mutateAsync(menu.id);
+    setDeleteTarget(menu);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    await deleteMutation.mutateAsync(deleteTarget.id);
+    setDeleteTarget(null);
   };
 
   const handleFormSubmit = async (formData: unknown) => {
@@ -562,6 +569,21 @@ export default function MenusPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTarget(null);
+        }}
+        title="删除菜单"
+        description={
+          <>
+            确定要删除菜单 <strong>「{deleteTarget?.name}」</strong> 吗？子菜单也会一并删除。
+          </>
+        }
+        onConfirm={confirmDelete}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

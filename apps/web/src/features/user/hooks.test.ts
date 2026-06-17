@@ -18,7 +18,17 @@ describe('useUsers', () => {
   });
 
   it('should fetch users list', async () => {
-    const mockUsers = [{ id: '1', email: 'a@b.com', username: 'alice', name: 'Alice', isActive: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' }];
+    const mockUsers = [
+      {
+        id: '1',
+        email: 'a@b.com',
+        username: 'alice',
+        name: 'Alice',
+        isActive: true,
+        createdAt: '2025-01-01',
+        updatedAt: '2025-01-01',
+      },
+    ];
     vi.mocked(userApi.getUsers).mockResolvedValue(mockUsers);
 
     const { result } = renderHook(() => useUsers(), {
@@ -37,7 +47,15 @@ describe('useUser', () => {
   });
 
   it('should fetch user by id', async () => {
-    const mockUser = { id: '1', email: 'a@b.com', username: 'alice', name: 'Alice', isActive: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' };
+    const mockUser = {
+      id: '1',
+      email: 'a@b.com',
+      username: 'alice',
+      name: 'Alice',
+      isActive: true,
+      createdAt: '2025-01-01',
+      updatedAt: '2025-01-01',
+    };
     vi.mocked(userApi.getUserById).mockResolvedValue(mockUser);
 
     const { result } = renderHook(() => useUser('1'), {
@@ -65,7 +83,15 @@ describe('useCreateUser', () => {
   });
 
   it('should call createUser API', async () => {
-    const newUser = { id: '2', email: 'new@test.com', username: 'new', name: null, isActive: true, createdAt: '2025-01-01', updatedAt: '2025-01-01' };
+    const newUser = {
+      id: '2',
+      email: 'new@test.com',
+      username: 'new',
+      name: null,
+      isActive: true,
+      createdAt: '2025-01-01',
+      updatedAt: '2025-01-01',
+    };
     vi.mocked(userApi.createUser).mockResolvedValue(newUser);
 
     const { result } = renderHook(() => useCreateUser(), {

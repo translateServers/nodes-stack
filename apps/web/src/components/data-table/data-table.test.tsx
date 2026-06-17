@@ -183,9 +183,7 @@ describe('DataTable', () => {
 
   describe('row selection', () => {
     it('should render checkboxes when enableRowSelection is true', () => {
-      render(
-        <DataTable data={mockData.slice(0, 3)} columns={columns} enableRowSelection />,
-      );
+      render(<DataTable data={mockData.slice(0, 3)} columns={columns} enableRowSelection />);
 
       const checkboxes = screen.getAllByRole('checkbox');
       expect(checkboxes.length).toBe(4);
@@ -193,9 +191,7 @@ describe('DataTable', () => {
 
     it('should select and deselect rows', async () => {
       const user = userEvent.setup();
-      render(
-        <DataTable data={mockData.slice(0, 3)} columns={columns} enableRowSelection />,
-      );
+      render(<DataTable data={mockData.slice(0, 3)} columns={columns} enableRowSelection />);
 
       const rowCheckboxes = screen.getAllByLabelText('选择行');
       await user.click(rowCheckboxes[0]);
@@ -225,8 +221,6 @@ describe('DataTable', () => {
       const user = userEvent.setup();
       const onBatchDelete = vi.fn();
 
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
-
       render(
         <DataTable
           data={mockData.slice(0, 3)}
@@ -243,6 +237,9 @@ describe('DataTable', () => {
       const deleteButton = screen.getByText('删除选中');
       await user.click(deleteButton);
 
+      const confirmButton = screen.getByText('确认删除');
+      await user.click(confirmButton);
+
       expect(onBatchDelete).toHaveBeenCalledWith([mockData[0], mockData[1]]);
 
       vi.restoreAllMocks();
@@ -250,9 +247,7 @@ describe('DataTable', () => {
 
     it('should clear selection when clicking cancel button', async () => {
       const user = userEvent.setup();
-      render(
-        <DataTable data={mockData.slice(0, 3)} columns={columns} enableRowSelection />,
-      );
+      render(<DataTable data={mockData.slice(0, 3)} columns={columns} enableRowSelection />);
 
       const rowCheckboxes = screen.getAllByLabelText('选择行');
       await user.click(rowCheckboxes[0]);

@@ -77,8 +77,9 @@ describe('LogQueryService', () => {
     it('should respect the limit parameter', () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readdirSync.mockReturnValue(['app.log'] as unknown as never[]);
-      const lines = Array.from({ length: 20 }, (_, i) =>
-        `[2025-06-01 10:00:${String(i).padStart(2, '0')}.000] info [App] Line ${i}`,
+      const lines = Array.from(
+        { length: 20 },
+        (_, i) => `[2025-06-01 10:00:${String(i).padStart(2, '0')}.000] info [App] Line ${i}`,
       ).join('\n');
       mockFs.readFileSync.mockReturnValue(lines);
 
@@ -91,8 +92,7 @@ describe('LogQueryService', () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readdirSync.mockReturnValue(['app.log'] as unknown as never[]);
       mockFs.readFileSync.mockReturnValue(
-        'this is not a valid log line\n' +
-          '[2025-06-01 10:00:00.000] info [App] Valid line\n',
+        'this is not a valid log line\n' + '[2025-06-01 10:00:00.000] info [App] Valid line\n',
       );
 
       const result = service.queryLogs({});
@@ -119,8 +119,7 @@ describe('LogQueryService', () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readdirSync.mockReturnValue(['app.log'] as unknown as never[]);
       mockFs.readFileSync.mockReturnValue(
-        '[2025-06-01 10:00:00.000] info [App] Old\n' +
-          '[2025-06-02 10:00:00.000] info [App] New\n',
+        '[2025-06-01 10:00:00.000] info [App] Old\n' + '[2025-06-02 10:00:00.000] info [App] New\n',
       );
 
       const result = service.queryLogs({ startDate: '2025-06-02' });

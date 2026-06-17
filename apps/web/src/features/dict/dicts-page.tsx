@@ -21,6 +21,7 @@ import {
 } from './hooks';
 import { createColumnHelper } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -373,6 +374,8 @@ export default function DictsPage() {
   const [editingType, setEditingType] = useState<DictTypeResponse | undefined>();
   const [valueDialogOpen, setValueDialogOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DictValueResponse | undefined>();
+  const [deleteTypeTarget, setDeleteTypeTarget] = useState<DictTypeResponse | null>(null);
+  const [deleteValueTarget, setDeleteValueTarget] = useState<DictValueResponse | null>(null);
 
   // 过滤后的字典类型
   const filteredTypes = useMemo(() => {
@@ -402,25 +405,33 @@ export default function DictsPage() {
     setTypeDialogOpen(true);
   }, []);
 
-  const handleDeleteType = useCallback(async (dictType: DictTypeResponse) => {
-    if (!confirm(`确定要删除字典类型 "${dictType.name}" 及其所有字典值吗？`)) return;
-    await deleteTypeMutation.mutateAsync(dictType.id);
-    if (selectedTypeId === dictType.id) {
+  const handleDeleteType = useCallback((dictType: DictTypeResponse) => {
+    setDeleteTypeTarget(dictType);
+  }, []);
+
+  const confirmDeleteType = useCallback(async () => {
+    if (!deleteTypeTarget) return;
+    await deleteTypeMutation.mutateAsync(deleteTypeTarget.id);
+    if (selectedTypeId === deleteTypeTarget.id) {
       setSelectedTypeId('');
     }
-  }, [deleteTypeMutation, selectedTypeId]);
+    setDeleteTypeTarget(null);
+  }, [deleteTypeTarget, deleteTypeMutation, selectedTypeId]);
 
-  const handleTypeFormSubmit = useCallback(async (data: unknown) => {
-    if (editingType) {
-      await updateTypeMutation.mutateAsync({
-        id: editingType.id,
-        params: data as UpdateDictTypeInput,
-      });
-    } else {
-      await createTypeMutation.mutateAsync(data as CreateDictTypeInput);
-    }
-    setTypeDialogOpen(false);
-  }, [editingType, createTypeMutation, updateTypeMutation]);
+  const handleTypeFormSubmit = useCallback(
+    async (data: unknown) => {
+      if (editingType) {
+        await updateTypeMutation.mutateAsync({
+          id: editingType.id,
+          params: data as UpdateDictTypeInput,
+        });
+      } else {
+        await createTypeMutation.mutateAsync(data as CreateDictTypeInput);
+      }
+      setTypeDialogOpen(false);
+    },
+    [editingType, createTypeMutation, updateTypeMutation],
+  );
 
   // 字典值操作
   const handleCreateValue = useCallback(() => {
@@ -433,91 +444,99 @@ export default function DictsPage() {
     setValueDialogOpen(true);
   }, []);
 
-  const handleDeleteValue = useCallback(async (dictValue: DictValueResponse) => {
-    if (!confirm(`确定要删除字典值 "${dictValue.label}" 吗？`)) return;
-    await deleteValueMutation.mutateAsync(dictValue.id);
-  }, [deleteValueMutation]);
+  const handleDeleteValue = useCallback((dictValue: DictValueResponse) => {
+    setDeleteValueTarget(dictValue);
+  }, []);
 
-  const handleValueFormSubmit = useCallback(async (data: unknown) => {
-    if (editingValue) {
-      await updateValueMutation.mutateAsync({
-        id: editingValue.id,
-        params: data as UpdateDictValueInput,
-      });
-    } else {
-      await createValueMutation.mutateAsync({
-        ...(data as CreateDictValueInput),
-        dictTypeId: selectedTypeId,
-      });
-    }
-    setValueDialogOpen(false);
-  }, [editingValue, selectedTypeId, createValueMutation, updateValueMutation]);
+  const confirmDeleteValue = useCallback(async () => {
+    if (!deleteValueTarget) return;
+    await deleteValueMutation.mutateAsync(deleteValueTarget.id);
+    setDeleteValueTarget(null);
+  }, [deleteValueTarget, deleteValueMutation]);
+
+  const handleValueFormSubmit = useCallback(
+    async (data: unknown) => {
+      if (editingValue) {
+        await updateValueMutation.mutateAsync({
+          id: editingValue.id,
+          params: data as UpdateDictValueInput,
+        });
+      } else {
+        await createValueMutation.mutateAsync({
+          ...(data as CreateDictValueInput),
+          dictTypeId: selectedTypeId,
+        });
+      }
+      setValueDialogOpen(false);
+    },
+    [editingValue, selectedTypeId, createValueMutation, updateValueMutation],
+  );
 
   const valueColumnHelper = createColumnHelper<DictValueResponse>();
 
-  const valueColumns = useMemo(() => [
-    valueColumnHelper.accessor('code', {
-      header: '编码',
-      cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
-    }),
-    valueColumnHelper.accessor('label', {
-      header: '标签',
-    }),
-    valueColumnHelper.accessor('value', {
-      header: '值',
-      cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
-    }),
-    valueColumnHelper.accessor('color', {
-      header: '颜色',
-      cell: (info) => {
-        const color = info.getValue();
-        if (!color) return '-';
-        return (
-          <div className="flex items-center gap-2">
-            <div
-              className="size-4 rounded border"
-              style={{ backgroundColor: color }}
-            />
-            <span className="text-xs">{color}</span>
+  const valueColumns = useMemo(
+    () => [
+      valueColumnHelper.accessor('code', {
+        header: '编码',
+        cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+      }),
+      valueColumnHelper.accessor('label', {
+        header: '标签',
+      }),
+      valueColumnHelper.accessor('value', {
+        header: '值',
+        cell: (info) => <span className="font-mono text-xs">{info.getValue()}</span>,
+      }),
+      valueColumnHelper.accessor('color', {
+        header: '颜色',
+        cell: (info) => {
+          const color = info.getValue();
+          if (!color) return '-';
+          return (
+            <div className="flex items-center gap-2">
+              <div className="size-4 rounded border" style={{ backgroundColor: color }} />
+              <span className="text-xs">{color}</span>
+            </div>
+          );
+        },
+      }),
+      valueColumnHelper.accessor('sort', {
+        header: '排序',
+      }),
+      valueColumnHelper.accessor('isActive', {
+        header: '状态',
+        cell: (info) =>
+          info.getValue() ? (
+            <Badge variant="default">启用</Badge>
+          ) : (
+            <Badge variant="secondary">禁用</Badge>
+          ),
+      }),
+      valueColumnHelper.display({
+        id: 'actions',
+        header: '操作',
+        size: 100,
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon-xs" onClick={() => handleEditValue(row.original)}>
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => handleDeleteValue(row.original)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
           </div>
-        );
-      },
-    }),
-    valueColumnHelper.accessor('sort', {
-      header: '排序',
-    }),
-    valueColumnHelper.accessor('isActive', {
-      header: '状态',
-      cell: (info) =>
-        info.getValue() ? (
-          <Badge variant="default">启用</Badge>
-        ) : (
-          <Badge variant="secondary">禁用</Badge>
         ),
-    }),
-    valueColumnHelper.display({
-      id: 'actions',
-      header: '操作',
-      size: 100,
-      enableSorting: false,
-      enableHiding: false,
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={() => handleEditValue(row.original)}>
-            <Pencil className="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => void handleDeleteValue(row.original)}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-      ),
-    }),
-  ], [handleEditValue, handleDeleteValue]);
+      }),
+    ],
+    [handleEditValue, handleDeleteValue],
+  );
 
   const selectedType = dictTypes?.find((t) => t.id === selectedTypeId);
 
@@ -600,7 +619,7 @@ export default function DictsPage() {
                           size="icon-xs"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void handleDeleteType(type);
+                            handleDeleteType(type);
                           }}
                           className="text-destructive hover:text-destructive"
                         >
@@ -688,6 +707,36 @@ export default function DictsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteTypeTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setDeleteTypeTarget(null);
+        }}
+        title="删除字典类型"
+        description={
+          <>
+            确定要删除字典类型 <strong>"{deleteTypeTarget?.name}"</strong> 及其所有字典值吗？
+          </>
+        }
+        onConfirm={confirmDeleteType}
+        loading={deleteTypeMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteValueTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setDeleteValueTarget(null);
+        }}
+        title="删除字典值"
+        description={
+          <>
+            确定要删除字典值 <strong>"{deleteValueTarget?.label}"</strong> 吗？
+          </>
+        }
+        onConfirm={confirmDeleteValue}
+        loading={deleteValueMutation.isPending}
+      />
     </div>
   );
 }

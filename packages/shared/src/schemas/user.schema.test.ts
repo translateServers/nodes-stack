@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  CreateUserSchema,
-  UpdateUserSchema,
-  UserResponseSchema,
-} from './user.schema.js';
+import { CreateUserSchema, UpdateUserSchema, UserResponseSchema } from './user.schema.js';
 
 describe('CreateUserSchema', () => {
   const valid = {
