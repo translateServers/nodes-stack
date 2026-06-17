@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ENDPOINTS } from '../../core/endpoints';
-import { get } from '../../core/http';
+import { ENDPOINTS } from '@/api/core/endpoints';
+import { get } from '@/api/core/http';
 
 export const HealthStatusSchema = z.object({
   status: z.enum(['ok', 'degraded']),

@@ -37,7 +37,7 @@ export class AuthController {
 
   @Public()
   @Get('captcha')
-  @Throttle({ long: { limit: 10, ttl: 60000 } })
+  @Throttle({ long: { limit: 50, ttl: 60000 } })
   @ApiOperation({
     summary: '获取验证码',
     description: '生成一张SVG格式的验证码图片，返回验证码ID和图片内容。登录时需要携带此验证码ID。',
@@ -62,7 +62,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
-  @Throttle({ long: { limit: 5, ttl: 60000 } })
+  @Throttle({ long: { limit: 50, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: '用户登录',

@@ -23,18 +23,10 @@ export {
 export * from './core/endpoints';
 export * from './core/api-error';
 
-// ── Module APIs ─────────────────────────────────────────────────────
-export * as authApi from './modules/auth/api';
-export * as userApi from './modules/user/api';
-export * as healthApi from './modules/health/api';
-export * as menuApi from './modules/menu/api';
-export * as roleApi from './modules/role/api';
-export * as dictApi from './modules/dict/api';
-
-// ── Hooks ───────────────────────────────────────────────────────────
-export * from './modules/auth/hooks';
-export * from './modules/user/hooks';
-export * from './modules/health/hooks';
-export * from './modules/menu/hooks';
-export * from './modules/role/hooks';
-export * from './modules/dict/hooks';
+// ── Feature hooks (re-exported for backward compatibility) ───────────
+export * from '@/features/auth/hooks';
+export * from '@/features/user/hooks';
+export * from '@/features/health/hooks';
+export * from '@/features/menu/hooks';
+export * from '@/features/role/hooks';
+export * from '@/features/dict/hooks';

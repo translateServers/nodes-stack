@@ -192,6 +192,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.59.0
         version: 5.101.0(react@19.2.7)
+      '@tanstack/react-router':
+        specifier: ^1.170.16
+        version: 1.170.16(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -8737,7 +8740,6 @@ snapshots:
       isbot: 5.1.43
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-    optional: true
 
   '@tanstack/react-store@0.9.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
@@ -8745,7 +8747,6 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
       use-sync-external-store: 1.6.0(react@19.2.7)
-    optional: true
 
   '@tanstack/react-table@8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
@@ -8804,8 +8805,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@tanstack/store@0.9.3':
-    optional: true
+  '@tanstack/store@0.9.3': {}
 
   '@tanstack/table-core@8.21.3': {}
 
@@ -10609,8 +10609,7 @@ snapshots:
     dependencies:
       is-inside-container: 1.0.0
 
-  isbot@5.1.43:
-    optional: true
+  isbot@5.1.43: {}
 
   isexe@2.0.0: {}
 
@@ -12561,7 +12560,6 @@ snapshots:
   use-sync-external-store@1.6.0(react@19.2.7):
     dependencies:
       react: 19.2.7
-    optional: true
 
   util-deprecate@1.0.2: {}
 

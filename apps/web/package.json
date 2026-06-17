@@ -16,6 +16,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@nebula/shared": "workspace:*",
     "@tanstack/react-query": "^5.59.0",
+    "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-table": "^8.21.3",
     "axios": "^1.17.0",
     "class-variance-authority": "^0.7.1",
