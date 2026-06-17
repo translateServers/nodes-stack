@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, redirect, useLocation } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, redirect, useLocation, useNavigate } from '@tanstack/react-router';
 import {
   ChevronRight,
   LayoutDashboard,
@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAuthStore, useUiStore } from '@/store';
+import { useLogout } from '@/api';
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: () => {
@@ -164,7 +165,8 @@ function NotificationButton() {
 
 function UserMenu() {
   const user = useAuthStore((s) => s.user);
-  const clearAuth = useAuthStore((s) => s.clearAuth);
+  const navigate = useNavigate();
+  const logoutMutation = useLogout();
   const initials = user?.name ? user.name.slice(0, 2).toUpperCase() : '管';
 
   return (
@@ -206,7 +208,17 @@ function UserMenu() {
           <span>系统设置</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={clearAuth} className="gap-2">
+        <DropdownMenuItem
+          variant="destructive"
+          className="gap-2"
+          onClick={() => {
+            logoutMutation.mutate(undefined, {
+              onSettled: () => {
+                void navigate({ to: '/login', replace: true });
+              },
+            });
+          }}
+        >
           <LogOut className="size-4" />
           <span>退出登录</span>
         </DropdownMenuItem>
