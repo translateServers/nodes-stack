@@ -1,4 +1,11 @@
-import { createFileRoute, Link, Outlet, redirect, useLocation, useNavigate } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useLocation,
+  useNavigate,
+} from '@tanstack/react-router';
 import {
   ChevronRight,
   LayoutDashboard,
