@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DataTable } from './data-table';
+import { ConfirmDialogProvider } from '@/components/confirm-dialog';
 import type { ColumnDef } from '@tanstack/react-table';
 
 interface TestData {
@@ -222,12 +223,15 @@ describe('DataTable', () => {
       const onBatchDelete = vi.fn();
 
       render(
-        <DataTable
-          data={mockData.slice(0, 3)}
-          columns={columns}
-          enableRowSelection
-          onBatchDelete={onBatchDelete}
-        />,
+        <>
+          <DataTable
+            data={mockData.slice(0, 3)}
+            columns={columns}
+            enableRowSelection
+            onBatchDelete={onBatchDelete}
+          />
+          <ConfirmDialogProvider />
+        </>,
       );
 
       const rowCheckboxes = screen.getAllByLabelText('选择行');

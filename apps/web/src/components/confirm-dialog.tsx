@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useSyncExternalStore } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import {
   AlertDialog,
@@ -12,29 +13,65 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-interface ConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface ConfirmOptions {
   title: string;
   description: React.ReactNode;
   confirmText?: string;
   cancelText?: string;
-  onConfirm: () => void | Promise<void>;
-  loading?: boolean;
 }
 
-export function ConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmText = '确认删除',
-  cancelText = '取消',
-  onConfirm,
-  loading = false,
-}: ConfirmDialogProps) {
+interface ConfirmState extends ConfirmOptions {
+  open: boolean;
+  resolve: ((value: boolean) => void) | null;
+}
+
+const emptyState: ConfirmState = {
+  open: false,
+  title: '',
+  description: '',
+  resolve: null,
+};
+
+let state = emptyState;
+let listeners: Array<() => void> = [];
+
+function emit() {
+  for (const l of listeners) l();
+}
+
+function getSnapshot() {
+  return state;
+}
+
+function subscribe(listener: () => void) {
+  listeners.push(listener);
+  return () => {
+    listeners = listeners.filter((l) => l !== listener);
+  };
+}
+
+export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    state = { ...options, open: true, resolve };
+    emit();
+  });
+}
+
+function handleClose(confirmed: boolean) {
+  state.resolve?.(confirmed);
+  state = emptyState;
+  emit();
+}
+
+export function ConfirmDialogProvider() {
+  const { open, title, description, confirmText, cancelText } = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getSnapshot,
+  );
+
   return (
-    <AlertDialog open={open} onOpenChange={(v) => !loading && onOpenChange(v)}>
+    <AlertDialog open={open} onOpenChange={(v) => !v && handleClose(false)}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogMedia className="bg-destructive/10">
@@ -44,17 +81,17 @@ export function ConfirmDialog({
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={loading}>{cancelText}</AlertDialogCancel>
+          <AlertDialogCancel onClick={() => handleClose(false)}>
+            {cancelText ?? '取消'}
+          </AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
-            disabled={loading}
-            onClick={async (e) => {
+            onClick={(e) => {
               e.preventDefault();
-              await onConfirm();
-              onOpenChange(false);
+              handleClose(true);
             }}
           >
-            {loading ? '处理中...' : confirmText}
+            {confirmText ?? '确认删除'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

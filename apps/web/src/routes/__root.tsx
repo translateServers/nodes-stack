@@ -4,6 +4,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/api/core/query-client';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ConfirmDialogProvider } from '@/components/confirm-dialog';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -16,6 +17,7 @@ function RootComponent() {
         <Outlet />
       </TooltipProvider>
       <Toaster richColors position="top-center" />
+      <ConfirmDialogProvider />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );

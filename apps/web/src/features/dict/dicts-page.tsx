@@ -21,7 +21,7 @@ import {
 } from './hooks';
 import { createColumnHelper } from '@tanstack/react-table';
 import { DataTable } from '@/components/data-table';
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { confirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -374,8 +374,6 @@ export default function DictsPage() {
   const [editingType, setEditingType] = useState<DictTypeResponse | undefined>();
   const [valueDialogOpen, setValueDialogOpen] = useState(false);
   const [editingValue, setEditingValue] = useState<DictValueResponse | undefined>();
-  const [deleteTypeTarget, setDeleteTypeTarget] = useState<DictTypeResponse | null>(null);
-  const [deleteValueTarget, setDeleteValueTarget] = useState<DictValueResponse | null>(null);
 
   // 过滤后的字典类型
   const filteredTypes = useMemo(() => {
@@ -405,18 +403,24 @@ export default function DictsPage() {
     setTypeDialogOpen(true);
   }, []);
 
-  const handleDeleteType = useCallback((dictType: DictTypeResponse) => {
-    setDeleteTypeTarget(dictType);
-  }, []);
-
-  const confirmDeleteType = useCallback(async () => {
-    if (!deleteTypeTarget) return;
-    await deleteTypeMutation.mutateAsync(deleteTypeTarget.id);
-    if (selectedTypeId === deleteTypeTarget.id) {
-      setSelectedTypeId('');
-    }
-    setDeleteTypeTarget(null);
-  }, [deleteTypeTarget, deleteTypeMutation, selectedTypeId]);
+  const handleDeleteType = useCallback(
+    async (dictType: DictTypeResponse) => {
+      const ok = await confirmDialog({
+        title: '删除字典类型',
+        description: (
+          <>
+            确定要删除字典类型 <strong>"{dictType.name}"</strong> 及其所有字典值吗？
+          </>
+        ),
+      });
+      if (!ok) return;
+      await deleteTypeMutation.mutateAsync(dictType.id);
+      if (selectedTypeId === dictType.id) {
+        setSelectedTypeId('');
+      }
+    },
+    [deleteTypeMutation, selectedTypeId],
+  );
 
   const handleTypeFormSubmit = useCallback(
     async (data: unknown) => {
@@ -444,15 +448,21 @@ export default function DictsPage() {
     setValueDialogOpen(true);
   }, []);
 
-  const handleDeleteValue = useCallback((dictValue: DictValueResponse) => {
-    setDeleteValueTarget(dictValue);
-  }, []);
-
-  const confirmDeleteValue = useCallback(async () => {
-    if (!deleteValueTarget) return;
-    await deleteValueMutation.mutateAsync(deleteValueTarget.id);
-    setDeleteValueTarget(null);
-  }, [deleteValueTarget, deleteValueMutation]);
+  const handleDeleteValue = useCallback(
+    async (dictValue: DictValueResponse) => {
+      const ok = await confirmDialog({
+        title: '删除字典值',
+        description: (
+          <>
+            确定要删除字典值 <strong>"{dictValue.label}"</strong> 吗？
+          </>
+        ),
+      });
+      if (!ok) return;
+      await deleteValueMutation.mutateAsync(dictValue.id);
+    },
+    [deleteValueMutation],
+  );
 
   const handleValueFormSubmit = useCallback(
     async (data: unknown) => {
@@ -526,7 +536,7 @@ export default function DictsPage() {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={() => handleDeleteValue(row.original)}
+              onClick={() => void handleDeleteValue(row.original)}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="size-3.5" />
@@ -619,7 +629,7 @@ export default function DictsPage() {
                           size="icon-xs"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteType(type);
+                            void handleDeleteType(type);
                           }}
                           className="text-destructive hover:text-destructive"
                         >
@@ -707,36 +717,6 @@ export default function DictsPage() {
           )}
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={deleteTypeTarget !== null}
-        onOpenChange={(v) => {
-          if (!v) setDeleteTypeTarget(null);
-        }}
-        title="删除字典类型"
-        description={
-          <>
-            确定要删除字典类型 <strong>"{deleteTypeTarget?.name}"</strong> 及其所有字典值吗？
-          </>
-        }
-        onConfirm={confirmDeleteType}
-        loading={deleteTypeMutation.isPending}
-      />
-
-      <ConfirmDialog
-        open={deleteValueTarget !== null}
-        onOpenChange={(v) => {
-          if (!v) setDeleteValueTarget(null);
-        }}
-        title="删除字典值"
-        description={
-          <>
-            确定要删除字典值 <strong>"{deleteValueTarget?.label}"</strong> 吗？
-          </>
-        }
-        onConfirm={confirmDeleteValue}
-        loading={deleteValueMutation.isPending}
-      />
     </div>
   );
 }

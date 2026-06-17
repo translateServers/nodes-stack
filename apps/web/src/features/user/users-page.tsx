@@ -5,7 +5,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { CreateUserSchema, UpdateUserSchema, type UserResponse } from '@nebula/shared';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from './hooks';
 import { DataTable } from '@/components/data-table';
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { confirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -135,7 +135,6 @@ export default function UsersPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | undefined>();
-  const [deleteTarget, setDeleteTarget] = useState<UserResponse | null>(null);
 
   const handleCreate = useCallback(() => {
     setEditingUser(undefined);
@@ -147,15 +146,21 @@ export default function UsersPage() {
     setDialogOpen(true);
   }, []);
 
-  const handleDelete = useCallback((user: UserResponse) => {
-    setDeleteTarget(user);
-  }, []);
-
-  const confirmDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    await deleteUserMutation.mutateAsync(deleteTarget.id);
-    setDeleteTarget(null);
-  }, [deleteTarget, deleteUserMutation]);
+  const handleDelete = useCallback(
+    async (user: UserResponse) => {
+      const ok = await confirmDialog({
+        title: '删除用户',
+        description: (
+          <>
+            确定要删除用户 <strong>"{user.username}"</strong> 吗？此操作不可撤销。
+          </>
+        ),
+      });
+      if (!ok) return;
+      await deleteUserMutation.mutateAsync(user.id);
+    },
+    [deleteUserMutation],
+  );
 
   const handleBatchDelete = useCallback(
     async (selectedUsers: UserResponse[]) => {
@@ -235,7 +240,7 @@ export default function UsersPage() {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={() => handleDelete(row.original)}
+              onClick={() => void handleDelete(row.original)}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="size-3.5" />
@@ -297,21 +302,6 @@ export default function UsersPage() {
           />
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(v) => {
-          if (!v) setDeleteTarget(null);
-        }}
-        title="删除用户"
-        description={
-          <>
-            确定要删除用户 <strong>"{deleteTarget?.username}"</strong> 吗？此操作不可撤销。
-          </>
-        }
-        onConfirm={confirmDelete}
-        loading={deleteUserMutation.isPending}
-      />
     </div>
   );
 }

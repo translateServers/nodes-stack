@@ -6,7 +6,7 @@ import type { z } from 'zod';
 import { CreateRoleSchema, UpdateRoleSchema, type RoleResponse } from '@nebula/shared';
 import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from './hooks';
 import { DataTable } from '@/components/data-table';
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { confirmDialog } from '@/components/confirm-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -102,7 +102,6 @@ export default function RolesPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleResponse | undefined>();
-  const [deleteTarget, setDeleteTarget] = useState<RoleResponse | null>(null);
 
   const handleCreate = useCallback(() => {
     setEditingRole(undefined);
@@ -114,15 +113,21 @@ export default function RolesPage() {
     setDialogOpen(true);
   }, []);
 
-  const handleDelete = useCallback((role: RoleResponse) => {
-    setDeleteTarget(role);
-  }, []);
-
-  const confirmDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    await deleteRoleMutation.mutateAsync(deleteTarget.id);
-    setDeleteTarget(null);
-  }, [deleteTarget, deleteRoleMutation]);
+  const handleDelete = useCallback(
+    async (role: RoleResponse) => {
+      const ok = await confirmDialog({
+        title: '删除角色',
+        description: (
+          <>
+            确定要删除角色 <strong>"{role.name}"</strong> 吗？此操作不可撤销。
+          </>
+        ),
+      });
+      if (!ok) return;
+      await deleteRoleMutation.mutateAsync(role.id);
+    },
+    [deleteRoleMutation],
+  );
 
   const handleBatchDelete = useCallback(
     async (selectedRoles: RoleResponse[]) => {
@@ -195,7 +200,7 @@ export default function RolesPage() {
             <Button
               variant="ghost"
               size="icon-xs"
-              onClick={() => handleDelete(row.original)}
+              onClick={() => void handleDelete(row.original)}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="size-3.5" />
@@ -248,21 +253,6 @@ export default function RolesPage() {
           />
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        onOpenChange={(v) => {
-          if (!v) setDeleteTarget(null);
-        }}
-        title="删除角色"
-        description={
-          <>
-            确定要删除角色 <strong>"{deleteTarget?.name}"</strong> 吗？此操作不可撤销。
-          </>
-        }
-        onConfirm={confirmDelete}
-        loading={deleteRoleMutation.isPending}
-      />
     </div>
   );
 }
