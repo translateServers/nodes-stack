@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, BookOpen, Shield, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Shield, FileText, Table } from 'lucide-react';
 
 export interface NavItem {
   text: string;
@@ -25,6 +25,10 @@ export const menuGroups: NavGroup[] = [
       { text: '字典管理', icon: FileText, path: '/dict' },
     ],
   },
+  {
+    label: '业务功能',
+    items: [{ text: '表格', icon: Table, path: '/sheet' }],
+  },
 ];
 
 export const pathLabels: Record<string, string> = {
@@ -33,4 +37,5 @@ export const pathLabels: Record<string, string> = {
   '/menus': '菜单管理',
   '/roles': '角色管理',
   '/dict': '字典管理',
+  '/sheet': '表格',
 };

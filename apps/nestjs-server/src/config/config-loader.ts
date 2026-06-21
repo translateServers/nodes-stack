@@ -18,6 +18,10 @@ export const loadConfig: ConfigFactory = () => {
       maxConnections: process.env.DB_MAX_CONNECTIONS,
       logging: process.env.DB_LOGGING,
     },
+    file: {
+      uploadDir: process.env.FILE_UPLOAD_DIR,
+      maxFileSize: process.env.FILE_MAX_SIZE,
+    },
     jwt: {
       secret: process.env.JWT_SECRET,
       accessTokenTtl: process.env.JWT_ACCESS_TTL,

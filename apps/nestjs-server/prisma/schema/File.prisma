@@ -1,0 +1,13 @@
+model File {
+  id        String   @id @default(uuid())
+  rowId     String
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  filePath  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([rowId])
+  @@map("files")
+}

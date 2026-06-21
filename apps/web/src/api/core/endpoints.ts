@@ -17,4 +17,8 @@ export const ENDPOINTS = {
   menus: '/menus',
   roles: '/roles',
   dict: '/dict',
+  files: '/files',
+  sheet: {
+    dropdownOptions: '/sheet/dropdown-options',
+  },
 } as const;

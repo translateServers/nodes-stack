@@ -28,6 +28,10 @@ export const BizMessage: Record<number, string> = {
   [BizCode.DICT_TYPE_ALREADY_EXISTS]: '字典类型编码已存在',
   [BizCode.DICT_VALUE_NOT_FOUND]: '字典值不存在',
   [BizCode.DICT_VALUE_ALREADY_EXISTS]: '字典值编码在该类型下已存在',
+  [BizCode.FILE_NOT_FOUND]: '文件不存在',
+  [BizCode.FILE_UPLOAD_FAILED]: '文件上传失败',
+  [BizCode.FILE_TYPE_NOT_ALLOWED]: '不支持的文件类型',
+  [BizCode.FILE_SIZE_EXCEEDED]: '文件大小超出限制',
 };
 
 // 业务异常类

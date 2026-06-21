@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -R \"C:\\\\worker\\\\nebula\\\\apps\\\\web\\\\src\" 2>nul | head -80)",
+      "Bash(ls -R \"C:\\\\worker\\\\nebula\\\\apps\\\\nestjs-server\\\\src\" 2>nul | head -80)"
+    ]
+  }
+}

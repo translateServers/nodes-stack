@@ -39,6 +39,12 @@ export const BizCode = {
   DICT_TYPE_ALREADY_EXISTS: 50002,
   DICT_VALUE_NOT_FOUND: 50003,
   DICT_VALUE_ALREADY_EXISTS: 50004,
+
+  // 文件模块 (60xxx)
+  FILE_NOT_FOUND: 60001,
+  FILE_UPLOAD_FAILED: 60002,
+  FILE_TYPE_NOT_ALLOWED: 60003,
+  FILE_SIZE_EXCEEDED: 60004,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];
@@ -112,6 +118,12 @@ const BIZ_CODE_TO_HTTP_STATUS: Record<BizCodeValue, number> = {
   [BizCode.DICT_TYPE_ALREADY_EXISTS]: 409,
   [BizCode.DICT_VALUE_NOT_FOUND]: 404,
   [BizCode.DICT_VALUE_ALREADY_EXISTS]: 409,
+
+  // 文件模块
+  [BizCode.FILE_NOT_FOUND]: 404,
+  [BizCode.FILE_UPLOAD_FAILED]: 500,
+  [BizCode.FILE_TYPE_NOT_ALLOWED]: 400,
+  [BizCode.FILE_SIZE_EXCEEDED]: 400,
 };
 
 /**

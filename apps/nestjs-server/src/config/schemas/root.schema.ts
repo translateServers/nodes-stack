@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AppSchema } from './app.schema';
 import { DatabaseSchema } from './database.schema';
+import { FileConfigSchema } from './file.schema';
 import { JwtSchema } from './jwt.schema';
 import { LoggerSchema } from './logger.schema';
 import { RedisSchema } from './redis.schema';
@@ -11,6 +12,7 @@ import { RedisSchema } from './redis.schema';
 export const RootConfigSchema = z.object({
   app: AppSchema,
   database: DatabaseSchema,
+  file: FileConfigSchema,
   jwt: JwtSchema,
   logger: LoggerSchema,
   redis: RedisSchema,
