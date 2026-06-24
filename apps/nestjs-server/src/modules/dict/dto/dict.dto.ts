@@ -1,5 +1,5 @@
 import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import {
   CreateDictTypeSchema as _CreateDictTypeSchema,
   UpdateDictTypeSchema as _UpdateDictTypeSchema,

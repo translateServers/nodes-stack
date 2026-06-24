@@ -10,14 +10,14 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { DictService } from '@/modules/dict/dict.service';
+import type { DictService } from '@/modules/dict/dict.service';
 import {
-  CreateDictTypeDto,
-  UpdateDictTypeDto,
+  type CreateDictTypeDto,
+  type UpdateDictTypeDto,
   DictTypeResponseDto,
   type DictTypeResponse,
-  CreateDictValueDto,
-  UpdateDictValueDto,
+  type CreateDictValueDto,
+  type UpdateDictValueDto,
   DictValueResponseDto,
   type DictValueResponse,
 } from '@/modules/dict/dto/dict.dto';

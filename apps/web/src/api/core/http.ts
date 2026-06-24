@@ -1,5 +1,5 @@
-import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
-import { z, type ZodType } from 'zod';
+import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+import type { z, ZodType } from 'zod';
 import {
   BizCode,
   type ApiErrorResponse,

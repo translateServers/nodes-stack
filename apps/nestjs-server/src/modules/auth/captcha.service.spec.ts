@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { CaptchaService } from '@/modules/auth/captcha.service';
 import { RedisService } from '@/modules/redis/redis.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
@@ -120,8 +120,8 @@ describe('CaptchaService', () => {
   describe('memory fallback (Redis unavailable)', () => {
     beforeEach(() => {
       mockRedisService.safeExec.mockImplementation(
-        async <T>(_fn: (client: typeof mockRedisClient) => Promise<T>, fallback: T): Promise<T> => {
-          return fallback;
+        <T>(_fn: (client: typeof mockRedisClient) => Promise<T>, fallback: T): Promise<T> => {
+          return Promise.resolve(fallback);
         },
       );
     });

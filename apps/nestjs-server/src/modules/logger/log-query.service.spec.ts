@@ -1,5 +1,5 @@
-import { LogQueryService, type LogEntry } from './log-query.service';
-import { TypedConfigService } from '@/config/typed-config.service';
+import { LogQueryService } from './log-query.service';
+import type { TypedConfigService } from '@/config/typed-config.service';
 
 jest.mock('fs');
 import * as fs from 'fs';

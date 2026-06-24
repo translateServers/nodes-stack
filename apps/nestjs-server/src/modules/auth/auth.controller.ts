@@ -1,20 +1,20 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, Request, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { Request as ExpressRequest } from 'express';
-import { AuthService } from '@/modules/auth/auth.service';
-import { UserService } from '@/modules/user/user.service';
-import { CaptchaService } from '@/modules/auth/captcha.service';
+import type { Request as ExpressRequest } from 'express';
+import type { AuthService } from '@/modules/auth/auth.service';
+import type { UserService } from '@/modules/user/user.service';
+import type { CaptchaService } from '@/modules/auth/captcha.service';
 import {
   CaptchaResponseDto,
-  LoginDto,
+  type LoginDto,
   ProfileResponseDto,
-  RefreshTokenDto,
-  RegisterDto,
+  type RefreshTokenDto,
+  type RegisterDto,
   TokenResponseDto,
 } from '@/modules/auth/dto/auth.dto';
 import { Public } from '@/common/decorators/public.decorator';
-import { UserPayload } from '@/common/interfaces/user.interface';
+import type { UserPayload } from '@/common/interfaces/user.interface';
 import {
   ApiSuccessResponse,
   ApiSuccessNoDataResponse,

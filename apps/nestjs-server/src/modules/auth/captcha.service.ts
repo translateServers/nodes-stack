@@ -3,8 +3,8 @@ import { create } from 'svg-captcha';
 import { randomUUID } from 'crypto';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
-import { CaptchaResponse } from '@/modules/auth/dto/auth.dto';
-import { RedisService } from '@/modules/redis/redis.service';
+import type { CaptchaResponse } from '@/modules/auth/dto/auth.dto';
+import type { RedisService } from '@/modules/redis/redis.service';
 
 const CAPTCHA_KEY_PREFIX = 'captcha:';
 const CAPTCHA_EXPIRES_SECONDS = 5 * 60;

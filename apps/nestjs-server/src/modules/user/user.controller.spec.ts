@@ -3,7 +3,7 @@ import { UserController } from '@/modules/user/user.controller';
 import { UserService } from '@/modules/user/user.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import { BizCode } from '@/common/enums/biz-code.enum';
-import { CreateUserDto, UpdateUserDto, type UserResponse } from '@/modules/user/dto/user.dto';
+import type { CreateUserDto, UpdateUserDto, UserResponse } from '@/modules/user/dto/user.dto';
 
 const mockUserService = {
   create: jest.fn(),

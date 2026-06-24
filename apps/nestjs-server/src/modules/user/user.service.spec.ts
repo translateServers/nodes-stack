@@ -1,10 +1,10 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcryptjs';
 import dayjs from 'dayjs';
 import { UserService } from '@/modules/user/user.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
-import { CreateUserDto, UpdateUserDto } from '@/modules/user/dto/user.dto';
+import type { CreateUserDto, UpdateUserDto } from '@/modules/user/dto/user.dto';
 
 jest.mock('bcryptjs', () => ({
   hash: jest.fn().mockResolvedValue('hashed-password'),

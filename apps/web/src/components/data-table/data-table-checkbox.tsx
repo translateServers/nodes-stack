@@ -1,4 +1,4 @@
-import { type Table, type Row } from '@tanstack/react-table';
+import type { Table, Row } from '@tanstack/react-table';
 import { Checkbox } from '@/components/ui/checkbox';
 
 type DataTableCheckboxProps<TData> =

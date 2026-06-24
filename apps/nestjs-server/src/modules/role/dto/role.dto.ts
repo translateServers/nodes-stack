@@ -1,5 +1,5 @@
 import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import {
   AssignMenusSchema as _AssignMenusSchema,
   CreateRoleSchema as _CreateRoleSchema,

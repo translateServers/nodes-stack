@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { PrismaService } from '@/prisma/prisma.service';
+import type { PrismaService } from '@/prisma/prisma.service';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import {
-  CreateUserDto,
-  UpdateUserDto,
-  UserResponse,
+  type CreateUserDto,
+  type UpdateUserDto,
+  type UserResponse,
   UserResponseSchema,
 } from '@/modules/user/dto/user.dto';
 

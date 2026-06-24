@@ -7,7 +7,9 @@ describe('cn', () => {
   });
 
   it('should handle conditional classes', () => {
-    expect(cn('base', false && 'hidden', 'end')).toBe('base end');
+    const isHidden = false;
+
+    expect(cn('base', isHidden && 'hidden', 'end')).toBe('base end');
   });
 
   it('should merge tailwind classes correctly', () => {

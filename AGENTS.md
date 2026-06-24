@@ -22,7 +22,9 @@ pnpm build            # 构建所有包（turbo 按依赖顺序）
 pnpm test             # 运行所有测试（turbo 会先执行 build）
 pnpm typecheck        # 全量类型检查
 pnpm lint             # 全量 ESLint 检查
-pnpm format           # Prettier 格式化所有文件
+pnpm format           # Biome 格式化所有文件
+pnpm biome:check      # Biome 检查
+pnpm biome:fix        # Biome 安全自动修复
 ```
 
 ## TypeScript 规则
@@ -33,10 +35,10 @@ pnpm format           # Prettier 格式化所有文件
 - API 类型使用 `@nebula/shared` 中的 `ApiResponse<T>`、`PaginatedResponse<T>` 等
 - 异步操作必须正确处理 Promise，禁止浮动 Promise
 
-## 代码格式（Prettier）
+## 代码格式（Biome）
 
 单引号、分号结尾、2 空格缩进、行宽 100、尾随逗号 `all`、箭头函数参数始终加括号。
-`prettier/prettier` 在 ESLint 中为 error 级别，格式问题会导致 lint 失败。
+格式化由 Biome 负责；ESLint 保留 TypeScript 类型感知规则，不再启用额外格式化插件规则。
 
 ## 后端注意事项
 
@@ -48,7 +50,7 @@ pnpm format           # Prettier 格式化所有文件
 ## 前端注意事项
 
 - 路径别名：`@/` → `src/`
-- TanStack Router 使用文件系统路由，路由树自动生成（`routeTree.gen.ts`，已加入 .prettierignore）
+- TanStack Router 使用文件系统路由，路由树自动生成（`routeTree.gen.ts`，已加入 Biome 忽略配置）
 - UI 组件优先使用 shadcn/ui + Radix UI + Tailwind CSS 工具类
 
 ## 测试
@@ -68,4 +70,4 @@ pnpm format           # Prettier 格式化所有文件
 
 - 日常代码生成不强制运行 `pnpm typecheck` 和 `pnpm lint`，仅当用户明确要求时才运行
 - 如果验证失败，必须修复后再输出
-- 当用户说"快速实现"或"不用管类型"时，可临时放宽类型检查，但仍遵守 Prettier 格式
+- 当用户说"快速实现"或"不用管类型"时，可临时放宽类型检查，但仍遵守 Biome 格式

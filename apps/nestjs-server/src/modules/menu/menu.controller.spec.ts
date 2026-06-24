@@ -1,7 +1,7 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { MenuController } from '@/modules/menu/menu.controller';
 import { MenuService } from '@/modules/menu/menu.service';
-import { CreateMenuDto, UpdateMenuDto, type MenuResponse } from '@/modules/menu/dto/menu.dto';
+import type { CreateMenuDto, UpdateMenuDto, MenuResponse } from '@/modules/menu/dto/menu.dto';
 
 const mockMenuService = {
   create: jest.fn(),

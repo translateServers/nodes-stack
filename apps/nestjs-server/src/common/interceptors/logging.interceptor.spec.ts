@@ -38,7 +38,9 @@ describe('LoggingInterceptor', () => {
       next: (value) => {
         expect(value).toBe('response-data');
       },
-      complete: () => done(),
+      complete: () => {
+        done();
+      },
     });
   });
 
@@ -49,7 +51,9 @@ describe('LoggingInterceptor', () => {
       next: (value) => {
         expect(value).toBe('response-data');
       },
-      complete: () => done(),
+      complete: () => {
+        done();
+      },
     });
   });
 });
