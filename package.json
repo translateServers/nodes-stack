@@ -12,8 +12,8 @@
     "test": "turbo run test",
     "clean": "turbo run clean",
     "format": "pnpm biome:fix",
-    "biome:check": "biome check .",
-    "biome:fix": "biome check --write .",
+    "check": "biome check .",
+    "fix": "biome check --write .",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
