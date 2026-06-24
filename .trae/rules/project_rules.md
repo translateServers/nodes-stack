@@ -16,15 +16,24 @@
 
 - 项目使用 `typescript-eslint` 的 `recommendedTypeChecked` 配置，所有生成的代码必须通过 ESLint 检查
 - `@typescript-eslint/no-explicit-any` 为 warn 级别，应尽量避免使用 `any`
-- `prettier/prettier` 为 error 级别，代码格式必须符合 Prettier 配置
+- 格式化由 Biome 负责，ESLint 不再启用 `prettier/prettier` 规则
 - 前端项目继承 `@nebula/eslint-config/react.js`，包含浏览器全局变量
 - 后端项目继承 `@nebula/eslint-config/nestjs.js`
 
-## 代码格式（Prettier）
+## 代码格式（Biome）
 
 - 单引号、分号结尾、2 空格缩进、行宽 100
 - 尾随逗号 `all`、箭头函数参数始终加括号
-- 生成代码前必须先读取项目现有 `.prettierrc` 配置
+- 生成代码前必须先读取根 `biome.json` 配置
+- Biome 作为项目格式化工具，并补充基础 lint 与 organize imports；不能替代 `pnpm typecheck` 与 `pnpm lint` 质量门
+- Biome 必须忽略 `node_modules`、`dist`、`build`、`coverage`、`.turbo`、生成路由树、锁文件和其他构建/生成产物，避免大面积格式化非源码文件
+
+## Biome 工具链
+
+- 根命令 `pnpm biome:check` 用于执行 Biome 检查，`pnpm biome:fix` 用于执行 Biome 安全自动修复
+- pre-commit 使用 `simple-git-hooks` + `lint-staged`，仅对暂存且受支持的文件运行 Biome 检查
+- Biome 检查通过仅代表格式、基础 lint 和 import 组织符合配置，不能替代 `pnpm typecheck` 与 `pnpm lint`
+- 修改 Biome 配置后，应按任务要求运行 `pnpm biome:check`；涉及 TypeScript/ESLint 兼容性时继续运行 `pnpm typecheck` 和 `pnpm lint`
 
 ## 前端开发
 
@@ -55,6 +64,6 @@
   - 跳过 TypeScript 严格类型检查规则（允许 `any`、隐式类型、`@ts-ignore` 等）
   - 跳过 ESLint `recommendedTypeChecked` 相关规则
   - 仍需保证代码语法正确、能正常运行
-  - 仍需遵守 Prettier 格式规范
+  - 仍需遵守 Biome 格式规范
   - 不需要运行 `pnpm typecheck` 和 `pnpm lint` 验证
 - 快速模式仅限当前请求，下一次请求自动恢复为默认的严格模式

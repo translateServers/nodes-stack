@@ -1,5 +1,5 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { type INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { HealthController } from '@/modules/health/health.controller';
 import { PrismaService } from '@/prisma/prisma.service';

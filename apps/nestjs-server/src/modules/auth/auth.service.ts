@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import type { JwtService } from '@nestjs/jwt';
 import dayjs from 'dayjs';
 import { createHash } from 'crypto';
-import { UserService } from '@/modules/user/user.service';
-import { PrismaService } from '@/prisma/prisma.service';
-import { RegisterDto, TokenResponse } from '@/modules/auth/dto/auth.dto';
+import type { UserService } from '@/modules/user/user.service';
+import type { PrismaService } from '@/prisma/prisma.service';
+import type { RegisterDto, TokenResponse } from '@/modules/auth/dto/auth.dto';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
-import { JwtPayload } from '@/common/interfaces/jwt.interface';
+import type { JwtPayload } from '@/common/interfaces/jwt.interface';
 import { parseExpiresIn } from '@/common/utils/time.util';
-import { TypedConfigService } from '@/config/typed-config.service';
+import type { TypedConfigService } from '@/config/typed-config.service';
 
 @Injectable()
 export class AuthService {

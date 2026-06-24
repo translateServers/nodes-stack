@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import type { PrismaService } from '@/prisma/prisma.service';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import {
-  CreateMenuDto,
+  type CreateMenuDto,
   MenuResponseSchema,
-  UpdateMenuDto,
+  type UpdateMenuDto,
   type MenuResponse,
 } from './dto/menu.dto';
 import type { MenuTreeNode } from '@nebula/shared/schemas';

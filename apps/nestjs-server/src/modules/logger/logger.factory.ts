@@ -1,4 +1,4 @@
-import { TypedConfigService } from '@/config/typed-config.service';
+import type { TypedConfigService } from '@/config/typed-config.service';
 import { sanitizeObject } from '@/common/utils/sanitize.util';
 import dayjs from 'dayjs';
 import { WinstonModule } from 'nest-winston';

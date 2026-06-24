@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { createHash } from 'crypto';
 import { AuthService } from '@/modules/auth/auth.service';
@@ -6,7 +6,7 @@ import { UserService } from '@/modules/user/user.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import { TypedConfigService } from '@/config/typed-config.service';
-import { RegisterDto } from '@/modules/auth/dto/auth.dto';
+import type { RegisterDto } from '@/modules/auth/dto/auth.dto';
 import { mockPrismaService, mockJwtService } from '../../../test/setup';
 
 const mockConfigData = {

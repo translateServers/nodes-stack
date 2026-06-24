@@ -1,9 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { AuthController } from '@/modules/auth/auth.controller';
 import { AuthService } from '@/modules/auth/auth.service';
 import { UserService } from '@/modules/user/user.service';
 import { CaptchaService } from '@/modules/auth/captcha.service';
-import { LoginDto, RegisterDto, RefreshTokenDto } from '@/modules/auth/dto/auth.dto';
+import type { LoginDto, RegisterDto, RefreshTokenDto } from '@/modules/auth/dto/auth.dto';
 import type { RequestWithUser } from '@/common/guards/jwt-auth.guard';
 import type { UserPayload } from '@/common/interfaces/user.interface';
 

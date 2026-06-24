@@ -1,7 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { TransformInterceptor } from './transform.interceptor';
-import { ExecutionContext, CallHandler } from '@nestjs/common';
-import { Observable, of } from 'rxjs';
+import type { ExecutionContext, CallHandler } from '@nestjs/common';
+import { type Observable, of } from 'rxjs';
 
 describe('TransformInterceptor', () => {
   let interceptor: TransformInterceptor<unknown>;

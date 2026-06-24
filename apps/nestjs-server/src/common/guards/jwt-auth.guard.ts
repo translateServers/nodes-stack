@@ -1,11 +1,11 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Injectable, type ExecutionContext } from '@nestjs/common';
+import type { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
-import { UserPayload } from '@/common/interfaces/user.interface';
+import type { UserPayload } from '@/common/interfaces/user.interface';
 
 /**
  * 包含用户信息的 Request 类型

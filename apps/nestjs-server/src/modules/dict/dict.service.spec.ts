@@ -211,7 +211,7 @@ describe('DictService', () => {
       mockPrismaService.dictType.findFirst.mockResolvedValue(null);
       mockPrismaService.dictType.update.mockResolvedValue(makeDictType({ id: 'test-id', ...dto }));
 
-      const result = await service.updateType('test-id', dto);
+      await service.updateType('test-id', dto);
 
       expect(mockPrismaService.dictType.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -370,7 +370,7 @@ describe('DictService', () => {
       mockPrismaService.dictValue.findFirst.mockResolvedValue(null);
       mockPrismaService.dictValue.update.mockResolvedValue(makeDictValue({ id: 'v1', ...dto }));
 
-      const result = await service.updateValue('v1', dto);
+      await service.updateValue('v1', dto);
 
       expect(mockPrismaService.dictValue.update).toHaveBeenCalledWith(
         expect.objectContaining({

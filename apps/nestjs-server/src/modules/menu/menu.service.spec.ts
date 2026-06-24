@@ -2,7 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { MenuService } from '@/modules/menu/menu.service';
 import { PrismaService } from '@/prisma/prisma.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
-import { CreateMenuDto, UpdateMenuDto } from '@/modules/menu/dto/menu.dto';
+import type { CreateMenuDto, UpdateMenuDto } from '@/modules/menu/dto/menu.dto';
 import type { Menu } from '@prisma/client';
 
 const mockPrismaService = {
@@ -342,7 +342,7 @@ describe('MenuService', () => {
         isVisible: true,
       };
 
-      const result = await service.update('u4', updateDto);
+      await service.update('u4', updateDto);
 
       expect(mockPrismaService.menu.update).toHaveBeenCalledWith(
         expect.objectContaining({

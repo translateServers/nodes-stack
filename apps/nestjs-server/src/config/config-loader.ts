@@ -1,4 +1,4 @@
-import { ConfigFactory } from '@nestjs/config/dist/interfaces';
+import type { ConfigFactory } from '@nestjs/config/dist/interfaces';
 import { treeifyError } from 'zod';
 import { RootConfigSchema } from './schemas/root.schema';
 
