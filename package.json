@@ -3,17 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
     "dev:web": "turbo run dev --filter=@nebula/web",
     "dev:server": "turbo run dev --filter=@nebula/nestjs-server",
+    "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "biome:check": "biome check .",
+    "biome:fix": "biome check --write .",
     "clean": "turbo run clean",
-    "format": "pnpm biome:fix",
-    "check": "biome check .",
-    "fix": "biome check --write .",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
