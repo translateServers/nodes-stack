@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DataTable } from './data-table';
 import { ConfirmDialogProvider } from '@/components/confirm-dialog';
@@ -140,8 +140,14 @@ describe('DataTable', () => {
       const searchInput = screen.getByPlaceholderText('搜索姓名');
       await user.type(searchInput, 'Alice');
 
-      expect(screen.getByText('Alice')).toBeInTheDocument();
-      expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+      // 等待防抖完成（300ms）
+      await waitFor(
+        () => {
+          expect(screen.getByText('Alice')).toBeInTheDocument();
+          expect(screen.queryByText('Bob')).not.toBeInTheDocument();
+        },
+        { timeout: 500 },
+      );
     });
 
     it('should show empty state when search has no results', async () => {
@@ -158,7 +164,13 @@ describe('DataTable', () => {
       const searchInput = screen.getByPlaceholderText('搜索');
       await user.type(searchInput, 'zzzzz');
 
-      expect(screen.getByText('暂无数据')).toBeInTheDocument();
+      // 等待防抖完成（300ms）
+      await waitFor(
+        () => {
+          expect(screen.getByText('暂无数据')).toBeInTheDocument();
+        },
+        { timeout: 500 },
+      );
     });
   });
 

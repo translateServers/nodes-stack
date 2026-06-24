@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { confirmDialog } from '@/components/confirm-dialog';
 import { DataTableViewOptions } from './data-table-view-options';
+import { useDebounce } from '@/hooks/use-debounce';
+import { useState, useEffect } from 'react';
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -32,18 +34,36 @@ export function DataTableToolbar<TData>({
   const hasSelection = selectedCount > 0;
 
   const primarySearchColumn = searchColumnIds?.[0];
-  const searchValue = primarySearchColumn
+  const filterValue = primarySearchColumn
     ? ((table.getColumn(primarySearchColumn)?.getFilterValue() as string | undefined) ?? '')
     : '';
 
-  const handleSearchChange = (value: string) => {
+  // 本地状态存储输入值，与防抖值解耦
+  const [localSearchValue, setLocalSearchValue] = useState(filterValue);
+  const debouncedSearchValue = useDebounce(localSearchValue, 300);
+
+  // 监听防抖后的值变化，更新表格过滤
+  useEffect(() => {
     searchColumnIds?.forEach((columnId) => {
-      table.getColumn(columnId)?.setFilterValue(value);
+      table.getColumn(columnId)?.setFilterValue(debouncedSearchValue);
     });
+  }, [debouncedSearchValue, searchColumnIds, table]);
+
+  // 当外部过滤值变化时（如重置），同步本地状态
+  useEffect(() => {
+    setLocalSearchValue(filterValue);
+  }, [filterValue]);
+
+  const handleSearchChange = (value: string) => {
+    setLocalSearchValue(value);
   };
 
   const handleClearSearch = () => {
-    handleSearchChange('');
+    setLocalSearchValue('');
+    // 立即清除过滤，不等待防抖
+    searchColumnIds?.forEach((columnId) => {
+      table.getColumn(columnId)?.setFilterValue('');
+    });
   };
 
   const handleBatchDelete = async () => {
@@ -67,11 +87,11 @@ export function DataTableToolbar<TData>({
             <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
             <Input
               placeholder={searchPlaceholder}
-              value={searchValue}
+              value={localSearchValue}
               onChange={(event) => handleSearchChange(event.target.value)}
               className="h-8 pl-8 pr-8"
             />
-            {searchValue && (
+            {localSearchValue && (
               <button
                 type="button"
                 onClick={handleClearSearch}
