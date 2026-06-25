@@ -7,7 +7,7 @@ This file provides guidance to the AI agent when working with code in this repos
 pnpm workspace + Turborepo 全栈 monorepo：
 
 - `apps/nestjs-server/` — NestJS 11 后端 API（Prisma 7 + SQLite/PostgreSQL + Redis）
-- `apps/web/` — React 19 + Vite 8 前端 SPA（TanStack Router + TanStack Query + shadcn/ui）
+- `apps/web/` — React 19 + Vite 8 前端 SPA（React Router 7 + TanStack Query + shadcn/ui + Tailwind CSS v4）
 - `packages/shared/` — 共享类型、Zod schemas、工具函数（`@nebula/shared`）
 - `packages/eslint-config/` — 共享 ESLint 配置（base / nestjs / react）
 - `packages/typescript-config/` — 共享 tsconfig presets
@@ -50,7 +50,7 @@ pnpm biome:fix        # Biome 安全自动修复
 ## 前端注意事项
 
 - 路径别名：`@/` → `src/`
-- TanStack Router 使用文件系统路由，路由树自动生成（`routeTree.gen.ts`，已加入 Biome 忽略配置）
+- React Router 7 使用文件系统路由，路由树自动生成（`routeTree.gen.ts`，已加入 Biome 忽略配置）
 - UI 组件优先使用 shadcn/ui + Radix UI + Tailwind CSS 工具类
 
 ## 测试
