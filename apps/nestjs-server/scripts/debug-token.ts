@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
-import { TypedConfigService } from '../src/config';
+import { TypedConfigService } from '../src/config/typed-config.service';
 import { parseExpiresIn } from '../src/common/utils/time.util';
 import dayjs from 'dayjs';
 
