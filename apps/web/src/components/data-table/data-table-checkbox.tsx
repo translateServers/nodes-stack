@@ -7,18 +7,25 @@ type DataTableCheckboxProps<TData> =
 
 export function DataTableCheckbox<TData>({ table, row }: DataTableCheckboxProps<TData>) {
   if (table) {
+    const allSelected = table.getIsAllPageRowsSelected();
+    const someSelected = table.getIsSomePageRowsSelected();
+
     return (
       <Checkbox
-        checked={table.getIsAllPageRowsSelected()}
+        checked={allSelected ? true : someSelected ? 'indeterminate' : false}
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="全选"
       />
     );
   }
 
+  // 行级 checkbox：支持树形数据的半选状态
+  const isSelected = row.getIsSelected();
+  const someSubRowsSelected = row.getIsSomeSelected();
+
   return (
     <Checkbox
-      checked={row.getIsSelected()}
+      checked={isSelected ? true : someSubRowsSelected ? 'indeterminate' : false}
       onCheckedChange={(value) => row.toggleSelected(!!value)}
       aria-label="选择行"
     />

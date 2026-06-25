@@ -1,5 +1,5 @@
-import type { Table } from '@tanstack/react-table';
-import { Search, Trash2, X } from 'lucide-react';
+import type { Table, ColumnFiltersState } from '@tanstack/react-table';
+import { FilterX, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { confirmDialog } from '@/components/confirm-dialog';
 import { DataTableViewOptions } from './data-table-view-options';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useState, useEffect } from 'react';
+import { hasActiveFilter } from './filters';
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
@@ -66,6 +67,22 @@ export function DataTableToolbar<TData>({
     });
   };
 
+  // 活跃的高级筛选条件（排除搜索列的文本筛选）
+  const activeFilters: ColumnFiltersState = table.getState().columnFilters.filter((f) => {
+    // 排除搜索列（搜索列使用文本筛选，已由搜索框展示）
+    if (searchColumnIds?.includes(f.id)) return false;
+    return f.value !== undefined && f.value !== '' && f.value !== null;
+  });
+
+  const handleClearFilter = (columnId: string) => {
+    table.getColumn(columnId)?.setFilterValue(undefined);
+  };
+
+  const handleClearAllFilters = () => {
+    table.resetColumnFilters();
+    handleClearSearch();
+  };
+
   const handleBatchDelete = async () => {
     if (!onBatchDelete || !hasSelection) return;
     const ok = await confirmDialog({
@@ -100,6 +117,36 @@ export function DataTableToolbar<TData>({
                 <X className="size-3.5" />
               </button>
             )}
+          </div>
+        )}
+        {/* 活跃筛选条件 Badge */}
+        {activeFilters.length > 0 && (
+          <div className="flex animate-in fade-in items-center gap-1.5 duration-200">
+            {activeFilters.map((filter) => {
+              const column = table.getColumn(filter.id);
+              const label =
+                typeof column?.columnDef.header === 'string' ? column.columnDef.header : filter.id;
+              return (
+                <Badge
+                  key={filter.id}
+                  variant="secondary"
+                  className="h-6 cursor-pointer gap-1 px-2 text-xs"
+                  onClick={() => handleClearFilter(filter.id)}
+                >
+                  {label}
+                  <X className="size-3" />
+                </Badge>
+              );
+            })}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearAllFilters}
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <FilterX className="size-3" />
+              清除全部
+            </Button>
           </div>
         )}
         {hasSelection && showBatchActions && (

@@ -1,6 +1,8 @@
+import { useState, type KeyboardEvent } from 'react';
 import type { Table } from '@tanstack/react-table';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -11,14 +13,38 @@ import {
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
+  /** 服务端模式下的总记录数（由 PaginatedResponse.total 提供）。
+   *  未提供时使用前端过滤后的行数。 */
+  total?: number;
+  /** 自定义每页选项，默认 [10, 20, 50] */
+  pageSizeOptions?: number[];
+  /** 是否显示跳页输入框，默认 true */
+  showJumpToPage?: boolean;
 }
 
-export function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
+export function DataTablePagination<TData>({
+  table,
+  total,
+  pageSizeOptions = [10, 20, 50],
+  showJumpToPage = true,
+}: DataTablePaginationProps<TData>) {
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageCount = table.getPageCount();
+  const totalCount = total ?? table.getFilteredRowModel().rows.length;
+  const [jumpValue, setJumpValue] = useState('');
+
+  const handleJumpToPage = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return;
+    const page = Number.parseInt(jumpValue, 10);
+    if (Number.isNaN(page) || page < 1 || page > pageCount) return;
+    table.setPageIndex(page - 1);
+    setJumpValue('');
+  };
+
   return (
     <div className="flex items-center justify-between border-t px-3 py-2.5">
       <div className="flex-1 text-sm text-muted-foreground">
-        共 {table.getFilteredRowModel().rows.length} 条，第{' '}
-        {table.getState().pagination.pageIndex + 1}/{table.getPageCount()} 页
+        共 {totalCount} 条，第 {pageIndex + 1}/{pageCount} 页
       </div>
       <div className="flex items-center gap-4 lg:gap-6">
         <div className="flex items-center gap-2">
@@ -33,7 +59,7 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
               <SelectValue placeholder={table.getState().pagination.pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
-              {[10, 20, 50].map((pageSize) => (
+              {pageSizeOptions.map((pageSize) => (
                 <SelectItem key={pageSize} value={`${pageSize}`}>
                   {pageSize} 条
                 </SelectItem>
@@ -41,6 +67,19 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
             </SelectContent>
           </Select>
         </div>
+        {showJumpToPage && pageCount > 1 && (
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">跳至</p>
+            <Input
+              className="h-8 w-[50px] text-center"
+              value={jumpValue}
+              placeholder={`${pageIndex + 1}`}
+              onChange={(e) => setJumpValue(e.target.value)}
+              onKeyDown={handleJumpToPage}
+            />
+            <p className="text-sm font-medium">页</p>
+          </div>
+        )}
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -74,7 +113,7 @@ export function DataTablePagination<TData>({ table }: DataTablePaginationProps<T
             variant="outline"
             size="icon-sm"
             className="hidden lg:flex"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            onClick={() => table.setPageIndex(pageCount - 1)}
             disabled={!table.getCanNextPage()}
           >
             <span className="sr-only">末页</span>

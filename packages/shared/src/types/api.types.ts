@@ -78,6 +78,46 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+// 排序方向
+export type SortOrder = 'asc' | 'desc';
+
+// 排序查询参数
+export interface SortQuery {
+  field: string;
+  order: SortOrder;
+}
+
+// 筛选操作符
+export type FilterOperator =
+  | 'eq'
+  | 'ne'
+  | 'contains'
+  | 'startsWith'
+  | 'endsWith'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'between'
+  | 'in';
+
+// 筛选条件
+export interface FilterCondition {
+  field: string;
+  operator: FilterOperator;
+  value: unknown;
+}
+
+// 表格查询参数（含分页、排序、筛选、搜索）
+export interface TableQuery extends PaginationQuery {
+  sort?: SortQuery[];
+  filters?: FilterCondition[];
+  search?: string;
+}
+
+// 表格查询响应（复用 PaginatedResponse 结构）
+export type TableQueryResult<T> = PaginatedResponse<T>;
+
 // 业务码 → HTTP 状态码映射
 const BIZ_CODE_TO_HTTP_STATUS: Record<BizCodeValue, number> = {
   [BizCode.SUCCESS]: 200,
