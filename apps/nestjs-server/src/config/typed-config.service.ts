@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { ConfigService as NestConfigService } from '@nestjs/config';
+import { ConfigService as NestConfigService } from '@nestjs/config';
 import type { RootConfig } from './schemas/root.schema';
 import type { ConfigPath, ConfigPathValue } from './types';
 

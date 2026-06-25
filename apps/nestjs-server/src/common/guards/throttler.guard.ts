@@ -4,7 +4,7 @@ import {
   type ThrottlerModuleOptions,
   type ThrottlerStorage,
 } from '@nestjs/throttler';
-import type { Reflector } from '@nestjs/core';
+import { Reflector } from '@nestjs/core';
 import { SKIP_THROTTLE_KEY } from '../decorators/skip-throttle.decorator';
 
 @Injectable()

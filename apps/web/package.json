@@ -11,7 +11,6 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules",
-    "postinstall": "prisma generate",
     "e2e": "playwright test --config=e2e/playwright.config.ts",
     "e2e:ui": "playwright test --config=e2e/playwright.config.ts --ui",
     "e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed",

@@ -10,7 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { UserService } from '@/modules/user/user.service';
+import { UserService } from '@/modules/user/user.service';
 import {
   type CreateUserDto,
   type UpdateUserDto,

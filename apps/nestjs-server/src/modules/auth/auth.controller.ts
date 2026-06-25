@@ -2,9 +2,9 @@ import { Controller, Post, Body, HttpCode, HttpStatus, Request, Get } from '@nes
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request as ExpressRequest } from 'express';
-import type { AuthService } from '@/modules/auth/auth.service';
-import type { UserService } from '@/modules/user/user.service';
-import type { CaptchaService } from '@/modules/auth/captcha.service';
+import { AuthService } from '@/modules/auth/auth.service';
+import { UserService } from '@/modules/user/user.service';
+import { CaptchaService } from '@/modules/auth/captcha.service';
 import {
   CaptchaResponseDto,
   type LoginDto,

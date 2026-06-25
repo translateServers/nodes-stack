@@ -1,7 +1,7 @@
 import { Injectable, type OnModuleInit, type OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import type { TypedConfigService } from '@/config/typed-config.service';
+import { TypedConfigService } from '@/config/typed-config.service';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {

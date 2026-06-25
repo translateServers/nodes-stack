@@ -3,8 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Injectable } from '@nestjs/common';
 import type { JwtPayload } from '@/common/interfaces/jwt.interface';
 import type { UserPayload } from '@/common/interfaces/user.interface';
-import type { TypedConfigService } from '@/config/typed-config.service';
-import type { PrismaService } from '@/prisma/prisma.service';
+import { TypedConfigService } from '@/config/typed-config.service';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

@@ -3,8 +3,8 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '@/common/decorators/public.decorator';
 import { SkipThrottle } from '@/common/decorators/skip-throttle.decorator';
 import { getCurrentTimeDatetime } from '@/common/utils/time.util';
-import type { PrismaService } from '@/prisma/prisma.service';
-import type { RedisService } from '@/modules/redis/redis.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { RedisService } from '@/modules/redis/redis.service';
 
 @ApiTags('health')
 @Controller()

@@ -1,6 +1,6 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { createClient, type RedisClientType } from 'redis';
-import type { TypedConfigService } from '@/config/typed-config.service';
+import { TypedConfigService } from '@/config/typed-config.service';
 
 /**
  * Redis 服务

@@ -10,7 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { MenuService } from './menu.service';
+import { MenuService } from './menu.service';
 import {
   type CreateMenuDto,
   type UpdateMenuDto,

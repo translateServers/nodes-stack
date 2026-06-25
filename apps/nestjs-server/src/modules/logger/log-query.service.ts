@@ -1,4 +1,4 @@
-import type { TypedConfigService } from '@/config/typed-config.service';
+import { TypedConfigService } from '@/config/typed-config.service';
 import { Injectable } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';

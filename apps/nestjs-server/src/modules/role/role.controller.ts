@@ -10,7 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { RoleService } from '@/modules/role/role.service';
+import { RoleService } from '@/modules/role/role.service';
 import {
   type CreateRoleDto,
   type UpdateRoleDto,
