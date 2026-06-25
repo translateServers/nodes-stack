@@ -1,8 +1,8 @@
-import { Injectable, type ExecutionContext } from '@nestjs/common';
+import { Injectable, ExecutionContext } from '@nestjs/common';
 import {
   ThrottlerGuard as NestThrottlerGuard,
   type ThrottlerModuleOptions,
-  type ThrottlerStorage,
+  ThrottlerStorage,
 } from '@nestjs/throttler';
 import { Reflector } from '@nestjs/core';
 import { SKIP_THROTTLE_KEY } from '../decorators/skip-throttle.decorator';
