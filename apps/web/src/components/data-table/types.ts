@@ -93,7 +93,7 @@ export interface DataTableProps<TData> {
   /** 表格数据 */
   data: TData[];
   /** 列定义 */
-  columns: ColumnDef<TData, unknown>[];
+  columns: ColumnDef<TData, any>[];
   /** 行 ID 提取函数，默认为 (row) => row.id */
   getRowId?: (row: TData) => string;
   /** 是否加载中 */

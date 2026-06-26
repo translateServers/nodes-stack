@@ -1,4 +1,4 @@
-import type { Column } from '@tanstack/react-table';
+import type { Column, Table } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ChevronsUpDown, EyeOff, FilterX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -14,11 +14,14 @@ import { getFilterRenderer, hasActiveFilter, type FilterType } from './filters';
 
 interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLDivElement> {
   column: Column<TData, TValue>;
+  /** 表格实例，用于读取多列排序状态。由 header 渲染函数的 context.table 传入。 */
+  table: Table<TData>;
   title: string;
 }
 
 export function DataTableColumnHeader<TData, TValue>({
   column,
+  table,
   title,
   className,
 }: DataTableColumnHeaderProps<TData, TValue>) {
@@ -26,7 +29,6 @@ export function DataTableColumnHeader<TData, TValue>({
     return <div className={cn(className)}>{title}</div>;
   }
 
-  const table = column.getTable();
   const enableMultiSort = table.options.enableMultiSort ?? false;
   const sortingState = table.getState().sorting;
   const sortIndex = sortingState.findIndex((s) => s.id === column.id);

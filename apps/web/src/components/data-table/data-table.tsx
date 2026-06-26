@@ -51,6 +51,8 @@ import { createFeatureContext } from './context';
 /** 行渲染片段组件的 props */
 interface DataTableRowFragmentProps<TData> {
   row: Row<TData>;
+  /** 是否选中（显式传入，确保 memo 能检测到选择状态变化并触发重渲染） */
+  isSelected: boolean;
   onRowClick?: (row: TData) => void;
   renderExpandedRowContent?: (row: TData) => React.ReactNode;
   isExpanded: boolean;
@@ -61,6 +63,7 @@ interface DataTableRowFragmentProps<TData> {
 /** 行渲染片段组件（行 + 可选的展开行），memo 优化大数据量重渲染 */
 const DataTableRowFragmentImpl = <TData,>({
   row,
+  isSelected,
   onRowClick,
   renderExpandedRowContent,
   isExpanded,
@@ -69,7 +72,7 @@ const DataTableRowFragmentImpl = <TData,>({
 }: DataTableRowFragmentProps<TData>) => (
   <>
     <TableRow
-      data-state={row.getIsSelected() && 'selected'}
+      data-state={isSelected ? 'selected' : undefined}
       onClick={onRowClick ? () => onRowClick(row.original) : undefined}
       className={onRowClick ? 'cursor-pointer' : undefined}
     >
@@ -411,6 +414,7 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
                         <DataTableRowFragment
                           key={row.id}
                           row={row}
+                          isSelected={row.getIsSelected()}
                           onRowClick={onRowClick}
                           renderExpandedRowContent={renderExpandedRowContent}
                           isExpanded={row.getIsExpanded()}
@@ -443,6 +447,7 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
                         <DataTableRowFragment
                           key={row.id}
                           row={row}
+                          isSelected={row.getIsSelected()}
                           onRowClick={onRowClick}
                           renderExpandedRowContent={renderExpandedRowContent}
                           isExpanded={row.getIsExpanded()}

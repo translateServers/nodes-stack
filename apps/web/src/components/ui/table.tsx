@@ -7,7 +7,7 @@ function Table({ className, ...props }: React.ComponentProps<'table'>) {
     <div data-slot="table-container" className="relative w-full overflow-x-auto">
       <table
         data-slot="table"
-        className={cn('w-full caption-bottom text-sm', className)}
+        className={cn('w-full caption-bottom text-sm border-collapse', className)}
         {...props}
       />
     </div>
@@ -18,7 +18,11 @@ function TableHeader({ className, ...props }: React.ComponentProps<'thead'>) {
   return (
     <thead
       data-slot="table-header"
-      className={cn('[&_tr]:border-b-2 [&_tr]:border-border', className)}
+      className={cn(
+        '[&_tr]:border-b-2 [&_tr]:border-border [&_tr]:border-l-3 [&_tr]:border-l-transparent',
+        '[&_tr:has([role=checkbox][data-state=checked],[role=checkbox][data-state=indeterminate])]:border-l-primary',
+        className,
+      )}
       {...props}
     />
   );
@@ -28,7 +32,7 @@ function TableBody({ className, ...props }: React.ComponentProps<'tbody'>) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn('[&_tr:last-child]:border-0', className)}
+      className={cn('[&_tr:last-child]:border-b-0', className)}
       {...props}
     />
   );
@@ -49,10 +53,10 @@ function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
     <tr
       data-slot="table-row"
       className={cn(
-        'border-b transition-colors duration-150',
+        'border-b border-l-3 border-l-transparent transition-colors duration-150',
         'hover:bg-muted/50 dark:hover:bg-muted/30',
         'has-aria-expanded:bg-muted/50',
-        'data-[state=selected]:bg-primary/5 data-[state=selected]:border-l-3 data-[state=selected]:border-l-primary',
+        'data-[state=selected]:bg-primary/5 data-[state=selected]:border-l-primary',
         className,
       )}
       {...props}

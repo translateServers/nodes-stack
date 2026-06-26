@@ -17,6 +17,7 @@ import { Route as AppSheetRouteImport } from './routes/_app.sheet'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
 import { Route as AppMenusRouteImport } from './routes/_app.menus'
 import { Route as AppDictRouteImport } from './routes/_app.dict'
+import { Route as AppDataTablePlaygroundRouteImport } from './routes/_app.data-table-playground'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -57,10 +58,16 @@ const AppDictRoute = AppDictRouteImport.update({
   path: '/dict',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDataTablePlaygroundRoute = AppDataTablePlaygroundRouteImport.update({
+  id: '/data-table-playground',
+  path: '/data-table-playground',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/data-table-playground': typeof AppDataTablePlaygroundRoute
   '/dict': typeof AppDictRoute
   '/menus': typeof AppMenusRoute
   '/roles': typeof AppRolesRoute
@@ -69,6 +76,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/data-table-playground': typeof AppDataTablePlaygroundRoute
   '/dict': typeof AppDictRoute
   '/menus': typeof AppMenusRoute
   '/roles': typeof AppRolesRoute
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/data-table-playground': typeof AppDataTablePlaygroundRoute
   '/_app/dict': typeof AppDictRoute
   '/_app/menus': typeof AppMenusRoute
   '/_app/roles': typeof AppRolesRoute
@@ -92,17 +101,27 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/data-table-playground'
     | '/dict'
     | '/menus'
     | '/roles'
     | '/sheet'
     | '/users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/dict' | '/menus' | '/roles' | '/sheet' | '/users' | '/'
+  to:
+    | '/login'
+    | '/data-table-playground'
+    | '/dict'
+    | '/menus'
+    | '/roles'
+    | '/sheet'
+    | '/users'
+    | '/'
   id:
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/data-table-playground'
     | '/_app/dict'
     | '/_app/menus'
     | '/_app/roles'
@@ -174,10 +193,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDictRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/data-table-playground': {
+      id: '/_app/data-table-playground'
+      path: '/data-table-playground'
+      fullPath: '/data-table-playground'
+      preLoaderRoute: typeof AppDataTablePlaygroundRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppDataTablePlaygroundRoute: typeof AppDataTablePlaygroundRoute
   AppDictRoute: typeof AppDictRoute
   AppMenusRoute: typeof AppMenusRoute
   AppRolesRoute: typeof AppRolesRoute
@@ -187,6 +214,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppDataTablePlaygroundRoute: AppDataTablePlaygroundRoute,
   AppDictRoute: AppDictRoute,
   AppMenusRoute: AppMenusRoute,
   AppRolesRoute: AppRolesRoute,
