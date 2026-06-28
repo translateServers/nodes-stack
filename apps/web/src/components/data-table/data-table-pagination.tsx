@@ -42,12 +42,15 @@ export function DataTablePagination<TData>({
   };
 
   return (
-    <div className="flex items-center justify-between border-t px-3 py-2.5">
-      <div className="flex-1 text-sm text-muted-foreground">
-        共 {totalCount} 条，第 {pageIndex + 1}/{pageCount} 页
+    <div className="flex flex-col gap-2 border-t px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+      <div className="text-center text-sm text-muted-foreground sm:text-left">
+        共 {totalCount} 条
+        <span className="hidden sm:inline">
+          ，第 {pageIndex + 1}/{pageCount} 页
+        </span>
       </div>
-      <div className="flex items-center gap-4 lg:gap-6">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-4 lg:gap-6">
+        <div className="hidden items-center gap-2 sm:flex">
           <p className="text-sm font-medium">每页</p>
           <Select
             value={`${table.getState().pagination.pageSize}`}
@@ -68,7 +71,7 @@ export function DataTablePagination<TData>({
           </Select>
         </div>
         {showJumpToPage && pageCount > 1 && (
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 md:flex">
             <p className="text-sm font-medium">跳至</p>
             <Input
               className="h-8 w-[50px] text-center"
@@ -84,7 +87,7 @@ export function DataTablePagination<TData>({
           <Button
             variant="outline"
             size="icon-sm"
-            className="hidden lg:flex"
+            className="hidden md:flex"
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
           >
@@ -100,6 +103,9 @@ export function DataTablePagination<TData>({
             <span className="sr-only">上一页</span>
             <ChevronLeft />
           </Button>
+          <span className="flex items-center px-2 text-sm font-medium sm:hidden">
+            {pageIndex + 1}/{pageCount}
+          </span>
           <Button
             variant="outline"
             size="icon-sm"
@@ -112,7 +118,7 @@ export function DataTablePagination<TData>({
           <Button
             variant="outline"
             size="icon-sm"
-            className="hidden lg:flex"
+            className="hidden md:flex"
             onClick={() => table.setPageIndex(pageCount - 1)}
             disabled={!table.getCanNextPage()}
           >

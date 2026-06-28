@@ -20,22 +20,27 @@ export function NumberRangeFilter<TData>({ column }: FilterRendererProps<TData>)
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Input
-        type="number"
-        value={min ?? ''}
-        onChange={handleMinChange}
-        placeholder="最小值"
-        className="h-8 w-full"
-      />
-      <span className="text-muted-foreground">-</span>
-      <Input
-        type="number"
-        value={max ?? ''}
-        onChange={handleMaxChange}
-        placeholder="最大值"
-        className="h-8 w-full"
-      />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-xs text-muted-foreground">最小值</span>
+        <Input
+          type="number"
+          value={min ?? ''}
+          onChange={handleMinChange}
+          placeholder="0"
+          className="h-8 flex-1"
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-xs text-muted-foreground">最大值</span>
+        <Input
+          type="number"
+          value={max ?? ''}
+          onChange={handleMaxChange}
+          placeholder="100"
+          className="h-8 flex-1"
+        />
+      </div>
     </div>
   );
 }

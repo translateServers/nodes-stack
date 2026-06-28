@@ -48,3 +48,7 @@ apps/web/e2e/test-results/
 playwright-report/
 test-results/
 .auth-state.json
+
+.playwright-cli/*
+
+test-artifacts/*

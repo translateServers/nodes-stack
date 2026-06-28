@@ -69,7 +69,7 @@ export function DataTableColumnHeader<TData, TValue>({
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
+        <DropdownMenuContent align="start" className="min-w-[280px]">
           <DropdownMenuItem
             onClick={(e) => column.toggleSorting(false, e.shiftKey && enableMultiSort)}
           >
@@ -90,7 +90,7 @@ export function DataTableColumnHeader<TData, TValue>({
           {FilterComponent && (
             <>
               <DropdownMenuSeparator />
-              <div className="min-w-[220px] p-2">
+              <div className="p-2">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">筛选</p>
                 <FilterComponent column={column as Column<TData, unknown>} />
               </div>
