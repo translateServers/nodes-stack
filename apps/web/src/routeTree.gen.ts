@@ -13,7 +13,6 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
 import { Route as AppUsersRouteImport } from './routes/_app.users'
-import { Route as AppSheetRouteImport } from './routes/_app.sheet'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
 import { Route as AppMenusRouteImport } from './routes/_app.menus'
 import { Route as AppDictRouteImport } from './routes/_app.dict'
@@ -36,11 +35,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppUsersRoute = AppUsersRouteImport.update({
   id: '/users',
   path: '/users',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppSheetRoute = AppSheetRouteImport.update({
-  id: '/sheet',
-  path: '/sheet',
   getParentRoute: () => AppRoute,
 } as any)
 const AppRolesRoute = AppRolesRouteImport.update({
@@ -71,7 +65,6 @@ export interface FileRoutesByFullPath {
   '/dict': typeof AppDictRoute
   '/menus': typeof AppMenusRoute
   '/roles': typeof AppRolesRoute
-  '/sheet': typeof AppSheetRoute
   '/users': typeof AppUsersRoute
 }
 export interface FileRoutesByTo {
@@ -80,7 +73,6 @@ export interface FileRoutesByTo {
   '/dict': typeof AppDictRoute
   '/menus': typeof AppMenusRoute
   '/roles': typeof AppRolesRoute
-  '/sheet': typeof AppSheetRoute
   '/users': typeof AppUsersRoute
   '/': typeof AppIndexRoute
 }
@@ -92,7 +84,6 @@ export interface FileRoutesById {
   '/_app/dict': typeof AppDictRoute
   '/_app/menus': typeof AppMenusRoute
   '/_app/roles': typeof AppRolesRoute
-  '/_app/sheet': typeof AppSheetRoute
   '/_app/users': typeof AppUsersRoute
   '/_app/': typeof AppIndexRoute
 }
@@ -105,7 +96,6 @@ export interface FileRouteTypes {
     | '/dict'
     | '/menus'
     | '/roles'
-    | '/sheet'
     | '/users'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -114,7 +104,6 @@ export interface FileRouteTypes {
     | '/dict'
     | '/menus'
     | '/roles'
-    | '/sheet'
     | '/users'
     | '/'
   id:
@@ -125,7 +114,6 @@ export interface FileRouteTypes {
     | '/_app/dict'
     | '/_app/menus'
     | '/_app/roles'
-    | '/_app/sheet'
     | '/_app/users'
     | '/_app/'
   fileRoutesById: FileRoutesById
@@ -165,13 +153,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppUsersRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/sheet': {
-      id: '/_app/sheet'
-      path: '/sheet'
-      fullPath: '/sheet'
-      preLoaderRoute: typeof AppSheetRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/roles': {
       id: '/_app/roles'
       path: '/roles'
@@ -208,7 +189,6 @@ interface AppRouteChildren {
   AppDictRoute: typeof AppDictRoute
   AppMenusRoute: typeof AppMenusRoute
   AppRolesRoute: typeof AppRolesRoute
-  AppSheetRoute: typeof AppSheetRoute
   AppUsersRoute: typeof AppUsersRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -218,7 +198,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppDictRoute: AppDictRoute,
   AppMenusRoute: AppMenusRoute,
   AppRolesRoute: AppRolesRoute,
-  AppSheetRoute: AppSheetRoute,
   AppUsersRoute: AppUsersRoute,
   AppIndexRoute: AppIndexRoute,
 }
