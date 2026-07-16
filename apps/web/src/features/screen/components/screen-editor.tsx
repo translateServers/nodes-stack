@@ -1,11 +1,29 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Save, Eye, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Save,
+  Eye,
+  Loader2,
+  Undo2,
+  Redo2,
+  Minus,
+  Plus,
+  Maximize,
+  Layers,
+  Package,
+} from 'lucide-react';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { ScreenCanvas } from '../components/screen-canvas';
 import { ComponentLibrary, useCanvasDrop } from '../components/component-library';
 import { PropertyPanel } from '../components/property-panel';
+import { LayerPanel } from '../components/layer-panel';
+import { CanvasContextMenu } from '../components/canvas-context-menu';
+import { CanvasRulers, type RulersHandle } from '../components/canvas-rulers';
+import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
+
+const ZOOM_PRESETS = [25, 50, 75, 100, 125, 150, 200];
 
 export function ScreenEditor() {
   const { id } = useParams({ from: '/screen/$id' });
@@ -18,9 +36,17 @@ export function ScreenEditor() {
   const loadProject = useScreenEditorStore((s) => s.loadProject);
   const storeProject = useScreenEditorStore((s) => s.project);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
+  const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
+  const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
+  const canUndo = useScreenEditorStore((s) => s.history.past.length > 0);
+  const canRedo = useScreenEditorStore((s) => s.history.future.length > 0);
+  const undo = useScreenEditorStore((s) => s.undo);
+  const redo = useScreenEditorStore((s) => s.redo);
 
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const rulersRef = useRef<RulersHandle>(null);
+  const [activeTab, setActiveTab] = useState<'library' | 'layers'>('library');
 
   useEffect(() => {
     if (project) {
@@ -34,7 +60,7 @@ export function ScreenEditor() {
       id: storeProject.id,
       params: {
         name: storeProject.name,
-        description: storeProject.description,
+        description: storeProject.description ?? undefined,
         canvas: storeProject.canvas,
         components: storeProject.components,
       },
@@ -50,18 +76,29 @@ export function ScreenEditor() {
     window.open(`/screen-preview/${id}`, '_blank');
   }, [id]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave]);
+  useKeyboardShortcuts(handleSave);
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
+
+  const handleZoomIn = useCallback(() => {
+    setCanvasScale(Math.min(5, canvasScale + 0.1));
+  }, [canvasScale, setCanvasScale]);
+
+  const handleZoomOut = useCallback(() => {
+    setCanvasScale(Math.max(0.1, canvasScale - 0.1));
+  }, [canvasScale, setCanvasScale]);
+
+  const handleFitToScreen = useCallback(() => {
+    if (!canvasContainerRef.current || !storeProject) return;
+    const rect = canvasContainerRef.current.getBoundingClientRect();
+    const canvas = storeProject.canvas;
+    const scaleX = (rect.width - 60) / canvas.width;
+    const scaleY = (rect.height - 60) / canvas.height;
+    const fitScale = Math.min(scaleX, scaleY, 1);
+    const offsetX = (rect.width - canvas.width * fitScale) / 2;
+    const offsetY = (rect.height - canvas.height * fitScale) / 2;
+    setCanvasScaleAndOffset(fitScale, { x: offsetX, y: offsetY });
+  }, [storeProject, setCanvasScaleAndOffset]);
 
   if (isLoading) {
     return (
@@ -71,10 +108,13 @@ export function ScreenEditor() {
     );
   }
 
+  const canvasWidth = storeProject?.canvas.width ?? 1920;
+  const canvasHeight = storeProject?.canvas.height ?? 1080;
+
   return (
     <div className="flex h-screen flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-3 border-b bg-white px-4 py-2">
+      <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
         <button
           type="button"
           className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
@@ -84,22 +124,70 @@ export function ScreenEditor() {
           返回
         </button>
         <div className="text-sm font-medium text-gray-800">{storeProject?.name ?? '加载中...'}</div>
+
+        <div className="mx-2 h-5 w-px bg-gray-200" />
+
+        <button
+          type="button"
+          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          title="撤销 (Ctrl+Z)"
+          onClick={undo}
+          disabled={!canUndo}
+        >
+          <Undo2 className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          title="重做 (Ctrl+Shift+Z)"
+          onClick={redo}
+          disabled={!canRedo}
+        >
+          <Redo2 className="h-4 w-4" />
+        </button>
+
         <div className="flex-1" />
 
-        <div className="flex items-center gap-1 text-xs text-gray-500">
-          缩放
+        {/* Zoom controls */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            title="缩小"
+            onClick={handleZoomOut}
+          >
+            <Minus className="h-4 w-4" />
+          </button>
           <select
-            className="rounded border border-gray-300 px-1 py-0.5 text-xs"
+            className="w-16 rounded border border-gray-300 px-1 py-0.5 text-center text-xs"
             value={Math.round(canvasScale * 100)}
             onChange={(e) => setCanvasScale(Number(e.target.value) / 100)}
           >
-            {[25, 50, 75, 100, 125, 150].map((s) => (
+            {ZOOM_PRESETS.map((s) => (
               <option key={s} value={s}>
                 {s}%
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            title="放大"
+            onClick={handleZoomIn}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            title="适应屏幕"
+            onClick={handleFitToScreen}
+          >
+            <Maximize className="h-4 w-4" />
+          </button>
         </div>
+
+        <div className="mx-2 h-5 w-px bg-gray-200" />
 
         <button
           type="button"
@@ -134,10 +222,55 @@ export function ScreenEditor() {
 
       {/* Editor layout */}
       <div className="flex flex-1 overflow-hidden">
-        <ComponentLibrary />
-        <div className="flex-1 overflow-auto">
-          <ScreenCanvas onDrop={handleDrop} onDragOver={handleDragOver} />
+        {/* Left sidebar with tabs */}
+        <div className="flex h-full w-60 flex-col border-r bg-white">
+          <div className="flex border-b">
+            <button
+              type="button"
+              className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
+                activeTab === 'library'
+                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              onClick={() => setActiveTab('library')}
+            >
+              <Package className="h-3.5 w-3.5" />
+              组件库
+            </button>
+            <button
+              type="button"
+              className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
+                activeTab === 'layers'
+                  ? 'border-b-2 border-blue-500 text-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+              onClick={() => setActiveTab('layers')}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              图层
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {activeTab === 'library' ? <ComponentLibrary /> : <LayerPanel />}
+          </div>
         </div>
+
+        {/* Canvas area with rulers and context menu */}
+        <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
+          <CanvasRulers
+            ref={rulersRef}
+            scale={canvasScale}
+            offset={canvasOffset}
+            canvasWidth={canvasWidth}
+            canvasHeight={canvasHeight}
+            containerRef={canvasContainerRef}
+          />
+          <div className="absolute inset-0" style={{ top: 20, left: 20 }}>
+            <ScreenCanvas onDrop={handleDrop} onDragOver={handleDragOver} />
+          </div>
+          <CanvasContextMenu containerRef={canvasContainerRef} />
+        </div>
+
         <PropertyPanel />
       </div>
     </div>

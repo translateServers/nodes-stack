@@ -1,83 +1,28 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import Moveable from 'react-moveable';
+import Selecto from 'react-selecto';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { ComponentRenderer } from '../registry/renderer';
 
-function ComponentWrapper({ component }: { component: ScreenComponent }) {
-  const selectedComponentId = useScreenEditorStore((s) => s.selectedComponentId);
-  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
-  const updateComponent = useScreenEditorStore((s) => s.updateComponent);
+interface DimensionInfo {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotate: number;
+  visible: boolean;
+}
 
-  const isSelected = selectedComponentId === component.id;
-  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
-    null,
-  );
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      if (component.status.locked) return;
-      e.stopPropagation();
-      selectComponent(component.id);
-
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        origX: component.position.x,
-        origY: component.position.y,
-      };
-
-      const handleMouseMove = (ev: MouseEvent) => {
-        if (!dragRef.current) return;
-        const canvasScale = useScreenEditorStore.getState().canvasScale;
-        const dx = (ev.clientX - dragRef.current.startX) / canvasScale;
-        const dy = (ev.clientY - dragRef.current.startY) / canvasScale;
-        updateComponent(component.id, {
-          position: {
-            ...component.position,
-            x: Math.round(dragRef.current.origX + dx),
-            y: Math.round(dragRef.current.origY + dy),
-          },
-        });
-      };
-
-      const handleMouseUp = () => {
-        dragRef.current = null;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
-
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    },
-    [component, selectComponent, updateComponent],
-  );
-
-  if (component.status.hidden) return null;
-
-  return (
-    <div
-      onMouseDown={handleMouseDown}
-      className={`absolute ${component.status.locked ? 'cursor-not-allowed' : 'cursor-move'} ${
-        isSelected ? 'ring-2 ring-blue-500 ring-offset-1' : ''
-      }`}
-      style={{
-        left: component.position.x,
-        top: component.position.y,
-        width: component.position.width,
-        height: component.position.height,
-        zIndex: component.zIndex,
-        opacity: component.style.opacity ?? 1,
-        borderRadius: component.style.borderRadius,
-        borderWidth: component.style.borderWidth,
-        borderColor: component.style.borderColor,
-        borderStyle: component.style.borderStyle,
-        backgroundColor: component.style.backgroundColor,
-        overflow: component.style.overflow ?? 'hidden',
-      }}
-    >
-      <ComponentRenderer component={component} />
-    </div>
-  );
+function getComponentId(el: Element): string | null {
+  let current: Element | null = el;
+  while (current) {
+    const id = current.getAttribute('data-component-id');
+    if (id) return id;
+    current = current.parentElement;
+  }
+  return null;
 }
 
 export function ScreenCanvas({
@@ -89,37 +34,534 @@ export function ScreenCanvas({
 }) {
   const project = useScreenEditorStore((s) => s.project);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
-  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
+  const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
+  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  const showBorderGuides = useScreenEditorStore((s) => s.showBorderGuides);
+  const selectComponents = useScreenEditorStore((s) => s.selectComponents);
+  const clearSelection = useScreenEditorStore((s) => s.clearSelection);
+  const updateComponent = useScreenEditorStore((s) => s.updateComponent);
+  const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
+  const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
+
+  const componentRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const moveableRef = useRef<Moveable>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const panState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
+    null,
+  );
+  const spaceHeld = useRef(false);
+  const [spaceHeldUI, setSpaceHeldUI] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const shiftRef = useRef(false);
+  const [shiftHeld, setShiftHeld] = useState(false);
+
+  const [dimension, setDimension] = useState<DimensionInfo>({
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+    rotate: 0,
+    visible: false,
+  });
+
+  const targets = selectedComponentIds
+    .map((id) => componentRefs.current.get(id))
+    .filter((el): el is HTMLElement => el != null);
+
+  useEffect(() => {
+    if (moveableRef.current) {
+      moveableRef.current.updateRect();
+    }
+  }, [selectedComponentIds, project?.components]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftRef.current = true;
+        flushSync(() => setShiftHeld(true));
+      }
+      if (e.code === 'Space' && !e.repeat) {
+        const target = e.target as HTMLElement;
+        if (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable
+        )
+          return;
+        e.preventDefault();
+        spaceHeld.current = true;
+        setSpaceHeldUI(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        shiftRef.current = false;
+        flushSync(() => setShiftHeld(false));
+      }
+      if (e.code === 'Space') {
+        spaceHeld.current = false;
+        setSpaceHeldUI(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  const handlePanStart = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0 || !spaceHeld.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setIsPanning(true);
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      panState.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: canvasOffset.x,
+        origY: canvasOffset.y,
+      };
+    },
+    [canvasOffset],
+  );
+
+  const handlePanMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!panState.current) return;
+      const dx = e.clientX - panState.current.startX;
+      const dy = e.clientY - panState.current.startY;
+      setCanvasScaleAndOffset(canvasScale, {
+        x: panState.current.origX + dx,
+        y: panState.current.origY + dy,
+      });
+    },
+    [canvasScale, setCanvasScaleAndOffset],
+  );
+
+  const handlePanEnd = useCallback((e: React.PointerEvent) => {
+    if (!panState.current) return;
+    panState.current = null;
+    setIsPanning(false);
+    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.altKey) return;
+      e.preventDefault();
+      const state = useScreenEditorStore.getState();
+      const rect = el.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+      const factor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
+      const newScale = Math.min(5, Math.max(0.1, state.canvasScale * factor));
+      const ratio = newScale / state.canvasScale;
+      setCanvasScaleAndOffset(newScale, {
+        x: cursorX - (cursorX - state.canvasOffset.x) * ratio,
+        y: cursorY - (cursorY - state.canvasOffset.y) * ratio,
+      });
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [setCanvasScaleAndOffset]);
 
   if (!project) return null;
 
   const { canvas, components } = project;
 
+  const isGroupSelect = selectedComponentIds.length > 1;
+
   return (
     <div
-      className="flex h-full w-full items-center justify-center overflow-auto bg-gray-100"
-      onMouseDown={() => selectComponent(null)}
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden bg-gray-100"
+      style={{ cursor: isPanning ? 'grabbing' : spaceHeldUI ? 'grab' : undefined }}
+      onPointerDown={handlePanStart}
+      onPointerMove={handlePanMove}
+      onPointerUp={handlePanEnd}
     >
       <div
-        className="relative origin-top-left shrink-0"
+        className="absolute"
         style={{
-          width: canvas.width,
-          height: canvas.height,
-          transform: `scale(${canvasScale})`,
-          backgroundColor: canvas.backgroundColor,
-          backgroundImage: canvas.backgroundImage ? `url(${canvas.backgroundImage})` : undefined,
-          backgroundSize: 'cover',
+          transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${canvasScale})`,
+          transformOrigin: 'top left',
         }}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
       >
-        {components
-          .filter((c) => !c.parentId)
-          .sort((a, b) => a.zIndex - b.zIndex)
-          .map((component) => (
-            <ComponentWrapper key={component.id} component={component} />
-          ))}
+        <div
+          ref={contentRef}
+          className="relative"
+          style={{
+            width: canvas.width,
+            height: canvas.height,
+            backgroundColor: canvas.backgroundColor,
+            backgroundImage: canvas.backgroundImage ? `url(${canvas.backgroundImage})` : undefined,
+            backgroundSize: 'cover',
+          }}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              clearSelection();
+            }
+          }}
+        >
+          {components
+            .filter((c: ScreenComponent) => !c.parentId && !c.status.hidden)
+            .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex)
+            .map((component: ScreenComponent) => (
+              <div
+                key={component.id}
+                ref={(el) => {
+                  if (el) componentRefs.current.set(component.id, el);
+                  else componentRefs.current.delete(component.id);
+                }}
+                data-component-id={component.id}
+                className="absolute"
+                style={{
+                  left: component.position.x,
+                  top: component.position.y,
+                  width: component.position.width,
+                  height: component.position.height,
+                  zIndex: component.zIndex,
+                  opacity: component.style.opacity ?? 1,
+                  borderRadius: component.style.borderRadius,
+                  borderWidth: component.style.borderWidth,
+                  borderColor: component.style.borderColor,
+                  borderStyle: component.style.borderStyle,
+                  backgroundColor: component.style.backgroundColor,
+                  overflow: component.style.overflow ?? 'hidden',
+                  transform: component.position.rotation
+                    ? `rotate(${component.position.rotation}deg)`
+                    : undefined,
+                  outline:
+                    showBorderGuides && !selectedComponentIds.includes(component.id)
+                      ? '1px dashed rgba(147, 197, 253, 0.5)'
+                      : undefined,
+                }}
+              >
+                <ComponentRenderer component={component} />
+              </div>
+            ))}
+        </div>
+
+        <Moveable
+          ref={moveableRef}
+          target={targets}
+          container={contentRef.current}
+          draggable
+          resizable
+          rotatable
+          snappable
+          keepRatio={shiftHeld}
+          throttleRotate={shiftHeld ? 15 : 0}
+          hideChildMoveableDefaultLines={isGroupSelect}
+          snapDirections={{
+            top: true,
+            bottom: true,
+            left: true,
+            right: true,
+            center: true,
+            middle: true,
+          }}
+          elementSnapDirections={{
+            top: true,
+            bottom: true,
+            left: true,
+            right: true,
+            center: true,
+            middle: true,
+          }}
+          verticalGuidelines={['0', `${canvas.width}`]}
+          horizontalGuidelines={['0', `${canvas.height}`]}
+          zoom={1 / canvasScale}
+          origin={false}
+          renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}
+          // --- Single target events ---
+          onDragStart={(e) => {
+            const id = getComponentId(e.target);
+            if (!id) return false;
+            const comp = components.find((c: ScreenComponent) => c.id === id);
+            if (comp?.status.locked) return false;
+            e.datas.id = id;
+            e.datas.startX = comp?.position.x ?? 0;
+            e.datas.startY = comp?.position.y ?? 0;
+          }}
+          onDrag={(e) => {
+            e.target.style.left = `${e.left}px`;
+            e.target.style.top = `${e.top}px`;
+            setDimension((d) => ({
+              ...d,
+              x: Math.round(e.left),
+              y: Math.round(e.top),
+              visible: true,
+            }));
+          }}
+          onDragEnd={(e) => {
+            if (!e.isDrag) return;
+            const id = e.datas.id;
+            if (!id) return;
+            const last = e.lastEvent;
+            if (!last) return;
+            updateComponent(id, {
+              position: {
+                ...components.find((c: ScreenComponent) => c.id === id)!.position,
+                x: Math.round(last.left),
+                y: Math.round(last.top),
+              },
+            });
+            setDimension((d) => ({ ...d, visible: false }));
+          }}
+          onResizeStart={(e) => {
+            const id = getComponentId(e.target);
+            if (!id) return false;
+            const comp = components.find((c: ScreenComponent) => c.id === id);
+            if (comp?.status.locked) return false;
+            e.datas.id = id;
+            e.datas.origW = comp?.position.width ?? 0;
+            e.datas.origH = comp?.position.height ?? 0;
+            e.datas.keepRatio = shiftRef.current;
+          }}
+          onResize={(e) => {
+            let w = e.width;
+            let h = e.height;
+            if (e.datas.keepRatio && e.datas.origW && e.datas.origH) {
+              const ratio = e.datas.origW / e.datas.origH;
+              const [dx, dy] = e.direction;
+              if (dx !== 0 && dy !== 0) {
+                const newH = w / ratio;
+                const newW = h * ratio;
+                if (Math.abs(w - e.datas.origW) > Math.abs(h - e.datas.origH)) {
+                  h = newH;
+                } else {
+                  w = newW;
+                }
+              } else if (dx !== 0) {
+                h = w / ratio;
+              } else if (dy !== 0) {
+                w = h * ratio;
+              }
+            }
+            e.target.style.width = `${w}px`;
+            e.target.style.height = `${h}px`;
+            if (e.drag) {
+              e.target.style.left = `${e.drag.left}px`;
+              e.target.style.top = `${e.drag.top}px`;
+            }
+            setDimension((d) => ({
+              ...d,
+              x: Math.round(Number.parseInt(e.target.style.left || '0')),
+              y: Math.round(Number.parseInt(e.target.style.top || '0')),
+              w: Math.round(w),
+              h: Math.round(h),
+              visible: true,
+            }));
+          }}
+          onResizeEnd={(e) => {
+            if (!e.isDrag) return;
+            const id = e.datas.id;
+            if (!id) return;
+            const comp = components.find((c: ScreenComponent) => c.id === id);
+            if (!comp) return;
+            const last = e.lastEvent;
+            if (!last) return;
+            updateComponent(id, {
+              position: {
+                ...comp.position,
+                x: Math.round(Number.parseInt(e.target.style.left)),
+                y: Math.round(Number.parseInt(e.target.style.top)),
+                width: Math.round(Number.parseInt(e.target.style.width)),
+                height: Math.round(Number.parseInt(e.target.style.height)),
+              },
+            });
+            setDimension((d) => ({ ...d, visible: false }));
+          }}
+          onRotateStart={(e) => {
+            const id = getComponentId(e.target);
+            if (!id) return false;
+            const comp = components.find((c: ScreenComponent) => c.id === id);
+            if (comp?.status.locked) return false;
+            e.datas.id = id;
+            e.datas.snapRotate = shiftRef.current;
+          }}
+          onRotate={(e) => {
+            let rotation = e.rotation;
+            if (e.datas.snapRotate) {
+              rotation = Math.round(rotation / 15) * 15;
+            }
+            const currentTransform = e.target.style.transform || '';
+            const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
+            if (rotateMatch) {
+              e.target.style.transform = currentTransform.replace(
+                rotateMatch[0],
+                `rotate(${rotation}deg)`,
+              );
+            } else {
+              e.target.style.transform = `${currentTransform} rotate(${rotation}deg)`.trim();
+            }
+            setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
+          }}
+          onRotateEnd={(e) => {
+            if (!e.isDrag) return;
+            const id = e.datas.id;
+            if (!id) return;
+            const comp = components.find((c: ScreenComponent) => c.id === id);
+            if (!comp) return;
+            const transform = e.target.style.transform || '';
+            const match = transform.match(/rotate\(([^)]+)deg\)/);
+            const rotation = match ? Number.parseFloat(match[1]) : 0;
+            updateComponent(id, {
+              position: { ...comp.position, rotation: Math.round(rotation) },
+            });
+            setDimension((d) => ({ ...d, visible: false }));
+          }}
+          // --- Group target events ---
+          onDragGroupStart={(e) => {
+            const ids: string[] = [];
+            for (const t of e.targets) {
+              const id = getComponentId(t);
+              if (id) {
+                const comp = components.find((c: ScreenComponent) => c.id === id);
+                if (comp?.status.locked) return false;
+                ids.push(id);
+              }
+            }
+            e.datas.ids = ids;
+          }}
+          onDragGroup={(e) => {
+            for (const ev of e.events) {
+              ev.target.style.left = `${ev.left}px`;
+              ev.target.style.top = `${ev.top}px`;
+            }
+          }}
+          onDragGroupEnd={(e) => {
+            if (!e.isDrag) return;
+            const ids = e.datas.ids as string[];
+            if (!ids) return;
+            const updates = e.events
+              .map((ev) => {
+                const id = getComponentId(ev.target);
+                if (!id) return null;
+                const comp = components.find((c: ScreenComponent) => c.id === id);
+                if (!comp) return null;
+                return {
+                  id,
+                  changes: {
+                    position: {
+                      ...comp.position,
+                      x: Math.round(Number.parseInt(ev.target.style.left)),
+                      y: Math.round(Number.parseInt(ev.target.style.top)),
+                    },
+                  },
+                };
+              })
+              .filter((u): u is NonNullable<typeof u> => u != null);
+            updateComponentsBatch(updates);
+          }}
+          onResizeGroupStart={(e) => {
+            for (const t of e.targets) {
+              const id = getComponentId(t);
+              if (id) {
+                const comp = components.find((c: ScreenComponent) => c.id === id);
+                if (comp?.status.locked) return false;
+              }
+            }
+          }}
+          onResizeGroup={(e) => {
+            for (const ev of e.events) {
+              ev.target.style.width = `${ev.width}px`;
+              ev.target.style.height = `${ev.height}px`;
+              if (ev.drag) {
+                ev.target.style.left = `${ev.drag.left}px`;
+                ev.target.style.top = `${ev.drag.top}px`;
+              }
+            }
+          }}
+          onResizeGroupEnd={(e) => {
+            if (!e.isDrag) return;
+            const updates = e.events
+              .map((ev) => {
+                const id = getComponentId(ev.target);
+                if (!id) return null;
+                const comp = components.find((c: ScreenComponent) => c.id === id);
+                if (!comp) return null;
+                return {
+                  id,
+                  changes: {
+                    position: {
+                      ...comp.position,
+                      x: Math.round(Number.parseInt(ev.target.style.left)),
+                      y: Math.round(Number.parseInt(ev.target.style.top)),
+                      width: Math.round(Number.parseInt(ev.target.style.width)),
+                      height: Math.round(Number.parseInt(ev.target.style.height)),
+                    },
+                  },
+                };
+              })
+              .filter((u): u is NonNullable<typeof u> => u != null);
+            updateComponentsBatch(updates);
+          }}
+          onChangeTargets={() => {}}
+        />
       </div>
+
+      <Selecto
+        dragContainer={containerRef.current}
+        selectableTargets={['[data-component-id]']}
+        selectByClick
+        selectFromInside={false}
+        hitRate={0}
+        toggleContinueSelect={['ctrl']}
+        onDragStart={(e) => {
+          if (moveableRef.current) {
+            const target = e.inputEvent?.target as HTMLElement;
+            if (moveableRef.current.isMoveableElement(target)) {
+              e.stop();
+            }
+            if (
+              target &&
+              getComponentId(target) &&
+              selectedComponentIds.includes(getComponentId(target)!)
+            ) {
+              e.stop();
+            }
+          }
+        }}
+        onSelectEnd={(e) => {
+          const selected = e.selected
+            .map((el) => getComponentId(el))
+            .filter((id): id is string => id != null);
+          selectComponents(selected);
+          if (e.isDragStart) {
+            setTimeout(() => {
+              moveableRef.current?.dragStart(e.inputEvent);
+            }, 0);
+          }
+        }}
+      />
+
+      {dimension.visible && (
+        <div
+          className="pointer-events-none fixed z-[9999] rounded bg-black/80 px-2 py-1 font-mono text-xs text-white"
+          style={{
+            left: 10,
+            bottom: 10,
+          }}
+        >
+          X:{dimension.x} Y:{dimension.y}
+          {dimension.w > 0 && ` W:${dimension.w}`}
+          {dimension.h > 0 && ` H:${dimension.h}`}
+          {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,12 @@
 import { useCallback } from 'react';
+import {
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+} from 'lucide-react';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, CanvasConfig } from '@nebula/shared';
 
@@ -106,6 +114,13 @@ function PositionFields({
           value={position.height}
           onChange={(v) => onUpdate({ position: { ...position, height: v } })}
         />
+        {position.rotation != null && position.rotation !== 0 && (
+          <NumberInput
+            label="旋转"
+            value={position.rotation}
+            onChange={(v) => onUpdate({ position: { ...position, rotation: v } })}
+          />
+        )}
       </div>
     </div>
   );
@@ -256,30 +271,157 @@ function CanvasSettingsFields({
   );
 }
 
+function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
+  const project = useScreenEditorStore((s) => s.project);
+  const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
+  const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
+
+  if (!project) return null;
+
+  const selectedComponents = selectedIds
+    .map((id: string) => project.components.find((c: ScreenComponent) => c.id === id))
+    .filter((c): c is ScreenComponent => c != null);
+
+  const alignHorizontal = (alignment: 'left' | 'center' | 'right') => {
+    if (selectedComponents.length < 2) return;
+    const xs = selectedComponents.map((c) => c.position.x);
+    const rights = selectedComponents.map((c) => c.position.x + c.position.width);
+    const minX = Math.min(...xs);
+    const maxRight = Math.max(...rights);
+    const centerX = (minX + maxRight) / 2;
+
+    const updates = selectedComponents.map((c) => {
+      let x = c.position.x;
+      if (alignment === 'left') x = minX;
+      else if (alignment === 'right') x = maxRight - c.position.width;
+      else x = centerX - c.position.width / 2;
+      return { id: c.id, changes: { position: { ...c.position, x: Math.round(x) } } };
+    });
+    updateComponentsBatch(updates);
+  };
+
+  const alignVertical = (alignment: 'top' | 'middle' | 'bottom') => {
+    if (selectedComponents.length < 2) return;
+    const ys = selectedComponents.map((c) => c.position.y);
+    const bottoms = selectedComponents.map((c) => c.position.y + c.position.height);
+    const minY = Math.min(...ys);
+    const maxBottom = Math.max(...bottoms);
+    const centerY = (minY + maxBottom) / 2;
+
+    const updates = selectedComponents.map((c) => {
+      let y = c.position.y;
+      if (alignment === 'top') y = minY;
+      else if (alignment === 'bottom') y = maxBottom - c.position.height;
+      else y = centerY - c.position.height / 2;
+      return { id: c.id, changes: { position: { ...c.position, y: Math.round(y) } } };
+    });
+    updateComponentsBatch(updates);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-gray-600">已选中 {selectedIds.length} 个组件</div>
+
+      <div className="space-y-2">
+        <div className="text-xs font-medium text-gray-600">对齐</div>
+        <div className="grid grid-cols-6 gap-1">
+          <button
+            type="button"
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            title="左对齐"
+            onClick={() => alignHorizontal('left')}
+          >
+            <AlignLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            title="水平居中"
+            onClick={() => alignHorizontal('center')}
+          >
+            <AlignCenter className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            title="右对齐"
+            onClick={() => alignHorizontal('right')}
+          >
+            <AlignRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            title="顶对齐"
+            onClick={() => alignVertical('top')}
+          >
+            <AlignStartVertical className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            title="垂直居中"
+            onClick={() => alignVertical('middle')}
+          >
+            <AlignCenterVertical className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            title="底对齐"
+            onClick={() => alignVertical('bottom')}
+          >
+            <AlignEndVertical className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="border-t pt-3">
+        <button
+          type="button"
+          className="w-full rounded bg-red-50 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-100"
+          onClick={removeSelectedComponents}
+        >
+          删除选中 ({selectedIds.length})
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function PropertyPanel() {
   const project = useScreenEditorStore((s) => s.project);
-  const selectedComponentId = useScreenEditorStore((s) => s.selectedComponentId);
+  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateCanvas = useScreenEditorStore((s) => s.updateCanvas);
   const removeComponent = useScreenEditorStore((s) => s.removeComponent);
 
-  const selectedComponent = project?.components.find((c) => c.id === selectedComponentId);
+  const selectedComponent =
+    selectedComponentIds.length === 1
+      ? project?.components.find((c: ScreenComponent) => c.id === selectedComponentIds[0])
+      : undefined;
 
   const handleComponentUpdate = useCallback(
     (updates: Partial<ScreenComponent>) => {
-      if (selectedComponentId) {
-        updateComponent(selectedComponentId, updates);
+      if (selectedComponentIds.length === 1) {
+        updateComponent(selectedComponentIds[0], updates);
       }
     },
-    [selectedComponentId, updateComponent],
+    [selectedComponentIds, updateComponent],
   );
 
   if (!project) return null;
 
+  const isMultiSelect = selectedComponentIds.length > 1;
+
   return (
     <div className="flex h-full w-72 flex-col border-l bg-white">
       <div className="border-b px-4 py-3 font-medium">
-        {selectedComponent ? selectedComponent.name : '属性'}
+        {selectedComponent
+          ? selectedComponent.name
+          : isMultiSelect
+            ? `多选 (${selectedComponentIds.length})`
+            : '属性'}
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {selectedComponent ? (
@@ -302,6 +444,8 @@ export function PropertyPanel() {
               </button>
             </div>
           </>
+        ) : isMultiSelect ? (
+          <MultiSelectPanel selectedIds={selectedComponentIds} />
         ) : (
           <CanvasSettingsFields canvas={project.canvas} onUpdate={updateCanvas} />
         )}
