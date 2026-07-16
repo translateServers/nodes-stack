@@ -24,20 +24,18 @@ export function AppLayout() {
 
       <div
         className={cn(
-          'flex min-h-screen flex-col transition-all duration-300 ease-in-out',
+          'flex min-h-screen flex-col transition-[padding-left] duration-300 ease-in-out',
           collapsed ? 'lg:pl-16' : 'lg:pl-64',
         )}
       >
         <AppHeader />
 
         <main className="flex-1 p-4 lg:p-6">
-          <div className="mx-auto max-w-7xl">
-            <Outlet />
-          </div>
+          <Outlet />
         </main>
 
         <footer className="border-t border-border/60 px-4 py-4 lg:px-6">
-          <div className="mx-auto flex max-w-7xl items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>&copy; 2024 Nebula Admin</span>
             <span>v1.0.0</span>
           </div>
