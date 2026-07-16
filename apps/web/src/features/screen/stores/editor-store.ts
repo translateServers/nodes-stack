@@ -7,12 +7,22 @@ interface HistoryState {
   future: ScreenComponent[][];
 }
 
+interface GuidesState {
+  /** 垂直参考线 x 坐标（画布坐标系） */
+  vertical: number[];
+  /** 水平参考线 y 坐标（画布坐标系） */
+  horizontal: number[];
+  visible: boolean;
+  locked: boolean;
+}
+
 interface ScreenEditorData {
   project: ScreenProject | null;
   selectedComponentIds: string[];
   canvasScale: number;
   canvasOffset: { x: number; y: number };
   showBorderGuides: boolean;
+  guides: GuidesState;
   history: HistoryState;
 }
 
@@ -41,6 +51,12 @@ interface ScreenEditorActions {
   setLocked: (ids: string[], locked: boolean) => void;
   setHidden: (ids: string[], hidden: boolean) => void;
   toggleBorderGuides: () => void;
+  addGuide: (orientation: 'vertical' | 'horizontal', position: number) => void;
+  updateGuide: (orientation: 'vertical' | 'horizontal', index: number, position: number) => void;
+  removeGuide: (orientation: 'vertical' | 'horizontal', index: number) => void;
+  clearGuides: () => void;
+  toggleGuidesVisibility: () => void;
+  toggleGuidesLock: () => void;
   undo: () => void;
   redo: () => void;
   canUndo: () => boolean;
@@ -59,6 +75,7 @@ const initialData: ScreenEditorData = {
   canvasScale: 1,
   canvasOffset: { x: 0, y: 0 },
   showBorderGuides: false,
+  guides: { vertical: [], horizontal: [], visible: true, locked: false },
   history: { past: [], future: [] },
 };
 
@@ -409,6 +426,76 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
           (state: ScreenEditorState) => ({ showBorderGuides: !state.showBorderGuides }),
           false,
           'toggleBorderGuides',
+        );
+      },
+
+      addGuide: (orientation, position) => {
+        set(
+          (state: ScreenEditorState) => ({
+            guides: {
+              ...state.guides,
+              [orientation]: [...state.guides[orientation], position].sort((a, b) => a - b),
+            },
+          }),
+          false,
+          'addGuide',
+        );
+      },
+
+      updateGuide: (orientation, index, position) => {
+        set(
+          (state: ScreenEditorState) => {
+            const list = [...state.guides[orientation]];
+            if (index < 0 || index >= list.length) return {};
+            list[index] = position;
+            list.sort((a, b) => a - b);
+            return { guides: { ...state.guides, [orientation]: list } };
+          },
+          false,
+          'updateGuide',
+        );
+      },
+
+      removeGuide: (orientation, index) => {
+        set(
+          (state: ScreenEditorState) => ({
+            guides: {
+              ...state.guides,
+              [orientation]: state.guides[orientation].filter((_, i) => i !== index),
+            },
+          }),
+          false,
+          'removeGuide',
+        );
+      },
+
+      clearGuides: () => {
+        set(
+          (state: ScreenEditorState) => ({
+            guides: { ...state.guides, vertical: [], horizontal: [] },
+          }),
+          false,
+          'clearGuides',
+        );
+      },
+
+      toggleGuidesVisibility: () => {
+        set(
+          (state: ScreenEditorState) => ({
+            guides: { ...state.guides, visible: !state.guides.visible },
+          }),
+          false,
+          'toggleGuidesVisibility',
+        );
+      },
+
+      toggleGuidesLock: () => {
+        set(
+          (state: ScreenEditorState) => ({
+            guides: { ...state.guides, locked: !state.guides.locked },
+          }),
+          false,
+          'toggleGuidesLock',
         );
       },
 

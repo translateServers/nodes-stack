@@ -130,6 +130,7 @@ export function ScreenCanvas({
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
+  const guides = useScreenEditorStore((s) => s.guides);
 
   // 从独立 store 获取 setDimension，避免拖拽高频回调触发画布重渲染
   const setDimension = useDimensionStore((s) => s.setDimension);
@@ -354,8 +355,16 @@ export function ScreenCanvas({
             center: true,
             middle: true,
           }}
-          verticalGuidelines={['0', `${canvas.width}`]}
-          horizontalGuidelines={['0', `${canvas.height}`]}
+          verticalGuidelines={[
+            '0',
+            `${canvas.width}`,
+            ...(guides.visible ? guides.vertical.map(String) : []),
+          ]}
+          horizontalGuidelines={[
+            '0',
+            `${canvas.height}`,
+            ...(guides.visible ? guides.horizontal.map(String) : []),
+          ]}
           zoom={1 / canvasScale}
           origin={false}
           renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}

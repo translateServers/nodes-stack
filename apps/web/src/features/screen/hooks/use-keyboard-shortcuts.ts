@@ -125,6 +125,12 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       getStore().toggleBorderGuides();
     });
 
+    // Ctrl/Cmd + ; 切换参考线显示
+    hotkeys('ctrl+;, command+;', (e) => {
+      e.preventDefault();
+      getStore().toggleGuidesVisibility();
+    });
+
     return () => {
       hotkeys.unbind('ctrl+s, command+s');
       hotkeys.unbind('ctrl+=, command=');
@@ -148,6 +154,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       hotkeys.unbind('shift+left');
       hotkeys.unbind('shift+right');
       hotkeys.unbind('ctrl+k');
+      hotkeys.unbind('ctrl+;, command+;');
     };
   }, [getStore, saveRef, zoomInRef, zoomOutRef, fitToScreenRef]);
 }

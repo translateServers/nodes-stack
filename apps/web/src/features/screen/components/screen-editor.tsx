@@ -13,6 +13,10 @@ import {
   Package,
   Moon,
   Sun,
+  Ruler,
+  Lock,
+  Unlock,
+  Trash2,
 } from 'lucide-react';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { useScreenEditorStore } from '../stores/editor-store';
@@ -23,6 +27,7 @@ import { PropertyPanel } from '../components/property-panel';
 import { LayerPanel } from '../components/layer-panel';
 import { CanvasContextMenu } from '../components/canvas-context-menu';
 import { CanvasRulers, type RulersHandle } from '../components/canvas-rulers';
+import { CanvasGuides } from '../components/canvas-guides';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { Button } from '@/components/ui/button';
 import {
@@ -56,6 +61,10 @@ export function ScreenEditor() {
   const canRedo = useScreenEditorStore((s) => s.history.future.length > 0);
   const undo = useScreenEditorStore((s) => s.undo);
   const redo = useScreenEditorStore((s) => s.redo);
+  const guides = useScreenEditorStore((s) => s.guides);
+  const toggleGuidesVisibility = useScreenEditorStore((s) => s.toggleGuidesVisibility);
+  const clearGuides = useScreenEditorStore((s) => s.clearGuides);
+  const toggleGuidesLock = useScreenEditorStore((s) => s.toggleGuidesLock);
 
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
@@ -211,6 +220,56 @@ export function ScreenEditor() {
 
           <Separator orientation="vertical" className="mx-2 h-5" />
 
+          {/* 参考线控制 */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={guides.visible ? 'secondary' : 'ghost'}
+                  size="icon-sm"
+                  aria-label="切换参考线显示"
+                  onClick={toggleGuidesVisibility}
+                >
+                  <Ruler />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>参考线 (Ctrl+;)</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="锁定参考线"
+                  onClick={toggleGuidesLock}
+                  disabled={!guides.visible}
+                >
+                  {guides.locked ? <Lock /> : <Unlock />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{guides.locked ? '解锁参考线' : '锁定参考线'}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="清除所有参考线"
+                  onClick={clearGuides}
+                  disabled={
+                    !guides.visible ||
+                    (guides.vertical.length === 0 && guides.horizontal.length === 0)
+                  }
+                >
+                  <Trash2 />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>清除所有参考线</TooltipContent>
+            </Tooltip>
+          </div>
+
+          <Separator orientation="vertical" className="mx-2 h-5" />
+
           <Button onClick={handleSave} disabled={updateMutation.isPending}>
             {updateMutation.isPending ? <Spinner className="size-4" /> : <Save />}
             保存
@@ -294,6 +353,11 @@ export function ScreenEditor() {
             <div className="absolute inset-0" style={{ top: 20, left: 20 }}>
               <ScreenCanvas onDrop={handleDrop} onDragOver={handleDragOver} />
             </div>
+            <CanvasGuides
+              containerRef={canvasContainerRef}
+              canvasWidth={canvasWidth}
+              canvasHeight={canvasHeight}
+            />
             <CanvasContextMenu containerRef={canvasContainerRef} />
           </div>
 

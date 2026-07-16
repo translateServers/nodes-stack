@@ -1,0 +1,282 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useScreenEditorStore } from '../stores/editor-store';
+
+const RULER_SIZE = 20;
+/** 参考线拖出画布外多少距离后删除（屏幕像素） */
+const REMOVE_THRESHOLD = 30;
+
+type Orientation = 'vertical' | 'horizontal';
+
+interface DraggingState {
+  orientation: Orientation;
+  /** -1 表示正在从标尺新建，>=0 表示拖动已有参考线的索引 */
+  index: number;
+  /** 起始屏幕坐标 */
+  startScreen: number;
+}
+
+interface CanvasGuidesProps {
+  /** 画布容器（含标尺），用于计算坐标和监听标尺拖出 */
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  canvasWidth: number;
+  canvasHeight: number;
+}
+
+/**
+ * 画布参考线层。
+ *
+ * 坐标约定：
+ * - store 中存储画布坐标系值（原点画布左上角）
+ * - 渲染时通过 screenPos = canvasPos * scale + offset + RULER_SIZE 转换为屏幕坐标
+ * - 标尺区域 RULER_SIZE px 内为"拖出参考线"的触发区
+ */
+export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: CanvasGuidesProps) {
+  const guides = useScreenEditorStore((s) => s.guides);
+  const canvasScale = useScreenEditorStore((s) => s.canvasScale);
+  const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
+  const addGuide = useScreenEditorStore((s) => s.addGuide);
+  const updateGuide = useScreenEditorStore((s) => s.updateGuide);
+  const removeGuide = useScreenEditorStore((s) => s.removeGuide);
+
+  const [dragging, setDragging] = useState<DraggingState | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ orientation: Orientation; pos: number } | null>(null);
+  const dragStateRef = useRef<DraggingState | null>(null);
+
+  // 同步 dragging 到 ref，方便在 window 监听里取最新值
+  useEffect(() => {
+    dragStateRef.current = dragging;
+  }, [dragging]);
+
+  /** 屏幕坐标 → 画布坐标 */
+  const toCanvas = useCallback(
+    (screenX: number, screenY: number) => {
+      const container = containerRef.current;
+      if (!container) return { x: 0, y: 0 };
+      const rect = container.getBoundingClientRect();
+      const x = (screenX - rect.left - canvasOffset.x) / canvasScale;
+      const y = (screenY - rect.top - canvasOffset.y) / canvasScale;
+      return { x, y };
+    },
+    [containerRef, canvasOffset, canvasScale],
+  );
+
+  /** 处理标尺区域的 pointerdown —— 从标尺拖出参考线 */
+  const handleRulerPointerDown = useCallback(
+    (orientation: Orientation) => (e: React.PointerEvent) => {
+      if (guides.locked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      const startScreen = orientation === 'vertical' ? e.clientX : e.clientY;
+      setDragging({ orientation, index: -1, startScreen });
+    },
+    [guides.locked],
+  );
+
+  /** 处理已有参考线的 pointerdown —— 拖动/删除 */
+  const handleGuidePointerDown = useCallback(
+    (orientation: Orientation, index: number) => (e: React.PointerEvent) => {
+      if (guides.locked) return;
+      e.preventDefault();
+      e.stopPropagation();
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      const startScreen = orientation === 'vertical' ? e.clientX : e.clientY;
+      setDragging({ orientation, index, startScreen });
+    },
+    [guides.locked],
+  );
+
+  /** 双击参考线删除 */
+  const handleGuideDoubleClick = useCallback(
+    (orientation: Orientation, index: number) => () => {
+      removeGuide(orientation, index);
+    },
+    [removeGuide],
+  );
+
+  /** 全局 pointermove：拖出/拖动参考线 */
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMove = (e: PointerEvent) => {
+      const state = dragStateRef.current;
+      if (!state) return;
+      const { x, y } = toCanvas(e.clientX, e.clientY);
+      const canvasPos = state.orientation === 'vertical' ? x : y;
+      const screenPos = state.orientation === 'vertical' ? e.clientX : e.clientY;
+
+      // 拖动过程中显示 hover 提示位置
+      setHoverPos({ orientation: state.orientation, pos: canvasPos });
+
+      // 拖动已有参考线：实时更新位置
+      if (state.index >= 0) {
+        // 判断是否拖出画布外（屏幕坐标系）
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          const relative =
+            state.orientation === 'vertical' ? screenPos - rect.left : screenPos - rect.top;
+          // 超出容器边界（含标尺）一定距离则删除
+          if (
+            relative < RULER_SIZE - REMOVE_THRESHOLD ||
+            relative > rect.width + REMOVE_THRESHOLD
+          ) {
+            removeGuide(state.orientation, state.index);
+            setDragging(null);
+            return;
+          }
+        }
+        updateGuide(state.orientation, state.index, Math.round(canvasPos));
+      }
+    };
+
+    const handleUp = (e: PointerEvent) => {
+      const state = dragStateRef.current;
+      if (!state) return;
+      const { x, y } = toCanvas(e.clientX, e.clientY);
+      const canvasPos = Math.round(state.orientation === 'vertical' ? x : y);
+
+      // 从标尺新建：松开时如果在画布范围内则创建
+      if (state.index === -1) {
+        if (
+          canvasPos >= 0 &&
+          canvasPos <= (state.orientation === 'vertical' ? canvasWidth : canvasHeight)
+        ) {
+          addGuide(state.orientation, canvasPos);
+        }
+      } else {
+        // 拖动已有：最终位置由 updateGuide 已处理
+      }
+      setDragging(null);
+      setHoverPos(null);
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [
+    dragging,
+    toCanvas,
+    containerRef,
+    canvasWidth,
+    canvasHeight,
+    addGuide,
+    updateGuide,
+    removeGuide,
+  ]);
+
+  if (!guides.visible) return null;
+
+  // 计算画布在容器中的屏幕位置（左上角）
+  const canvasScreenLeft = canvasOffset.x + RULER_SIZE;
+  const canvasScreenTop = canvasOffset.y + RULER_SIZE;
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40">
+      {/* 标尺拖出热区：仅在未锁定时启用 */}
+      {!guides.locked && (
+        <>
+          {/* 顶部标尺热区（拖出水平参考线） */}
+          <div
+            className="pointer-events-auto absolute cursor-ns-resize"
+            style={{ left: RULER_SIZE, right: 0, top: 0, height: RULER_SIZE }}
+            onPointerDown={handleRulerPointerDown('horizontal')}
+          />
+          {/* 左侧标尺热区（拖出垂直参考线） */}
+          <div
+            className="pointer-events-auto absolute cursor-ew-resize"
+            style={{ top: RULER_SIZE, bottom: 0, left: 0, width: RULER_SIZE }}
+            onPointerDown={handleRulerPointerDown('vertical')}
+          />
+        </>
+      )}
+
+      {/* 已有参考线 */}
+      {guides.vertical.map((pos, i) => {
+        const screenX = canvasScreenLeft + pos * canvasScale;
+        const isDragging = dragging?.orientation === 'vertical' && dragging.index === i;
+        return (
+          <div
+            key={`v-${pos}-${i}`}
+            className={`pointer-events-auto absolute cursor-ew-resize ${
+              isDragging ? 'opacity-100' : 'opacity-90'
+            }`}
+            style={{
+              left: screenX,
+              top: RULER_SIZE,
+              bottom: 0,
+              width: 1,
+              backgroundColor: 'rgb(56 132 209)',
+              pointerEvents: guides.locked ? 'none' : 'auto',
+            }}
+            onPointerDown={handleGuidePointerDown('vertical', i)}
+            onDoubleClick={handleGuideDoubleClick('vertical', i)}
+          >
+            {/* 加宽点击热区 */}
+            <div className="absolute inset-y-0" style={{ left: -3, width: 7 }} />
+          </div>
+        );
+      })}
+
+      {guides.horizontal.map((pos, i) => {
+        const screenY = canvasScreenTop + pos * canvasScale;
+        const isDragging = dragging?.orientation === 'horizontal' && dragging.index === i;
+        return (
+          <div
+            key={`h-${pos}-${i}`}
+            className={`pointer-events-auto absolute cursor-ns-resize ${
+              isDragging ? 'opacity-100' : 'opacity-90'
+            }`}
+            style={{
+              top: screenY,
+              left: RULER_SIZE,
+              right: 0,
+              height: 1,
+              backgroundColor: 'rgb(56 132 209)',
+              pointerEvents: guides.locked ? 'none' : 'auto',
+            }}
+            onPointerDown={handleGuidePointerDown('horizontal', i)}
+            onDoubleClick={handleGuideDoubleClick('horizontal', i)}
+          >
+            <div className="absolute inset-x-0" style={{ top: -3, height: 7 }} />
+          </div>
+        );
+      })}
+
+      {/* 拖动从标尺新建时的预览线 */}
+      {hoverPos && dragging?.index === -1 && (
+        <>
+          {hoverPos.orientation === 'vertical' && (
+            <div
+              className="absolute"
+              style={{
+                left: canvasScreenLeft + hoverPos.pos * canvasScale,
+                top: RULER_SIZE,
+                bottom: 0,
+                width: 1,
+                backgroundColor: 'rgb(56 132 209)',
+                opacity: 0.5,
+              }}
+            />
+          )}
+          {hoverPos.orientation === 'horizontal' && (
+            <div
+              className="absolute"
+              style={{
+                top: canvasScreenTop + hoverPos.pos * canvasScale,
+                left: RULER_SIZE,
+                right: 0,
+                height: 1,
+                backgroundColor: 'rgb(56 132 209)',
+                opacity: 0.5,
+              }}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
