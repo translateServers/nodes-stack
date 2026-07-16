@@ -8,6 +8,7 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     icon: 'Type',
     defaultProps: { content: '请输入文本' },
     defaultSize: { width: 200, height: 60 },
+    defaultStyle: { color: '#ffffff', fontSize: 14 },
   },
   {
     type: 'bar-chart',
@@ -55,6 +56,7 @@ export function createComponentInstance(
       borderWidth: 0,
       borderRadius: 0,
       overflow: 'hidden',
+      ...def.defaultStyle,
     },
     props: structuredClone(def.defaultProps),
     status: { locked: false, hidden: false },

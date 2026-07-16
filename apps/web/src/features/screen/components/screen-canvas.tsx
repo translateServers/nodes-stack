@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
+import { create } from 'zustand';
 import Moveable from 'react-moveable';
 import Selecto from 'react-selecto';
 import type { ScreenComponent } from '@nebula/shared';
@@ -14,6 +15,93 @@ interface DimensionInfo {
   rotate: number;
   visible: boolean;
 }
+
+const initialDimension: DimensionInfo = {
+  x: 0,
+  y: 0,
+  w: 0,
+  h: 0,
+  rotate: 0,
+  visible: false,
+};
+
+/**
+ * 独立的 dimension 状态 store。
+ * 将拖拽过程中的尺寸/位置提示信息从画布主组件中剥离，
+ * 避免 onDrag 高频回调触发整个画布重渲染导致拖拽抖动。
+ */
+const useDimensionStore = create<{
+  dimension: DimensionInfo;
+  setDimension: (updater: (d: DimensionInfo) => DimensionInfo) => void;
+}>((set) => ({
+  dimension: initialDimension,
+  setDimension: (updater) => set((state) => ({ dimension: updater(state.dimension) })),
+}));
+
+/** 尺寸/位置提示浮层，仅订阅 dimension store，不随画布重渲染 */
+const DimensionTooltip = memo(function DimensionTooltip() {
+  const dimension = useDimensionStore((s) => s.dimension);
+  if (!dimension.visible) return null;
+  return (
+    <div
+      className="pointer-events-none fixed z-[9999] rounded bg-black/80 px-2 py-1 font-mono text-xs text-white"
+      style={{ left: 10, bottom: 10 }}
+    >
+      X:{dimension.x} Y:{dimension.y}
+      {dimension.w > 0 && ` W:${dimension.w}`}
+      {dimension.h > 0 && ` H:${dimension.h}`}
+      {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
+    </div>
+  );
+});
+
+interface CanvasComponentWrapperProps {
+  component: ScreenComponent;
+  selected: boolean;
+  showBorderGuides: boolean;
+  registerRef: (id: string, el: HTMLElement | null) => void;
+}
+
+/**
+ * Memo 化的画布组件容器。
+ * 拖拽过程中 Moveable 直接操作 DOM style，若父组件重渲染导致此处重新渲染，
+ * React 的 style 对象 diff 会覆盖 Moveable 的直接 DOM 操作，造成视觉抖动。
+ * 通过 memo 确保仅在 component 数据实际变化时才重新渲染。
+ */
+const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
+  component,
+  selected,
+  showBorderGuides,
+  registerRef,
+}: CanvasComponentWrapperProps) {
+  return (
+    <div
+      ref={(el) => registerRef(component.id, el)}
+      data-component-id={component.id}
+      className="absolute"
+      style={{
+        left: component.position.x,
+        top: component.position.y,
+        width: component.position.width,
+        height: component.position.height,
+        zIndex: component.zIndex,
+        opacity: component.style.opacity ?? 1,
+        borderRadius: component.style.borderRadius,
+        borderWidth: component.style.borderWidth,
+        borderColor: component.style.borderColor,
+        borderStyle: component.style.borderStyle,
+        backgroundColor: component.style.backgroundColor,
+        overflow: component.style.overflow ?? 'hidden',
+        transform: component.position.rotation
+          ? `rotate(${component.position.rotation}deg)`
+          : undefined,
+        outline: showBorderGuides && !selected ? '1px dashed rgba(147, 197, 253, 0.5)' : undefined,
+      }}
+    >
+      <ComponentRenderer component={component} />
+    </div>
+  );
+});
 
 function getComponentId(el: Element): string | null {
   let current: Element | null = el;
@@ -43,6 +131,9 @@ export function ScreenCanvas({
   const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
 
+  // 从独立 store 获取 setDimension，避免拖拽高频回调触发画布重渲染
+  const setDimension = useDimensionStore((s) => s.setDimension);
+
   const componentRefs = useRef<Map<string, HTMLElement>>(new Map());
   const moveableRef = useRef<Moveable>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,18 +147,26 @@ export function ScreenCanvas({
   const shiftRef = useRef(false);
   const [shiftHeld, setShiftHeld] = useState(false);
 
-  const [dimension, setDimension] = useState<DimensionInfo>({
-    x: 0,
-    y: 0,
-    w: 0,
-    h: 0,
-    rotate: 0,
-    visible: false,
-  });
+  /** 稳定的 ref 注册回调，避免作为 prop 传入 memo 组件时引起重渲染 */
+  const registerRef = useCallback((id: string, el: HTMLElement | null) => {
+    if (el) componentRefs.current.set(id, el);
+    else componentRefs.current.delete(id);
+  }, []);
 
-  const targets = selectedComponentIds
-    .map((id) => componentRefs.current.get(id))
-    .filter((el): el is HTMLElement => el != null);
+  /** 选中 ID 集合，O(1) 查询选中状态 */
+  const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
+
+  /**
+   * Memo 化 targets 数组，仅在选中组件变化时重新计算。
+   * 避免每次渲染生成新数组引用导致 Moveable 内部重新初始化造成拖拽抖动。
+   */
+  const targets = useMemo(
+    () =>
+      selectedComponentIds
+        .map((id) => componentRefs.current.get(id))
+        .filter((el): el is HTMLElement => el != null),
+    [selectedComponentIds],
+  );
 
   useEffect(() => {
     if (moveableRef.current) {
@@ -172,7 +271,7 @@ export function ScreenCanvas({
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
-  }, [setCanvasScaleAndOffset]);
+  }, [setCanvasScaleAndOffset, project]);
 
   if (!project) return null;
 
@@ -218,38 +317,13 @@ export function ScreenCanvas({
             .filter((c: ScreenComponent) => !c.parentId && !c.status.hidden)
             .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex)
             .map((component: ScreenComponent) => (
-              <div
+              <CanvasComponentWrapper
                 key={component.id}
-                ref={(el) => {
-                  if (el) componentRefs.current.set(component.id, el);
-                  else componentRefs.current.delete(component.id);
-                }}
-                data-component-id={component.id}
-                className="absolute"
-                style={{
-                  left: component.position.x,
-                  top: component.position.y,
-                  width: component.position.width,
-                  height: component.position.height,
-                  zIndex: component.zIndex,
-                  opacity: component.style.opacity ?? 1,
-                  borderRadius: component.style.borderRadius,
-                  borderWidth: component.style.borderWidth,
-                  borderColor: component.style.borderColor,
-                  borderStyle: component.style.borderStyle,
-                  backgroundColor: component.style.backgroundColor,
-                  overflow: component.style.overflow ?? 'hidden',
-                  transform: component.position.rotation
-                    ? `rotate(${component.position.rotation}deg)`
-                    : undefined,
-                  outline:
-                    showBorderGuides && !selectedComponentIds.includes(component.id)
-                      ? '1px dashed rgba(147, 197, 253, 0.5)'
-                      : undefined,
-                }}
-              >
-                <ComponentRenderer component={component} />
-              </div>
+                component={component}
+                selected={selectedIdSet.has(component.id)}
+                showBorderGuides={showBorderGuides}
+                registerRef={registerRef}
+              />
             ))}
         </div>
 
@@ -548,20 +622,7 @@ export function ScreenCanvas({
         }}
       />
 
-      {dimension.visible && (
-        <div
-          className="pointer-events-none fixed z-[9999] rounded bg-black/80 px-2 py-1 font-mono text-xs text-white"
-          style={{
-            left: 10,
-            bottom: 10,
-          }}
-        >
-          X:{dimension.x} Y:{dimension.y}
-          {dimension.w > 0 && ` W:${dimension.w}`}
-          {dimension.h > 0 && ` H:${dimension.h}`}
-          {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
-        </div>
-      )}
+      <DimensionTooltip />
     </div>
   );
 }

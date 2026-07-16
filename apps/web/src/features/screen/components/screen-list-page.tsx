@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { Plus, Trash2, Eye, Edit, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Eye, Edit } from 'lucide-react';
 import {
   useScreenProjects,
   useCreateScreenProject,
   useDeleteScreenProject,
   usePublishScreenProject,
 } from '../hooks';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 
 export function ScreenListPage() {
   const { data: projects, isLoading } = useScreenProjects();
@@ -30,7 +36,7 @@ export function ScreenListPage() {
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/70" />
+        <Spinner className="size-6 text-muted-foreground/70" />
       </div>
     );
   }
@@ -43,97 +49,87 @@ export function ScreenListPage() {
 
       {/* Create form */}
       <div className="mb-6 flex gap-2">
-        <input
+        <Input
           type="text"
           placeholder="输入大屏项目名称"
-          className="flex-1 rounded border border-input bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="flex-1"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleCreate();
           }}
         />
-        <button
-          type="button"
-          className="flex items-center gap-1 rounded bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          onClick={handleCreate}
-          disabled={!newName.trim() || createMutation.isPending}
-        >
-          {createMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
+        <Button onClick={handleCreate} disabled={!newName.trim() || createMutation.isPending}>
+          {createMutation.isPending ? <Spinner className="size-4" /> : <Plus />}
           创建
-        </button>
+        </Button>
       </div>
 
       {/* Project list */}
       {projects && projects.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
-            <div
-              key={project.id}
-              className="rounded-lg border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
-            >
-              <div className="mb-2 flex items-start justify-between">
-                <div>
-                  <h3 className="font-medium text-foreground">{project.name}</h3>
-                  {project.description && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{project.description}</p>
-                  )}
+            <Card key={project.id} className="transition-shadow hover:shadow-md">
+              <CardHeader>
+                <CardTitle>{project.name}</CardTitle>
+                {project.description && (
+                  <p className="text-xs text-muted-foreground">{project.description}</p>
+                )}
+                <CardAction>
+                  <Badge variant={project.status === 'published' ? 'default' : 'secondary'}>
+                    {project.status === 'published' ? '已发布' : '草稿'}
+                  </Badge>
+                </CardAction>
+              </CardHeader>
+
+              <CardContent>
+                <div className="mb-3 text-xs text-muted-foreground/70">
+                  {project.canvas.width} x {project.canvas.height} &middot;{' '}
+                  {project.components.length} 个组件 &middot; {project.updatedAt}
                 </div>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-xs ${
-                    project.status === 'published'
-                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {project.status === 'published' ? '已发布' : '草稿'}
-                </span>
-              </div>
 
-              <div className="mb-3 text-xs text-muted-foreground/70">
-                {project.canvas.width} x {project.canvas.height} &middot;{' '}
-                {project.components.length} 个组件 &middot; {project.updatedAt}
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  className="flex flex-1 items-center justify-center gap-1 rounded bg-primary/10 px-2 py-1.5 text-xs text-primary hover:bg-primary/20"
-                  onClick={() => window.open(`/screen/${project.id}`, '_blank')}
-                >
-                  <Edit className="h-3 w-3" />
-                  编辑
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center justify-center gap-1 rounded bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-600 hover:bg-emerald-500/20 dark:text-emerald-400"
-                  onClick={() => window.open(`/screen-preview/${project.id}`, '_blank')}
-                >
-                  <Eye className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  className="flex items-center justify-center gap-1 rounded bg-destructive/10 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/20"
-                  onClick={() => {
-                    if (confirm('确定删除此大屏项目？')) {
-                      deleteMutation.mutate(project.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => window.open(`/screen/${project.id}`, '_blank')}
+                  >
+                    <Edit />
+                    编辑
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => window.open(`/screen-preview/${project.id}`, '_blank')}
+                    aria-label="预览"
+                  >
+                    <Eye />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon-sm"
+                    onClick={() => {
+                      if (confirm('确定删除此大屏项目？')) {
+                        deleteMutation.mutate(project.id);
+                      }
+                    }}
+                    aria-label="删除"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : (
-        <div className="flex h-48 items-center justify-center rounded-lg border-2 border-dashed border-border text-muted-foreground/70">
-          暂无大屏项目，请创建一个
-        </div>
+        <Empty className="h-48">
+          <EmptyHeader>
+            <EmptyTitle>暂无大屏项目</EmptyTitle>
+            <EmptyDescription>请在上方输入名称后创建一个</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
     </div>
   );

@@ -45,6 +45,8 @@ describe('Component Registry', () => {
       expect(instance?.props.content).toBe('请输入文本');
       expect(instance?.id).toBeDefined();
       expect(instance?.style.opacity).toBe(1);
+      expect(instance?.style.color).toBe('#ffffff');
+      expect(instance?.style.fontSize).toBe(14);
     });
 
     it('should create a bar-chart component instance', () => {

@@ -87,4 +87,5 @@ export interface ComponentDefinition {
   thumbnail?: string;
   defaultProps: Record<string, unknown>;
   defaultSize: { width: number; height: number };
+  defaultStyle?: Partial<ComponentStyle>;
 }

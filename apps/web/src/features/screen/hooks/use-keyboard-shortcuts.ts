@@ -3,8 +3,21 @@ import hotkeys from 'hotkeys-js';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent } from '@nebula/shared';
 
-export function useKeyboardShortcuts(onSave: () => void) {
-  const saveRef = useLatestRef(onSave);
+interface KeyboardShortcutsOptions {
+  onSave: () => void;
+  /** 放大画布（Ctrl/Cmd + =） */
+  onZoomIn?: () => void;
+  /** 缩小画布（Ctrl/Cmd + -） */
+  onZoomOut?: () => void;
+  /** 适应屏幕（Ctrl/Cmd + 0） */
+  onFitToScreen?: () => void;
+}
+
+export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
+  const saveRef = useLatestRef(options.onSave);
+  const zoomInRef = useLatestRef(options.onZoomIn);
+  const zoomOutRef = useLatestRef(options.onZoomOut);
+  const fitToScreenRef = useLatestRef(options.onFitToScreen);
 
   const getStore = useCallback(() => useScreenEditorStore.getState(), []);
 
@@ -13,7 +26,15 @@ export function useKeyboardShortcuts(onSave: () => void) {
       const target = event.target as HTMLElement;
       const tagName = target.tagName;
       if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
-        if (hotkeys.getPressedKeyCodes().includes(83) && (event.ctrlKey || event.metaKey)) {
+        const pressed = hotkeys.getPressedKeyCodes();
+        // 允许在输入框内使用 Ctrl/Cmd+S 保存、Ctrl/Cmd+加/减/0 缩放
+        if (
+          (pressed.includes(83) ||
+            pressed.includes(187) ||
+            pressed.includes(189) ||
+            pressed.includes(48)) &&
+          (event.ctrlKey || event.metaKey)
+        ) {
           return true;
         }
         return false;
@@ -24,6 +45,20 @@ export function useKeyboardShortcuts(onSave: () => void) {
     hotkeys('ctrl+s, command+s', (e) => {
       e.preventDefault();
       saveRef.current();
+    });
+
+    // 缩放快捷键：Ctrl/Cmd + =（放大）、Ctrl/Cmd + -（缩小）、Ctrl/Cmd + 0（适应屏幕）
+    hotkeys('ctrl+=, command=', (e) => {
+      e.preventDefault();
+      zoomInRef.current?.();
+    });
+    hotkeys('ctrl+-, command+-', (e) => {
+      e.preventDefault();
+      zoomOutRef.current?.();
+    });
+    hotkeys('ctrl+0, command+0', (e) => {
+      e.preventDefault();
+      fitToScreenRef.current?.();
     });
 
     hotkeys('escape', () => {
@@ -92,6 +127,9 @@ export function useKeyboardShortcuts(onSave: () => void) {
 
     return () => {
       hotkeys.unbind('ctrl+s, command+s');
+      hotkeys.unbind('ctrl+=, command=');
+      hotkeys.unbind('ctrl+-, command+-');
+      hotkeys.unbind('ctrl+0, command+0');
       hotkeys.unbind('escape');
       hotkeys.unbind('delete, backspace');
       hotkeys.unbind('ctrl+a, command+a');
@@ -111,7 +149,7 @@ export function useKeyboardShortcuts(onSave: () => void) {
       hotkeys.unbind('shift+right');
       hotkeys.unbind('ctrl+k');
     };
-  }, [getStore, saveRef]);
+  }, [getStore, saveRef, zoomInRef, zoomOutRef, fitToScreenRef]);
 }
 
 function useLatestRef<T>(value: T): { current: T } {

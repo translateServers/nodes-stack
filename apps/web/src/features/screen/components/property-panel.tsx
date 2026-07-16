@@ -9,6 +9,20 @@ import {
 } from 'lucide-react';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, CanvasConfig } from '@nebula/shared';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
+/** 与 Input 同款样式的 textarea，项目暂无 Textarea shadcn 组件，本地复用样式 */
+const textareaClass =
+  'w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30';
 
 function NumberInput({
   label,
@@ -22,9 +36,9 @@ function NumberInput({
   return (
     <div className="flex items-center gap-2">
       <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
-      <input
+      <Input
         type="number"
-        className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className="h-7 px-2 py-1 text-sm"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
@@ -44,9 +58,9 @@ function TextInput({
   return (
     <div className="flex items-center gap-2">
       <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
-      <input
+      <Input
         type="text"
-        className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className="h-7 px-2 py-1 text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -72,9 +86,9 @@ function ColorInput({
         value={value || '#000000'}
         onChange={(e) => onChange(e.target.value)}
       />
-      <input
+      <Input
         type="text"
-        className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className="h-7 px-2 py-1 text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -180,7 +194,7 @@ function TextPropsFields({
       <div className="flex items-center gap-2">
         <label className="w-12 shrink-0 text-xs text-muted-foreground">内容</label>
         <textarea
-          className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={textareaClass}
           rows={3}
           value={(props.content as string) ?? ''}
           onChange={(e) => onUpdate({ props: { ...props, content: e.target.value } })}
@@ -219,7 +233,7 @@ function BarChartPropsFields({
       <div className="flex items-center gap-2">
         <label className="w-12 shrink-0 text-xs text-muted-foreground">数据</label>
         <textarea
-          className="w-full rounded border border-input bg-card px-2 py-1 font-mono text-xs text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={`${textareaClass} font-mono text-xs`}
           rows={6}
           value={JSON.stringify(props.data ?? [], null, 2)}
           onChange={(e) => {
@@ -255,17 +269,21 @@ function CanvasSettingsFields({
       />
       <div className="flex items-center gap-2">
         <label className="w-12 shrink-0 text-xs text-muted-foreground">缩放</label>
-        <select
-          className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        <Select
           value={canvas.scaleMode}
-          onChange={(e) => onUpdate({ scaleMode: e.target.value as CanvasConfig['scaleMode'] })}
+          onValueChange={(v) => onUpdate({ scaleMode: v as CanvasConfig['scaleMode'] })}
         >
-          <option value="fit">等比缩放</option>
-          <option value="full">拉伸铺满</option>
-          <option value="width">宽度铺满</option>
-          <option value="height">高度铺满</option>
-          <option value="none">原始尺寸</option>
-        </select>
+          <SelectTrigger size="sm" className="h-7 w-full text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fit">等比缩放</SelectItem>
+            <SelectItem value="full">拉伸铺满</SelectItem>
+            <SelectItem value="width">宽度铺满</SelectItem>
+            <SelectItem value="height">高度铺满</SelectItem>
+            <SelectItem value="none">原始尺寸</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );
@@ -319,73 +337,101 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">已选中 {selectedIds.length} 个组件</div>
+    <TooltipProvider>
+      <div className="space-y-4">
+        <div className="text-sm text-muted-foreground">已选中 {selectedIds.length} 个组件</div>
 
-      <div className="space-y-2">
-        <div className="text-xs font-medium text-foreground">对齐</div>
-        <div className="grid grid-cols-6 gap-1">
-          <button
-            type="button"
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="左对齐"
-            onClick={() => alignHorizontal('left')}
-          >
-            <AlignLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="水平居中"
-            onClick={() => alignHorizontal('center')}
-          >
-            <AlignCenter className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="右对齐"
-            onClick={() => alignHorizontal('right')}
-          >
-            <AlignRight className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="顶对齐"
-            onClick={() => alignVertical('top')}
-          >
-            <AlignStartVertical className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="垂直居中"
-            onClick={() => alignVertical('middle')}
-          >
-            <AlignCenterVertical className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="底对齐"
-            onClick={() => alignVertical('bottom')}
-          >
-            <AlignEndVertical className="h-4 w-4" />
-          </button>
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-foreground">对齐</div>
+          <div className="grid grid-cols-6 gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="左对齐"
+                  onClick={() => alignHorizontal('left')}
+                >
+                  <AlignLeft />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>左对齐</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="水平居中"
+                  onClick={() => alignHorizontal('center')}
+                >
+                  <AlignCenter />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>水平居中</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="右对齐"
+                  onClick={() => alignHorizontal('right')}
+                >
+                  <AlignRight />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>右对齐</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="顶对齐"
+                  onClick={() => alignVertical('top')}
+                >
+                  <AlignStartVertical />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>顶对齐</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="垂直居中"
+                  onClick={() => alignVertical('middle')}
+                >
+                  <AlignCenterVertical />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>垂直居中</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="底对齐"
+                  onClick={() => alignVertical('bottom')}
+                >
+                  <AlignEndVertical />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>底对齐</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-3">
+          <Button variant="destructive" className="w-full" onClick={removeSelectedComponents}>
+            删除选中 ({selectedIds.length})
+          </Button>
         </div>
       </div>
-
-      <div className="border-t border-border pt-3">
-        <button
-          type="button"
-          className="w-full rounded bg-destructive/10 px-3 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/20"
-          onClick={removeSelectedComponents}
-        >
-          删除选中 ({selectedIds.length})
-        </button>
-      </div>
-    </div>
+    </TooltipProvider>
   );
 }
 
@@ -435,13 +481,13 @@ export function PropertyPanel() {
               <BarChartPropsFields component={selectedComponent} onUpdate={handleComponentUpdate} />
             )}
             <div className="border-t border-border pt-3">
-              <button
-                type="button"
-                className="w-full rounded bg-destructive/10 px-3 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/20"
+              <Button
+                variant="destructive"
+                className="w-full"
                 onClick={() => removeComponent(selectedComponent.id)}
               >
                 删除组件
-              </button>
+              </Button>
             </div>
           </>
         ) : isMultiSelect ? (
