@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   AlignLeft,
   AlignCenter,
@@ -442,18 +442,22 @@ export function PropertyPanel() {
   const updateCanvas = useScreenEditorStore((s) => s.updateCanvas);
   const removeComponent = useScreenEditorStore((s) => s.removeComponent);
 
-  const selectedComponent =
-    selectedComponentIds.length === 1
-      ? project?.components.find((c: ScreenComponent) => c.id === selectedComponentIds[0])
-      : undefined;
+  const singleSelectedId = selectedComponentIds.length === 1 ? selectedComponentIds[0] : null;
+  const selectedComponent = useMemo(
+    () =>
+      project && singleSelectedId
+        ? project.components.find((c) => c.id === singleSelectedId)
+        : undefined,
+    [project, singleSelectedId],
+  );
 
   const handleComponentUpdate = useCallback(
     (updates: Partial<ScreenComponent>) => {
-      if (selectedComponentIds.length === 1) {
-        updateComponent(selectedComponentIds[0], updates);
+      if (singleSelectedId) {
+        updateComponent(singleSelectedId, updates);
       }
     },
-    [selectedComponentIds, updateComponent],
+    [singleSelectedId, updateComponent],
   );
 
   if (!project) return null;

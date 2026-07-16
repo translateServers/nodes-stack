@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import hotkeys from 'hotkeys-js';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent } from '@nebula/shared';
@@ -159,8 +159,8 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
   }, [getStore, saveRef, zoomInRef, zoomOutRef, fitToScreenRef]);
 }
 
-function useLatestRef<T>(value: T): { current: T } {
-  const ref = { current: value };
+function useLatestRef<T>(value: T): React.MutableRefObject<T> {
+  const ref = useRef<T>(value);
   ref.current = value;
   return ref;
 }

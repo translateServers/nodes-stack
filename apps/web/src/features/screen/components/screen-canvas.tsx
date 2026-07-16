@@ -158,15 +158,16 @@ export function ScreenCanvas({
   const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
 
   /**
-   * Memo 化 targets 数组，仅在选中组件变化时重新计算。
-   * 避免每次渲染生成新数组引用导致 Moveable 内部重新初始化造成拖拽抖动。
+   * Memo 化 targets 数组。
+   * 依赖包含 project?.components：新增组件并立即选中时，selectedComponentIds 可能
+   * 先于 ref 注册变化，加入 components 依赖可在组件挂载后再次重算 targets。
    */
   const targets = useMemo(
     () =>
       selectedComponentIds
         .map((id) => componentRefs.current.get(id))
         .filter((el): el is HTMLElement => el != null),
-    [selectedComponentIds],
+    [selectedComponentIds, project?.components],
   );
 
   useEffect(() => {
@@ -274,9 +275,39 @@ export function ScreenCanvas({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [setCanvasScaleAndOffset, project]);
 
-  if (!project) return null;
+  const components = project?.components ?? [];
+  const canvas = project?.canvas;
 
-  const { canvas, components } = project;
+  /**
+   * Memo 化可见组件列表（过滤 + 按 zIndex 排序）。
+   * 避免每次渲染都重新 filter+sort 产生新数组与新 component 引用，
+   * 否则会使 CanvasComponentWrapper 的 memo 失效。
+   */
+  const visibleComponents = useMemo(
+    () =>
+      components
+        .filter((c: ScreenComponent) => !c.parentId && !c.status.hidden)
+        .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex),
+    [components],
+  );
+
+  /** Memo 化 Moveable 的 snap 参考线，避免每次渲染产生新数组引用触发 Moveable 内部重算 */
+  const verticalGuidelines = useMemo(
+    () =>
+      canvas
+        ? ['0', `${canvas.width}`, ...(guides.visible ? guides.vertical.map(String) : [])]
+        : [],
+    [canvas, guides.visible, guides.vertical],
+  );
+  const horizontalGuidelines = useMemo(
+    () =>
+      canvas
+        ? ['0', `${canvas.height}`, ...(guides.visible ? guides.horizontal.map(String) : [])]
+        : [],
+    [canvas, guides.visible, guides.horizontal],
+  );
+
+  if (!project || !canvas) return null;
 
   const isGroupSelect = selectedComponentIds.length > 1;
 
@@ -314,18 +345,15 @@ export function ScreenCanvas({
             }
           }}
         >
-          {components
-            .filter((c: ScreenComponent) => !c.parentId && !c.status.hidden)
-            .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex)
-            .map((component: ScreenComponent) => (
-              <CanvasComponentWrapper
-                key={component.id}
-                component={component}
-                selected={selectedIdSet.has(component.id)}
-                showBorderGuides={showBorderGuides}
-                registerRef={registerRef}
-              />
-            ))}
+          {visibleComponents.map((component: ScreenComponent) => (
+            <CanvasComponentWrapper
+              key={component.id}
+              component={component}
+              selected={selectedIdSet.has(component.id)}
+              showBorderGuides={showBorderGuides}
+              registerRef={registerRef}
+            />
+          ))}
         </div>
 
         <Moveable
@@ -355,16 +383,8 @@ export function ScreenCanvas({
             center: true,
             middle: true,
           }}
-          verticalGuidelines={[
-            '0',
-            `${canvas.width}`,
-            ...(guides.visible ? guides.vertical.map(String) : []),
-          ]}
-          horizontalGuidelines={[
-            '0',
-            `${canvas.height}`,
-            ...(guides.visible ? guides.horizontal.map(String) : []),
-          ]}
+          verticalGuidelines={verticalGuidelines}
+          horizontalGuidelines={horizontalGuidelines}
           zoom={1 / canvasScale}
           origin={false}
           renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}

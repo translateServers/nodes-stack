@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   Type,
   BarChart3,
@@ -26,10 +26,13 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Box,
 };
 
+const KNOWN_TYPE_TO_ICON: Record<string, string> = {
+  text: 'Type',
+  'bar-chart': 'BarChart3',
+};
+
 function getIconForType(type: string): React.ComponentType<{ className?: string }> {
-  const def = ICON_MAP;
-  const knownTypes: Record<string, string> = { text: 'Type', 'bar-chart': 'BarChart3' };
-  return def[knownTypes[type]] ?? Box;
+  return ICON_MAP[KNOWN_TYPE_TO_ICON[type]] ?? Box;
 }
 
 export function LayerPanel() {
@@ -58,9 +61,14 @@ export function LayerPanel() {
     [selectComponent],
   );
 
-  if (!project) return null;
+  // Memo 化：仅在 components 引用变化时重新排序；选中状态用 Set 做 O(1) 查询
+  const sorted = useMemo(
+    () => (project ? [...project.components].sort((a, b) => b.zIndex - a.zIndex) : []),
+    [project],
+  );
+  const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
 
-  const sorted = [...project.components].sort((a, b) => b.zIndex - a.zIndex);
+  if (!project) return null;
 
   return (
     <TooltipProvider>
@@ -71,7 +79,7 @@ export function LayerPanel() {
         <div className="flex-1 overflow-y-auto">
           {sorted.map((comp) => {
             const Icon = getIconForType(comp.type);
-            const isSelected = selectedComponentIds.includes(comp.id);
+            const isSelected = selectedIdSet.has(comp.id);
             return (
               <div
                 key={comp.id}

@@ -84,9 +84,10 @@ function pushHistory(set: (fn: (state: ScreenEditorState) => Partial<ScreenEdito
     if (!state.project) return {};
     return {
       history: {
-        past: [...state.history.past, structuredClone(state.project.components)].slice(
-          -HISTORY_LIMIT,
-        ),
+        // 浅拷贝即可：store 内所有 update 操作均为 immutable（用展开符产生新对象/新数组），
+        // 不会原地修改 component 对象，因此旧数组及其内部引用始终保留历史快照语义。
+        // 改用浅拷贝避免大组件树深拷贝（structuredClone）带来的性能开销。
+        past: [...state.history.past, [...state.project.components]].slice(-HISTORY_LIMIT),
         future: [],
       },
     };
@@ -509,7 +510,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             selectedComponentIds: [],
             history: {
               past: state.history.past.slice(0, -1),
-              future: [structuredClone(state.project?.components ?? []), ...state.history.future],
+              // 浅拷贝当前 components 存入 future（同 pushHistory 的immutable前提）
+              future: [[...(state.project?.components ?? [])], ...state.history.future],
             },
           }),
           false,
@@ -526,7 +528,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             project: state.project ? { ...state.project, components: next } : state.project,
             selectedComponentIds: [],
             history: {
-              past: [...state.history.past, structuredClone(state.project?.components ?? [])],
+              past: [...state.history.past, [...(state.project?.components ?? [])]],
               future: state.history.future.slice(1),
             },
           }),

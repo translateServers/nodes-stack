@@ -13,9 +13,10 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Box,
 };
 
-export function ComponentLibrary() {
-  const categories = [...new Set(COMPONENT_DEFINITIONS.map((d) => d.category))];
+// 静态常量，避免每次 render 重新计算
+const CATEGORIES = [...new Set(COMPONENT_DEFINITIONS.map((d) => d.category))];
 
+export function ComponentLibrary() {
   const handleDragStart = useCallback((e: React.DragEvent, type: string) => {
     e.dataTransfer.setData('component-type', type);
     e.dataTransfer.effectAllowed = 'copy';
@@ -23,7 +24,7 @@ export function ComponentLibrary() {
 
   return (
     <div className="p-3">
-      {categories.map((category) => (
+      {CATEGORIES.map((category) => (
         <div key={category} className="mb-4">
           <div className="mb-2 text-xs font-medium text-muted-foreground">
             {CATEGORY_LABELS[category] ?? category}
