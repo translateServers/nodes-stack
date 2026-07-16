@@ -49,7 +49,9 @@ export function LayerPanel() {
 
   return (
     <div className="flex flex-col">
-      <div className="px-3 py-2 text-xs font-medium text-gray-500">图层 ({sorted.length})</div>
+      <div className="px-3 py-2 text-xs font-medium text-muted-foreground">
+        图层 ({sorted.length})
+      </div>
       <div className="flex-1 overflow-y-auto">
         {sorted.map((comp) => {
           const Icon = getIconForType(comp.type);
@@ -57,20 +59,22 @@ export function LayerPanel() {
           return (
             <div
               key={comp.id}
-              className={`flex cursor-pointer items-center gap-2 border-b border-gray-100 px-3 py-2 text-sm transition-colors ${
-                isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+              className={`flex cursor-pointer items-center gap-2 border-b border-border/60 px-3 py-2 text-sm transition-colors ${
+                isSelected ? 'bg-primary/10' : 'hover:bg-accent'
               }`}
               onClick={(e) => toggleSelect(e, comp.id)}
             >
-              <Icon className="h-4 w-4 shrink-0 text-gray-400" />
+              <Icon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
               <span
-                className={`flex-1 truncate ${comp.status.hidden ? 'text-gray-300' : 'text-gray-700'}`}
+                className={`flex-1 truncate ${
+                  comp.status.hidden ? 'text-muted-foreground/40' : 'text-foreground'
+                }`}
               >
                 {comp.name}
               </span>
               <button
                 type="button"
-                className="rounded p-0.5 text-gray-400 hover:text-gray-600"
+                className="rounded p-0.5 text-muted-foreground/70 hover:text-foreground"
                 title={comp.status.hidden ? '显示' : '隐藏'}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -85,7 +89,7 @@ export function LayerPanel() {
               </button>
               <button
                 type="button"
-                className="rounded p-0.5 text-gray-400 hover:text-gray-600"
+                className="rounded p-0.5 text-muted-foreground/70 hover:text-foreground"
                 title={comp.status.locked ? '解锁' : '锁定'}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -101,7 +105,7 @@ export function LayerPanel() {
               <div className="flex gap-0.5">
                 <button
                   type="button"
-                  className="rounded px-1 text-[10px] text-gray-400 hover:text-gray-600"
+                  className="rounded px-1 text-[10px] text-muted-foreground/70 hover:text-foreground"
                   title="置顶"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -112,7 +116,7 @@ export function LayerPanel() {
                 </button>
                 <button
                   type="button"
-                  className="rounded px-1 text-[10px] text-gray-400 hover:text-gray-600"
+                  className="rounded px-1 text-[10px] text-muted-foreground/70 hover:text-foreground"
                   title="置底"
                   onClick={(e) => {
                     e.stopPropagation();

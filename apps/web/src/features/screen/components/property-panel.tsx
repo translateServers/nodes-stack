@@ -21,10 +21,10 @@ function NumberInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="w-12 shrink-0 text-xs text-gray-500">{label}</label>
+      <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
       <input
         type="number"
-        className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
@@ -43,10 +43,10 @@ function TextInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="w-12 shrink-0 text-xs text-gray-500">{label}</label>
+      <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
       <input
         type="text"
-        className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -65,16 +65,16 @@ function ColorInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="w-12 shrink-0 text-xs text-gray-500">{label}</label>
+      <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
       <input
         type="color"
-        className="h-7 w-7 shrink-0 cursor-pointer rounded border border-gray-300"
+        className="h-7 w-7 shrink-0 cursor-pointer rounded border border-input bg-card"
         value={value || '#000000'}
         onChange={(e) => onChange(e.target.value)}
       />
       <input
         type="text"
-        className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -92,7 +92,7 @@ function PositionFields({
   const { position } = component;
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-gray-600">位置与尺寸</div>
+      <div className="text-xs font-medium text-foreground">位置与尺寸</div>
       <div className="grid grid-cols-2 gap-2">
         <NumberInput
           label="X"
@@ -136,7 +136,7 @@ function StyleFields({
   const { style } = component;
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-gray-600">样式</div>
+      <div className="text-xs font-medium text-foreground">样式</div>
       <ColorInput
         label="背景"
         value={style.backgroundColor ?? '#ffffff'}
@@ -176,11 +176,11 @@ function TextPropsFields({
   const { props, style } = component;
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-gray-600">文本属性</div>
+      <div className="text-xs font-medium text-foreground">文本属性</div>
       <div className="flex items-center gap-2">
-        <label className="w-12 shrink-0 text-xs text-gray-500">内容</label>
+        <label className="w-12 shrink-0 text-xs text-muted-foreground">内容</label>
         <textarea
-          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+          className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           rows={3}
           value={(props.content as string) ?? ''}
           onChange={(e) => onUpdate({ props: { ...props, content: e.target.value } })}
@@ -210,16 +210,16 @@ function BarChartPropsFields({
   const { props } = component;
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-gray-600">图表属性</div>
+      <div className="text-xs font-medium text-foreground">图表属性</div>
       <TextInput
         label="标题"
         value={(props.title as string) ?? ''}
         onChange={(v) => onUpdate({ props: { ...props, title: v } })}
       />
       <div className="flex items-center gap-2">
-        <label className="w-12 shrink-0 text-xs text-gray-500">数据</label>
+        <label className="w-12 shrink-0 text-xs text-muted-foreground">数据</label>
         <textarea
-          className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+          className="w-full rounded border border-input bg-card px-2 py-1 font-mono text-xs text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           rows={6}
           value={JSON.stringify(props.data ?? [], null, 2)}
           onChange={(e) => {
@@ -245,7 +245,7 @@ function CanvasSettingsFields({
 }) {
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-gray-600">画布设置</div>
+      <div className="text-xs font-medium text-foreground">画布设置</div>
       <NumberInput label="宽度" value={canvas.width} onChange={(v) => onUpdate({ width: v })} />
       <NumberInput label="高度" value={canvas.height} onChange={(v) => onUpdate({ height: v })} />
       <ColorInput
@@ -254,9 +254,9 @@ function CanvasSettingsFields({
         onChange={(v) => onUpdate({ backgroundColor: v })}
       />
       <div className="flex items-center gap-2">
-        <label className="w-12 shrink-0 text-xs text-gray-500">缩放</label>
+        <label className="w-12 shrink-0 text-xs text-muted-foreground">缩放</label>
         <select
-          className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+          className="w-full rounded border border-input bg-card px-2 py-1 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           value={canvas.scaleMode}
           onChange={(e) => onUpdate({ scaleMode: e.target.value as CanvasConfig['scaleMode'] })}
         >
@@ -320,14 +320,14 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="text-sm text-gray-600">已选中 {selectedIds.length} 个组件</div>
+      <div className="text-sm text-muted-foreground">已选中 {selectedIds.length} 个组件</div>
 
       <div className="space-y-2">
-        <div className="text-xs font-medium text-gray-600">对齐</div>
+        <div className="text-xs font-medium text-foreground">对齐</div>
         <div className="grid grid-cols-6 gap-1">
           <button
             type="button"
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="左对齐"
             onClick={() => alignHorizontal('left')}
           >
@@ -335,7 +335,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
           </button>
           <button
             type="button"
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="水平居中"
             onClick={() => alignHorizontal('center')}
           >
@@ -343,7 +343,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
           </button>
           <button
             type="button"
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="右对齐"
             onClick={() => alignHorizontal('right')}
           >
@@ -351,7 +351,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
           </button>
           <button
             type="button"
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="顶对齐"
             onClick={() => alignVertical('top')}
           >
@@ -359,7 +359,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
           </button>
           <button
             type="button"
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="垂直居中"
             onClick={() => alignVertical('middle')}
           >
@@ -367,7 +367,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
           </button>
           <button
             type="button"
-            className="rounded p-1.5 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="底对齐"
             onClick={() => alignVertical('bottom')}
           >
@@ -376,10 +376,10 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
         </div>
       </div>
 
-      <div className="border-t pt-3">
+      <div className="border-t border-border pt-3">
         <button
           type="button"
-          className="w-full rounded bg-red-50 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-100"
+          className="w-full rounded bg-destructive/10 px-3 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/20"
           onClick={removeSelectedComponents}
         >
           删除选中 ({selectedIds.length})
@@ -415,8 +415,8 @@ export function PropertyPanel() {
   const isMultiSelect = selectedComponentIds.length > 1;
 
   return (
-    <div className="flex h-full w-72 flex-col border-l bg-white">
-      <div className="border-b px-4 py-3 font-medium">
+    <div className="flex h-full w-72 flex-col border-l border-border bg-card text-foreground">
+      <div className="border-b border-border px-4 py-3 font-medium">
         {selectedComponent
           ? selectedComponent.name
           : isMultiSelect
@@ -434,10 +434,10 @@ export function PropertyPanel() {
             {selectedComponent.type === 'bar-chart' && (
               <BarChartPropsFields component={selectedComponent} onUpdate={handleComponentUpdate} />
             )}
-            <div className="border-t pt-3">
+            <div className="border-t border-border pt-3">
               <button
                 type="button"
-                className="w-full rounded bg-red-50 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-100"
+                className="w-full rounded bg-destructive/10 px-3 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/20"
                 onClick={() => removeComponent(selectedComponent.id)}
               >
                 删除组件

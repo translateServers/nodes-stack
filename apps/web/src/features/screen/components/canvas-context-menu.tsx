@@ -112,13 +112,13 @@ export function CanvasContextMenu({
 
   return (
     <div
-      className="fixed z-[10000] min-w-40 rounded-md border bg-white py-1 shadow-lg"
+      className="fixed z-[10000] min-w-40 rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg"
       style={{ left: menu.x, top: menu.y }}
       onClick={(e) => e.stopPropagation()}
     >
       {items.map((item, i) => {
         if ('type' in item && item.type === 'divider') {
-          return <div key={`div-${i}`} className="my-1 border-t" />;
+          return <div key={`div-${i}`} className="my-1 border-t border-border" />;
         }
         const menuItem = item as {
           label: string;
@@ -130,13 +130,13 @@ export function CanvasContextMenu({
           <button
             key={menuItem.label}
             type="button"
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
             onClick={() => {
               menuItem.action();
               close();
             }}
           >
-            <Icon className="h-4 w-4 text-gray-400" />
+            <Icon className="h-4 w-4 text-muted-foreground" />
             {menuItem.label}
           </button>
         );

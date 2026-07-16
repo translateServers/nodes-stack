@@ -183,7 +183,7 @@ export function ScreenCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden bg-gray-100"
+      className="relative h-full w-full overflow-hidden bg-muted"
       style={{ cursor: isPanning ? 'grabbing' : spaceHeldUI ? 'grab' : undefined }}
       onPointerDown={handlePanStart}
       onPointerMove={handlePanMove}

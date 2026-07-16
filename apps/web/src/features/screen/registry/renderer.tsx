@@ -18,7 +18,7 @@ export function ComponentRenderer({ component }: ComponentRendererProps) {
   const Renderer = RENDERERS[component.type];
   if (!Renderer) {
     return (
-      <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+      <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
         未知组件: {component.type}
       </div>
     );

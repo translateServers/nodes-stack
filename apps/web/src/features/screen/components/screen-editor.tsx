@@ -102,8 +102,8 @@ export function ScreenEditor() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      <div className="flex h-full items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground/70" />
       </div>
     );
   }
@@ -112,24 +112,26 @@ export function ScreenEditor() {
   const canvasHeight = storeProject?.canvas.height ?? 1080;
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col bg-background text-foreground">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b bg-white px-4 py-2">
+      <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
         <button
           type="button"
-          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+          className="flex items-center gap-1 rounded px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
           onClick={() => navigate({ to: '/screen' })}
         >
           <ArrowLeft className="h-4 w-4" />
           返回
         </button>
-        <div className="text-sm font-medium text-gray-800">{storeProject?.name ?? '加载中...'}</div>
+        <div className="text-sm font-medium text-foreground">
+          {storeProject?.name ?? '加载中...'}
+        </div>
 
-        <div className="mx-2 h-5 w-px bg-gray-200" />
+        <div className="mx-2 h-5 w-px bg-border" />
 
         <button
           type="button"
-          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
           title="撤销 (Ctrl+Z)"
           onClick={undo}
           disabled={!canUndo}
@@ -138,7 +140,7 @@ export function ScreenEditor() {
         </button>
         <button
           type="button"
-          className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-30"
           title="重做 (Ctrl+Shift+Z)"
           onClick={redo}
           disabled={!canRedo}
@@ -152,14 +154,14 @@ export function ScreenEditor() {
         <div className="flex items-center gap-1">
           <button
             type="button"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="缩小"
             onClick={handleZoomOut}
           >
             <Minus className="h-4 w-4" />
           </button>
           <select
-            className="w-16 rounded border border-gray-300 px-1 py-0.5 text-center text-xs"
+            className="w-16 rounded border border-input bg-card px-1 py-0.5 text-center text-xs text-foreground"
             value={Math.round(canvasScale * 100)}
             onChange={(e) => setCanvasScale(Number(e.target.value) / 100)}
           >
@@ -171,7 +173,7 @@ export function ScreenEditor() {
           </select>
           <button
             type="button"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="放大"
             onClick={handleZoomIn}
           >
@@ -179,7 +181,7 @@ export function ScreenEditor() {
           </button>
           <button
             type="button"
-            className="rounded p-1 text-gray-500 hover:bg-gray-100"
+            className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="适应屏幕"
             onClick={handleFitToScreen}
           >
@@ -187,11 +189,11 @@ export function ScreenEditor() {
           </button>
         </div>
 
-        <div className="mx-2 h-5 w-px bg-gray-200" />
+        <div className="mx-2 h-5 w-px bg-border" />
 
         <button
           type="button"
-          className="flex items-center gap-1 rounded bg-blue-500 px-3 py-1.5 text-sm text-white hover:bg-blue-600 disabled:opacity-50"
+          className="flex items-center gap-1 rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           onClick={handleSave}
           disabled={updateMutation.isPending}
         >
@@ -204,7 +206,7 @@ export function ScreenEditor() {
         </button>
         <button
           type="button"
-          className="flex items-center gap-1 rounded bg-green-500 px-3 py-1.5 text-sm text-white hover:bg-green-600 disabled:opacity-50"
+          className="flex items-center gap-1 rounded bg-emerald-500 px-3 py-1.5 text-sm text-white hover:bg-emerald-600 disabled:opacity-50 dark:bg-emerald-600 dark:hover:bg-emerald-700"
           onClick={handlePublish}
           disabled={publishMutation.isPending}
         >
@@ -212,7 +214,7 @@ export function ScreenEditor() {
         </button>
         <button
           type="button"
-          className="flex items-center gap-1 rounded border px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+          className="flex items-center gap-1 rounded border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
           onClick={handlePreview}
         >
           <Eye className="h-4 w-4" />
@@ -223,14 +225,14 @@ export function ScreenEditor() {
       {/* Editor layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar with tabs */}
-        <div className="flex h-full w-60 flex-col border-r bg-white">
-          <div className="flex border-b">
+        <div className="flex h-full w-60 flex-col border-r border-border bg-card">
+          <div className="flex border-b border-border">
             <button
               type="button"
               className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
                 activeTab === 'library'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setActiveTab('library')}
             >
@@ -241,8 +243,8 @@ export function ScreenEditor() {
               type="button"
               className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
                 activeTab === 'layers'
-                  ? 'border-b-2 border-blue-500 text-blue-600'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'border-b-2 border-primary text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setActiveTab('layers')}
             >

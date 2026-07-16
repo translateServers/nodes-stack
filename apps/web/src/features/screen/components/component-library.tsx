@@ -25,7 +25,7 @@ export function ComponentLibrary() {
     <div className="p-3">
       {categories.map((category) => (
         <div key={category} className="mb-4">
-          <div className="mb-2 text-xs font-medium text-gray-500">
+          <div className="mb-2 text-xs font-medium text-muted-foreground">
             {CATEGORY_LABELS[category] ?? category}
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -36,10 +36,10 @@ export function ComponentLibrary() {
                   key={def.type}
                   draggable
                   onDragStart={(e) => handleDragStart(e, def.type)}
-                  className="flex cursor-grab flex-col items-center gap-1 rounded border bg-gray-50 p-3 transition-colors hover:border-blue-300 hover:bg-blue-50 active:cursor-grabbing"
+                  className="flex cursor-grab flex-col items-center gap-1 rounded border border-border bg-muted/50 p-3 transition-colors hover:border-primary/50 hover:bg-primary/10 active:cursor-grabbing"
                 >
-                  <Icon className="h-5 w-5 text-gray-600" />
-                  <span className="text-xs text-gray-700">{def.name}</span>
+                  <Icon className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-xs text-foreground">{def.name}</span>
                 </div>
               );
             })}
