@@ -1,4 +1,12 @@
-import { LayoutDashboard, Users, BookOpen, Shield, FileText, FlaskConical } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  Shield,
+  FileText,
+  FlaskConical,
+  Monitor,
+} from 'lucide-react';
 
 export interface NavItem {
   text: string;
@@ -29,6 +37,10 @@ export const menuGroups: NavGroup[] = [
     label: '业务功能',
     items: [{ text: '表格 Playground', icon: FlaskConical, path: '/data-table-playground' }],
   },
+  {
+    label: '设计工具',
+    items: [{ text: '大屏设计器', icon: Monitor, path: '/screen' }],
+  },
 ];
 
 export const pathLabels: Record<string, string> = {
@@ -38,4 +50,5 @@ export const pathLabels: Record<string, string> = {
   '/roles': '角色管理',
   '/dict': '字典管理',
   '/data-table-playground': '表格 Playground',
+  '/screen': '大屏设计器',
 };

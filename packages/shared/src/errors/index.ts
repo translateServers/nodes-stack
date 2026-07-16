@@ -32,6 +32,9 @@ export const BizMessage: Record<number, string> = {
   [BizCode.FILE_UPLOAD_FAILED]: '文件上传失败',
   [BizCode.FILE_TYPE_NOT_ALLOWED]: '不支持的文件类型',
   [BizCode.FILE_SIZE_EXCEEDED]: '文件大小超出限制',
+  [BizCode.SCREEN_NOT_FOUND]: '大屏项目不存在',
+  [BizCode.SCREEN_NAME_EXISTS]: '大屏项目名称已存在',
+  [BizCode.SCREEN_PUBLISH_FAILED]: '大屏发布失败',
 };
 
 // 业务异常类

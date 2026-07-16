@@ -1,0 +1,14 @@
+model ScreenProject {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  canvas      String   @default("{}")
+  components  String   @default("[]")
+  status      String   @default("draft")
+  thumbnail   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@map("screen_projects")
+}

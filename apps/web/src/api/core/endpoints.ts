@@ -18,4 +18,5 @@ export const ENDPOINTS = {
   roles: '/roles',
   dict: '/dict',
   files: '/files',
+  screen: '/screen',
 } as const;

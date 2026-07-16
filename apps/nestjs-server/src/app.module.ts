@@ -9,6 +9,7 @@ import { MenuModule } from '@/modules/menu/menu.module';
 import { RoleModule } from '@/modules/role/role.module';
 import { DictModule } from '@/modules/dict/dict.module';
 import { FileModule } from '@/modules/file/file.module';
+import { ScreenModule } from '@/modules/screen/screen.module';
 import { HealthModule } from '@/modules/health/health.module';
 import { CacheModule } from '@/modules/cache/cache.module';
 import { RedisModule } from '@/modules/redis/redis.module';
@@ -37,6 +38,7 @@ import { HttpExceptionFilter } from '@/common/filters/http-exception.filter';
     RoleModule,
     DictModule,
     FileModule,
+    ScreenModule,
     HealthModule,
     LoggerModule,
   ],
