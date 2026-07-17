@@ -1,6 +1,5 @@
 export * as Biz from './types/api.types.js';
 export * from './types/api.types.js';
-export * from './types/screen.types.js';
 
 export * as AuthSchemas from './schemas/auth.schema.js';
 export * as UserSchemas from './schemas/user.schema.js';

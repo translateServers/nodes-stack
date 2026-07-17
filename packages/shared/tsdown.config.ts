@@ -4,7 +4,6 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/types/api.types.ts',
-    'src/types/screen.types.ts',
     'src/schemas/index.ts',
     'src/errors/index.ts',
     'src/utils/index.ts',
