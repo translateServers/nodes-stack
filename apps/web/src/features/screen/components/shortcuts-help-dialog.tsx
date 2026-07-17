@@ -53,10 +53,11 @@ export const ShortcutsHelpDialog = memo(function ShortcutsHelpDialog({
   open,
   onOpenChange,
 }: ShortcutsHelpDialogProps) {
-  // 按 category 分组，保持注册表顺序
+  // 按 category 分组，保持注册表顺序；过滤掉 hidden 条目（如 noop 拦截条目）
   const grouped = useMemo(() => {
     const map = new Map<ShortcutCategory, ShortcutDefinition[]>();
     for (const s of SHORTCUTS_REGISTRY) {
+      if (s.hidden) continue;
       const list = map.get(s.category) ?? [];
       list.push(s);
       map.set(s.category, list);

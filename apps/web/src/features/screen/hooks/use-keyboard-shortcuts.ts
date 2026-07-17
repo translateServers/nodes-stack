@@ -2,17 +2,23 @@
  * 大屏编辑器快捷键集中 hook（基于 react-hotkeys-hook）
  *
  * 设计要点：
- * - 所有快捷键的键位、描述、分组在 shortcuts-registry.ts 中单一维护
+ * - 所有快捷键的键位、描述、分组、preventDefault 语义在 shortcuts-registry.ts 中单一维护
+ * - useHotkeys 的 options 由 buildHotkeysOptions(entry, enabled) 统一生成，消除双轨制
  * - 全局快捷键（save/zoom/guides）通过 enableOnFormTags: true 在输入框内也放行
  * - 画布作用域快捷键通过 enabled: !isEditingText 控制
  * - 工具切换走 toolStateMachine（PS 级临时切换栈）
  * - useHotkeys 在组件卸载时自动解绑，无需手动 unbind
+ *
+ * 防冲突方法论：
+ * - registry 中 preventDefault='always' 的条目，options.preventDefault 自动为 true
+ * - registry 中 preventDefault='callback-only' 的条目，callback 内必须调用 e.preventDefault()
+ * - registry 中 preventDefault='none' 的条目，不阻止默认行为
  */
 
 import { useCallback, useRef } from 'react';
-import { useHotkeys } from 'react-hotkeys-hook';
+import { useHotkeys, type Options } from 'react-hotkeys-hook';
 import { useScreenEditorStore } from '../stores/editor-store';
-import { getShortcutById } from './shortcuts-registry';
+import { getShortcutById, type ShortcutDefinition } from './shortcuts-registry';
 import type { ToolStateMachineApi } from './use-tool-state-machine';
 import type { ScreenComponent } from '@nebula/shared';
 
@@ -37,6 +43,28 @@ function useLatestRef<T>(value: T): React.RefObject<T> {
   return ref;
 }
 
+/**
+ * 根据 registry 条目统一生成 useHotkeys 的 options。
+ * - preventDefault='always' → preventDefault: true（库在事件触发前阻止默认行为）
+ * - preventDefault='callback-only' / 'none' → preventDefault: false（由 callback 内决定）
+ * - enableOnFormTags 不传时按 scope 推断（global → true, canvas → false）
+ */
+export function buildHotkeysOptions(
+  entry: ShortcutDefinition,
+  enabled: boolean | (() => boolean),
+): Options {
+  return {
+    enabled,
+    preventDefault: entry.preventDefault === 'always',
+    enableOnFormTags: entry.enableOnFormTags ?? entry.scope === 'global',
+  };
+}
+
+/** 合并主键位与别名为一个逗号分隔的字符串（react-hotkeys-hook 多键位语法） */
+function getAllKeys(entry: ShortcutDefinition): string {
+  return [entry.keys, ...(entry.aliases ?? [])].join(',');
+}
+
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   const { toolStateMachine } = options;
   const { isEditingText } = toolStateMachine;
@@ -52,79 +80,89 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   const canvasEnabled = useCallback(() => !isEditingText, [isEditingText]);
 
   // ===== 文件 =====
+  const saveEntry = getShortcutById('save')!;
   useHotkeys(
-    getShortcutById('save')!.keys,
-    (e) => {
-      e.preventDefault();
+    getAllKeys(saveEntry),
+    () => {
       saveRef.current();
     },
-    { enableOnFormTags: true, preventDefault: true },
+    buildHotkeysOptions(saveEntry, true),
   );
 
   // ===== 视图 =====
+  const zoomInEntry = getShortcutById('zoomIn')!;
   useHotkeys(
-    getShortcutById('zoomIn')!.keys,
-    (e) => {
-      e.preventDefault();
+    getAllKeys(zoomInEntry),
+    () => {
       zoomInRef.current?.();
     },
-    { enableOnFormTags: true, preventDefault: true },
+    buildHotkeysOptions(zoomInEntry, true),
   );
+  const zoomOutEntry = getShortcutById('zoomOut')!;
   useHotkeys(
-    getShortcutById('zoomOut')!.keys,
-    (e) => {
-      e.preventDefault();
+    getAllKeys(zoomOutEntry),
+    () => {
       zoomOutRef.current?.();
     },
-    { enableOnFormTags: true, preventDefault: true },
+    buildHotkeysOptions(zoomOutEntry, true),
   );
+  const fitToScreenEntry = getShortcutById('fitToScreen')!;
   useHotkeys(
-    getShortcutById('fitToScreen')!.keys,
-    (e) => {
-      e.preventDefault();
+    getAllKeys(fitToScreenEntry),
+    () => {
       fitToScreenRef.current?.();
     },
-    { enableOnFormTags: true, preventDefault: true },
+    buildHotkeysOptions(fitToScreenEntry, true),
   );
+  const toggleGuidesEntry = getShortcutById('toggleGuides')!;
   useHotkeys(
-    getShortcutById('toggleGuides')!.keys,
-    (e) => {
-      e.preventDefault();
+    getAllKeys(toggleGuidesEntry),
+    () => {
       getStore().toggleGuidesVisibility();
     },
-    { enableOnFormTags: true, preventDefault: true },
+    buildHotkeysOptions(toggleGuidesEntry, true),
   );
-  useHotkeys(getShortcutById('toggleBorderGuides')!.keys, () => getStore().toggleBorderGuides(), {
-    enabled: canvasEnabled,
-  });
+  const toggleBorderGuidesEntry = getShortcutById('toggleBorderGuides')!;
+  useHotkeys(
+    getAllKeys(toggleBorderGuidesEntry),
+    (e) => {
+      e.preventDefault();
+      getStore().toggleBorderGuides();
+    },
+    buildHotkeysOptions(toggleBorderGuidesEntry, canvasEnabled),
+  );
 
   // ===== 编辑 =====
+  const undoEntry = getShortcutById('undo')!;
   useHotkeys(
-    getShortcutById('undo')!.keys,
+    getAllKeys(undoEntry),
     (e) => {
       e.preventDefault();
       getStore().undo();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(undoEntry, canvasEnabled),
   );
+  const redoEntry = getShortcutById('redo')!;
   useHotkeys(
-    getShortcutById('redo')!.keys,
+    getAllKeys(redoEntry),
     (e) => {
       e.preventDefault();
       getStore().redo();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(redoEntry, canvasEnabled),
   );
+  const deleteEntry = getShortcutById('delete')!;
   useHotkeys(
-    getShortcutById('delete')!.keys,
+    getAllKeys(deleteEntry),
     (e) => {
       e.preventDefault();
       getStore().removeSelectedComponents();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(deleteEntry, canvasEnabled),
   );
+  const selectAllEntry = getShortcutById('selectAll')!;
   useHotkeys(
-    getShortcutById('selectAll')!.keys,
+    getAllKeys(selectAllEntry),
     (e) => {
       e.preventDefault();
       const store = getStore();
@@ -135,94 +173,108 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
         store.selectComponents(allIds);
       }
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(selectAllEntry, canvasEnabled),
   );
+  const copyEntry = getShortcutById('copy')!;
   useHotkeys(
-    getShortcutById('copy')!.keys,
+    getAllKeys(copyEntry),
     (e) => {
       e.preventDefault();
       getStore().copySelectedToClipboard();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(copyEntry, canvasEnabled),
   );
+  const pasteEntry = getShortcutById('paste')!;
   useHotkeys(
-    getShortcutById('paste')!.keys,
+    getAllKeys(pasteEntry),
     (e) => {
       e.preventDefault();
       getStore().pasteFromClipboard();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(pasteEntry, canvasEnabled),
   );
+  const duplicateEntry = getShortcutById('duplicate')!;
   useHotkeys(
-    getShortcutById('duplicate')!.keys,
+    getAllKeys(duplicateEntry),
     (e) => {
       e.preventDefault();
       getStore().duplicateSelected();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(duplicateEntry, canvasEnabled),
   );
 
   // ===== 组件 =====
+  const bringToFrontEntry = getShortcutById('bringToFront')!;
   useHotkeys(
-    getShortcutById('bringToFront')!.keys,
+    getAllKeys(bringToFrontEntry),
     (e) => {
       e.preventDefault();
       const store = getStore();
       for (const id of store.selectedComponentIds) store.reorderToTop(id);
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(bringToFrontEntry, canvasEnabled),
   );
+  const sendToBackEntry = getShortcutById('sendToBack')!;
   useHotkeys(
-    getShortcutById('sendToBack')!.keys,
+    getAllKeys(sendToBackEntry),
     (e) => {
       e.preventDefault();
       const store = getStore();
       for (const id of store.selectedComponentIds) store.reorderToBottom(id);
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(sendToBackEntry, canvasEnabled),
   );
+  const groupEntry = getShortcutById('group')!;
   useHotkeys(
-    getShortcutById('group')!.keys,
+    getAllKeys(groupEntry),
     (e) => {
       e.preventDefault();
       getStore().groupSelected();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(groupEntry, canvasEnabled),
   );
+  const ungroupEntry = getShortcutById('ungroup')!;
   useHotkeys(
-    getShortcutById('ungroup')!.keys,
+    getAllKeys(ungroupEntry),
     (e) => {
       e.preventDefault();
       getStore().ungroupSelected();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(ungroupEntry, canvasEnabled),
   );
+  const lockEntry = getShortcutById('lock')!;
   useHotkeys(
-    getShortcutById('lock')!.keys,
-    () => {
+    getAllKeys(lockEntry),
+    (e) => {
+      e.preventDefault();
       const store = getStore();
       store.setLocked(store.selectedComponentIds, true);
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(lockEntry, canvasEnabled),
   );
+  const unlockEntry = getShortcutById('unlock')!;
   useHotkeys(
-    getShortcutById('unlock')!.keys,
-    () => {
+    getAllKeys(unlockEntry),
+    (e) => {
+      e.preventDefault();
       const store = getStore();
       store.setLocked(store.selectedComponentIds, false);
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(unlockEntry, canvasEnabled),
   );
+  const hideEntry = getShortcutById('hide')!;
   useHotkeys(
-    getShortcutById('hide')!.keys,
-    () => {
+    getAllKeys(hideEntry),
+    (e) => {
+      e.preventDefault();
       const store = getStore();
       store.setHidden(store.selectedComponentIds, true);
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(hideEntry, canvasEnabled),
   );
+  const clearSelectionEntry = getShortcutById('clearSelection')!;
   useHotkeys(
-    getShortcutById('clearSelection')!.keys,
+    getAllKeys(clearSelectionEntry),
     () => {
       const store = getStore();
       // 分层语义：先退出当前活动分组（保留选中），再次 Esc 才清空选中。
@@ -232,95 +284,173 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
         store.clearSelection();
       }
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(clearSelectionEntry, canvasEnabled),
   );
 
-  // 微移
-  useHotkeys('up', () => getStore().nudgeSelected(0, -1), { enabled: canvasEnabled });
-  useHotkeys('down', () => getStore().nudgeSelected(0, 1), { enabled: canvasEnabled });
-  useHotkeys('left', () => getStore().nudgeSelected(-1, 0), { enabled: canvasEnabled });
-  useHotkeys('right', () => getStore().nudgeSelected(1, 0), { enabled: canvasEnabled });
-  useHotkeys('shift+up', () => getStore().nudgeSelected(0, -10), {
-    enabled: canvasEnabled,
-  });
-  useHotkeys('shift+down', () => getStore().nudgeSelected(0, 10), {
-    enabled: canvasEnabled,
-  });
-  useHotkeys('shift+left', () => getStore().nudgeSelected(-10, 0), {
-    enabled: canvasEnabled,
-  });
-  useHotkeys('shift+right', () => getStore().nudgeSelected(10, 0), {
-    enabled: canvasEnabled,
-  });
+  // 微移（键位由 shortcuts-registry 单一数据源提供，便于帮助面板自动显示）
+  const nudgeUpEntry = getShortcutById('nudgeUp')!;
+  useHotkeys(
+    getAllKeys(nudgeUpEntry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(0, -1);
+    },
+    buildHotkeysOptions(nudgeUpEntry, canvasEnabled),
+  );
+  const nudgeDownEntry = getShortcutById('nudgeDown')!;
+  useHotkeys(
+    getAllKeys(nudgeDownEntry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(0, 1);
+    },
+    buildHotkeysOptions(nudgeDownEntry, canvasEnabled),
+  );
+  const nudgeLeftEntry = getShortcutById('nudgeLeft')!;
+  useHotkeys(
+    getAllKeys(nudgeLeftEntry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(-1, 0);
+    },
+    buildHotkeysOptions(nudgeLeftEntry, canvasEnabled),
+  );
+  const nudgeRightEntry = getShortcutById('nudgeRight')!;
+  useHotkeys(
+    getAllKeys(nudgeRightEntry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(1, 0);
+    },
+    buildHotkeysOptions(nudgeRightEntry, canvasEnabled),
+  );
+  const nudgeUp10Entry = getShortcutById('nudgeUp10')!;
+  useHotkeys(
+    getAllKeys(nudgeUp10Entry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(0, -10);
+    },
+    buildHotkeysOptions(nudgeUp10Entry, canvasEnabled),
+  );
+  const nudgeDown10Entry = getShortcutById('nudgeDown10')!;
+  useHotkeys(
+    getAllKeys(nudgeDown10Entry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(0, 10);
+    },
+    buildHotkeysOptions(nudgeDown10Entry, canvasEnabled),
+  );
+  const nudgeLeft10Entry = getShortcutById('nudgeLeft10')!;
+  useHotkeys(
+    getAllKeys(nudgeLeft10Entry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(-10, 0);
+    },
+    buildHotkeysOptions(nudgeLeft10Entry, canvasEnabled),
+  );
+  const nudgeRight10Entry = getShortcutById('nudgeRight10')!;
+  useHotkeys(
+    getAllKeys(nudgeRight10Entry),
+    (e) => {
+      e.preventDefault();
+      getStore().nudgeSelected(10, 0);
+    },
+    buildHotkeysOptions(nudgeRight10Entry, canvasEnabled),
+  );
+
+  // noop：拦截 Alt+方向键触发的浏览器历史导航（macOS / Firefox）
+  // 4 个 noop 条目合并为一次 useHotkeys 调用，callback 仅 preventDefault
+  const noopAltEntries = ['noopAltLeft', 'noopAltRight', 'noopAltUp', 'noopAltDown'].map(
+    (id) => getShortcutById(id)!,
+  );
+  const noopAltKeys = noopAltEntries.flatMap((e) => [e.keys, ...(e.aliases ?? [])]).join(',');
+  useHotkeys(
+    noopAltKeys,
+    (e) => {
+      e.preventDefault();
+    },
+    buildHotkeysOptions(noopAltEntries[0], canvasEnabled),
+  );
 
   // ===== 对齐 =====
+  const alignLeftEntry = getShortcutById('alignLeft')!;
   useHotkeys(
-    getShortcutById('alignLeft')!.keys,
+    getAllKeys(alignLeftEntry),
     (e) => {
       e.preventDefault();
       getStore().alignSelectedHorizontal('left');
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(alignLeftEntry, canvasEnabled),
   );
+  const alignCenterHEntry = getShortcutById('alignCenterH')!;
   useHotkeys(
-    getShortcutById('alignCenterH')!.keys,
+    getAllKeys(alignCenterHEntry),
     (e) => {
       e.preventDefault();
       getStore().alignSelectedHorizontal('center');
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(alignCenterHEntry, canvasEnabled),
   );
+  const alignRightEntry = getShortcutById('alignRight')!;
   useHotkeys(
-    getShortcutById('alignRight')!.keys,
+    getAllKeys(alignRightEntry),
     (e) => {
       e.preventDefault();
       getStore().alignSelectedHorizontal('right');
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(alignRightEntry, canvasEnabled),
   );
+  const alignTopEntry = getShortcutById('alignTop')!;
   useHotkeys(
-    getShortcutById('alignTop')!.keys,
+    getAllKeys(alignTopEntry),
     (e) => {
       e.preventDefault();
       getStore().alignSelectedVertical('top');
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(alignTopEntry, canvasEnabled),
   );
+  const alignMiddleVEntry = getShortcutById('alignMiddleV')!;
   useHotkeys(
-    getShortcutById('alignMiddleV')!.keys,
+    getAllKeys(alignMiddleVEntry),
     (e) => {
       e.preventDefault();
       getStore().alignSelectedVertical('middle');
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(alignMiddleVEntry, canvasEnabled),
   );
+  const alignBottomEntry = getShortcutById('alignBottom')!;
   useHotkeys(
-    getShortcutById('alignBottom')!.keys,
+    getAllKeys(alignBottomEntry),
     (e) => {
       e.preventDefault();
       getStore().alignSelectedVertical('bottom');
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(alignBottomEntry, canvasEnabled),
   );
+  const distributeHEntry = getShortcutById('distributeH')!;
   useHotkeys(
-    getShortcutById('distributeH')!.keys,
+    getAllKeys(distributeHEntry),
     (e) => {
       e.preventDefault();
       getStore().distributeSelectedHorizontal();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(distributeHEntry, canvasEnabled),
   );
+  const distributeVEntry = getShortcutById('distributeV')!;
   useHotkeys(
-    getShortcutById('distributeV')!.keys,
+    getAllKeys(distributeVEntry),
     (e) => {
       e.preventDefault();
       getStore().distributeSelectedVertical();
     },
-    { enabled: canvasEnabled },
+    buildHotkeysOptions(distributeVEntry, canvasEnabled),
   );
 
   // ===== 工具切换（PS 级） =====
-  // 单字母切换主工具（仅画布作用域）
+  // 单字母切换主工具（仅画布作用域，不在 registry 中文档化）
   useHotkeys('v', () => toolStateMachine.setTool('select'), {
     enabled: canvasEnabled,
   });
@@ -344,13 +474,54 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     keyup: true,
   });
 
-  // ===== 帮助 =====
+  // [/] 边框宽度调整（适配表 #18，复用 Task 2.2 的 brushSize 条目）：
+  // [ 减小 1px，] 增大 1px，范围 [0, 20]，文本类型忽略
+  const brushSizeDecreaseEntry = getShortcutById('brushSizeDecrease')!;
   useHotkeys(
-    getShortcutById('showHelp')!.keys,
-    (e) => {
-      e.preventDefault();
+    getAllKeys(brushSizeDecreaseEntry),
+    () => {
+      getStore().adjustBorderWidth(-1);
+    },
+    buildHotkeysOptions(brushSizeDecreaseEntry, canvasEnabled),
+  );
+  const brushSizeIncreaseEntry = getShortcutById('brushSizeIncrease')!;
+  useHotkeys(
+    getAllKeys(brushSizeIncreaseEntry),
+    () => {
+      getStore().adjustBorderWidth(1);
+    },
+    buildHotkeysOptions(brushSizeIncreaseEntry, canvasEnabled),
+  );
+
+  // ===== 帮助 =====
+  const showHelpEntry = getShortcutById('showHelp')!;
+  useHotkeys(
+    getAllKeys(showHelpEntry),
+    () => {
       showHelpRef.current?.();
     },
-    { enableOnFormTags: true, preventDefault: true },
+    buildHotkeysOptions(showHelpEntry, true),
+  );
+
+  // ===== 界面 =====
+  // Tab 切换 UI 显隐：仅在画布激活时触发，避免干扰 Radix Popover/Dialog 焦点流转
+  // enableOnFormTags: false 保留 input/textarea 内 Tab 焦点切换
+  const toggleUIEntry = getShortcutById('toggleUI')!;
+  useHotkeys(
+    getAllKeys(toggleUIEntry),
+    (e) => {
+      e.preventDefault();
+      getStore().toggleUI();
+    },
+    buildHotkeysOptions(toggleUIEntry, canvasEnabled),
+  );
+  // F 循环切换屏幕模式：standard → withMenu → fullscreen → standard
+  const cycleScreenModeEntry = getShortcutById('cycleScreenMode')!;
+  useHotkeys(
+    getAllKeys(cycleScreenModeEntry),
+    () => {
+      getStore().cycleScreenMode();
+    },
+    buildHotkeysOptions(cycleScreenModeEntry, canvasEnabled),
   );
 }

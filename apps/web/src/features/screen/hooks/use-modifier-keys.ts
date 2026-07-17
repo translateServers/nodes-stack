@@ -17,6 +17,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
+/**
+ * 判断当前焦点是否在表单元素（input/textarea/select）或 contenteditable 元素上。
+ * 用于修饰键 hook 中决定是否阻止默认行为：
+ * - true：不阻止默认行为，让用户在表单/contenteditable 中正常输入
+ * - false：阻止默认行为，触发画布平移等功能
+ *
+ * react-hotkeys-hook 的 enableOnFormTags 选项只覆盖 input/textarea/select，
+ * 不覆盖 contenteditable 元素，因此需要此函数补充判断。
+ */
+export function isFormElementFocused(): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName.toLowerCase();
+  return (
+    tag === 'input' ||
+    tag === 'textarea' ||
+    tag === 'select' ||
+    (el as HTMLElement).isContentEditable
+  );
+}
+
 export interface ModifierKeysApi {
   /** ref 形式，避免闭包陈旧（高频 pointer 回调用） */
   spaceRef: React.RefObject<boolean>;
@@ -58,15 +80,18 @@ export function useModifierKeys(): ModifierKeysApi {
   }, []);
 
   // Space：keydown 压栈，keyup 出栈
-  // preventDefault 必须保留，否则页面会随空格滚动
-  // enableOnFormTags: false 让输入框聚焦时不响应
+  // 在表单/contenteditable 中不阻止默认行为，让用户正常输入空格；
+  // 其他情况下 preventDefault 阻止页面随空格滚动
+  // enableOnFormTags: false 让 input/textarea/select 聚焦时不响应（contenteditable 由 isFormElementFocused 补充）
   useHotkeys(
     'space',
-    () => {
+    (e) => {
+      if (isFormElementFocused()) return;
+      e.preventDefault();
       spaceRef.current = true;
       setSpaceHeld(true);
     },
-    { keydown: true, keyup: false, preventDefault: true, enableOnFormTags: false },
+    { keydown: true, keyup: false, enableOnFormTags: false },
   );
   useHotkeys(
     'space',

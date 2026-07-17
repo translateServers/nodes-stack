@@ -40,6 +40,13 @@ export function ScreenEditor() {
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
+  // UI 显隐开关（Tab 快捷键）：false 时隐藏工具栏/侧边栏/属性面板/状态栏，仅保留画布
+  const uiVisible = useScreenEditorStore((s) => s.uiVisible);
+  // 屏幕模式（F 快捷键）：standard / withMenu / fullscreen，与 uiVisible 组合决定显隐
+  const screenMode = useScreenEditorStore((s) => s.screenMode);
+  // 组合显隐：uiVisible=false 强制隐藏所有 UI；screenMode 进一步控制细节
+  const showToolbar = uiVisible && screenMode !== 'fullscreen';
+  const showPanels = uiVisible && screenMode === 'standard';
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const rulersRef = useRef<RulersHandle>(null);
@@ -145,87 +152,91 @@ export function ScreenEditor() {
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background text-foreground">
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
-          <Button variant="ghost" size="sm" onClick={() => void navigate({ to: '/screen' })}>
-            <ArrowLeft />
-            返回
-          </Button>
-          <div className="text-sm font-medium text-foreground">
-            {storeProject?.name ?? '加载中...'}
+        {/* Toolbar（standard + withMenu 显示，fullscreen 隐藏，Tab 切换时强制隐藏） */}
+        {showToolbar && (
+          <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
+            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: '/screen' })}>
+              <ArrowLeft />
+              返回
+            </Button>
+            <div className="text-sm font-medium text-foreground">
+              {storeProject?.name ?? '加载中...'}
+            </div>
+
+            <Separator orientation="vertical" className="mx-2 h-5" />
+
+            <ProjectMenubar
+              onSave={handleSave}
+              onPublish={handlePublish}
+              onPreview={handlePreview}
+              onShowImport={() => setShowImport(true)}
+              onExport={handleExport}
+              onShowSnapshotManager={() => setShowSnapshotManager(true)}
+              onShowCanvasSettings={() => setShowCanvasSettings(true)}
+              onShowEventBlueprint={() => setShowEventBlueprint(true)}
+              onShowCodeEditor={() => setShowCodeEditor(true)}
+              onShowShortcutsHelp={() => setShowHelp(true)}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              onFitToScreen={handleFitToScreen}
+              isSaving={updateMutation.isPending}
+              isPublishing={publishMutation.isPending}
+            />
+
+            <div className="flex-1" />
+
+            <Button onClick={handleSave} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? <Spinner className="size-4" /> : <Save />}
+              保存
+            </Button>
+            <Button
+              onClick={handlePublish}
+              disabled={publishMutation.isPending}
+              className="bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+            >
+              发布
+            </Button>
           </div>
-
-          <Separator orientation="vertical" className="mx-2 h-5" />
-
-          <ProjectMenubar
-            onSave={handleSave}
-            onPublish={handlePublish}
-            onPreview={handlePreview}
-            onShowImport={() => setShowImport(true)}
-            onExport={handleExport}
-            onShowSnapshotManager={() => setShowSnapshotManager(true)}
-            onShowCanvasSettings={() => setShowCanvasSettings(true)}
-            onShowEventBlueprint={() => setShowEventBlueprint(true)}
-            onShowCodeEditor={() => setShowCodeEditor(true)}
-            onShowShortcutsHelp={() => setShowHelp(true)}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onFitToScreen={handleFitToScreen}
-            isSaving={updateMutation.isPending}
-            isPublishing={publishMutation.isPending}
-          />
-
-          <div className="flex-1" />
-
-          <Button onClick={handleSave} disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? <Spinner className="size-4" /> : <Save />}
-            保存
-          </Button>
-          <Button
-            onClick={handlePublish}
-            disabled={publishMutation.isPending}
-            className="bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-          >
-            发布
-          </Button>
-        </div>
+        )}
 
         {/* Editor layout */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left sidebar with tabs */}
-          <div className="flex h-full w-60 flex-col border-r border-border bg-card">
-            <div className="flex border-b border-border">
-              <button
-                type="button"
-                className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
-                  activeTab === 'library'
-                    ? 'border-b-2 border-primary text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                onClick={() => setActiveTab('library')}
-              >
-                <Package className="h-3.5 w-3.5" />
-                组件库
-              </button>
-              <button
-                type="button"
-                className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
-                  activeTab === 'layers'
-                    ? 'border-b-2 border-primary text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                onClick={() => setActiveTab('layers')}
-              >
-                <Layers className="h-3.5 w-3.5" />
-                图层
-              </button>
+          {/* Left sidebar with tabs（仅 standard 模式显示） */}
+          {showPanels && (
+            <div className="flex h-full w-60 flex-col border-r border-border bg-card">
+              <div className="flex border-b border-border">
+                <button
+                  type="button"
+                  className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
+                    activeTab === 'library'
+                      ? 'border-b-2 border-primary text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setActiveTab('library')}
+                >
+                  <Package className="h-3.5 w-3.5" />
+                  组件库
+                </button>
+                <button
+                  type="button"
+                  className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
+                    activeTab === 'layers'
+                      ? 'border-b-2 border-primary text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => setActiveTab('layers')}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  图层
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {activeTab === 'library' ? <ComponentLibrary /> : <LayerPanel />}
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              {activeTab === 'library' ? <ComponentLibrary /> : <LayerPanel />}
-            </div>
-          </div>
+          )}
 
-          {/* Canvas area with rulers and context menu */}
+          {/* Canvas area with rulers and context menu（始终显示） */}
           <CanvasContextMenu
             onShowCanvasSettings={() => setShowCanvasSettings(true)}
             onZoomIn={handleZoomIn}
@@ -252,11 +263,12 @@ export function ScreenEditor() {
             </div>
           </CanvasContextMenu>
 
-          <PropertyPanel />
+          {/* Property panel（仅 standard 模式显示） */}
+          {showPanels && <PropertyPanel />}
         </div>
 
-        {/* Status bar */}
-        <CanvasStatusBar toolStateMachine={toolStateMachine} />
+        {/* Status bar（仅 standard 模式显示） */}
+        {showPanels && <CanvasStatusBar toolStateMachine={toolStateMachine} />}
       </div>
       <ShortcutsHelpDialog open={showHelp} onOpenChange={setShowHelp} />
       <CanvasSettingsDialog open={showCanvasSettings} onOpenChange={setShowCanvasSettings} />

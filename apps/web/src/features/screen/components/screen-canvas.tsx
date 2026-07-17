@@ -6,6 +6,9 @@ import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useModifierKeys } from '../hooks/use-modifier-keys';
 import { ComponentRenderer } from '../registry/renderer';
+import { handleSelectEnd, zoomAtPoint, type ClickRecord } from '../lib/canvas-event-router';
+import { findAlignmentLines, snapPosition, type AlignmentRect } from '../lib/smart-guides';
+import { SmartGuidesOverlay, useAlignmentLinesStore } from './smart-guides-overlay';
 
 interface DimensionInfo {
   x: number;
@@ -14,6 +17,8 @@ interface DimensionInfo {
   h: number;
   rotate: number;
   visible: boolean;
+  /** 模式提示（如 Alt 中心变换），空时不显示 */
+  mode?: string;
 }
 
 const initialDimension: DimensionInfo = {
@@ -23,6 +28,7 @@ const initialDimension: DimensionInfo = {
   h: 0,
   rotate: 0,
   visible: false,
+  mode: undefined,
 };
 
 /**
@@ -47,10 +53,11 @@ const DimensionTooltip = memo(function DimensionTooltip() {
       className="pointer-events-none fixed z-[9999] rounded bg-black/80 px-2 py-1 font-mono text-xs text-white"
       style={{ left: 10, bottom: 10 }}
     >
-      X:{dimension.x} Y:{dimension.y}
-      {dimension.w > 0 && ` W:${dimension.w}`}
-      {dimension.h > 0 && ` H:${dimension.h}`}
+      X:{dimension.x}px Y:{dimension.y}px
+      {dimension.w > 0 && ` W:${dimension.w}px`}
+      {dimension.h > 0 && ` H:${dimension.h}px`}
       {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
+      {dimension.mode && ` [${dimension.mode}]`}
     </div>
   );
 });
@@ -167,12 +174,20 @@ export function ScreenCanvas({
   const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
+  // Alt+拖拽复制（适配表 #12）：onDragEnd 时调用，复制选中到光标位置
+  const duplicateSelectedToPosition = useScreenEditorStore((s) => s.duplicateSelectedToPosition);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
   const guides = useScreenEditorStore((s) => s.guides);
   const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
+  const smartGuidesEnabled = useScreenEditorStore((s) => s.smartGuidesEnabled);
+  const gridEnabled = useScreenEditorStore((s) => s.gridEnabled);
+  const gridSize = useScreenEditorStore((s) => s.gridSize);
 
   // 从独立 store 获取 setDimension，避免拖拽高频回调触发画布重渲染
   const setDimension = useDimensionStore((s) => s.setDimension);
+  // Smart Guides：从独立 store 获取 setLines / clear，避免 onDrag 高频回调触发画布重渲染
+  const setAlignmentLines = useAlignmentLinesStore((s) => s.setLines);
+  const clearAlignmentLines = useAlignmentLinesStore((s) => s.clear);
 
   const componentRefs = useRef<Map<string, HTMLElement>>(new Map());
   const moveableRef = useRef<Moveable>(null);
@@ -180,14 +195,15 @@ export function ScreenCanvas({
   const contentRef = useRef<HTMLDivElement>(null);
   // 手动双击检测：Selecto 在 click 事件上调用 preventDefault 会抑制原生 dblclick，
   // 因此这里记录上一次单击的 componentId 与时间戳，自行判定双击。
-  const lastClickRef = useRef<{ id: string; time: number } | null>(null);
+  const lastClickRef = useRef<ClickRecord | null>(null);
   const panState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
     null,
   );
   const [isPanning, setIsPanning] = useState(false);
   // 修饰键状态由 useModifierKeys 集中管理（替换原独立的 keydown/keyup 监听）
   // spaceHeld 重命名为 spaceHeldUI 保持原 UI 状态语义
-  const { spaceRef, shiftRef, spaceHeld: spaceHeldUI, shiftHeld } = useModifierKeys();
+  // altHeld 用于切换 copy 光标（Alt+拖拽复制，适配表 #12）
+  const { spaceRef, shiftRef, spaceHeld: spaceHeldUI, shiftHeld, altHeld } = useModifierKeys();
 
   /** 稳定的 ref 注册回调，避免作为 prop 传入 memo 组件时引起重渲染 */
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
@@ -259,19 +275,31 @@ export function ScreenCanvas({
     if (!el) return;
 
     const handleWheel = (e: WheelEvent) => {
-      if (!e.altKey) return;
+      // 缩放手势：Alt+滚轮（原有）或 Ctrl/Cmd+滚轮（主流编辑器习惯）
+      // 拦截浏览器原生页面缩放
+      const isZoomGesture = e.altKey || e.ctrlKey || e.metaKey;
+      if (!isZoomGesture) return;
       e.preventDefault();
       const state = useScreenEditorStore.getState();
       const rect = el.getBoundingClientRect();
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
-      const factor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
-      const newScale = Math.min(5, Math.max(0.1, state.canvasScale * factor));
-      const ratio = newScale / state.canvasScale;
-      setCanvasScaleAndOffset(newScale, {
-        x: cursorX - (cursorX - state.canvasOffset.x) * ratio,
-        y: cursorY - (cursorY - state.canvasOffset.y) * ratio,
+      // 计算原始 factor 并对最终 scale 做 [0.1, 5] 边界限制，
+      // 用 clampedScale / canvasScale 得到实际 factor，确保 offset 与 scale 一致
+      const rawFactor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
+      const rawNewScale = state.canvasScale * rawFactor;
+      const clampedScale = Math.min(5, Math.max(0.1, rawNewScale));
+      const actualFactor = clampedScale / state.canvasScale;
+      const result = zoomAtPoint({
+        currentScale: state.canvasScale,
+        currentOffset: state.canvasOffset,
+        cursorX,
+        cursorY,
+        factor: actualFactor,
       });
+      setCanvasScaleAndOffset(result.scale, result.offset);
+      // TODO: Z 工具点击放大接入点：复用 zoomAtPoint 计算，factor 固定 1.5
+      // TODO: Ctrl+= / Ctrl+- 快捷键接入点：复用 zoomAtPoint，factor 1.1 / 1/1.1
     };
 
     el.addEventListener('wheel', handleWheel, { passive: false });
@@ -294,20 +322,113 @@ export function ScreenCanvas({
     [components],
   );
 
+  /**
+   * 根据画布尺寸与 gridSize 生成网格线坐标数组（数值数组）。
+   * 当 gridEnabled=true 时合并到 Moveable guidelines 中作为吸附目标。
+   * 仅包含 [0, canvas.width/height] 区间内的整数倍 gridSize 点。
+   */
+  const gridVerticalLines = useMemo<number[]>(() => {
+    if (!canvas || !gridEnabled || gridSize < 1) return [];
+    const lines: number[] = [];
+    for (let x = gridSize; x < canvas.width; x += gridSize) {
+      lines.push(x);
+    }
+    return lines;
+  }, [canvas, gridEnabled, gridSize]);
+  const gridHorizontalLines = useMemo<number[]>(() => {
+    if (!canvas || !gridEnabled || gridSize < 1) return [];
+    const lines: number[] = [];
+    for (let y = gridSize; y < canvas.height; y += gridSize) {
+      lines.push(y);
+    }
+    return lines;
+  }, [canvas, gridEnabled, gridSize]);
+
   /** Memo 化 Moveable 的 snap 参考线，避免每次渲染产生新数组引用触发 Moveable 内部重算 */
   const verticalGuidelines = useMemo(
     () =>
       canvas
-        ? ['0', `${canvas.width}`, ...(guides.visible ? guides.vertical.map(String) : [])]
+        ? [
+            '0',
+            `${canvas.width}`,
+            ...(guides.visible ? guides.vertical.map(String) : []),
+            ...(gridEnabled ? gridVerticalLines.map(String) : []),
+          ]
         : [],
-    [canvas, guides.visible, guides.vertical],
+    [canvas, guides.visible, guides.vertical, gridEnabled, gridVerticalLines],
   );
   const horizontalGuidelines = useMemo(
     () =>
       canvas
-        ? ['0', `${canvas.height}`, ...(guides.visible ? guides.horizontal.map(String) : [])]
+        ? [
+            '0',
+            `${canvas.height}`,
+            ...(guides.visible ? guides.horizontal.map(String) : []),
+            ...(gridEnabled ? gridHorizontalLines.map(String) : []),
+          ]
         : [],
-    [canvas, guides.visible, guides.horizontal],
+    [canvas, guides.visible, guides.horizontal, gridEnabled, gridHorizontalLines],
+  );
+
+  /**
+   * Smart Guides 参考矩形数组：所有可见且未选中的组件位置（画布坐标系）。
+   * 在 onDrag 中用于 findAlignmentLines 计算，避免每次拖拽都重新 filter。
+   * 排除当前选中的组件（自身不需要与自己对齐）。
+   */
+  const smartGuidesReferenceRects = useMemo<AlignmentRect[]>(
+    () =>
+      visibleComponents
+        .filter((c: ScreenComponent) => !selectedIdSet.has(c.id))
+        .map((c: ScreenComponent) => ({
+          x: c.position.x,
+          y: c.position.y,
+          width: c.position.width,
+          height: c.position.height,
+          id: c.id,
+        })),
+    [visibleComponents, selectedIdSet],
+  );
+
+  /**
+   * 在拖拽过程中计算并更新 Smart Guides 对齐线，并返回吸附后的坐标。
+   * 仅当 smartGuidesEnabled 为 true 且有参考组件时计算。
+   * 返回的 snappedLeft / snappedTop 为吸附后坐标（若无可吸附线则等于输入值）。
+   */
+  const updateAlignmentLines = useCallback(
+    (
+      movedX: number,
+      movedY: number,
+      movedW: number,
+      movedH: number,
+    ): { snappedLeft: number; snappedTop: number } => {
+      if (!smartGuidesEnabled || smartGuidesReferenceRects.length === 0) {
+        if (useAlignmentLinesStore.getState().lines.length > 0) {
+          clearAlignmentLines();
+        }
+        return { snappedLeft: movedX, snappedTop: movedY };
+      }
+      const movedRect: AlignmentRect = {
+        x: movedX,
+        y: movedY,
+        width: movedW,
+        height: movedH,
+      };
+      const lines = findAlignmentLines(movedRect, smartGuidesReferenceRects);
+      // 吸附：对距离 < 3px 的对齐线应用吸附
+      const snapped = snapPosition(movedX, movedY, movedW, movedH, lines);
+      // 更新 overlay 中显示的 movedRect 为吸附后位置，保持辅助线与实际位置同步
+      const snappedRect: AlignmentRect = {
+        x: snapped.left,
+        y: snapped.top,
+        width: movedW,
+        height: movedH,
+      };
+      // 重新计算吸附后的对齐线（使 distance=0 的吸附线高亮显示）
+      const snappedLines = findAlignmentLines(snappedRect, smartGuidesReferenceRects);
+      setAlignmentLines(snappedLines, snappedRect);
+      return { snappedLeft: snapped.left, snappedTop: snapped.top };
+    },
+    [smartGuidesEnabled, smartGuidesReferenceRects, setAlignmentLines, clearAlignmentLines],
   );
 
   if (!project || !canvas) return null;
@@ -318,7 +439,9 @@ export function ScreenCanvas({
     <div
       ref={containerRef}
       className="relative h-full w-full overflow-hidden bg-muted"
-      style={{ cursor: isPanning ? 'grabbing' : spaceHeldUI ? 'grab' : undefined }}
+      style={{
+        cursor: isPanning ? 'grabbing' : spaceHeldUI ? 'grab' : altHeld ? 'copy' : undefined,
+      }}
       onPointerDown={handlePanStart}
       onPointerMove={handlePanMove}
       onPointerUp={handlePanEnd}
@@ -364,6 +487,9 @@ export function ScreenCanvas({
 
           {/* 活动分组包围盒：双击进入分组后高亮 */}
           <ActiveGroupOutline groupId={activeGroupId} components={visibleComponents} />
+
+          {/* Smart Guides 智能对齐线浮层 */}
+          <SmartGuidesOverlay canvasWidth={canvas.width} canvasHeight={canvas.height} />
         </div>
 
         <Moveable
@@ -373,7 +499,7 @@ export function ScreenCanvas({
           draggable
           resizable
           rotatable
-          snappable={snapEnabled}
+          snappable={snapEnabled || gridEnabled}
           keepRatio={shiftHeld}
           throttleRotate={shiftHeld ? 15 : 0}
           hideChildMoveableDefaultLines={isGroupSelect}
@@ -407,14 +533,32 @@ export function ScreenCanvas({
             e.datas.id = id;
             e.datas.startX = comp?.position.x ?? 0;
             e.datas.startY = comp?.position.y ?? 0;
-          }}
-          onDrag={(e) => {
-            e.target.style.left = `${e.left}px`;
-            e.target.style.top = `${e.top}px`;
+            e.datas.origW = comp?.position.width ?? 0;
+            e.datas.origH = comp?.position.height ?? 0;
+            // Alt+拖拽复制（适配表 #12）：按下 Alt 启动拖拽时标记，
+            // onDragEnd 时复制选中组件到拖拽位置，原件保持原位
+            e.datas.isAltCopy = (e.inputEvent as { altKey?: boolean } | null)?.altKey === true;
+            // 同步 W/H 到 dimension store，使拖拽过程中也显示尺寸
             setDimension((d) => ({
               ...d,
-              x: Math.round(e.left),
-              y: Math.round(e.top),
+              w: Math.round(comp?.position.width ?? 0),
+              h: Math.round(comp?.position.height ?? 0),
+            }));
+          }}
+          onDrag={(e) => {
+            // Smart Guides：计算对齐线 + 吸附（距离 < 3px 自动吸附）
+            const { snappedLeft, snappedTop } = updateAlignmentLines(
+              e.left,
+              e.top,
+              Number(e.datas.origW) || 0,
+              Number(e.datas.origH) || 0,
+            );
+            e.target.style.left = `${snappedLeft}px`;
+            e.target.style.top = `${snappedTop}px`;
+            setDimension((d) => ({
+              ...d,
+              x: Math.round(snappedLeft),
+              y: Math.round(snappedTop),
               visible: true,
             }));
           }}
@@ -424,14 +568,20 @@ export function ScreenCanvas({
             if (!id) return;
             const last = e.lastEvent;
             if (!last) return;
-            updateComponent(id, {
-              position: {
-                ...components.find((c: ScreenComponent) => c.id === id)!.position,
-                x: Math.round(last.left),
-                y: Math.round(last.top),
-              },
-            });
+            // Alt+拖拽复制：拖拽结束时复制选中组件到光标位置，原件保持原位
+            if (e.datas.isAltCopy) {
+              duplicateSelectedToPosition(Math.round(last.left), Math.round(last.top));
+            } else {
+              updateComponent(id, {
+                position: {
+                  ...components.find((c: ScreenComponent) => c.id === id)!.position,
+                  x: Math.round(last.left),
+                  y: Math.round(last.top),
+                },
+              });
+            }
             setDimension((d) => ({ ...d, visible: false }));
+            clearAlignmentLines();
           }}
           onResizeStart={(e) => {
             const id = getComponentId(e.target);
@@ -441,7 +591,15 @@ export function ScreenCanvas({
             e.datas.id = id;
             e.datas.origW = comp?.position.width ?? 0;
             e.datas.origH = comp?.position.height ?? 0;
+            e.datas.origX = comp?.position.x ?? 0;
+            e.datas.origY = comp?.position.y ?? 0;
             e.datas.keepRatio = shiftRef.current;
+            // Alt 中心变换（适配表 #11）：以组件中心为原点对称缩放，
+            // 调整 left/top 抵消 width/height 变化使中心点位置不变
+            e.datas.isAltCenter = (e.inputEvent as { altKey?: boolean } | null)?.altKey === true;
+            if (e.datas.isAltCenter) {
+              setDimension((d) => ({ ...d, mode: '中心变换' }));
+            }
           }}
           onResize={(e) => {
             let w = e.width;
@@ -465,7 +623,17 @@ export function ScreenCanvas({
             }
             e.target.style.width = `${w}px`;
             e.target.style.height = `${h}px`;
-            if (e.drag) {
+            if (e.datas.isAltCenter) {
+              // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
+              const origW = Number(e.datas.origW) || 0;
+              const origH = Number(e.datas.origH) || 0;
+              const origX = Number(e.datas.origX) || 0;
+              const origY = Number(e.datas.origY) || 0;
+              const newX = origX + (origW - w) / 2;
+              const newY = origY + (origH - h) / 2;
+              e.target.style.left = `${newX}px`;
+              e.target.style.top = `${newY}px`;
+            } else if (e.drag) {
               e.target.style.left = `${e.drag.left}px`;
               e.target.style.top = `${e.drag.top}px`;
             }
@@ -495,7 +663,7 @@ export function ScreenCanvas({
                 height: Math.round(Number.parseInt(e.target.style.height)),
               },
             });
-            setDimension((d) => ({ ...d, visible: false }));
+            setDimension((d) => ({ ...d, visible: false, mode: undefined }));
           }}
           onRotateStart={(e) => {
             const id = getComponentId(e.target);
@@ -653,64 +821,23 @@ export function ScreenCanvas({
             .map((el) => getComponentId(el))
             .filter((id): id is string => id != null);
 
-          const input = e.inputEvent as MouseEvent | undefined;
-          const hasModifier = input?.ctrlKey || input?.metaKey || input?.shiftKey;
-          const isSingleClick = e.isDragStart && !hasModifier && selected.length === 1;
+          // 委托纯函数计算决策（归一化 spec.md 热点 5）
+          const result = handleSelectEnd({
+            selected,
+            inputEvent: e.inputEvent as MouseEvent,
+            lastClick: lastClickRef.current,
+            activeGroupId,
+            components,
+            isDragStart: e.isDragStart,
+          });
 
-          // 双击检测：Selecto 在 click 上 preventDefault 会抑制原生 dblclick，
-          // 这里手动判定：同一组件、间隔 < 400ms 视为双击。
-          // 双击命中分组内组件 → 进入分组（setActiveGroupId + 仅选中该组件）。
-          if (isSingleClick) {
-            const clickedId = selected[0];
-            const now = Date.now();
-            const last = lastClickRef.current;
-            lastClickRef.current = { id: clickedId, time: now };
-            if (last && last.id === clickedId && now - last.time < 400) {
-              lastClickRef.current = null;
-              const clickedComp = components.find((c: ScreenComponent) => c.id === clickedId);
-              if (clickedComp?.parentId) {
-                // 进入分组：设置活动分组并选中被双击的组件
-                setActiveGroupId(clickedComp.parentId);
-                selectComponent(clickedId);
-              } else {
-                // 顶层组件双击：退出任何分组
-                setActiveGroupId(null);
-                selectComponent(clickedId);
-              }
-              return;
-            }
-          } else {
-            // 框选 / Ctrl 多选：清空双击判定状态
-            lastClickRef.current = null;
+          // 应用副作用：lastClick → activeGroupId → selection → Moveable dragStart
+          lastClickRef.current = result.newLastClick;
+          if (result.newActiveGroupId !== activeGroupId) {
+            setActiveGroupId(result.newActiveGroupId);
           }
-
-          // 单击分组中的组件：根据 activeGroupId 决定选中整组还是单个组件
-          let finalSelection = selected;
-          if (isSingleClick) {
-            const clickedComp = components.find((c: ScreenComponent) => c.id === selected[0]);
-            if (clickedComp?.parentId) {
-              // 组件属于某分组
-              if (activeGroupId === clickedComp.parentId) {
-                // 已进入该分组 → 仅选中此组件
-                finalSelection = [clickedComp.id];
-              } else {
-                // 未进入或进入了别的分组 → 选中整个分组（同时退出旧分组）
-                // 注：不在这里 setActiveGroupId，保持 activeGroupId=null 语义
-                finalSelection = components
-                  .filter((c: ScreenComponent) => c.parentId === clickedComp.parentId)
-                  .map((c: ScreenComponent) => c.id);
-                if (activeGroupId !== null) {
-                  setActiveGroupId(null);
-                }
-              }
-            } else if (activeGroupId !== null) {
-              // 单击顶层组件：退出当前活动分组
-              setActiveGroupId(null);
-            }
-          }
-
-          selectComponents(finalSelection);
-          if (e.isDragStart) {
+          selectComponents(result.selection);
+          if (!result.isDoubleClick && e.isDragStart) {
             setTimeout(() => {
               moveableRef.current?.dragStart(e.inputEvent);
             }, 0);

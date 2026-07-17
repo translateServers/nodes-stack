@@ -16,6 +16,16 @@ import {
   Group as GroupIcon,
   Ungroup,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { Button } from '@/components/ui/button';
@@ -37,6 +47,41 @@ const KNOWN_TYPE_TO_ICON: Record<string, string> = {
 
 function getIconForType(type: string): React.ComponentType<{ className?: string }> {
   return ICON_MAP[KNOWN_TYPE_TO_ICON[type]] ?? Box;
+}
+
+/**
+ * 可拖拽图层行包装器（Task 3.23）。
+ * 使用 dnd-kit 的 useSortable，拖拽时透明度降低，transform 由 dnd-kit 控制。
+ * 仅顶层 component 节点（无 parentId）参与排序，分组与子组件保持原状（ChevronsUp/Down 兜底）。
+ */
+function SortableLayerRow({
+  id,
+  children,
+  disabled,
+}: {
+  id: string;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : 1,
+        cursor: disabled ? undefined : 'grab',
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
 }
 
 /** 树节点：可能是单个组件，也可能是虚拟分组 */
@@ -103,10 +148,14 @@ export function LayerPanel() {
   const setHidden = useScreenEditorStore((s) => s.setHidden);
   const reorderToTop = useScreenEditorStore((s) => s.reorderToTop);
   const reorderToBottom = useScreenEditorStore((s) => s.reorderToBottom);
+  const reorderLayerToIndex = useScreenEditorStore((s) => s.reorderLayerToIndex);
   const groupSelected = useScreenEditorStore((s) => s.groupSelected);
   const ungroupSelected = useScreenEditorStore((s) => s.ungroupSelected);
   const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
   const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
+
+  // dnd-kit 拖拽传感器：PointerSensor + 8px 激活距离，避免点击误触发拖拽
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   // 折叠状态：默认所有分组展开。使用 Set<string> 存储已折叠的 groupId
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -123,6 +172,14 @@ export function LayerPanel() {
   // Memo 化：仅在 components 引用变化时重建树；选中状态用 Set 做 O(1) 查询
   const tree = useMemo(() => (project ? buildLayerTree(project.components) : []), [project]);
   const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
+  // 仅顶层 component 节点参与 dnd-kit 排序（分组节点不在 SortableContext.items 中）
+  const topLevelSortableIds = useMemo(
+    () =>
+      tree
+        .filter((n): n is Extract<LayerNode, { kind: 'component' }> => n.kind === 'component')
+        .map((n) => n.comp.id),
+    [tree],
+  );
 
   const canGroup = selectedComponentIds.length >= 2;
   const canUngroup = (() => {
@@ -224,7 +281,22 @@ export function LayerPanel() {
     });
   };
 
-  /** 渲染单个组件行 */
+  /**
+   * dnd-kit 拖拽结束：根据 active/over 在顶层组件列表中的索引调用 reorderLayerToIndex。
+   * over 为 null 表示未悬停在有效目标上，忽略。
+   */
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    const fromIdx = topLevelSortableIds.indexOf(activeId);
+    const toIdx = topLevelSortableIds.indexOf(overId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    reorderLayerToIndex(activeId, toIdx);
+  };
+
+  /** 渲染单个组件行（不含 key，由外层 SortableLayerRow 或直接 div 提供） */
   const renderComponent = (comp: ScreenComponent, depth: number) => {
     const Icon = getIconForType(comp.type);
     const isSelected = selectedIdSet.has(comp.id);
@@ -232,7 +304,6 @@ export function LayerPanel() {
     const inActiveGroup = comp.parentId !== null && comp.parentId === activeGroupId;
     return (
       <div
-        key={comp.id}
         className={`flex cursor-pointer items-center gap-2 border-b border-border/60 py-2 pr-3 text-sm transition-colors ${
           isSelected ? 'bg-primary/10' : 'hover:bg-accent'
         }`}
@@ -481,9 +552,22 @@ export function LayerPanel() {
           </div>
         )}
         <div className="flex-1 overflow-y-auto">
-          {tree.map((node) =>
-            node.kind === 'component' ? renderComponent(node.comp, 0) : renderGroup(node),
-          )}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={topLevelSortableIds} strategy={verticalListSortingStrategy}>
+              {tree.map((node) => {
+                if (node.kind === 'group') return renderGroup(node);
+                return (
+                  <SortableLayerRow key={node.comp.id} id={node.comp.id}>
+                    {renderComponent(node.comp, 0)}
+                  </SortableLayerRow>
+                );
+              })}
+            </SortableContext>
+          </DndContext>
         </div>
       </div>
     </TooltipProvider>

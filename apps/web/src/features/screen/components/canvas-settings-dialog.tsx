@@ -28,6 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface CanvasSettingsDialogProps {
   open: boolean;
@@ -89,6 +91,11 @@ function ColorField({
 export function CanvasSettingsDialog({ open, onOpenChange }: CanvasSettingsDialogProps) {
   const canvas = useScreenEditorStore((s) => s.project?.canvas);
   const updateCanvas = useScreenEditorStore((s) => s.updateCanvas);
+  // 网格吸附为会话级配置（不入项目持久化），直接读写 store，无需 draft
+  const gridEnabled = useScreenEditorStore((s) => s.gridEnabled);
+  const gridSize = useScreenEditorStore((s) => s.gridSize);
+  const setGridEnabled = useScreenEditorStore((s) => s.setGridEnabled);
+  const setGridSize = useScreenEditorStore((s) => s.setGridSize);
 
   // 本地副本：仅在 open 切换为 true 时同步 store
   const [draft, setDraft] = useState<CanvasConfig | null>(null);
@@ -177,6 +184,39 @@ export function CanvasSettingsDialog({ open, onOpenChange }: CanvasSettingsDialo
                 <SelectItem value="none">原始尺寸</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* 网格吸附：会话级配置，直接读写 store，无需 draft */}
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="grid-enabled" className="text-sm">
+                网格吸附
+              </Label>
+              <Switch
+                id="grid-enabled"
+                checked={gridEnabled}
+                onCheckedChange={(checked) => setGridEnabled(checked === true)}
+              />
+            </div>
+            <div
+              className={`flex items-center gap-2 transition-opacity ${
+                gridEnabled ? 'opacity-100' : 'opacity-50'
+              }`}
+            >
+              <label className="w-14 shrink-0 text-xs text-muted-foreground">网格大小</label>
+              <Input
+                type="number"
+                min={1}
+                className="h-8 px-2 py-1 text-sm"
+                value={gridSize}
+                disabled={!gridEnabled}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (Number.isFinite(v) && v >= 1) setGridSize(Math.floor(v));
+                }}
+              />
+              <span className="text-xs text-muted-foreground">px</span>
+            </div>
           </div>
         </div>
 

@@ -44,6 +44,11 @@ import { useScreenEditorStore } from '../stores/editor-store';
 import { ShortcutBadge } from './shortcut-badge';
 import { getShortcutKeys } from '../hooks/shortcuts-registry';
 import {
+  attachContextMenuRedistributor,
+  findComponentIdAtPoint,
+  getComponentIdFromElement,
+} from '../lib/canvas-event-router';
+import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuGroup,
@@ -81,38 +86,6 @@ function MenuItemContent({
       {keys && <ShortcutBadge keys={keys} />}
     </>
   );
-}
-
-/** 从 DOM 元素向上查找 data-component-id */
-function getComponentIdFromElement(el: HTMLElement | null): string | null {
-  let current: HTMLElement | null = el;
-  while (current) {
-    if (current.classList?.contains('moveable-control-box')) break;
-    const id = current.getAttribute('data-component-id');
-    if (id) return id;
-    current = current.parentElement;
-  }
-  return null;
-}
-
-/**
- * 基于坐标做 hit-test 查找组件。
- * 因为 Moveable 会在选中组件上方渲染控制边框（.moveable-area / .moveable-control
- * / .moveable-line 等）覆盖在组件上方拦截事件，导致 e.target 不是组件本身，
- * 所以需要 elementsFromPoint 遍历鼠标下所有元素，跳过 Moveable 和菜单层，
- * 找到真正的 data-component-id。
- */
-function findComponentIdAtPoint(clientX: number, clientY: number): string | null {
-  const elements = document.elementsFromPoint(clientX, clientY);
-  for (const el of elements) {
-    if (!(el instanceof HTMLElement)) continue;
-    if (el.closest('[data-slot="context-menu-content"]')) continue;
-    if (el.closest('[data-radix-popper-content-wrapper]')) continue;
-    if (el.closest('.moveable-control-box')) continue;
-    const id = getComponentIdFromElement(el);
-    if (id) return id;
-  }
-  return null;
 }
 
 /** 组件菜单：右键命中组件时显示 */
@@ -346,7 +319,6 @@ export function CanvasContextMenu({
   const [open, setOpen] = useState(false);
   const [menuKey, setMenuKey] = useState(0);
   const openRef = useRef(false);
-  const redispatchedRef = useRef(false);
   const selectComponent = useScreenEditorStore((s) => s.selectComponent);
   const clearSelection = useScreenEditorStore((s) => s.clearSelection);
 
@@ -386,144 +358,34 @@ export function CanvasContextMenu({
   //    contextmenu 处理产生竞态——新 contextmenu 到达时 open 状态尚未完成切换，
   //    Radix 认为菜单仍处于 open=true 状态，跳过锚点坐标更新，直接复用旧位置。
   //
-  // 修复策略：
+  // 修复策略（事件路由层归一化，详见 lib/canvas-event-router.ts）：
   // pointerdown 捕获阶段：仅视觉隐藏旧菜单，不阻止事件传播，
   //   让 DismissableLayer 自然接收 pointerdown 触发异步关闭。
   // contextmenu 捕获阶段：拦截事件，同步关闭菜单并递增 key 强制重建，
   //   等待双 rAF 确保 DOM 清理后重派完整事件序列。
   useEffect(() => {
-    const restorePointerEvents = () => {
-      document.body.style.pointerEvents = '';
-      document.documentElement.style.pointerEvents = '';
-      const root = document.getElementById('root');
-      if (root) root.style.pointerEvents = '';
-    };
-
-    const dispatchRightClickAt = (x: number, y: number) => {
-      redispatchedRef.current = true;
-      restorePointerEvents();
-
-      try {
-        const elements = document.elementsFromPoint(x, y);
-        let target: Element | null = null;
-        for (const el of elements) {
-          if (!(el instanceof HTMLElement)) continue;
-          if (el.closest('[data-slot="context-menu-content"]')) continue;
-          if (el.closest('[data-radix-popper-content-wrapper]')) continue;
-          if (el.closest('.moveable-control-box')) continue;
-          target = el;
-          break;
-        }
-        if (!target) target = document.body;
-
-        const common = {
-          bubbles: true,
-          cancelable: true,
-          clientX: x,
-          clientY: y,
-          view: window,
-          button: 2,
-          pointerId: 1,
-          isPrimary: true,
-          pointerType: 'mouse' as const,
-        };
-
-        target.dispatchEvent(new PointerEvent('pointerdown', { ...common, buttons: 2 }));
-        target.dispatchEvent(
-          new MouseEvent('mousedown', {
-            bubbles: true,
-            cancelable: true,
-            clientX: x,
-            clientY: y,
-            view: window,
-            button: 2,
-            buttons: 2,
-          }),
-        );
-        target.dispatchEvent(new PointerEvent('pointerup', { ...common, buttons: 0 }));
-        target.dispatchEvent(
-          new MouseEvent('mouseup', {
-            bubbles: true,
-            cancelable: true,
-            clientX: x,
-            clientY: y,
-            view: window,
-            button: 2,
-            buttons: 0,
-          }),
-        );
-        target.dispatchEvent(
-          new MouseEvent('contextmenu', {
-            bubbles: true,
-            cancelable: true,
-            clientX: x,
-            clientY: y,
-            view: window,
-            button: 2,
-            buttons: 0,
-          }),
-        );
-      } finally {
-        setTimeout(() => {
-          redispatchedRef.current = false;
-        }, 100);
-      }
-    };
-
-    const handlePointerDownCapture = (e: PointerEvent) => {
-      if (e.button !== 2) return;
-      if (!openRef.current || redispatchedRef.current) return;
-
-      const existingContent = document.querySelector('[data-slot="context-menu-content"]');
-      if (existingContent instanceof HTMLElement) {
-        existingContent.style.setProperty('animation', 'none', 'important');
-        existingContent.style.setProperty('transition', 'none', 'important');
-        existingContent.style.setProperty('opacity', '0', 'important');
-        existingContent.style.pointerEvents = 'none';
-      }
-    };
-
-    const handleContextMenuCapture = (e: MouseEvent) => {
-      if (e.button !== 2) return;
-      if (redispatchedRef.current) return;
-      if (!openRef.current) return;
-
-      e.stopImmediatePropagation();
-      e.preventDefault();
-
-      restorePointerEvents();
-
-      const x = e.clientX;
-      const y = e.clientY;
-
-      flushSync(() => {
-        openRef.current = false;
-        setOpen(false);
-        setMenuKey((k) => k + 1);
-      });
-
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          dispatchRightClickAt(x, y);
-
-          setTimeout(() => {
-            if (!openRef.current) {
-              flushSync(() => {
-                openRef.current = true;
-                setOpen(true);
-              });
-            }
-          }, 50);
+    const cleanup = attachContextMenuRedistributor({
+      isOpen: () => openRef.current,
+      // 同步关闭菜单 + 递增 menuKey 强制 ContextMenu 重建（清空 DOM 状态）。
+      // 两者合并到同一个 flushSync 内，等价于重构前的原子提交行为。
+      onClose: () => {
+        flushSync(() => {
+          openRef.current = false;
+          setOpen(false);
+          setMenuKey((k) => k + 1);
         });
-      });
-    };
-
-    document.addEventListener('contextmenu', handleContextMenuCapture, true);
-    document.addEventListener('pointerdown', handlePointerDownCapture, true);
-    return () => {
-      document.removeEventListener('contextmenu', handleContextMenuCapture, true);
-      document.removeEventListener('pointerdown', handlePointerDownCapture, true);
-    };
+      },
+      // menuKey 已在 onClose 的 flushSync 内更新，此处无需重复触发
+      onMenuKeyBump: () => {},
+      // 重派发后若菜单仍未打开（Radix 未接收到事件），主动恢复 open=true
+      onReopenIfClosed: () => {
+        flushSync(() => {
+          openRef.current = true;
+          setOpen(true);
+        });
+      },
+    });
+    return cleanup;
   }, []);
 
   const child = (isValidElement(children) ? children : <div>{children}</div>) as ReactElement<{

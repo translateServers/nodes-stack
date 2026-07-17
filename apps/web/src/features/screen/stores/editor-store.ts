@@ -43,6 +43,35 @@ interface ScreenEditorData {
    * 参考 Figma 的 "Enter Frame" 行为。
    */
   activeGroupId: string | null;
+  /**
+   * 智能对齐线开关：拖拽组件时是否显示与其他组件的对齐辅助线（会话级，不持久化）。
+   * 与 `snapEnabled` 独立 —— 关闭吸附仍可显示对齐线参考。
+   */
+  smartGuidesEnabled: boolean;
+  /**
+   * 网格吸附开关：开启后组件拖拽时吸附到 `gridSize` 整数倍坐标（会话级，不持久化）。
+   * 与 `snapEnabled` / `smartGuidesEnabled` 独立 —— 互不影响。
+   */
+  gridEnabled: boolean;
+  /**
+   * 网格大小（px）：仅当 `gridEnabled` 为 true 时生效，控制吸附网格的间距。
+   * 默认 10，常见取值 4/5/8/10/20。
+   */
+  gridSize: number;
+  /**
+   * UI 可见性开关：控制工具栏 / 侧边栏 / 属性面板等编辑器 UI 的显隐（会话级，不持久化）。
+   * 用于 Tab 快捷键切换"全屏画布预览"模式（与 Photoshop 的 Tab 行为一致）。
+   * 关闭时仅保留画布主体，便于专注预览；再次按 Tab 恢复。
+   */
+  uiVisible: boolean;
+  /**
+   * 屏幕模式（F 快捷键循环切换，会话级，不持久化）：
+   * - `standard`：完整编辑器（工具栏 + 侧边栏 + 属性面板 + 状态栏）
+   * - `withMenu`：仅保留顶部工具栏 + 画布（隐藏侧边栏 / 属性面板 / 状态栏）
+   * - `fullscreen`：仅画布（无任何 UI 干扰，用于纯预览）
+   * 与 `uiVisible` 独立 —— `uiVisible=false` 优先级更高，会强制隐藏所有 UI。
+   */
+  screenMode: 'standard' | 'withMenu' | 'fullscreen';
 }
 
 interface ScreenEditorActions {
@@ -63,9 +92,28 @@ interface ScreenEditorActions {
   setCanvasScaleAndOffset: (scale: number, offset: { x: number; y: number }) => void;
   resetViewport: () => void;
   reorderComponent: (id: string, newZIndex: number) => void;
+  /**
+   * 拖拽重排图层顺序（Task 3.23）：将组件移到图层列表的指定位置（0 表示最顶层），
+   * 内部重新分配 zIndex 保持连续整数。用于 dnd-kit 拖拽结束。
+   */
+  reorderLayerToIndex: (id: string, toIndex: number) => void;
   reorderToTop: (id: string) => void;
   reorderToBottom: (id: string) => void;
   duplicateSelected: () => void;
+  /**
+   * Alt+拖拽复制（适配表 #12）：复制选中组件到指定坐标，保持选中组件之间的相对位置。
+   * 与 `duplicateSelected` 的差异：
+   * - 副本不偏移 20px，而是整体平移到 (x, y)（以选中组件边界框左上角为基准）
+   * - 用于 Alt+拖拽场景：拖拽结束时复制并放置到光标位置，原件保持原位
+   * - 入历史栈
+   */
+  duplicateSelectedToPosition: (x: number, y: number) => void;
+  /**
+   * [/] 边框宽度调整（适配表 #18）：调整选中组件的 style.borderWidth，
+   * 步长 1px，范围 [0, 20]；文本类型组件忽略（其渲染语义不依赖边框）。
+   * 用于 [ / ] 快捷键绑定。
+   */
+  adjustBorderWidth: (delta: number) => void;
   nudgeSelected: (dx: number, dy: number) => void;
   setLocked: (ids: string[], locked: boolean) => void;
   setHidden: (ids: string[], hidden: boolean) => void;
@@ -103,6 +151,16 @@ interface ScreenEditorActions {
   toggleSnap: () => void;
   /** 切换原生事件触发开关 */
   toggleNativeEvent: () => void;
+  /** 设置智能对齐线开关（接受显式 value，便于未来接入设置面板） */
+  setSmartGuidesEnabled: (value: boolean) => void;
+  /** 设置网格吸附开关（接受显式 value，便于未来接入设置面板） */
+  setGridEnabled: (value: boolean) => void;
+  /** 设置网格大小（建议 ≥ 1，调用方负责边界校验） */
+  setGridSize: (size: number) => void;
+  /** 切换 UI 显隐（Tab 快捷键） */
+  toggleUI: () => void;
+  /** 循环切换屏幕模式：standard → withMenu → fullscreen → standard（F 快捷键） */
+  cycleScreenMode: () => void;
   /** 进入/退出分组编辑模式：设置 activeGroupId（双击进入分组） */
   setActiveGroupId: (groupId: string | null) => void;
 }
@@ -124,9 +182,27 @@ const initialData: ScreenEditorData = {
   snapEnabled: true,
   nativeEventEnabled: false,
   activeGroupId: null,
+  smartGuidesEnabled: true,
+  gridEnabled: false,
+  gridSize: 10,
+  uiVisible: true,
+  screenMode: 'standard',
 };
 
-function pushHistory(set: (fn: (state: ScreenEditorState) => Partial<ScreenEditorState>) => void) {
+/**
+ * Zustand set 函数类型（兼容 devtools actionName 标签）。
+ * 收窄到 ScreenEditorState，避免在迁移过程中扩散 any。
+ */
+type ScreenEditorSet = (
+  partial:
+    | ScreenEditorState
+    | Partial<ScreenEditorState>
+    | ((state: ScreenEditorState) => ScreenEditorState | Partial<ScreenEditorState>),
+  replace?: false,
+  actionName?: string,
+) => void;
+
+function pushHistory(set: ScreenEditorSet): void {
   set((state: ScreenEditorState) => {
     if (!state.project) return {};
     return {
@@ -139,6 +215,29 @@ function pushHistory(set: (fn: (state: ScreenEditorState) => Partial<ScreenEdito
       },
     };
   });
+}
+
+/**
+ * 高阶函数：将"推入历史栈 + 应用业务更新"两个步骤打包为单一调用。
+ * 用于替代 editor-store 中所有 action 的 `pushHistory(set); set(updater, false, name);` 模式。
+ *
+ * 行为：
+ * 1. 先调用 `pushHistory(set)`：把当前 `project.components` 快照推入 `history.past`，并清空 `future`
+ * 2. 再调用 `set(updater, false, actionName)`：应用业务更新，并在 devtools 中标记 actionName
+ *
+ * 不迁移任何现有 action（仅提供 API，迁移见 Task 2.16–2.20）。
+ *
+ * @param set zustand set 函数（由 store creator 提供）
+ * @param actionName devtools 中显示的 action 名称（用于调试）
+ * @param updater 业务状态更新函数，返回部分 state
+ */
+export function withHistory(
+  set: ScreenEditorSet,
+  actionName: string,
+  updater: (state: ScreenEditorState) => Partial<ScreenEditorState>,
+): void {
+  pushHistory(set);
+  set(updater, false, actionName);
 }
 
 export const useScreenEditorStore = create<ScreenEditorState>()(
@@ -171,106 +270,79 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       },
 
       addComponent: (component) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: [...state.project.components, component],
-              },
-            };
-          },
-          false,
-          'addComponent',
-        );
+        withHistory(set, 'addComponent', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: [...state.project.components, component],
+            },
+          };
+        });
       },
 
       updateComponent: (id, updates) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  c.id === id ? { ...c, ...updates } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'updateComponent',
-        );
+        withHistory(set, 'updateComponent', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                c.id === id ? { ...c, ...updates } : c,
+              ),
+            },
+          };
+        });
       },
 
       updateComponentsBatch: (updates) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            const updateMap = new Map(
-              updates.map((u: { id: string; changes: Partial<ScreenComponent> }) => [
-                u.id,
-                u.changes,
-              ]),
-            );
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) => {
-                  const changes = updateMap.get(c.id);
-                  return changes ? { ...c, ...changes } : c;
-                }),
-              },
-            };
-          },
-          false,
-          'updateComponentsBatch',
-        );
+        withHistory(set, 'updateComponentsBatch', (state) => {
+          if (!state.project) return {};
+          const updateMap = new Map(
+            updates.map((u: { id: string; changes: Partial<ScreenComponent> }) => [
+              u.id,
+              u.changes,
+            ]),
+          );
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) => {
+                const changes = updateMap.get(c.id);
+                return changes ? { ...c, ...changes } : c;
+              }),
+            },
+          };
+        });
       },
 
       removeComponent: (id) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.filter((c: ScreenComponent) => c.id !== id),
-              },
-              selectedComponentIds: state.selectedComponentIds.filter((sid: string) => sid !== id),
-            };
-          },
-          false,
-          'removeComponent',
-        );
+        withHistory(set, 'removeComponent', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.filter((c: ScreenComponent) => c.id !== id),
+            },
+            selectedComponentIds: state.selectedComponentIds.filter((sid: string) => sid !== id),
+          };
+        });
       },
 
       removeSelectedComponents: () => {
         const ids = get().selectedComponentIds;
         if (ids.length === 0) return;
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            const idSet = new Set(ids);
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.filter(
-                  (c: ScreenComponent) => !idSet.has(c.id),
-                ),
-              },
-              selectedComponentIds: [],
-            };
-          },
-          false,
-          'removeSelectedComponents',
-        );
+        withHistory(set, 'removeSelectedComponents', (state) => {
+          if (!state.project) return {};
+          const idSet = new Set(ids);
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.filter((c: ScreenComponent) => !idSet.has(c.id)),
+            },
+            selectedComponentIds: [],
+          };
+        });
       },
 
       updateCanvas: (updates) => {
@@ -306,74 +378,90 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       },
 
       reorderComponent: (id, newZIndex) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  c.id === id ? { ...c, zIndex: newZIndex } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'reorderComponent',
-        );
+        withHistory(set, 'reorderComponent', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                c.id === id ? { ...c, zIndex: newZIndex } : c,
+              ),
+            },
+          };
+        });
+      },
+
+      reorderLayerToIndex: (id, toIndex) => {
+        withHistory(set, 'reorderLayerToIndex', (state) => {
+          if (!state.project) return {};
+          // 仅在顶层组件（无 parentId）中重排，与 layer-panel 树结构一致
+          const topLevel = state.project.components
+            .filter((c: ScreenComponent) => !c.parentId)
+            .sort((a: ScreenComponent, b: ScreenComponent) => b.zIndex - a.zIndex);
+          const fromIdx = topLevel.findIndex((c) => c.id === id);
+          if (fromIdx === -1) return {};
+          const clampedTo = Math.max(0, Math.min(topLevel.length - 1, toIndex));
+          if (fromIdx === clampedTo) return {};
+          // 移除源并插入到目标位置
+          const [moved] = topLevel.splice(fromIdx, 1);
+          topLevel.splice(clampedTo, 0, moved);
+          // 重新分配顶层 zIndex：index 0 = 最高 zIndex（与原 maxZ 对齐，避免越界）
+          const maxZ = state.project.components.reduce(
+            (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
+            0,
+          );
+          const newZByCompId = new Map<string, number>();
+          topLevel.forEach((c, idx) => newZByCompId.set(c.id, maxZ - idx));
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                newZByCompId.has(c.id) ? { ...c, zIndex: newZByCompId.get(c.id)! } : c,
+              ),
+            },
+          };
+        });
       },
 
       reorderToTop: (id) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            const maxZ = state.project.components.reduce(
-              (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
-              0,
-            );
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  c.id === id ? { ...c, zIndex: maxZ + 1 } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'reorderToTop',
-        );
+        withHistory(set, 'reorderToTop', (state) => {
+          if (!state.project) return {};
+          const maxZ = state.project.components.reduce(
+            (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
+            0,
+          );
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                c.id === id ? { ...c, zIndex: maxZ + 1 } : c,
+              ),
+            },
+          };
+        });
       },
 
       reorderToBottom: (id) => {
-        pushHistory(set);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            const minZ = state.project.components.reduce(
-              (min: number, c: ScreenComponent) => Math.min(min, c.zIndex),
-              Number.POSITIVE_INFINITY,
-            );
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  c.id === id ? { ...c, zIndex: minZ - 1 } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'reorderToBottom',
-        );
+        withHistory(set, 'reorderToBottom', (state) => {
+          if (!state.project) return {};
+          const minZ = state.project.components.reduce(
+            (min: number, c: ScreenComponent) => Math.min(min, c.zIndex),
+            Number.POSITIVE_INFINITY,
+          );
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                c.id === id ? { ...c, zIndex: minZ - 1 } : c,
+              ),
+            },
+          };
+        });
       },
 
       duplicateSelected: () => {
         const { selectedComponentIds, project } = get();
         if (selectedComponentIds.length === 0 || !project) return;
-        pushHistory(set);
         const selectedSet = new Set(selectedComponentIds);
         const newComponents: ScreenComponent[] = [];
         for (const c of project.components) {
@@ -386,87 +474,121 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             });
           }
         }
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: [...state.project.components, ...newComponents],
-              },
-              selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
-            };
-          },
-          false,
-          'duplicateSelected',
-        );
+        withHistory(set, 'duplicateSelected', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: [...state.project.components, ...newComponents],
+            },
+            selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+          };
+        });
+      },
+
+      duplicateSelectedToPosition: (x, y) => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length === 0 || !project) return;
+        const selectedComps = project.components.filter((c) => selectedComponentIds.includes(c.id));
+        if (selectedComps.length === 0) return;
+        // 以选中组件边界框左上角为基准，整体平移到 (x, y)，保持组件间相对位置
+        const minX = Math.min(...selectedComps.map((c) => c.position.x));
+        const minY = Math.min(...selectedComps.map((c) => c.position.y));
+        const offsetX = x - minX;
+        const offsetY = y - minY;
+        const newComponents: ScreenComponent[] = selectedComps.map((c) => ({
+          ...structuredClone(c),
+          id: crypto.randomUUID(),
+          name: `${c.name} 副本`,
+          position: { ...c.position, x: c.position.x + offsetX, y: c.position.y + offsetY },
+        }));
+        withHistory(set, 'duplicateSelectedToPosition', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: [...state.project.components, ...newComponents],
+            },
+            selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+          };
+        });
       },
 
       nudgeSelected: (dx, dy) => {
         const { selectedComponentIds } = get();
         if (selectedComponentIds.length === 0) return;
-        pushHistory(set);
         const idSet = new Set(selectedComponentIds);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  idSet.has(c.id) && !c.status.locked
-                    ? {
-                        ...c,
-                        position: { ...c.position, x: c.position.x + dx, y: c.position.y + dy },
-                      }
-                    : c,
-                ),
-              },
-            };
-          },
-          false,
-          'nudgeSelected',
-        );
+        withHistory(set, 'nudgeSelected', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                idSet.has(c.id) && !c.status.locked
+                  ? {
+                      ...c,
+                      position: { ...c.position, x: c.position.x + dx, y: c.position.y + dy },
+                    }
+                  : c,
+              ),
+            },
+          };
+        });
+      },
+
+      adjustBorderWidth: (delta) => {
+        const { selectedComponentIds } = get();
+        if (selectedComponentIds.length === 0) return;
+        const idSet = new Set(selectedComponentIds);
+        withHistory(set, 'adjustBorderWidth', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) => {
+                if (!idSet.has(c.id) || c.status.locked) return c;
+                // 文本类型不依赖边框语义，忽略 [/] 调整
+                if (c.type === 'text') return c;
+                const current = c.style.borderWidth ?? 0;
+                const next = Math.max(0, Math.min(20, current + delta));
+                return {
+                  ...c,
+                  style: { ...c.style, borderWidth: next },
+                };
+              }),
+            },
+          };
+        });
       },
 
       setLocked: (ids, locked) => {
-        pushHistory(set);
         const idSet = new Set(ids);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  idSet.has(c.id) ? { ...c, status: { ...c.status, locked } } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'setLocked',
-        );
+        withHistory(set, 'setLocked', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                idSet.has(c.id) ? { ...c, status: { ...c.status, locked } } : c,
+              ),
+            },
+          };
+        });
       },
 
       setHidden: (ids, hidden) => {
-        pushHistory(set);
         const idSet = new Set(ids);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  idSet.has(c.id) ? { ...c, status: { ...c.status, hidden } } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'setHidden',
-        );
+        withHistory(set, 'setHidden', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                idSet.has(c.id) ? { ...c, status: { ...c.status, hidden } } : c,
+              ),
+            },
+          };
+        });
       },
 
       toggleBorderGuides: () => {
@@ -609,7 +731,6 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       pasteFromClipboard: () => {
         const { clipboard, pasteCount, project } = get();
         if (!clipboard || clipboard.length === 0 || !project) return;
-        pushHistory(set);
         // 每次粘贴偏移累加 20px，避免连续粘贴重叠
         const offset = (pasteCount + 1) * 20;
         const newComponents: ScreenComponent[] = clipboard.map((c: ScreenComponent) => ({
@@ -622,21 +743,17 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             y: c.position.y + offset,
           },
         }));
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: [...state.project.components, ...newComponents],
-              },
-              selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
-              pasteCount: state.pasteCount + 1,
-            };
-          },
-          false,
-          'pasteFromClipboard',
-        );
+        withHistory(set, 'pasteFromClipboard', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: [...state.project.components, ...newComponents],
+            },
+            selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+            pasteCount: state.pasteCount + 1,
+          };
+        });
       },
 
       alignSelectedHorizontal: (alignment) => {
@@ -757,46 +874,36 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       groupSelected: () => {
         const { selectedComponentIds, project } = get();
         if (selectedComponentIds.length < 2 || !project) return;
-        pushHistory(set);
         const groupId = `group-${crypto.randomUUID()}`;
         const idSet = new Set(selectedComponentIds);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  idSet.has(c.id) ? { ...c, parentId: groupId } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'groupSelected',
-        );
+        withHistory(set, 'groupSelected', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                idSet.has(c.id) ? { ...c, parentId: groupId } : c,
+              ),
+            },
+          };
+        });
       },
 
       ungroupSelected: () => {
         const { selectedComponentIds, project } = get();
         if (selectedComponentIds.length === 0 || !project) return;
-        pushHistory(set);
         const idSet = new Set(selectedComponentIds);
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                components: state.project.components.map((c: ScreenComponent) =>
-                  idSet.has(c.id) ? { ...c, parentId: null } : c,
-                ),
-              },
-            };
-          },
-          false,
-          'ungroupSelected',
-        );
+        withHistory(set, 'ungroupSelected', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                idSet.has(c.id) ? { ...c, parentId: null } : c,
+              ),
+            },
+          };
+        });
       },
 
       toggleSnap: () => {
@@ -814,6 +921,37 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
           }),
           false,
           'toggleNativeEvent',
+        );
+      },
+
+      setSmartGuidesEnabled: (value) => {
+        set({ smartGuidesEnabled: value }, false, 'setSmartGuidesEnabled');
+      },
+
+      setGridEnabled: (value) => {
+        set({ gridEnabled: value }, false, 'setGridEnabled');
+      },
+
+      setGridSize: (size) => {
+        set({ gridSize: size }, false, 'setGridSize');
+      },
+
+      toggleUI: () => {
+        set((state: ScreenEditorState) => ({ uiVisible: !state.uiVisible }), false, 'toggleUI');
+      },
+
+      cycleScreenMode: () => {
+        set(
+          (state: ScreenEditorState) => ({
+            screenMode:
+              state.screenMode === 'standard'
+                ? 'withMenu'
+                : state.screenMode === 'withMenu'
+                  ? 'fullscreen'
+                  : 'standard',
+          }),
+          false,
+          'cycleScreenMode',
         );
       },
 

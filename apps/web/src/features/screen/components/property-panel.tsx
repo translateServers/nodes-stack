@@ -19,32 +19,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+// 数值字段统一使用 PS 风格 NumberInput（↑↓ 微调 + draft 提交，避免每次按键入历史栈）
+import { NumberInput } from './number-input';
+
+/** 属性面板内数值字段的统一样式（与新 NumberInput 默认 h-8 视觉对齐到原 h-7 紧凑外观） */
+const numberInputClass = 'h-7 px-2 py-1 text-sm';
 
 /** 与 Input 同款样式的 textarea，项目暂无 Textarea shadcn 组件，本地复用样式 */
 const textareaClass =
   'w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30';
-
-function NumberInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
-      <Input
-        type="number"
-        className="h-7 px-2 py-1 text-sm"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-    </div>
-  );
-}
 
 function TextInput({
   label,
@@ -112,27 +95,34 @@ function PositionFields({
           label="X"
           value={position.x}
           onChange={(v) => onUpdate({ position: { ...position, x: v } })}
+          className={numberInputClass}
         />
         <NumberInput
           label="Y"
           value={position.y}
           onChange={(v) => onUpdate({ position: { ...position, y: v } })}
+          className={numberInputClass}
         />
         <NumberInput
           label="宽"
           value={position.width}
+          min={1}
           onChange={(v) => onUpdate({ position: { ...position, width: v } })}
+          className={numberInputClass}
         />
         <NumberInput
           label="高"
           value={position.height}
+          min={1}
           onChange={(v) => onUpdate({ position: { ...position, height: v } })}
+          className={numberInputClass}
         />
         {position.rotation != null && position.rotation !== 0 && (
           <NumberInput
             label="旋转"
             value={position.rotation}
             onChange={(v) => onUpdate({ position: { ...position, rotation: v } })}
+            className={numberInputClass}
           />
         )}
       </div>
@@ -159,12 +149,19 @@ function StyleFields({
       <NumberInput
         label="透明度"
         value={style.opacity ?? 1}
-        onChange={(v) => onUpdate({ style: { ...style, opacity: Math.min(1, Math.max(0, v)) } })}
+        step={0.1}
+        shiftStep={0.5}
+        min={0}
+        max={1}
+        onChange={(v) => onUpdate({ style: { ...style, opacity: v } })}
+        className={numberInputClass}
       />
       <NumberInput
         label="边框"
         value={style.borderWidth ?? 0}
+        min={0}
         onChange={(v) => onUpdate({ style: { ...style, borderWidth: v } })}
+        className={numberInputClass}
       />
       <ColorInput
         label="边框色"
@@ -174,7 +171,9 @@ function StyleFields({
       <NumberInput
         label="圆角"
         value={style.borderRadius ?? 0}
+        min={0}
         onChange={(v) => onUpdate({ style: { ...style, borderRadius: v } })}
+        className={numberInputClass}
       />
     </div>
   );
@@ -203,7 +202,9 @@ function TextPropsFields({
       <NumberInput
         label="字号"
         value={style.fontSize ?? 14}
+        min={1}
         onChange={(v) => onUpdate({ style: { ...style, fontSize: v } })}
+        className={numberInputClass}
       />
       <ColorInput
         label="字色"
@@ -260,8 +261,20 @@ function CanvasSettingsFields({
   return (
     <div className="space-y-2">
       <div className="text-xs font-medium text-foreground">画布设置</div>
-      <NumberInput label="宽度" value={canvas.width} onChange={(v) => onUpdate({ width: v })} />
-      <NumberInput label="高度" value={canvas.height} onChange={(v) => onUpdate({ height: v })} />
+      <NumberInput
+        label="宽度"
+        value={canvas.width}
+        min={1}
+        onChange={(v) => onUpdate({ width: v })}
+        className={numberInputClass}
+      />
+      <NumberInput
+        label="高度"
+        value={canvas.height}
+        min={1}
+        onChange={(v) => onUpdate({ height: v })}
+        className={numberInputClass}
+      />
       <ColorInput
         label="背景"
         value={canvas.backgroundColor}
@@ -397,7 +410,10 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
 }
 
 export function PropertyPanel() {
-  const project = useScreenEditorStore((s) => s.project);
+  // 细粒度订阅：仅当 components 数组引用变化时重渲染（拖拽 onDragEnd / onResizeEnd 通过
+  // updateComponent 创建新数组引用，确保属性面板数值实时同步，肉眼无滞后）
+  const components = useScreenEditorStore((s) => s.project?.components);
+  const canvas = useScreenEditorStore((s) => s.project?.canvas);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateCanvas = useScreenEditorStore((s) => s.updateCanvas);
@@ -406,10 +422,10 @@ export function PropertyPanel() {
   const singleSelectedId = selectedComponentIds.length === 1 ? selectedComponentIds[0] : null;
   const selectedComponent = useMemo(
     () =>
-      project && singleSelectedId
-        ? project.components.find((c) => c.id === singleSelectedId)
+      components && singleSelectedId
+        ? components.find((c) => c.id === singleSelectedId)
         : undefined,
-    [project, singleSelectedId],
+    [components, singleSelectedId],
   );
 
   const handleComponentUpdate = useCallback(
@@ -421,7 +437,7 @@ export function PropertyPanel() {
     [singleSelectedId, updateComponent],
   );
 
-  if (!project) return null;
+  if (!components || !canvas) return null;
 
   const isMultiSelect = selectedComponentIds.length > 1;
 
@@ -458,7 +474,7 @@ export function PropertyPanel() {
         ) : isMultiSelect ? (
           <MultiSelectPanel selectedIds={selectedComponentIds} />
         ) : (
-          <CanvasSettingsFields canvas={project.canvas} onUpdate={updateCanvas} />
+          <CanvasSettingsFields canvas={canvas} onUpdate={updateCanvas} />
         )}
       </div>
     </div>
