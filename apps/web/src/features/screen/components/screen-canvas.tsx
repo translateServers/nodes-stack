@@ -131,6 +131,7 @@ export function ScreenCanvas({
   const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
   const guides = useScreenEditorStore((s) => s.guides);
+  const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
 
   // 从独立 store 获取 setDimension，避免拖拽高频回调触发画布重渲染
   const setDimension = useDimensionStore((s) => s.setDimension);
@@ -324,7 +325,7 @@ export function ScreenCanvas({
           draggable
           resizable
           rotatable
-          snappable
+          snappable={snapEnabled}
           keepRatio={shiftHeld}
           throttleRotate={shiftHeld ? 15 : 0}
           hideChildMoveableDefaultLines={isGroupSelect}

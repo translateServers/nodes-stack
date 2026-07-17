@@ -1,0 +1,5 @@
+{
+"**/*.{js,jsx,tsx,ts,css,less}": ["npx @biomejs/biome check --write"],
+"src/**/*.md": ["npx @biomejs/biome check --write"],
+"package.json": ["npx sort-package-json"]
+}

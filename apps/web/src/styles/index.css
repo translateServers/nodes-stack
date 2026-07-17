@@ -128,3 +128,65 @@
     @apply font-sans;
   }
 }
+
+/* ============================================================
+ * 全局滚动条样式
+ *
+ * 设计原则：
+ * 1. 融入项目 OKLCH 主题色体系（hue 290 紫色系），通过 CSS 变量自适应亮/暗模式
+ * 2. 细而优雅（10px 宽），不抢眼但可用
+ * 3. 三态反馈：default（半透明）→ hover（明显）→ active（primary 色）
+ * 4. 轨道透明，减少视觉噪音
+ * 5. 圆角与 --radius 变量保持一致
+ * 6. 支持 Firefox（scrollbar-color）+ Webkit/Blink（::-webkit-scrollbar）
+ * 7. 尊重 prefers-reduced-motion，禁用过渡动画
+ * ============================================================ */
+
+/* Firefox：scrollbar-width + scrollbar-color */
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 50%, transparent) transparent;
+  }
+}
+
+/* Webkit/Blink（Chrome、Edge、Safari） */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
+    border-radius: var(--radius-md);
+    /* 2px 边距让滑块不贴边，视觉更精致 */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background-color 200ms ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--muted-foreground) 80%, transparent);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--primary);
+  }
+
+  /* 双方向交汇处的方角块，保持与滑块一致的圆角风格 */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* 尊重用户的减弱动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  ::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+}

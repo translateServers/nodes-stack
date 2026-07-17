@@ -28,6 +28,13 @@ interface ScreenEditorData {
   clipboard: ScreenComponent[] | null;
   /** 粘贴次数计数器，用于累加偏移避免重叠 */
   pasteCount: number;
+  /** 吸附开关：控制 Moveable 的 snappable 行为（会话级，不持久化） */
+  snapEnabled: boolean;
+  /**
+   * 原生事件触发开关：编辑模式下是否允许组件触发原生 onClick/onHover 等事件。
+   * 默认关闭（编辑模式下仅响应拖拽/选中），开启时用于调试组件交互。
+   */
+  nativeEventEnabled: boolean;
 }
 
 interface ScreenEditorActions {
@@ -84,6 +91,10 @@ interface ScreenEditorActions {
   groupSelected: () => void;
   /** 解组：清除选中组件的 parentId */
   ungroupSelected: () => void;
+  /** 切换吸附开关 */
+  toggleSnap: () => void;
+  /** 切换原生事件触发开关 */
+  toggleNativeEvent: () => void;
 }
 
 export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
@@ -100,6 +111,8 @@ const initialData: ScreenEditorData = {
   history: { past: [], future: [] },
   clipboard: null,
   pasteCount: 0,
+  snapEnabled: true,
+  nativeEventEnabled: false,
 };
 
 function pushHistory(set: (fn: (state: ScreenEditorState) => Partial<ScreenEditorState>) => void) {
@@ -772,6 +785,24 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
           },
           false,
           'ungroupSelected',
+        );
+      },
+
+      toggleSnap: () => {
+        set(
+          (state: ScreenEditorState) => ({ snapEnabled: !state.snapEnabled }),
+          false,
+          'toggleSnap',
+        );
+      },
+
+      toggleNativeEvent: () => {
+        set(
+          (state: ScreenEditorState) => ({
+            nativeEventEnabled: !state.nativeEventEnabled,
+          }),
+          false,
+          'toggleNativeEvent',
         );
       },
     }),

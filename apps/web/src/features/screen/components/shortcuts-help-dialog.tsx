@@ -17,7 +17,7 @@ import {
 import {
   SHORTCUTS_REGISTRY,
   SHORTCUT_CATEGORY_LABELS,
-  isMac,
+  formatKeys,
   type ShortcutCategory,
   type ShortcutDefinition,
 } from '../hooks/shortcuts-registry';
@@ -25,32 +25,6 @@ import {
 interface ShortcutsHelpDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-/**
- * 将键位表达式渲染为可读的按键序列。
- * 例：'mod+shift+z' → ['Ctrl', 'Shift', 'Z']（Win）或 ['⌘', 'Shift', 'Z']（Mac）
- * 多个键位用逗号分隔时只显示第一个（如 'delete,backspace' → ['Delete']）
- */
-function formatKeys(keys: string): string[] {
-  const mac = isMac();
-  const first = keys.split(',')[0]?.trim() ?? '';
-  return first.split('+').map((k) => {
-    const key = k.trim();
-    switch (key) {
-      case 'mod':
-        return mac ? '⌘' : 'Ctrl';
-      case 'shift':
-        return 'Shift';
-      case 'alt':
-        return mac ? 'Option' : 'Alt';
-      case 'ctrl':
-        return mac ? '⌃' : 'Ctrl';
-      default:
-        // 单字母大写显示
-        return key.length === 1 ? key.toUpperCase() : key;
-    }
-  });
 }
 
 function KeyBadge({ keyName }: { keyName: string }) {

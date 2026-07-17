@@ -1,146 +1,518 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Copy, Trash2, Lock, Unlock, EyeOff, ArrowUpToLine, ArrowDownToLine } from 'lucide-react';
-import { useScreenEditorStore } from '../stores/editor-store';
-import type { ScreenComponent } from '@nebula/shared';
+/**
+ * 画布右键菜单（上下文菜单）
+ *
+ * 基于 Radix ContextMenu 实现双场景菜单：
+ * - 组件菜单：右键命中组件时显示（7 组：剪贴板/删除/状态/层级/对齐/分布/成组）
+ * - 画布菜单：右键画布空白处时显示（4 组：粘贴/全选/缩放/画布设置）
+ *
+ * 包裹式组件：用 ContextMenuTrigger asChild 包裹画布容器，
+ * 在 onContextMenu 事件中判断目标是组件还是画布空白，切换 mode。
+ */
 
-interface ContextMenuState {
-  visible: boolean;
-  x: number;
-  y: number;
-  componentId: string | null;
+import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
+import type { MouseEventHandler, ReactElement } from 'react';
+import {
+  Copy,
+  ClipboardPaste,
+  CopyPlus,
+  Trash2,
+  Lock,
+  Unlock,
+  EyeOff,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignStartVertical,
+  AlignCenterVertical,
+  AlignEndVertical,
+  AlignHorizontalDistributeCenter,
+  AlignVerticalDistributeCenter,
+  Group,
+  Ungroup,
+  BoxSelect,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
+import type { ScreenComponent } from '@nebula/shared';
+import { useScreenEditorStore } from '../stores/editor-store';
+import { ShortcutBadge } from './shortcut-badge';
+import { getShortcutKeys } from '../hooks/shortcuts-registry';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+
+interface CanvasContextMenuProps {
+  onShowCanvasSettings: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFitToScreen: () => void;
+  children: React.ReactNode;
 }
 
-const initialState: ContextMenuState = { visible: false, x: 0, y: 0, componentId: null };
+/** 菜单项的图标 + 文本 + 快捷键徽章组合 */
+function MenuItemContent({
+  icon: Icon,
+  label,
+  shortcutId,
+}: {
+  icon: LucideIcon;
+  label: string;
+  shortcutId?: string;
+}) {
+  const keys = shortcutId ? getShortcutKeys(shortcutId) : null;
+  return (
+    <>
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
+      <span className="flex-1 truncate whitespace-nowrap">{label}</span>
+      {keys && <ShortcutBadge keys={keys} />}
+    </>
+  );
+}
 
-function getComponentIdFromEvent(e: MouseEvent): string | null {
-  let target = e.target as HTMLElement | null;
-  while (target) {
-    const id = target.getAttribute('data-component-id');
+/** 从 DOM 元素向上查找 data-component-id */
+function getComponentIdFromElement(el: HTMLElement | null): string | null {
+  let current: HTMLElement | null = el;
+  while (current) {
+    const id = current.getAttribute('data-component-id');
     if (id) return id;
-    target = target.parentElement;
+    current = current.parentElement;
   }
   return null;
 }
 
-export function CanvasContextMenu({
-  containerRef,
-}: {
-  containerRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const [menu, setMenu] = useState<ContextMenuState>(initialState);
+/** 组件菜单：右键命中组件时显示 */
+function ComponentMenuItems() {
+  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  const project = useScreenEditorStore((s) => s.project);
+  const clipboard = useScreenEditorStore((s) => s.clipboard);
 
-  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
+  const copySelectedToClipboard = useScreenEditorStore((s) => s.copySelectedToClipboard);
+  const pasteFromClipboard = useScreenEditorStore((s) => s.pasteFromClipboard);
   const duplicateSelected = useScreenEditorStore((s) => s.duplicateSelected);
   const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
   const setLocked = useScreenEditorStore((s) => s.setLocked);
   const setHidden = useScreenEditorStore((s) => s.setHidden);
   const reorderToTop = useScreenEditorStore((s) => s.reorderToTop);
   const reorderToBottom = useScreenEditorStore((s) => s.reorderToBottom);
+  const alignSelectedHorizontal = useScreenEditorStore((s) => s.alignSelectedHorizontal);
+  const alignSelectedVertical = useScreenEditorStore((s) => s.alignSelectedVertical);
+  const distributeSelectedHorizontal = useScreenEditorStore((s) => s.distributeSelectedHorizontal);
+  const distributeSelectedVertical = useScreenEditorStore((s) => s.distributeSelectedVertical);
+  const groupSelected = useScreenEditorStore((s) => s.groupSelected);
+  const ungroupSelected = useScreenEditorStore((s) => s.ungroupSelected);
 
-  const close = useCallback(() => setMenu(initialState), []);
+  const selectedCount = selectedComponentIds.length;
+  const hasSelection = selectedCount > 0;
+  const canAlign = selectedCount >= 2;
+  const canDistribute = selectedCount >= 3;
+  const canGroup = selectedCount >= 2;
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
+  const selectedComponents: ScreenComponent[] = project
+    ? project.components.filter((c: ScreenComponent) => selectedComponentIds.includes(c.id))
+    : [];
+  const allLocked = selectedComponents.every((c: ScreenComponent) => c.status.locked);
+  const hasGrouped = selectedComponents.some((c: ScreenComponent) => c.parentId);
 
-    const handleContextMenu = (e: MouseEvent) => {
-      const compId = getComponentIdFromEvent(e);
-      if (compId) {
-        e.preventDefault();
+  return (
+    <>
+      {/* 剪贴板 */}
+      <ContextMenuGroup>
+        <ContextMenuItem onSelect={copySelectedToClipboard} disabled={!hasSelection}>
+          <MenuItemContent icon={Copy} label="复制" shortcutId="copy" />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={pasteFromClipboard} disabled={!clipboard}>
+          <MenuItemContent icon={ClipboardPaste} label="粘贴" shortcutId="paste" />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={duplicateSelected} disabled={!hasSelection}>
+          <MenuItemContent icon={CopyPlus} label="创建副本" shortcutId="duplicate" />
+        </ContextMenuItem>
+      </ContextMenuGroup>
+      <ContextMenuSeparator />
+      {/* 删除 */}
+      <ContextMenuItem
+        onSelect={removeSelectedComponents}
+        disabled={!hasSelection}
+        variant="destructive"
+      >
+        <MenuItemContent icon={Trash2} label="删除选中" shortcutId="delete" />
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      {/* 状态 */}
+      <ContextMenuGroup>
+        <ContextMenuItem onSelect={() => setLocked(selectedComponentIds, !allLocked)}>
+          {allLocked ? (
+            <Unlock className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <Lock className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <span className="flex-1 truncate whitespace-nowrap">{allLocked ? '解锁' : '锁定'}</span>
+          <ShortcutBadge keys={getShortcutKeys('lock') ?? ''} />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => setHidden(selectedComponentIds, true)}>
+          <EyeOff className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 truncate whitespace-nowrap">隐藏</span>
+          <ShortcutBadge keys={getShortcutKeys('hide') ?? ''} />
+        </ContextMenuItem>
+      </ContextMenuGroup>
+      <ContextMenuSeparator />
+      {/* 层级 */}
+      <ContextMenuGroup>
+        <ContextMenuItem
+          onSelect={() => {
+            for (const id of selectedComponentIds) reorderToTop(id);
+          }}
+          disabled={allLocked}
+        >
+          <MenuItemContent icon={ArrowUpToLine} label="置于顶层" shortcutId="bringToFront" />
+        </ContextMenuItem>
+        <ContextMenuItem
+          onSelect={() => {
+            for (const id of selectedComponentIds) reorderToBottom(id);
+          }}
+          disabled={allLocked}
+        >
+          <MenuItemContent icon={ArrowDownToLine} label="置于底层" shortcutId="sendToBack" />
+        </ContextMenuItem>
+      </ContextMenuGroup>
+      <ContextMenuSeparator />
+      {/* 对齐子菜单 */}
+      <ContextMenuSub>
+        <ContextMenuSubTrigger disabled={!canAlign || allLocked}>
+          <AlignLeft className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 truncate whitespace-nowrap">对齐</span>
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent className="w-48">
+          <ContextMenuItem onSelect={() => alignSelectedHorizontal('left')}>
+            <MenuItemContent icon={AlignLeft} label="左对齐" shortcutId="alignLeft" />
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => alignSelectedHorizontal('center')}>
+            <MenuItemContent icon={AlignCenter} label="水平居中" shortcutId="alignCenterH" />
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => alignSelectedHorizontal('right')}>
+            <MenuItemContent icon={AlignRight} label="右对齐" shortcutId="alignRight" />
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={() => alignSelectedVertical('top')}>
+            <MenuItemContent icon={AlignStartVertical} label="顶对齐" shortcutId="alignTop" />
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => alignSelectedVertical('middle')}>
+            <MenuItemContent
+              icon={AlignCenterVertical}
+              label="垂直居中"
+              shortcutId="alignMiddleV"
+            />
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => alignSelectedVertical('bottom')}>
+            <MenuItemContent icon={AlignEndVertical} label="底对齐" shortcutId="alignBottom" />
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      {/* 分布子菜单 */}
+      <ContextMenuSub>
+        <ContextMenuSubTrigger disabled={!canDistribute || allLocked}>
+          <AlignHorizontalDistributeCenter className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1 truncate whitespace-nowrap">分布</span>
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent className="w-48">
+          <ContextMenuItem onSelect={distributeSelectedHorizontal}>
+            <MenuItemContent
+              icon={AlignHorizontalDistributeCenter}
+              label="水平分布"
+              shortcutId="distributeH"
+            />
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={distributeSelectedVertical}>
+            <MenuItemContent
+              icon={AlignVerticalDistributeCenter}
+              label="垂直分布"
+              shortcutId="distributeV"
+            />
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
+      <ContextMenuSeparator />
+      {/* 成组 */}
+      <ContextMenuGroup>
+        <ContextMenuItem onSelect={groupSelected} disabled={!canGroup || allLocked}>
+          <MenuItemContent icon={Group} label="成组" shortcutId="group" />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={ungroupSelected} disabled={!hasGrouped}>
+          <MenuItemContent icon={Ungroup} label="解除成组" shortcutId="ungroup" />
+        </ContextMenuItem>
+      </ContextMenuGroup>
+    </>
+  );
+}
+
+/** 画布菜单：右键画布空白处时显示 */
+function CanvasMenuItems({
+  onShowCanvasSettings,
+  onZoomIn,
+  onZoomOut,
+  onFitToScreen,
+}: {
+  onShowCanvasSettings: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFitToScreen: () => void;
+}) {
+  const clipboard = useScreenEditorStore((s) => s.clipboard);
+  const project = useScreenEditorStore((s) => s.project);
+  const selectComponents = useScreenEditorStore((s) => s.selectComponents);
+  const pasteFromClipboard = useScreenEditorStore((s) => s.pasteFromClipboard);
+
+  const handleSelectAll = useCallback(() => {
+    if (!project) return;
+    selectComponents(project.components.map((c: ScreenComponent) => c.id));
+  }, [project, selectComponents]);
+
+  return (
+    <>
+      {/* 剪贴板 */}
+      <ContextMenuItem onSelect={pasteFromClipboard} disabled={!clipboard}>
+        <MenuItemContent icon={ClipboardPaste} label="粘贴" shortcutId="paste" />
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      {/* 选择 */}
+      <ContextMenuItem onSelect={handleSelectAll} disabled={!project}>
+        <MenuItemContent icon={BoxSelect} label="全选" shortcutId="selectAll" />
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      {/* 视图 */}
+      <ContextMenuGroup>
+        <ContextMenuItem onSelect={onZoomIn}>
+          <MenuItemContent icon={ZoomIn} label="放大" shortcutId="zoomIn" />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onZoomOut}>
+          <MenuItemContent icon={ZoomOut} label="缩小" shortcutId="zoomOut" />
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onFitToScreen}>
+          <MenuItemContent icon={Maximize} label="适应屏幕" shortcutId="fitToScreen" />
+        </ContextMenuItem>
+      </ContextMenuGroup>
+      <ContextMenuSeparator />
+      {/* 画布配置 */}
+      <ContextMenuItem onSelect={onShowCanvasSettings} disabled={!project}>
+        <Settings className="size-4 shrink-0 text-muted-foreground" />
+        <span className="flex-1 truncate whitespace-nowrap">画布设置...</span>
+      </ContextMenuItem>
+    </>
+  );
+}
+
+export function CanvasContextMenu({
+  onShowCanvasSettings,
+  onZoomIn,
+  onZoomOut,
+  onFitToScreen,
+  children,
+}: CanvasContextMenuProps) {
+  const [mode, setMode] = useState<'component' | 'canvas'>('canvas');
+  const [open, setOpen] = useState(false);
+  const [menuKey, setMenuKey] = useState(0);
+  const openRef = useRef(false);
+  const redispatchedRef = useRef(false);
+  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
+
+  const handleOpenChange = useCallback((next: boolean) => {
+    openRef.current = next;
+    setOpen(next);
+  }, []);
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const compId = getComponentIdFromElement(e.target as HTMLElement);
+      const currentSelected = useScreenEditorStore.getState().selectedComponentIds;
+
+      if (compId && !currentSelected.includes(compId)) {
         selectComponent(compId);
-        setMenu({ visible: true, x: e.clientX, y: e.clientY, componentId: compId });
+      }
+
+      setMode(compId || currentSelected.length > 0 ? 'component' : 'canvas');
+    },
+    [selectComponent],
+  );
+
+  // 解决"菜单已打开时再次右键，菜单停留在旧位置"的问题。
+  //
+  // 根因分析：
+  // 1. 快速右键时 pointerdown→contextmenu 间隔约 30ms，Radix Presence 因退出动画
+  //    （duration-100）保持旧 Content 在 DOM 中未卸载。
+  // 2. DismissableLayer 在 pointerdown 捕获阶段触发异步关闭，与 Radix Trigger 的
+  //    contextmenu 处理产生竞态——新 contextmenu 到达时 open 状态尚未完成切换，
+  //    Radix 认为菜单仍处于 open=true 状态，跳过锚点坐标更新，直接复用旧位置。
+  //
+  // 修复策略：
+  // 在 document 的 contextmenu 捕获阶段拦截：若菜单已打开且点击目标不在菜单内部，
+  // 则阻止原生事件继续传播，同步关闭菜单，等待双 rAF 确保 DOM 完全清理后，
+  // 重新派发一套完整的指针事件序列触发全新打开，强制 Radix 使用新坐标定位。
+  // 使用 redispatchedRef 标记重派事件，避免无限拦截循环。
+  // 同时在 pointerdown 捕获阶段提前隐藏旧菜单，避免视觉残留。
+  useEffect(() => {
+    const dispatchRightClickAt = (x: number, y: number) => {
+      const target = document.elementFromPoint(x, y) ?? document.body;
+      redispatchedRef.current = true;
+
+      const pointerDown = new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        buttons: 2,
+        clientX: x,
+        clientY: y,
+        pointerType: 'mouse',
+        pointerId: 1,
+        isPrimary: true,
+        view: window,
+      });
+      target.dispatchEvent(pointerDown);
+
+      const mouseDown = new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: x,
+        clientY: y,
+        view: window,
+      });
+      target.dispatchEvent(mouseDown);
+
+      const pointerUp = new PointerEvent('pointerup', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        buttons: 0,
+        clientX: x,
+        clientY: y,
+        pointerType: 'mouse',
+        pointerId: 1,
+        isPrimary: true,
+        view: window,
+      });
+      target.dispatchEvent(pointerUp);
+
+      const mouseUp = new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: x,
+        clientY: y,
+        view: window,
+      });
+      target.dispatchEvent(mouseUp);
+
+      const contextMenu = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: x,
+        clientY: y,
+        view: window,
+      });
+      target.dispatchEvent(contextMenu);
+
+      queueMicrotask(() => {
+        redispatchedRef.current = false;
+      });
+    };
+
+    const handleContextMenuCapture = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      if (redispatchedRef.current) return;
+      if (!openRef.current) return;
+      if (e.target instanceof Element && e.target.closest('[data-slot="context-menu-content"]'))
+        return;
+
+      e.stopImmediatePropagation();
+      e.preventDefault();
+
+      const x = e.clientX;
+      const y = e.clientY;
+
+      const existingContent = document.querySelector('[data-slot="context-menu-content"]');
+      if (existingContent instanceof HTMLElement) {
+        existingContent.style.setProperty('animation', 'none', 'important');
+        existingContent.style.setProperty('transition', 'none', 'important');
+        existingContent.style.setProperty('opacity', '0', 'important');
+        existingContent.style.pointerEvents = 'none';
+      }
+
+      flushSync(() => {
+        openRef.current = false;
+        setOpen(false);
+        setMenuKey((k) => k + 1);
+      });
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          dispatchRightClickAt(x, y);
+        });
+      });
+    };
+
+    const handlePointerDownCapture = (e: PointerEvent) => {
+      if (e.button !== 2) return;
+      if (!openRef.current || redispatchedRef.current) return;
+      if (e.target instanceof Element && e.target.closest('[data-slot="context-menu-content"]'))
+        return;
+
+      const existingContent = document.querySelector('[data-slot="context-menu-content"]');
+      if (existingContent instanceof HTMLElement) {
+        existingContent.style.setProperty('animation', 'none', 'important');
+        existingContent.style.setProperty('transition', 'none', 'important');
+        existingContent.style.setProperty('opacity', '0', 'important');
+        existingContent.style.pointerEvents = 'none';
       }
     };
 
-    el.addEventListener('contextmenu', handleContextMenu);
-    return () => el.removeEventListener('contextmenu', handleContextMenu);
-  }, [containerRef, selectComponent]);
+    document.addEventListener('contextmenu', handleContextMenuCapture, true);
+    document.addEventListener('pointerdown', handlePointerDownCapture, true);
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenuCapture, true);
+      document.removeEventListener('pointerdown', handlePointerDownCapture, true);
+    };
+  }, []);
 
-  useEffect(() => {
-    if (!menu.visible) return;
-    const handleClick = () => close();
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
-  }, [menu.visible, close]);
-
-  if (!menu.visible || !menu.componentId) return null;
-
-  const id = menu.componentId;
-  const project = useScreenEditorStore.getState().project;
-  const comp = project?.components.find((c: ScreenComponent) => c.id === id);
-
-  const items = [
-    {
-      label: '复制',
-      icon: Copy,
-      action: () => {
-        selectComponent(id);
-        duplicateSelected();
-      },
+  const child = (isValidElement(children) ? children : <div>{children}</div>) as ReactElement<{
+    onContextMenu?: MouseEventHandler<HTMLDivElement>;
+  }>;
+  const originalHandler = child.props.onContextMenu;
+  const trigger = cloneElement(child, {
+    onContextMenu: (e: React.MouseEvent<HTMLDivElement>) => {
+      originalHandler?.(e);
+      handleContextMenu(e);
     },
-    {
-      label: '删除',
-      icon: Trash2,
-      action: () => {
-        selectComponent(id);
-        removeSelectedComponents();
-      },
-    },
-    { type: 'divider' as const },
-    {
-      label: comp?.status.locked ? '解锁' : '锁定',
-      icon: comp?.status.locked ? Unlock : Lock,
-      action: () => setLocked([id], !comp?.status.locked),
-    },
-    {
-      label: '隐藏',
-      icon: EyeOff,
-      action: () => setHidden([id], true),
-    },
-    { type: 'divider' as const },
-    {
-      label: '置于顶层',
-      icon: ArrowUpToLine,
-      action: () => reorderToTop(id),
-    },
-    {
-      label: '置于底层',
-      icon: ArrowDownToLine,
-      action: () => reorderToBottom(id),
-    },
-  ];
+  });
 
   return (
-    <div
-      className="fixed z-[10000] min-w-40 rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg"
-      style={{ left: menu.x, top: menu.y }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {items.map((item, i) => {
-        if ('type' in item && item.type === 'divider') {
-          return <div key={`div-${i}`} className="my-1 border-t border-border" />;
-        }
-        const menuItem = item as {
-          label: string;
-          icon: React.ComponentType<{ className?: string }>;
-          action: () => void;
-        };
-        const Icon = menuItem.icon;
-        return (
-          <button
-            key={menuItem.label}
-            type="button"
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
-            onClick={() => {
-              menuItem.action();
-              close();
-            }}
-          >
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            {menuItem.label}
-          </button>
-        );
-      })}
-    </div>
+    <ContextMenu key={menuKey} open={open} onOpenChange={handleOpenChange}>
+      <ContextMenuTrigger asChild>{trigger}</ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        {mode === 'component' ? (
+          <ComponentMenuItems />
+        ) : (
+          <CanvasMenuItems
+            onShowCanvasSettings={onShowCanvasSettings}
+            onZoomIn={onZoomIn}
+            onZoomOut={onZoomOut}
+            onFitToScreen={onFitToScreen}
+          />
+        )}
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

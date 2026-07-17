@@ -296,8 +296,41 @@ export function getShortcutById(id: string): ShortcutDefinition | undefined {
   return SHORTCUTS_REGISTRY.find((s) => s.id === id);
 }
 
+/** 根据 id 获取快捷键表达式（如 'mod+s'），未找到返回 null */
+export function getShortcutKeys(id: string): string | null {
+  return getShortcutById(id)?.keys ?? null;
+}
+
 /** 判断当前是否为 macOS（用于帮助面板渲染 mod 键的展示形式） */
 export function isMac(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Mac|iPod|iPhone|iPad/i.test(navigator.platform);
+}
+
+/**
+ * 将键位表达式渲染为可读的按键序列。
+ * 例：'mod+shift+z' → ['Ctrl', 'Shift', 'Z']（Win）或 ['⌘', 'Shift', 'Z']（Mac）
+ * 多个键位用逗号分隔时只显示第一个（如 'delete,backspace' → ['Delete']）
+ *
+ * 共享给 shortcuts-help-dialog、菜单项 ShortcutBadge 等，避免重复实现。
+ */
+export function formatKeys(keys: string): string[] {
+  const mac = isMac();
+  const first = keys.split(',')[0]?.trim() ?? '';
+  return first.split('+').map((k) => {
+    const key = k.trim();
+    switch (key) {
+      case 'mod':
+        return mac ? '⌘' : 'Ctrl';
+      case 'shift':
+        return 'Shift';
+      case 'alt':
+        return mac ? 'Option' : 'Alt';
+      case 'ctrl':
+        return mac ? '⌃' : 'Ctrl';
+      default:
+        // 单字母大写显示
+        return key.length === 1 ? key.toUpperCase() : key;
+    }
+  });
 }

@@ -1,27 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import {
-  ArrowLeft,
-  Save,
-  Eye,
-  Undo2,
-  Redo2,
-  Minus,
-  Plus,
-  Maximize,
-  Layers,
-  Package,
-  Moon,
-  Sun,
-  Ruler,
-  Lock,
-  Unlock,
-  Trash2,
-  Keyboard,
-} from 'lucide-react';
+import { ArrowLeft, Save, Layers, Package } from 'lucide-react';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { useScreenEditorStore } from '../stores/editor-store';
-import { useUiStore } from '@/store';
 import { ScreenCanvas } from '../components/screen-canvas';
 import { ComponentLibrary, useCanvasDrop } from '../components/component-library';
 import { PropertyPanel } from '../components/property-panel';
@@ -29,22 +10,21 @@ import { LayerPanel } from '../components/layer-panel';
 import { CanvasContextMenu } from '../components/canvas-context-menu';
 import { CanvasRulers, type RulersHandle } from '../components/canvas-rulers';
 import { CanvasGuides } from '../components/canvas-guides';
+import { CanvasStatusBar } from './canvas-status-bar';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { useToolStateMachine } from '../hooks/use-tool-state-machine';
 import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
+import { ProjectMenubar } from './project-menubar';
+import { CanvasSettingsDialog } from './canvas-settings-dialog';
+import { ImportDialog } from './import-dialog';
+import { SnapshotManagerDialog } from './snapshot-manager-dialog';
+import { EventBlueprintSheet } from './event-blueprint-sheet';
+import { CodeEditorSheet } from './code-editor-sheet';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-const ZOOM_PRESETS = [25, 50, 75, 100, 125, 150, 200];
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { toast } from 'sonner';
 
 export function ScreenEditor() {
   const { id } = useParams({ from: '/screen/$id' });
@@ -60,22 +40,16 @@ export function ScreenEditor() {
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
-  const canUndo = useScreenEditorStore((s) => s.history.past.length > 0);
-  const canRedo = useScreenEditorStore((s) => s.history.future.length > 0);
-  const undo = useScreenEditorStore((s) => s.undo);
-  const redo = useScreenEditorStore((s) => s.redo);
-  const guides = useScreenEditorStore((s) => s.guides);
-  const toggleGuidesVisibility = useScreenEditorStore((s) => s.toggleGuidesVisibility);
-  const clearGuides = useScreenEditorStore((s) => s.clearGuides);
-  const toggleGuidesLock = useScreenEditorStore((s) => s.toggleGuidesLock);
-
-  const theme = useUiStore((s) => s.theme);
-  const setTheme = useUiStore((s) => s.setTheme);
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const rulersRef = useRef<RulersHandle>(null);
   const [activeTab, setActiveTab] = useState<'library' | 'layers'>('library');
   const [showHelp, setShowHelp] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [showSnapshotManager, setShowSnapshotManager] = useState(false);
+  const [showCanvasSettings, setShowCanvasSettings] = useState(false);
+  const [showEventBlueprint, setShowEventBlueprint] = useState(false);
+  const [showCodeEditor, setShowCodeEditor] = useState(false);
   const toolStateMachine = useToolStateMachine();
 
   useEffect(() => {
@@ -105,6 +79,26 @@ export function ScreenEditor() {
   const handlePreview = useCallback(() => {
     window.open(`/screen-preview/${id}`, '_blank');
   }, [id]);
+
+  /** 导出当前项目为 JSON 文件，由浏览器直接触发下载 */
+  const handleExport = useCallback(() => {
+    if (!storeProject) return;
+    try {
+      const json = JSON.stringify(storeProject, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${storeProject.name}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success(`已导出 ${storeProject.name}.json`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '导出失败');
+    }
+  }, [storeProject]);
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
 
@@ -153,7 +147,7 @@ export function ScreenEditor() {
       <div className="flex h-screen flex-col bg-background text-foreground">
         {/* Toolbar */}
         <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
-          <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/screen' })}>
+          <Button variant="ghost" size="sm" onClick={() => void navigate({ to: '/screen' })}>
             <ArrowLeft />
             返回
           </Button>
@@ -163,119 +157,25 @@ export function ScreenEditor() {
 
           <Separator orientation="vertical" className="mx-2 h-5" />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={undo} disabled={!canUndo}>
-                <Undo2 />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>撤销 (Ctrl+Z)</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-sm" onClick={redo} disabled={!canRedo}>
-                <Redo2 />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>重做 (Ctrl+Shift+Z)</TooltipContent>
-          </Tooltip>
+          <ProjectMenubar
+            onSave={handleSave}
+            onPublish={handlePublish}
+            onPreview={handlePreview}
+            onShowImport={() => setShowImport(true)}
+            onExport={handleExport}
+            onShowSnapshotManager={() => setShowSnapshotManager(true)}
+            onShowCanvasSettings={() => setShowCanvasSettings(true)}
+            onShowEventBlueprint={() => setShowEventBlueprint(true)}
+            onShowCodeEditor={() => setShowCodeEditor(true)}
+            onShowShortcutsHelp={() => setShowHelp(true)}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onFitToScreen={handleFitToScreen}
+            isSaving={updateMutation.isPending}
+            isPublishing={publishMutation.isPending}
+          />
 
           <div className="flex-1" />
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-sm" onClick={handleZoomOut}>
-                  <Minus />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>缩小</TooltipContent>
-            </Tooltip>
-            <Select
-              value={String(Math.round(canvasScale * 100))}
-              onValueChange={(v) => setCanvasScale(Number(v) / 100)}
-            >
-              <SelectTrigger size="sm" className="w-16 justify-center text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ZOOM_PRESETS.map((s) => (
-                  <SelectItem key={s} value={String(s)}>
-                    {s}%
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-sm" onClick={handleZoomIn}>
-                  <Plus />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>放大</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon-sm" onClick={handleFitToScreen}>
-                  <Maximize />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>适应屏幕</TooltipContent>
-            </Tooltip>
-          </div>
-
-          <Separator orientation="vertical" className="mx-2 h-5" />
-
-          {/* 参考线控制 */}
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={guides.visible ? 'secondary' : 'ghost'}
-                  size="icon-sm"
-                  aria-label="切换参考线显示"
-                  onClick={toggleGuidesVisibility}
-                >
-                  <Ruler />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>参考线 (Ctrl+;)</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="锁定参考线"
-                  onClick={toggleGuidesLock}
-                  disabled={!guides.visible}
-                >
-                  {guides.locked ? <Lock /> : <Unlock />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{guides.locked ? '解锁参考线' : '锁定参考线'}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="清除所有参考线"
-                  onClick={clearGuides}
-                  disabled={
-                    !guides.visible ||
-                    (guides.vertical.length === 0 && guides.horizontal.length === 0)
-                  }
-                >
-                  <Trash2 />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>清除所有参考线</TooltipContent>
-            </Tooltip>
-          </div>
-
-          <Separator orientation="vertical" className="mx-2 h-5" />
 
           <Button onClick={handleSave} disabled={updateMutation.isPending}>
             {updateMutation.isPending ? <Spinner className="size-4" /> : <Save />}
@@ -288,42 +188,6 @@ export function ScreenEditor() {
           >
             发布
           </Button>
-          <Button variant="outline" onClick={handlePreview}>
-            <Eye />
-            预览
-          </Button>
-
-          <Separator orientation="vertical" className="mx-2 h-5" />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="快捷键"
-                onClick={() => setShowHelp(true)}
-              >
-                <Keyboard />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>快捷键 (Ctrl+/)</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="切换主题"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              >
-                {theme === 'dark' ? <Sun /> : <Moon />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'}
-            </TooltipContent>
-          </Tooltip>
         </div>
 
         {/* Editor layout */}
@@ -362,30 +226,48 @@ export function ScreenEditor() {
           </div>
 
           {/* Canvas area with rulers and context menu */}
-          <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
-            <CanvasRulers
-              ref={rulersRef}
-              scale={canvasScale}
-              offset={canvasOffset}
-              canvasWidth={canvasWidth}
-              canvasHeight={canvasHeight}
-              containerRef={canvasContainerRef}
-            />
-            <div className="absolute inset-0" style={{ top: 20, left: 20 }}>
-              <ScreenCanvas onDrop={handleDrop} onDragOver={handleDragOver} />
+          <CanvasContextMenu
+            onShowCanvasSettings={() => setShowCanvasSettings(true)}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onFitToScreen={handleFitToScreen}
+          >
+            <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
+              <CanvasRulers
+                ref={rulersRef}
+                scale={canvasScale}
+                offset={canvasOffset}
+                canvasWidth={canvasWidth}
+                canvasHeight={canvasHeight}
+                containerRef={canvasContainerRef}
+              />
+              <div className="absolute inset-0" style={{ top: 20, left: 20 }}>
+                <ScreenCanvas onDrop={handleDrop} onDragOver={handleDragOver} />
+              </div>
+              <CanvasGuides
+                containerRef={canvasContainerRef}
+                canvasWidth={canvasWidth}
+                canvasHeight={canvasHeight}
+              />
             </div>
-            <CanvasGuides
-              containerRef={canvasContainerRef}
-              canvasWidth={canvasWidth}
-              canvasHeight={canvasHeight}
-            />
-            <CanvasContextMenu containerRef={canvasContainerRef} />
-          </div>
+          </CanvasContextMenu>
 
           <PropertyPanel />
         </div>
+
+        {/* Status bar */}
+        <CanvasStatusBar toolStateMachine={toolStateMachine} />
       </div>
       <ShortcutsHelpDialog open={showHelp} onOpenChange={setShowHelp} />
+      <CanvasSettingsDialog open={showCanvasSettings} onOpenChange={setShowCanvasSettings} />
+      <ImportDialog open={showImport} onOpenChange={setShowImport} currentProjectId={id} />
+      <SnapshotManagerDialog
+        open={showSnapshotManager}
+        onOpenChange={setShowSnapshotManager}
+        projectId={storeProject?.id}
+      />
+      <EventBlueprintSheet open={showEventBlueprint} onOpenChange={setShowEventBlueprint} />
+      <CodeEditorSheet open={showCodeEditor} onOpenChange={setShowCodeEditor} />
     </TooltipProvider>
   );
 }
