@@ -154,7 +154,7 @@ describe('DataTable 新增特性', () => {
       const col: ColumnDef<TestData, unknown> = { accessorKey: 'name', header: 'Name' };
       const wrapped = wrapWithTreeExpand(col);
       expect(wrapped.cell).toBeDefined();
-      expect(wrapped.accessorKey).toBe('name');
+      expect('accessorKey' in wrapped ? wrapped.accessorKey : undefined).toBe('name');
     });
   });
 

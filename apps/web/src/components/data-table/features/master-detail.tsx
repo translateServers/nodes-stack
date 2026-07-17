@@ -43,9 +43,7 @@ export function createExpandButtonColumn<TData>(): ColumnDef<TData, unknown> {
  * 展开行内容通过 DataTableProps.renderExpandedRow 插槽渲染。
  * 此 feature 提供展开按钮列。
  */
-export function createMasterDetailFeature<TData>(
-  enabled: boolean,
-): DataTableFeature<TData> & { getColumnEnhancers: () => ColumnDef<TData, unknown>[] } {
+export function createMasterDetailFeature<TData>(enabled: boolean): DataTableFeature<TData> {
   return {
     id: 'master-detail',
     columnEnhancers: () => (enabled ? [createExpandButtonColumn<TData>()] : []),

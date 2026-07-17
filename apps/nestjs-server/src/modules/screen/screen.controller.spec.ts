@@ -31,7 +31,7 @@ const defaultCanvas = {
   scaleMode: 'fit',
 };
 
-function makeResponse(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function makeResponse(overrides: object = {}): Record<string, unknown> {
   return {
     id: 'project-id',
     name: '测试大屏',
@@ -42,7 +42,7 @@ function makeResponse(overrides: Record<string, unknown> = {}): Record<string, u
     thumbnail: null,
     createdAt: '2025-07-16 10:00:00',
     updatedAt: '2025-07-16 10:00:00',
-    ...overrides,
+    ...(overrides as Record<string, unknown>),
   };
 }
 

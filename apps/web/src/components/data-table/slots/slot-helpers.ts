@@ -18,18 +18,18 @@ export function mergeSlots<TData>(
 
   // feature slots 按顺序合并（后面的覆盖前面的）
   for (const fs of featureSlots) {
-    for (const key of Object.keys(fs) as (keyof DataTableSlots<TData>)[]) {
-      if (fs[key] !== undefined) {
-        merged[key] = fs[key];
+    for (const [key, value] of Object.entries(fs)) {
+      if (value !== undefined) {
+        (merged as Record<string, unknown>)[key] = value;
       }
     }
   }
 
   // user slots 优先级最高
   if (userSlots) {
-    for (const key of Object.keys(userSlots) as (keyof DataTableSlots<TData>)[]) {
-      if (userSlots[key] !== undefined) {
-        merged[key] = userSlots[key];
+    for (const [key, value] of Object.entries(userSlots)) {
+      if (value !== undefined) {
+        (merged as Record<string, unknown>)[key] = value;
       }
     }
   }

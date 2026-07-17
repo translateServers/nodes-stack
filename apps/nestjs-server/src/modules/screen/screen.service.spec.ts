@@ -68,7 +68,9 @@ describe('ScreenService', () => {
     it('should create a screen project with default canvas', async () => {
       const dto: CreateScreenProjectDto = { name: '测试大屏' };
       mockPrismaService.screenProject.findUnique.mockResolvedValue(null);
-      mockPrismaService.screenProject.create.mockResolvedValue(makeScreenProject(dto));
+      mockPrismaService.screenProject.create.mockResolvedValue(
+        makeScreenProject({ name: dto.name }),
+      );
 
       const result = await service.createProject(dto);
 
@@ -169,7 +171,12 @@ describe('ScreenService', () => {
     });
 
     it('should update canvas and components', async () => {
-      const newCanvas = { width: 2560, height: 1440, backgroundColor: '#222', scaleMode: 'fit' };
+      const newCanvas = {
+        width: 2560,
+        height: 1440,
+        backgroundColor: '#222',
+        scaleMode: 'fit' as const,
+      };
       const newComponents = [
         {
           id: 'comp-1',
