@@ -24,6 +24,10 @@ interface ScreenEditorData {
   showBorderGuides: boolean;
   guides: GuidesState;
   history: HistoryState;
+  /** 剪贴板（不入历史栈），保存最近一次复制的组件深拷贝 */
+  clipboard: ScreenComponent[] | null;
+  /** 粘贴次数计数器，用于累加偏移避免重叠 */
+  pasteCount: number;
 }
 
 interface ScreenEditorActions {
@@ -63,6 +67,23 @@ interface ScreenEditorActions {
   canRedo: () => boolean;
   getProject: () => ScreenProject | null;
   getSelectedComponents: () => ScreenComponent[];
+
+  /** 复制选中组件到内存剪贴板（不入历史栈） */
+  copySelectedToClipboard: () => void;
+  /** 从内存剪贴板粘贴（入历史栈，每次偏移累加 20px） */
+  pasteFromClipboard: () => void;
+  /** 水平对齐选中组件（至少 2 个） */
+  alignSelectedHorizontal: (alignment: 'left' | 'center' | 'right') => void;
+  /** 垂直对齐选中组件（至少 2 个） */
+  alignSelectedVertical: (alignment: 'top' | 'middle' | 'bottom') => void;
+  /** 水平等距分布选中组件（至少 3 个） */
+  distributeSelectedHorizontal: () => void;
+  /** 垂直等距分布选中组件（至少 3 个） */
+  distributeSelectedVertical: () => void;
+  /** 成组：为选中组件赋值虚拟 parentId（骨架阶段不渲染组容器） */
+  groupSelected: () => void;
+  /** 解组：清除选中组件的 parentId */
+  ungroupSelected: () => void;
 }
 
 export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
@@ -77,6 +98,8 @@ const initialData: ScreenEditorData = {
   showBorderGuides: false,
   guides: { vertical: [], horizontal: [], visible: true, locked: false },
   history: { past: [], future: [] },
+  clipboard: null,
+  pasteCount: 0,
 };
 
 function pushHistory(set: (fn: (state: ScreenEditorState) => Partial<ScreenEditorState>) => void) {
@@ -546,6 +569,210 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         if (!project) return [];
         const idSet = new Set(selectedComponentIds);
         return project.components.filter((c: ScreenComponent) => idSet.has(c.id));
+      },
+
+      copySelectedToClipboard: () => {
+        const selected = get().getSelectedComponents();
+        if (selected.length === 0) return;
+        // 深拷贝避免后续修改剪贴板内容影响已粘贴的组件
+        set(
+          { clipboard: structuredClone(selected), pasteCount: 0 },
+          false,
+          'copySelectedToClipboard',
+        );
+      },
+
+      pasteFromClipboard: () => {
+        const { clipboard, pasteCount, project } = get();
+        if (!clipboard || clipboard.length === 0 || !project) return;
+        pushHistory(set);
+        // 每次粘贴偏移累加 20px，避免连续粘贴重叠
+        const offset = (pasteCount + 1) * 20;
+        const newComponents: ScreenComponent[] = clipboard.map((c: ScreenComponent) => ({
+          ...structuredClone(c),
+          id: crypto.randomUUID(),
+          name: c.name,
+          position: {
+            ...c.position,
+            x: c.position.x + offset,
+            y: c.position.y + offset,
+          },
+        }));
+        set(
+          (state: ScreenEditorState) => {
+            if (!state.project) return state;
+            return {
+              project: {
+                ...state.project,
+                components: [...state.project.components, ...newComponents],
+              },
+              selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+              pasteCount: state.pasteCount + 1,
+            };
+          },
+          false,
+          'pasteFromClipboard',
+        );
+      },
+
+      alignSelectedHorizontal: (alignment) => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length < 2 || !project) return;
+        const idSet = new Set(selectedComponentIds);
+        const selected = project.components.filter((c: ScreenComponent) => idSet.has(c.id));
+        if (selected.length < 2) return;
+
+        const xs = selected.map((c: ScreenComponent) => c.position.x);
+        const rights = selected.map((c: ScreenComponent) => c.position.x + c.position.width);
+        const minX = Math.min(...xs);
+        const maxRight = Math.max(...rights);
+        const centerX = (minX + maxRight) / 2;
+
+        const updates = selected.map((c: ScreenComponent) => {
+          let x: number;
+          if (alignment === 'left') x = minX;
+          else if (alignment === 'right') x = maxRight - c.position.width;
+          else x = centerX - c.position.width / 2;
+          return {
+            id: c.id,
+            changes: { position: { ...c.position, x: Math.round(x) } },
+          };
+        });
+        // updateComponentsBatch 内部已 pushHistory
+        get().updateComponentsBatch(updates);
+      },
+
+      alignSelectedVertical: (alignment) => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length < 2 || !project) return;
+        const idSet = new Set(selectedComponentIds);
+        const selected = project.components.filter((c: ScreenComponent) => idSet.has(c.id));
+        if (selected.length < 2) return;
+
+        const ys = selected.map((c: ScreenComponent) => c.position.y);
+        const bottoms = selected.map((c: ScreenComponent) => c.position.y + c.position.height);
+        const minY = Math.min(...ys);
+        const maxBottom = Math.max(...bottoms);
+        const centerY = (minY + maxBottom) / 2;
+
+        const updates = selected.map((c: ScreenComponent) => {
+          let y: number;
+          if (alignment === 'top') y = minY;
+          else if (alignment === 'bottom') y = maxBottom - c.position.height;
+          else y = centerY - c.position.height / 2;
+          return {
+            id: c.id,
+            changes: { position: { ...c.position, y: Math.round(y) } },
+          };
+        });
+        get().updateComponentsBatch(updates);
+      },
+
+      distributeSelectedHorizontal: () => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length < 3 || !project) return;
+        const idSet = new Set(selectedComponentIds);
+        const selected = project.components
+          .filter((c: ScreenComponent) => idSet.has(c.id))
+          .sort((a: ScreenComponent, b: ScreenComponent) => a.position.x - b.position.x);
+        if (selected.length < 3) return;
+
+        const first = selected[0];
+        const last = selected[selected.length - 1];
+        const minX = first.position.x;
+        const maxRight = last.position.x + last.position.width;
+        const totalWidth = selected.reduce(
+          (sum: number, c: ScreenComponent) => sum + c.position.width,
+          0,
+        );
+        const gap = (maxRight - minX - totalWidth) / (selected.length - 1);
+
+        let cursor = minX;
+        const updates = selected.map((c: ScreenComponent) => {
+          const newX = cursor;
+          cursor += c.position.width + gap;
+          return {
+            id: c.id,
+            changes: { position: { ...c.position, x: Math.round(newX) } },
+          };
+        });
+        get().updateComponentsBatch(updates);
+      },
+
+      distributeSelectedVertical: () => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length < 3 || !project) return;
+        const idSet = new Set(selectedComponentIds);
+        const selected = project.components
+          .filter((c: ScreenComponent) => idSet.has(c.id))
+          .sort((a: ScreenComponent, b: ScreenComponent) => a.position.y - b.position.y);
+        if (selected.length < 3) return;
+
+        const first = selected[0];
+        const last = selected[selected.length - 1];
+        const minY = first.position.y;
+        const maxBottom = last.position.y + last.position.height;
+        const totalHeight = selected.reduce(
+          (sum: number, c: ScreenComponent) => sum + c.position.height,
+          0,
+        );
+        const gap = (maxBottom - minY - totalHeight) / (selected.length - 1);
+
+        let cursor = minY;
+        const updates = selected.map((c: ScreenComponent) => {
+          const newY = cursor;
+          cursor += c.position.height + gap;
+          return {
+            id: c.id,
+            changes: { position: { ...c.position, y: Math.round(newY) } },
+          };
+        });
+        get().updateComponentsBatch(updates);
+      },
+
+      groupSelected: () => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length < 2 || !project) return;
+        pushHistory(set);
+        const groupId = `group-${crypto.randomUUID()}`;
+        const idSet = new Set(selectedComponentIds);
+        set(
+          (state: ScreenEditorState) => {
+            if (!state.project) return state;
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) ? { ...c, parentId: groupId } : c,
+                ),
+              },
+            };
+          },
+          false,
+          'groupSelected',
+        );
+      },
+
+      ungroupSelected: () => {
+        const { selectedComponentIds, project } = get();
+        if (selectedComponentIds.length === 0 || !project) return;
+        pushHistory(set);
+        const idSet = new Set(selectedComponentIds);
+        set(
+          (state: ScreenEditorState) => {
+            if (!state.project) return state;
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) ? { ...c, parentId: null } : c,
+                ),
+              },
+            };
+          },
+          false,
+          'ungroupSelected',
+        );
       },
     }),
     { name: 'ScreenEditorStore' },

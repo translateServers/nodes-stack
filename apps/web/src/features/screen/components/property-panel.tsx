@@ -292,49 +292,10 @@ function CanvasSettingsFields({
 function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
   const project = useScreenEditorStore((s) => s.project);
   const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
-  const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
+  const alignSelectedHorizontal = useScreenEditorStore((s) => s.alignSelectedHorizontal);
+  const alignSelectedVertical = useScreenEditorStore((s) => s.alignSelectedVertical);
 
   if (!project) return null;
-
-  const selectedComponents = selectedIds
-    .map((id: string) => project.components.find((c: ScreenComponent) => c.id === id))
-    .filter((c): c is ScreenComponent => c != null);
-
-  const alignHorizontal = (alignment: 'left' | 'center' | 'right') => {
-    if (selectedComponents.length < 2) return;
-    const xs = selectedComponents.map((c) => c.position.x);
-    const rights = selectedComponents.map((c) => c.position.x + c.position.width);
-    const minX = Math.min(...xs);
-    const maxRight = Math.max(...rights);
-    const centerX = (minX + maxRight) / 2;
-
-    const updates = selectedComponents.map((c) => {
-      let x = c.position.x;
-      if (alignment === 'left') x = minX;
-      else if (alignment === 'right') x = maxRight - c.position.width;
-      else x = centerX - c.position.width / 2;
-      return { id: c.id, changes: { position: { ...c.position, x: Math.round(x) } } };
-    });
-    updateComponentsBatch(updates);
-  };
-
-  const alignVertical = (alignment: 'top' | 'middle' | 'bottom') => {
-    if (selectedComponents.length < 2) return;
-    const ys = selectedComponents.map((c) => c.position.y);
-    const bottoms = selectedComponents.map((c) => c.position.y + c.position.height);
-    const minY = Math.min(...ys);
-    const maxBottom = Math.max(...bottoms);
-    const centerY = (minY + maxBottom) / 2;
-
-    const updates = selectedComponents.map((c) => {
-      let y = c.position.y;
-      if (alignment === 'top') y = minY;
-      else if (alignment === 'bottom') y = maxBottom - c.position.height;
-      else y = centerY - c.position.height / 2;
-      return { id: c.id, changes: { position: { ...c.position, y: Math.round(y) } } };
-    });
-    updateComponentsBatch(updates);
-  };
 
   return (
     <TooltipProvider>
@@ -350,7 +311,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="左对齐"
-                  onClick={() => alignHorizontal('left')}
+                  onClick={() => alignSelectedHorizontal('left')}
                 >
                   <AlignLeft />
                 </Button>
@@ -363,7 +324,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="水平居中"
-                  onClick={() => alignHorizontal('center')}
+                  onClick={() => alignSelectedHorizontal('center')}
                 >
                   <AlignCenter />
                 </Button>
@@ -376,7 +337,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="右对齐"
-                  onClick={() => alignHorizontal('right')}
+                  onClick={() => alignSelectedHorizontal('right')}
                 >
                   <AlignRight />
                 </Button>
@@ -389,7 +350,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="顶对齐"
-                  onClick={() => alignVertical('top')}
+                  onClick={() => alignSelectedVertical('top')}
                 >
                   <AlignStartVertical />
                 </Button>
@@ -402,7 +363,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="垂直居中"
-                  onClick={() => alignVertical('middle')}
+                  onClick={() => alignSelectedVertical('middle')}
                 >
                   <AlignCenterVertical />
                 </Button>
@@ -415,7 +376,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
                   variant="ghost"
                   size="icon-sm"
                   aria-label="底对齐"
-                  onClick={() => alignVertical('bottom')}
+                  onClick={() => alignSelectedVertical('bottom')}
                 >
                   <AlignEndVertical />
                 </Button>

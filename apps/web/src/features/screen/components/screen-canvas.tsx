@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { create } from 'zustand';
 import Moveable from 'react-moveable';
 import Selecto from 'react-selecto';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
+import { useModifierKeys } from '../hooks/use-modifier-keys';
 import { ComponentRenderer } from '../registry/renderer';
 
 interface DimensionInfo {
@@ -142,11 +142,10 @@ export function ScreenCanvas({
   const panState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
     null,
   );
-  const spaceHeld = useRef(false);
-  const [spaceHeldUI, setSpaceHeldUI] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
-  const shiftRef = useRef(false);
-  const [shiftHeld, setShiftHeld] = useState(false);
+  // 修饰键状态由 useModifierKeys 集中管理（替换原独立的 keydown/keyup 监听）
+  // spaceHeld 重命名为 spaceHeldUI 保持原 UI 状态语义
+  const { spaceRef, shiftRef, spaceHeld: spaceHeldUI, shiftHeld } = useModifierKeys();
 
   /** 稳定的 ref 注册回调，避免作为 prop 传入 memo 组件时引起重渲染 */
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
@@ -176,47 +175,9 @@ export function ScreenCanvas({
     }
   }, [selectedComponentIds, project?.components]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftRef.current = true;
-        flushSync(() => setShiftHeld(true));
-      }
-      if (e.code === 'Space' && !e.repeat) {
-        const target = e.target as HTMLElement;
-        if (
-          target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable
-        )
-          return;
-        e.preventDefault();
-        spaceHeld.current = true;
-        setSpaceHeldUI(true);
-      }
-    };
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') {
-        shiftRef.current = false;
-        flushSync(() => setShiftHeld(false));
-      }
-      if (e.code === 'Space') {
-        spaceHeld.current = false;
-        setSpaceHeldUI(false);
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
   const handlePanStart = useCallback(
     (e: React.PointerEvent) => {
-      if (e.button !== 0 || !spaceHeld.current) return;
+      if (e.button !== 0 || !spaceRef.current) return;
       e.preventDefault();
       e.stopPropagation();
       setIsPanning(true);

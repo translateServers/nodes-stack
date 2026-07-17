@@ -17,6 +17,7 @@ import {
   Lock,
   Unlock,
   Trash2,
+  Keyboard,
 } from 'lucide-react';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { useScreenEditorStore } from '../stores/editor-store';
@@ -29,6 +30,8 @@ import { CanvasContextMenu } from '../components/canvas-context-menu';
 import { CanvasRulers, type RulersHandle } from '../components/canvas-rulers';
 import { CanvasGuides } from '../components/canvas-guides';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
+import { useToolStateMachine } from '../hooks/use-tool-state-machine';
+import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -72,6 +75,8 @@ export function ScreenEditor() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const rulersRef = useRef<RulersHandle>(null);
   const [activeTab, setActiveTab] = useState<'library' | 'layers'>('library');
+  const [showHelp, setShowHelp] = useState(false);
+  const toolStateMachine = useToolStateMachine();
 
   useEffect(() => {
     if (project) {
@@ -128,6 +133,8 @@ export function ScreenEditor() {
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
     onFitToScreen: handleFitToScreen,
+    onShowHelp: () => setShowHelp(true),
+    toolStateMachine,
   });
 
   if (isLoading) {
@@ -293,6 +300,20 @@ export function ScreenEditor() {
               <Button
                 variant="ghost"
                 size="icon-sm"
+                aria-label="快捷键"
+                onClick={() => setShowHelp(true)}
+              >
+                <Keyboard />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>快捷键 (Ctrl+/)</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 aria-label="切换主题"
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               >
@@ -364,6 +385,7 @@ export function ScreenEditor() {
           <PropertyPanel />
         </div>
       </div>
+      <ShortcutsHelpDialog open={showHelp} onOpenChange={setShowHelp} />
     </TooltipProvider>
   );
 }
