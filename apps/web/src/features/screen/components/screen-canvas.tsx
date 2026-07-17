@@ -248,7 +248,7 @@ export function ScreenCanvas({
   const visibleComponents = useMemo(
     () =>
       components
-        .filter((c: ScreenComponent) => !c.parentId && !c.status.hidden)
+        .filter((c: ScreenComponent) => !c.status.hidden)
         .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex),
     [components],
   );

@@ -43,7 +43,7 @@ function PreviewCanvas({ project }: { project: ScreenProject }) {
         }}
       >
         {components
-          .filter((c) => !c.status.hidden && !c.parentId)
+          .filter((c) => !c.status.hidden)
           .sort((a, b) => a.zIndex - b.zIndex)
           .map((component) => (
             <div

@@ -87,9 +87,30 @@ function MenuItemContent({
 function getComponentIdFromElement(el: HTMLElement | null): string | null {
   let current: HTMLElement | null = el;
   while (current) {
+    if (current.classList?.contains('moveable-control-box')) break;
     const id = current.getAttribute('data-component-id');
     if (id) return id;
     current = current.parentElement;
+  }
+  return null;
+}
+
+/**
+ * 基于坐标做 hit-test 查找组件。
+ * 因为 Moveable 会在选中组件上方渲染控制边框（.moveable-area / .moveable-control
+ * / .moveable-line 等）覆盖在组件上方拦截事件，导致 e.target 不是组件本身，
+ * 所以需要 elementsFromPoint 遍历鼠标下所有元素，跳过 Moveable 和菜单层，
+ * 找到真正的 data-component-id。
+ */
+function findComponentIdAtPoint(clientX: number, clientY: number): string | null {
+  const elements = document.elementsFromPoint(clientX, clientY);
+  for (const el of elements) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (el.closest('[data-slot="context-menu-content"]')) continue;
+    if (el.closest('[data-radix-popper-content-wrapper]')) continue;
+    if (el.closest('.moveable-control-box')) continue;
+    const id = getComponentIdFromElement(el);
+    if (id) return id;
   }
   return null;
 }
@@ -327,6 +348,7 @@ export function CanvasContextMenu({
   const openRef = useRef(false);
   const redispatchedRef = useRef(false);
   const selectComponent = useScreenEditorStore((s) => s.selectComponent);
+  const clearSelection = useScreenEditorStore((s) => s.clearSelection);
 
   const handleOpenChange = useCallback((next: boolean) => {
     openRef.current = next;
@@ -335,19 +357,27 @@ export function CanvasContextMenu({
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      const compId = getComponentIdFromElement(e.target as HTMLElement);
+      // 优先从事件 target 向上查找；若被 Moveable 控制层等覆盖层拦截，
+      // 回退到基于坐标的 hit-test 找到真实组件。
+      const compId =
+        getComponentIdFromElement(e.target as HTMLElement) ??
+        findComponentIdAtPoint(e.clientX, e.clientY);
       const currentSelected = useScreenEditorStore.getState().selectedComponentIds;
 
-      if (compId && !currentSelected.includes(compId)) {
-        selectComponent(compId);
+      if (compId) {
+        if (!currentSelected.includes(compId)) {
+          selectComponent(compId);
+        }
+        setMode('component');
+      } else {
+        clearSelection();
+        setMode('canvas');
       }
-
-      setMode(compId || currentSelected.length > 0 ? 'component' : 'canvas');
     },
-    [selectComponent],
+    [selectComponent, clearSelection],
   );
 
-  // 解决"菜单已打开时再次右键，菜单停留在旧位置"的问题。
+  // 解决"菜单已打开时再次右键，菜单停留在旧位置/旧mode"的问题。
   //
   // 根因分析：
   // 1. 快速右键时 pointerdown→contextmenu 间隔约 30ms，Radix Presence 因退出动画
@@ -357,91 +387,92 @@ export function CanvasContextMenu({
   //    Radix 认为菜单仍处于 open=true 状态，跳过锚点坐标更新，直接复用旧位置。
   //
   // 修复策略：
-  // 在 document 的 contextmenu 捕获阶段拦截：若菜单已打开且点击目标不在菜单内部，
-  // 则阻止原生事件继续传播，同步关闭菜单，等待双 rAF 确保 DOM 完全清理后，
-  // 重新派发一套完整的指针事件序列触发全新打开，强制 Radix 使用新坐标定位。
-  // 使用 redispatchedRef 标记重派事件，避免无限拦截循环。
-  // 同时在 pointerdown 捕获阶段提前隐藏旧菜单，避免视觉残留。
+  // pointerdown 捕获阶段：仅视觉隐藏旧菜单，不阻止事件传播，
+  //   让 DismissableLayer 自然接收 pointerdown 触发异步关闭。
+  // contextmenu 捕获阶段：拦截事件，同步关闭菜单并递增 key 强制重建，
+  //   等待双 rAF 确保 DOM 清理后重派完整事件序列。
   useEffect(() => {
-    const dispatchRightClickAt = (x: number, y: number) => {
-      const target = document.elementFromPoint(x, y) ?? document.body;
-      redispatchedRef.current = true;
-
-      const pointerDown = new PointerEvent('pointerdown', {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        buttons: 2,
-        clientX: x,
-        clientY: y,
-        pointerType: 'mouse',
-        pointerId: 1,
-        isPrimary: true,
-        view: window,
-      });
-      target.dispatchEvent(pointerDown);
-
-      const mouseDown = new MouseEvent('mousedown', {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        clientX: x,
-        clientY: y,
-        view: window,
-      });
-      target.dispatchEvent(mouseDown);
-
-      const pointerUp = new PointerEvent('pointerup', {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        buttons: 0,
-        clientX: x,
-        clientY: y,
-        pointerType: 'mouse',
-        pointerId: 1,
-        isPrimary: true,
-        view: window,
-      });
-      target.dispatchEvent(pointerUp);
-
-      const mouseUp = new MouseEvent('mouseup', {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        clientX: x,
-        clientY: y,
-        view: window,
-      });
-      target.dispatchEvent(mouseUp);
-
-      const contextMenu = new MouseEvent('contextmenu', {
-        bubbles: true,
-        cancelable: true,
-        button: 2,
-        clientX: x,
-        clientY: y,
-        view: window,
-      });
-      target.dispatchEvent(contextMenu);
-
-      queueMicrotask(() => {
-        redispatchedRef.current = false;
-      });
+    const restorePointerEvents = () => {
+      document.body.style.pointerEvents = '';
+      document.documentElement.style.pointerEvents = '';
+      const root = document.getElementById('root');
+      if (root) root.style.pointerEvents = '';
     };
 
-    const handleContextMenuCapture = (e: MouseEvent) => {
+    const dispatchRightClickAt = (x: number, y: number) => {
+      redispatchedRef.current = true;
+      restorePointerEvents();
+
+      try {
+        const elements = document.elementsFromPoint(x, y);
+        let target: Element | null = null;
+        for (const el of elements) {
+          if (!(el instanceof HTMLElement)) continue;
+          if (el.closest('[data-slot="context-menu-content"]')) continue;
+          if (el.closest('[data-radix-popper-content-wrapper]')) continue;
+          if (el.closest('.moveable-control-box')) continue;
+          target = el;
+          break;
+        }
+        if (!target) target = document.body;
+
+        const common = {
+          bubbles: true,
+          cancelable: true,
+          clientX: x,
+          clientY: y,
+          view: window,
+          button: 2,
+          pointerId: 1,
+          isPrimary: true,
+          pointerType: 'mouse' as const,
+        };
+
+        target.dispatchEvent(new PointerEvent('pointerdown', { ...common, buttons: 2 }));
+        target.dispatchEvent(
+          new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            view: window,
+            button: 2,
+            buttons: 2,
+          }),
+        );
+        target.dispatchEvent(new PointerEvent('pointerup', { ...common, buttons: 0 }));
+        target.dispatchEvent(
+          new MouseEvent('mouseup', {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            view: window,
+            button: 2,
+            buttons: 0,
+          }),
+        );
+        target.dispatchEvent(
+          new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            view: window,
+            button: 2,
+            buttons: 0,
+          }),
+        );
+      } finally {
+        setTimeout(() => {
+          redispatchedRef.current = false;
+        }, 100);
+      }
+    };
+
+    const handlePointerDownCapture = (e: PointerEvent) => {
       if (e.button !== 2) return;
-      if (redispatchedRef.current) return;
-      if (!openRef.current) return;
-      if (e.target instanceof Element && e.target.closest('[data-slot="context-menu-content"]'))
-        return;
-
-      e.stopImmediatePropagation();
-      e.preventDefault();
-
-      const x = e.clientX;
-      const y = e.clientY;
+      if (!openRef.current || redispatchedRef.current) return;
 
       const existingContent = document.querySelector('[data-slot="context-menu-content"]');
       if (existingContent instanceof HTMLElement) {
@@ -450,6 +481,20 @@ export function CanvasContextMenu({
         existingContent.style.setProperty('opacity', '0', 'important');
         existingContent.style.pointerEvents = 'none';
       }
+    };
+
+    const handleContextMenuCapture = (e: MouseEvent) => {
+      if (e.button !== 2) return;
+      if (redispatchedRef.current) return;
+      if (!openRef.current) return;
+
+      e.stopImmediatePropagation();
+      e.preventDefault();
+
+      restorePointerEvents();
+
+      const x = e.clientX;
+      const y = e.clientY;
 
       flushSync(() => {
         openRef.current = false;
@@ -460,23 +505,17 @@ export function CanvasContextMenu({
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           dispatchRightClickAt(x, y);
+
+          setTimeout(() => {
+            if (!openRef.current) {
+              flushSync(() => {
+                openRef.current = true;
+                setOpen(true);
+              });
+            }
+          }, 50);
         });
       });
-    };
-
-    const handlePointerDownCapture = (e: PointerEvent) => {
-      if (e.button !== 2) return;
-      if (!openRef.current || redispatchedRef.current) return;
-      if (e.target instanceof Element && e.target.closest('[data-slot="context-menu-content"]'))
-        return;
-
-      const existingContent = document.querySelector('[data-slot="context-menu-content"]');
-      if (existingContent instanceof HTMLElement) {
-        existingContent.style.setProperty('animation', 'none', 'important');
-        existingContent.style.setProperty('transition', 'none', 'important');
-        existingContent.style.setProperty('opacity', '0', 'important');
-        existingContent.style.pointerEvents = 'none';
-      }
     };
 
     document.addEventListener('contextmenu', handleContextMenuCapture, true);
