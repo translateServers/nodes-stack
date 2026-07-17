@@ -55,6 +55,41 @@ const DimensionTooltip = memo(function DimensionTooltip() {
   );
 });
 
+interface ActiveGroupOutlineProps {
+  groupId: string | null;
+  components: ScreenComponent[];
+}
+
+/**
+ * 活动分组包围盒：当 activeGroupId 被设置时（用户已双击进入分组），
+ * 在画布上以虚线框高亮当前分组所有成员的并集包围盒，提示用户"正在编辑此分组内部"。
+ */
+const ActiveGroupOutline = memo(function ActiveGroupOutline({
+  groupId,
+  components,
+}: ActiveGroupOutlineProps) {
+  if (!groupId) return null;
+  const siblings = components.filter((c) => c.parentId === groupId);
+  if (siblings.length === 0) return null;
+  const minX = Math.min(...siblings.map((c) => c.position.x));
+  const minY = Math.min(...siblings.map((c) => c.position.y));
+  const maxX = Math.max(...siblings.map((c) => c.position.x + c.position.width));
+  const maxY = Math.max(...siblings.map((c) => c.position.y + c.position.height));
+  return (
+    <div
+      className="pointer-events-none absolute"
+      style={{
+        left: minX - 4,
+        top: minY - 4,
+        width: maxX - minX + 8,
+        height: maxY - minY + 8,
+        border: '1.5px dashed rgb(59 130 246 / 0.7)',
+        borderRadius: 4,
+      }}
+    />
+  );
+});
+
 interface CanvasComponentWrapperProps {
   component: ScreenComponent;
   selected: boolean;
@@ -125,8 +160,11 @@ export function ScreenCanvas({
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const showBorderGuides = useScreenEditorStore((s) => s.showBorderGuides);
+  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
   const selectComponents = useScreenEditorStore((s) => s.selectComponents);
   const clearSelection = useScreenEditorStore((s) => s.clearSelection);
+  const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
+  const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
@@ -140,6 +178,9 @@ export function ScreenCanvas({
   const moveableRef = useRef<Moveable>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  // 手动双击检测：Selecto 在 click 事件上调用 preventDefault 会抑制原生 dblclick，
+  // 因此这里记录上一次单击的 componentId 与时间戳，自行判定双击。
+  const lastClickRef = useRef<{ id: string; time: number } | null>(null);
   const panState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
     null,
   );
@@ -303,6 +344,10 @@ export function ScreenCanvas({
           onDragOver={onDragOver}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
+              // 点击空白画布：退出当前活动分组并清空选中
+              if (activeGroupId !== null) {
+                setActiveGroupId(null);
+              }
               clearSelection();
             }
           }}
@@ -316,6 +361,9 @@ export function ScreenCanvas({
               registerRef={registerRef}
             />
           ))}
+
+          {/* 活动分组包围盒：双击进入分组后高亮 */}
+          <ActiveGroupOutline groupId={activeGroupId} components={visibleComponents} />
         </div>
 
         <Moveable
@@ -604,7 +652,64 @@ export function ScreenCanvas({
           const selected = e.selected
             .map((el) => getComponentId(el))
             .filter((id): id is string => id != null);
-          selectComponents(selected);
+
+          const input = e.inputEvent as MouseEvent | undefined;
+          const hasModifier = input?.ctrlKey || input?.metaKey || input?.shiftKey;
+          const isSingleClick = e.isDragStart && !hasModifier && selected.length === 1;
+
+          // 双击检测：Selecto 在 click 上 preventDefault 会抑制原生 dblclick，
+          // 这里手动判定：同一组件、间隔 < 400ms 视为双击。
+          // 双击命中分组内组件 → 进入分组（setActiveGroupId + 仅选中该组件）。
+          if (isSingleClick) {
+            const clickedId = selected[0];
+            const now = Date.now();
+            const last = lastClickRef.current;
+            lastClickRef.current = { id: clickedId, time: now };
+            if (last && last.id === clickedId && now - last.time < 400) {
+              lastClickRef.current = null;
+              const clickedComp = components.find((c: ScreenComponent) => c.id === clickedId);
+              if (clickedComp?.parentId) {
+                // 进入分组：设置活动分组并选中被双击的组件
+                setActiveGroupId(clickedComp.parentId);
+                selectComponent(clickedId);
+              } else {
+                // 顶层组件双击：退出任何分组
+                setActiveGroupId(null);
+                selectComponent(clickedId);
+              }
+              return;
+            }
+          } else {
+            // 框选 / Ctrl 多选：清空双击判定状态
+            lastClickRef.current = null;
+          }
+
+          // 单击分组中的组件：根据 activeGroupId 决定选中整组还是单个组件
+          let finalSelection = selected;
+          if (isSingleClick) {
+            const clickedComp = components.find((c: ScreenComponent) => c.id === selected[0]);
+            if (clickedComp?.parentId) {
+              // 组件属于某分组
+              if (activeGroupId === clickedComp.parentId) {
+                // 已进入该分组 → 仅选中此组件
+                finalSelection = [clickedComp.id];
+              } else {
+                // 未进入或进入了别的分组 → 选中整个分组（同时退出旧分组）
+                // 注：不在这里 setActiveGroupId，保持 activeGroupId=null 语义
+                finalSelection = components
+                  .filter((c: ScreenComponent) => c.parentId === clickedComp.parentId)
+                  .map((c: ScreenComponent) => c.id);
+                if (activeGroupId !== null) {
+                  setActiveGroupId(null);
+                }
+              }
+            } else if (activeGroupId !== null) {
+              // 单击顶层组件：退出当前活动分组
+              setActiveGroupId(null);
+            }
+          }
+
+          selectComponents(finalSelection);
           if (e.isDragStart) {
             setTimeout(() => {
               moveableRef.current?.dragStart(e.inputEvent);

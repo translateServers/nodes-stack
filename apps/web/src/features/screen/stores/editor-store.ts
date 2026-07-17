@@ -35,6 +35,14 @@ interface ScreenEditorData {
    * 默认关闭（编辑模式下仅响应拖拽/选中），开启时用于调试组件交互。
    */
   nativeEventEnabled: boolean;
+  /**
+   * 当前进入的分组 ID（"编辑模式"下选中的组）。
+   * - null：未进入任何分组，单击组内组件会选中整个分组
+   * - 设置为某 groupId：用户已双击进入该分组，此时单击组内子组件仅选中该组件；
+   *   画布会用虚线包围盒高亮当前活动分组，Esc 或单击外部组件退出。
+   * 参考 Figma 的 "Enter Frame" 行为。
+   */
+  activeGroupId: string | null;
 }
 
 interface ScreenEditorActions {
@@ -95,6 +103,8 @@ interface ScreenEditorActions {
   toggleSnap: () => void;
   /** 切换原生事件触发开关 */
   toggleNativeEvent: () => void;
+  /** 进入/退出分组编辑模式：设置 activeGroupId（双击进入分组） */
+  setActiveGroupId: (groupId: string | null) => void;
 }
 
 export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
@@ -113,6 +123,7 @@ const initialData: ScreenEditorData = {
   pasteCount: 0,
   snapEnabled: true,
   nativeEventEnabled: false,
+  activeGroupId: null,
 };
 
 function pushHistory(set: (fn: (state: ScreenEditorState) => Partial<ScreenEditorState>) => void) {
@@ -804,6 +815,10 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
           false,
           'toggleNativeEvent',
         );
+      },
+
+      setActiveGroupId: (groupId) => {
+        set({ activeGroupId: groupId }, false, 'setActiveGroupId');
       },
     }),
     { name: 'ScreenEditorStore' },

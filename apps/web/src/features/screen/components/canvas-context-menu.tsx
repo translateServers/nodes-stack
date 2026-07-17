@@ -537,8 +537,12 @@ export function CanvasContextMenu({
     },
   });
 
+  // modal=false：避免 Radix 在菜单打开时设置 body { pointer-events: none }，
+  // 否则画布元素会继承 none 导致 Moveable 无法接收 pointerdown，用户右键菜单后无法直接拖拽组件。
+  // 关闭 modal 同时取消 trapFocus/scrollLock/aria-hide，对画布上下文菜单场景可接受；
+  // 仍保留 DismissableLayer 的外部点击关闭与 Esc 关闭。
   return (
-    <ContextMenu key={menuKey} open={open} onOpenChange={handleOpenChange}>
+    <ContextMenu key={menuKey} open={open} onOpenChange={handleOpenChange} modal={false}>
       <ContextMenuTrigger asChild>{trigger}</ContextMenuTrigger>
       <ContextMenuContent className="w-56">
         {mode === 'component' ? (

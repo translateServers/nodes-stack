@@ -221,9 +221,19 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     },
     { enabled: canvasEnabled },
   );
-  useHotkeys(getShortcutById('clearSelection')!.keys, () => getStore().clearSelection(), {
-    enabled: canvasEnabled,
-  });
+  useHotkeys(
+    getShortcutById('clearSelection')!.keys,
+    () => {
+      const store = getStore();
+      // 分层语义：先退出当前活动分组（保留选中），再次 Esc 才清空选中。
+      if (store.activeGroupId) {
+        store.setActiveGroupId(null);
+      } else {
+        store.clearSelection();
+      }
+    },
+    { enabled: canvasEnabled },
+  );
 
   // 微移
   useHotkeys('up', () => getStore().nudgeSelected(0, -1), { enabled: canvasEnabled });
