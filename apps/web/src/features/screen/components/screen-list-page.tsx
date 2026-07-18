@@ -1,11 +1,6 @@
 import { useState } from 'react';
 import { Plus, Trash2, Eye, Edit } from 'lucide-react';
-import {
-  useScreenProjects,
-  useCreateScreenProject,
-  useDeleteScreenProject,
-  usePublishScreenProject,
-} from '../hooks';
+import { useScreenProjects, useCreateScreenProject, useDeleteScreenProject } from '../hooks';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +12,6 @@ export function ScreenListPage() {
   const { data: projects, isLoading } = useScreenProjects();
   const createMutation = useCreateScreenProject();
   const deleteMutation = useDeleteScreenProject();
-  const publishMutation = usePublishScreenProject();
   const [newName, setNewName] = useState('');
 
   const handleCreate = () => {

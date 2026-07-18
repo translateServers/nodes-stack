@@ -248,8 +248,6 @@ export function ScreenEditor() {
                 ref={rulersRef}
                 scale={canvasScale}
                 offset={canvasOffset}
-                canvasWidth={canvasWidth}
-                canvasHeight={canvasHeight}
                 containerRef={canvasContainerRef}
               />
               <div className="absolute inset-0" style={{ top: 20, left: 20 }}>

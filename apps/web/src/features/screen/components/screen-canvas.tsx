@@ -21,6 +21,76 @@ interface DimensionInfo {
   mode?: string;
 }
 
+/**
+ * Moveable 事件 datas 袋的类型化描述。
+ *
+ * react-moveable 0.56 中 `e.datas` 类型为 `IObject<any>`、`e.lastEvent` 为 `any`，
+ * 直接读取会触发 `@typescript-eslint/no-unsafe-*` 系列规则。这里以 interface
+ * 形式声明各 handler 写入 / 读取的字段，handler 内统一通过 `as unknown as` 单点
+ * 转换后访问，避免 `any` 在调用链中扩散。
+ */
+interface DragDatas {
+  id: string;
+  startX: number;
+  startY: number;
+  origW: number;
+  origH: number;
+  isAltCopy: boolean;
+}
+
+interface ResizeDatas {
+  id: string;
+  origW: number;
+  origH: number;
+  origX: number;
+  origY: number;
+  keepRatio: boolean;
+  isAltCenter: boolean;
+}
+
+interface RotateDatas {
+  id: string;
+  snapRotate: boolean;
+}
+
+interface GroupDragDatas {
+  ids: string[];
+}
+
+/** OnDragEnd / OnResizeEnd 中 `e.lastEvent` 的最小形状（left/top/width/height/isDrag） */
+interface MoveableLastEvent {
+  left: number;
+  top: number;
+  width?: number;
+  height?: number;
+  isDrag: boolean;
+}
+
+/**
+ * 从 Moveable 的 `e.target`（HTMLElement | SVGElement）中提取 data-component-id。
+ *
+ * react-moveable 的 target 类型包含 SVGElement，但画布组件一律为 HTMLDivElement，
+ * 通过类型守卫收敛到 HTMLElement 后再向上查找，避免对 SVGElement 调用 getAttribute
+ * 时行为差异（实际两者都支持，但收敛类型让 TS 更安全）。
+ */
+function getComponentIdFromTarget(target: HTMLElement | SVGElement): string | null {
+  let current: Element | null = target;
+  while (current) {
+    const id = current.getAttribute('data-component-id');
+    if (id) return id;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/** 安全读取 inputEvent 的 altKey，兼容 MouseEvent / PointerEvent / TouchEvent */
+function readAltKey(inputEvent: unknown): boolean {
+  if (inputEvent && typeof inputEvent === 'object' && 'altKey' in inputEvent) {
+    return inputEvent.altKey === true;
+  }
+  return false;
+}
+
 const initialDimension: DimensionInfo = {
   x: 0,
   y: 0,
@@ -145,16 +215,6 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
   );
 });
 
-function getComponentId(el: Element): string | null {
-  let current: Element | null = el;
-  while (current) {
-    const id = current.getAttribute('data-component-id');
-    if (id) return id;
-    current = current.parentElement;
-  }
-  return null;
-}
-
 export function ScreenCanvas({
   onDrop,
   onDragOver,
@@ -167,7 +227,6 @@ export function ScreenCanvas({
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const showBorderGuides = useScreenEditorStore((s) => s.showBorderGuides);
-  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
   const selectComponents = useScreenEditorStore((s) => s.selectComponents);
   const clearSelection = useScreenEditorStore((s) => s.clearSelection);
   const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
@@ -526,18 +585,19 @@ export function ScreenCanvas({
           renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}
           // --- Single target events ---
           onDragStart={(e) => {
-            const id = getComponentId(e.target);
+            const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (comp?.status.locked) return false;
-            e.datas.id = id;
-            e.datas.startX = comp?.position.x ?? 0;
-            e.datas.startY = comp?.position.y ?? 0;
-            e.datas.origW = comp?.position.width ?? 0;
-            e.datas.origH = comp?.position.height ?? 0;
+            const datas = e.datas as unknown as DragDatas;
+            datas.id = id;
+            datas.startX = comp?.position.x ?? 0;
+            datas.startY = comp?.position.y ?? 0;
+            datas.origW = comp?.position.width ?? 0;
+            datas.origH = comp?.position.height ?? 0;
             // Alt+拖拽复制（适配表 #12）：按下 Alt 启动拖拽时标记，
             // onDragEnd 时复制选中组件到拖拽位置，原件保持原位
-            e.datas.isAltCopy = (e.inputEvent as { altKey?: boolean } | null)?.altKey === true;
+            datas.isAltCopy = readAltKey(e.inputEvent);
             // 同步 W/H 到 dimension store，使拖拽过程中也显示尺寸
             setDimension((d) => ({
               ...d,
@@ -546,12 +606,13 @@ export function ScreenCanvas({
             }));
           }}
           onDrag={(e) => {
+            const datas = e.datas as unknown as DragDatas;
             // Smart Guides：计算对齐线 + 吸附（距离 < 3px 自动吸附）
             const { snappedLeft, snappedTop } = updateAlignmentLines(
               e.left,
               e.top,
-              Number(e.datas.origW) || 0,
-              Number(e.datas.origH) || 0,
+              datas.origW || 0,
+              datas.origH || 0,
             );
             e.target.style.left = `${snappedLeft}px`;
             e.target.style.top = `${snappedTop}px`;
@@ -564,17 +625,20 @@ export function ScreenCanvas({
           }}
           onDragEnd={(e) => {
             if (!e.isDrag) return;
-            const id = e.datas.id;
+            const datas = e.datas as unknown as Partial<DragDatas>;
+            const id = datas.id;
             if (!id) return;
-            const last = e.lastEvent;
+            const last = e.lastEvent as unknown as MoveableLastEvent | undefined;
             if (!last) return;
             // Alt+拖拽复制：拖拽结束时复制选中组件到光标位置，原件保持原位
-            if (e.datas.isAltCopy) {
+            if (datas.isAltCopy) {
               duplicateSelectedToPosition(Math.round(last.left), Math.round(last.top));
             } else {
+              const comp = components.find((c: ScreenComponent) => c.id === id);
+              if (!comp) return;
               updateComponent(id, {
                 position: {
-                  ...components.find((c: ScreenComponent) => c.id === id)!.position,
+                  ...comp.position,
                   x: Math.round(last.left),
                   y: Math.round(last.top),
                 },
@@ -584,33 +648,35 @@ export function ScreenCanvas({
             clearAlignmentLines();
           }}
           onResizeStart={(e) => {
-            const id = getComponentId(e.target);
+            const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (comp?.status.locked) return false;
-            e.datas.id = id;
-            e.datas.origW = comp?.position.width ?? 0;
-            e.datas.origH = comp?.position.height ?? 0;
-            e.datas.origX = comp?.position.x ?? 0;
-            e.datas.origY = comp?.position.y ?? 0;
-            e.datas.keepRatio = shiftRef.current;
+            const datas = e.datas as unknown as ResizeDatas;
+            datas.id = id;
+            datas.origW = comp?.position.width ?? 0;
+            datas.origH = comp?.position.height ?? 0;
+            datas.origX = comp?.position.x ?? 0;
+            datas.origY = comp?.position.y ?? 0;
+            datas.keepRatio = shiftRef.current;
             // Alt 中心变换（适配表 #11）：以组件中心为原点对称缩放，
             // 调整 left/top 抵消 width/height 变化使中心点位置不变
-            e.datas.isAltCenter = (e.inputEvent as { altKey?: boolean } | null)?.altKey === true;
-            if (e.datas.isAltCenter) {
+            datas.isAltCenter = readAltKey(e.inputEvent);
+            if (datas.isAltCenter) {
               setDimension((d) => ({ ...d, mode: '中心变换' }));
             }
           }}
           onResize={(e) => {
+            const datas = e.datas as unknown as ResizeDatas;
             let w = e.width;
             let h = e.height;
-            if (e.datas.keepRatio && e.datas.origW && e.datas.origH) {
-              const ratio = e.datas.origW / e.datas.origH;
+            if (datas.keepRatio && datas.origW && datas.origH) {
+              const ratio = datas.origW / datas.origH;
               const [dx, dy] = e.direction;
               if (dx !== 0 && dy !== 0) {
                 const newH = w / ratio;
                 const newW = h * ratio;
-                if (Math.abs(w - e.datas.origW) > Math.abs(h - e.datas.origH)) {
+                if (Math.abs(w - datas.origW) > Math.abs(h - datas.origH)) {
                   h = newH;
                 } else {
                   w = newW;
@@ -623,14 +689,10 @@ export function ScreenCanvas({
             }
             e.target.style.width = `${w}px`;
             e.target.style.height = `${h}px`;
-            if (e.datas.isAltCenter) {
+            if (datas.isAltCenter) {
               // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
-              const origW = Number(e.datas.origW) || 0;
-              const origH = Number(e.datas.origH) || 0;
-              const origX = Number(e.datas.origX) || 0;
-              const origY = Number(e.datas.origY) || 0;
-              const newX = origX + (origW - w) / 2;
-              const newY = origY + (origH - h) / 2;
+              const newX = datas.origX + (datas.origW - w) / 2;
+              const newY = datas.origY + (datas.origH - h) / 2;
               e.target.style.left = `${newX}px`;
               e.target.style.top = `${newY}px`;
             } else if (e.drag) {
@@ -648,11 +710,13 @@ export function ScreenCanvas({
           }}
           onResizeEnd={(e) => {
             if (!e.isDrag) return;
-            const id = e.datas.id;
+            const datas = e.datas as unknown as Partial<ResizeDatas>;
+            const id = datas.id;
             if (!id) return;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (!comp) return;
-            const last = e.lastEvent;
+            // lastEvent 仅用于 guard，实际值从 e.target.style 读取以避免 any 扩散
+            const last = e.lastEvent as unknown as MoveableLastEvent | undefined;
             if (!last) return;
             updateComponent(id, {
               position: {
@@ -666,16 +730,18 @@ export function ScreenCanvas({
             setDimension((d) => ({ ...d, visible: false, mode: undefined }));
           }}
           onRotateStart={(e) => {
-            const id = getComponentId(e.target);
+            const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (comp?.status.locked) return false;
-            e.datas.id = id;
-            e.datas.snapRotate = shiftRef.current;
+            const datas = e.datas as unknown as RotateDatas;
+            datas.id = id;
+            datas.snapRotate = shiftRef.current;
           }}
           onRotate={(e) => {
+            const datas = e.datas as unknown as RotateDatas;
             let rotation = e.rotation;
-            if (e.datas.snapRotate) {
+            if (datas.snapRotate) {
               rotation = Math.round(rotation / 15) * 15;
             }
             const currentTransform = e.target.style.transform || '';
@@ -692,7 +758,8 @@ export function ScreenCanvas({
           }}
           onRotateEnd={(e) => {
             if (!e.isDrag) return;
-            const id = e.datas.id;
+            const datas = e.datas as unknown as Partial<RotateDatas>;
+            const id = datas.id;
             if (!id) return;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (!comp) return;
@@ -708,14 +775,15 @@ export function ScreenCanvas({
           onDragGroupStart={(e) => {
             const ids: string[] = [];
             for (const t of e.targets) {
-              const id = getComponentId(t);
+              const id = getComponentIdFromTarget(t);
               if (id) {
                 const comp = components.find((c: ScreenComponent) => c.id === id);
                 if (comp?.status.locked) return false;
                 ids.push(id);
               }
             }
-            e.datas.ids = ids;
+            const datas = e.datas as unknown as GroupDragDatas;
+            datas.ids = ids;
           }}
           onDragGroup={(e) => {
             for (const ev of e.events) {
@@ -725,11 +793,12 @@ export function ScreenCanvas({
           }}
           onDragGroupEnd={(e) => {
             if (!e.isDrag) return;
-            const ids = e.datas.ids as string[];
+            const datas = e.datas as unknown as Partial<GroupDragDatas>;
+            const ids = datas.ids;
             if (!ids) return;
             const updates = e.events
               .map((ev) => {
-                const id = getComponentId(ev.target);
+                const id = getComponentIdFromTarget(ev.target);
                 if (!id) return null;
                 const comp = components.find((c: ScreenComponent) => c.id === id);
                 if (!comp) return null;
@@ -749,7 +818,7 @@ export function ScreenCanvas({
           }}
           onResizeGroupStart={(e) => {
             for (const t of e.targets) {
-              const id = getComponentId(t);
+              const id = getComponentIdFromTarget(t);
               if (id) {
                 const comp = components.find((c: ScreenComponent) => c.id === id);
                 if (comp?.status.locked) return false;
@@ -770,7 +839,7 @@ export function ScreenCanvas({
             if (!e.isDrag) return;
             const updates = e.events
               .map((ev) => {
-                const id = getComponentId(ev.target);
+                const id = getComponentIdFromTarget(ev.target);
                 if (!id) return null;
                 const comp = components.find((c: ScreenComponent) => c.id === id);
                 if (!comp) return null;
@@ -803,28 +872,39 @@ export function ScreenCanvas({
         toggleContinueSelect={['ctrl']}
         onDragStart={(e) => {
           if (moveableRef.current) {
-            const target = e.inputEvent?.target as HTMLElement;
-            if (moveableRef.current.isMoveableElement(target)) {
+            // Selecto inputEvent 为 any，可能是 MouseEvent / TouchEvent / PointerEvent。
+            // 通过 instanceof 收敛到 HTMLElement 后再使用，避免 as HTMLElement 越过类型检查
+            const rawTarget = (e.inputEvent as { target?: unknown } | null)?.target;
+            const target = rawTarget instanceof HTMLElement ? rawTarget : null;
+            if (target && moveableRef.current.isMoveableElement(target)) {
               e.stop();
             }
-            if (
-              target &&
-              getComponentId(target) &&
-              selectedComponentIds.includes(getComponentId(target)!)
-            ) {
-              e.stop();
+            if (target) {
+              const targetId = getComponentIdFromTarget(target);
+              if (targetId && selectedComponentIds.includes(targetId)) {
+                e.stop();
+              }
             }
           }
         }}
         onSelectEnd={(e) => {
           const selected = e.selected
-            .map((el) => getComponentId(el))
+            .map((el) => getComponentIdFromTarget(el))
             .filter((id): id is string => id != null);
+
+          // Selecto 的 inputEvent 可能是 MouseEvent / TouchEvent / PointerEvent。
+          // handleSelectEnd 需要 MouseEvent（读 ctrlKey/metaKey/shiftKey），
+          // 非 MouseEvent 时退化为无修饰键的合成事件，保证类型安全。
+          const rawEvent: unknown = e.inputEvent;
+          const inputEvent: MouseEvent =
+            rawEvent instanceof MouseEvent
+              ? rawEvent
+              : new MouseEvent('mousedown', { bubbles: true });
 
           // 委托纯函数计算决策（归一化 spec.md 热点 5）
           const result = handleSelectEnd({
             selected,
-            inputEvent: e.inputEvent as MouseEvent,
+            inputEvent,
             lastClick: lastClickRef.current,
             activeGroupId,
             components,
@@ -838,9 +918,12 @@ export function ScreenCanvas({
           }
           selectComponents(result.selection);
           if (!result.isDoubleClick && e.isDragStart) {
-            setTimeout(() => {
-              moveableRef.current?.dragStart(e.inputEvent);
-            }, 0);
+            // Moveable dragStart 期望 MouseEvent；TouchEvent 不支持，跳过以避免运行时错误
+            if (inputEvent instanceof MouseEvent) {
+              setTimeout(() => {
+                moveableRef.current?.dragStart(inputEvent);
+              }, 0);
+            }
           }
         }}
       />

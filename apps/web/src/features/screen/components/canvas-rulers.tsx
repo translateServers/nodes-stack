@@ -9,8 +9,6 @@ export interface RulersHandle {
 interface RulersProps {
   scale: number;
   offset: { x: number; y: number };
-  canvasWidth: number;
-  canvasHeight: number;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -62,7 +60,7 @@ function useIsDark(): boolean {
 }
 
 export const CanvasRulers = forwardRef<RulersHandle, RulersProps>(function CanvasRulers(
-  { scale, offset, canvasWidth, canvasHeight, containerRef },
+  { scale, offset, containerRef },
   ref,
 ) {
   const rulerXRef = useRef<Ruler>(null);

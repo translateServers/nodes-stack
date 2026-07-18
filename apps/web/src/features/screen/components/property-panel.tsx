@@ -239,7 +239,8 @@ function BarChartPropsFields({
           value={JSON.stringify(props.data ?? [], null, 2)}
           onChange={(e) => {
             try {
-              const parsed = JSON.parse(e.target.value);
+              // JSON.parse 返回 any，显式声明 unknown 阻断 any 扩散
+              const parsed: unknown = JSON.parse(e.target.value);
               onUpdate({ props: { ...props, data: parsed } });
             } catch {
               // ignore invalid JSON during editing

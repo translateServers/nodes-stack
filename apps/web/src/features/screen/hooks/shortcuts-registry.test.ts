@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SHORTCUTS_REGISTRY,
+  formatKeys,
   validateRegistry,
   type ShortcutDefinition,
 } from './shortcuts-registry';
@@ -130,10 +131,28 @@ describe('SHORTCUTS_REGISTRY 合规性（防冲突方法论）', () => {
     expect(warnings).toHaveLength(0);
   });
 
-  it('zoomIn 有 mod+shift+= 别名', () => {
+  it('zoomIn 有 mod+shift+equal 别名（兼容 Ctrl+Shift+=）', () => {
     const zoomIn = SHORTCUTS_REGISTRY.find((e) => e.id === 'zoomIn');
     expect(zoomIn).toBeDefined();
-    expect(zoomIn?.aliases).toContain('mod+shift+=');
+    expect(zoomIn?.aliases).toContain('mod+shift+equal');
+  });
+
+  it('符号快捷键使用 code 名（react-hotkeys-hook 5.x 用 e.code 匹配）', () => {
+    const symbolEntries = [
+      { id: 'zoomIn', expected: 'mod+equal' },
+      { id: 'zoomOut', expected: 'mod+minus' },
+      { id: 'toggleGuides', expected: 'mod+semicolon' },
+      { id: 'bringToFront', expected: 'mod+bracketright' },
+      { id: 'sendToBack', expected: 'mod+bracketleft' },
+      { id: 'showHelp', expected: 'mod+slash' },
+      { id: 'brushSizeDecrease', expected: 'bracketleft' },
+      { id: 'brushSizeIncrease', expected: 'bracketright' },
+    ];
+    for (const { id, expected } of symbolEntries) {
+      const entry = SHORTCUTS_REGISTRY.find((e) => e.id === id);
+      expect(entry, `entry ${id} should exist`).toBeDefined();
+      expect(entry?.keys, `entry ${id} should use code name`).toBe(expected);
+    }
   });
 
   it('包含 4 个 noop Alt+方向键条目且 hidden=true', () => {
@@ -150,5 +169,46 @@ describe('SHORTCUTS_REGISTRY 合规性（防冲突方法论）', () => {
     const toggleUI = SHORTCUTS_REGISTRY.find((e) => e.id === 'toggleUI');
     expect(toggleUI).toBeDefined();
     expect(toggleUI?.enableOnFormTags).toBe(false);
+  });
+});
+
+describe('formatKeys（code 名 → 可读字符映射）', () => {
+  // 确保帮助面板对用户友好：code 名（equal/minus/bracketleft 等）应渲染为字面量符号
+  it('mod+equal → [Ctrl, =]', () => {
+    expect(formatKeys('mod+equal')).toContain('=');
+  });
+
+  it('mod+minus → [Ctrl, -]', () => {
+    expect(formatKeys('mod+minus')).toContain('-');
+  });
+
+  it('mod+semicolon → [Ctrl, ;]', () => {
+    expect(formatKeys('mod+semicolon')).toContain(';');
+  });
+
+  it('mod+bracketleft → [Ctrl, []', () => {
+    expect(formatKeys('mod+bracketleft')).toContain('[');
+  });
+
+  it('mod+bracketright → [Ctrl, ]]', () => {
+    expect(formatKeys('mod+bracketright')).toContain(']');
+  });
+
+  it('mod+slash → [Ctrl, /]', () => {
+    expect(formatKeys('mod+slash')).toContain('/');
+  });
+
+  it('bracketleft（单键）→ [[]', () => {
+    expect(formatKeys('bracketleft')).toEqual(['[']);
+  });
+
+  it('bracketright（单键）→ []]', () => {
+    expect(formatKeys('bracketright')).toEqual([']']);
+  });
+
+  it('保留原有字面量快捷键不变（如 mod+s → [Ctrl, S]）', () => {
+    const keys = formatKeys('mod+s');
+    expect(keys).toHaveLength(2);
+    expect(keys[1]).toBe('S');
   });
 });

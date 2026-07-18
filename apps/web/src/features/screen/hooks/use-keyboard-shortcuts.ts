@@ -179,6 +179,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   useHotkeys(
     getAllKeys(copyEntry),
     (e) => {
+      // 若用户用鼠标拖选了文字（如画布上文本组件内的文字、或双击选中的词），
+      // 让浏览器原生 copy 生效，把选中文字写入系统剪贴板。
+      // 仅当没有原生选区时，才执行"复制选中组件到内存剪贴板"的逻辑。
+      const selection = typeof window !== 'undefined' ? window.getSelection() : null;
+      if (selection && selection.toString().length > 0) {
+        return;
+      }
       e.preventDefault();
       getStore().copySelectedToClipboard();
     },

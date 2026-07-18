@@ -31,5 +31,5 @@ export const ComponentRenderer = memo(function ComponentRenderer({
       </div>
     );
   }
-  return <Renderer props={component.props} style={component.style as Record<string, unknown>} />;
+  return <Renderer props={component.props} style={component.style} />;
 });

@@ -13,7 +13,7 @@ describe('NumberInput', () => {
     it('ArrowUp 默认步进 1', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowUp');
       expect(onChange).toHaveBeenCalledWith(11);
     });
@@ -21,7 +21,7 @@ describe('NumberInput', () => {
     it('ArrowDown 默认步进 -1', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowDown');
       expect(onChange).toHaveBeenCalledWith(9);
     });
@@ -29,7 +29,7 @@ describe('NumberInput', () => {
     it('Shift+ArrowUp 步进 10', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowUp', true);
       expect(onChange).toHaveBeenCalledWith(20);
     });
@@ -37,7 +37,7 @@ describe('NumberInput', () => {
     it('Shift+ArrowDown 步进 -10', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowDown', true);
       expect(onChange).toHaveBeenCalledWith(0);
     });
@@ -45,7 +45,7 @@ describe('NumberInput', () => {
     it('自定义 step 与 shiftStep', () => {
       const onChange = vi.fn();
       render(<NumberInput value={0} onChange={onChange} step={2} shiftStep={50} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowUp');
       expect(onChange).toHaveBeenCalledWith(2);
       keyDown(input, 'ArrowUp', true);
@@ -57,7 +57,7 @@ describe('NumberInput', () => {
     it('ArrowUp 不超过 max', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} max={10} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowUp');
       expect(onChange).toHaveBeenCalledWith(10);
     });
@@ -65,7 +65,7 @@ describe('NumberInput', () => {
     it('ArrowDown 不低于 min', () => {
       const onChange = vi.fn();
       render(<NumberInput value={0} onChange={onChange} min={0} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       keyDown(input, 'ArrowDown');
       expect(onChange).toHaveBeenCalledWith(0);
     });
@@ -75,7 +75,7 @@ describe('NumberInput', () => {
     it('Enter 提交 draft 值', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       // 进入编辑态
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '42' } });
@@ -86,7 +86,7 @@ describe('NumberInput', () => {
     it('Blur 提交 draft 值', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '99' } });
       fireEvent.blur(input);
@@ -96,7 +96,7 @@ describe('NumberInput', () => {
     it('Esc 放弃编辑，不触发 onChange', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '999' } });
       keyDown(input, 'Escape');
@@ -108,7 +108,7 @@ describe('NumberInput', () => {
     it('无效输入（非数字）不提交', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: 'abc' } });
       fireEvent.blur(input);
@@ -118,7 +118,7 @@ describe('NumberInput', () => {
     it('空字符串不提交', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '' } });
       fireEvent.blur(input);
@@ -128,7 +128,7 @@ describe('NumberInput', () => {
     it('浮点数正常解析', () => {
       const onChange = vi.fn();
       render(<NumberInput value={0} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '12.5' } });
       keyDown(input, 'Enter');
@@ -138,7 +138,7 @@ describe('NumberInput', () => {
     it('负数正常解析', () => {
       const onChange = vi.fn();
       render(<NumberInput value={0} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '-3' } });
       keyDown(input, 'Enter');
@@ -148,7 +148,7 @@ describe('NumberInput', () => {
     it('值未变化时不重复触发 onChange', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '10' } });
       fireEvent.blur(input);
@@ -159,7 +159,7 @@ describe('NumberInput', () => {
     it('直接输入时受 min/max 钳制', () => {
       const onChange = vi.fn();
       render(<NumberInput value={5} onChange={onChange} min={0} max={10} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '999' } });
       fireEvent.blur(input);
@@ -170,7 +170,7 @@ describe('NumberInput', () => {
   describe('显示与渲染', () => {
     it('未编辑时显示 value', () => {
       render(<NumberInput value={42} onChange={vi.fn()} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole<HTMLInputElement>('textbox');
       expect(input.value).toBe('42');
     });
 
@@ -186,7 +186,7 @@ describe('NumberInput', () => {
 
     it('disabled 时 input 不可编辑', () => {
       render(<NumberInput value={0} onChange={vi.fn()} disabled />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole<HTMLInputElement>('textbox');
       expect(input.disabled).toBe(true);
     });
   });
@@ -195,7 +195,7 @@ describe('NumberInput', () => {
     it('编辑态下 ArrowUp 基于 draft 解析值步进', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '100' } });
       keyDown(input, 'ArrowUp');
@@ -206,7 +206,7 @@ describe('NumberInput', () => {
     it('编辑态下 draft 无效时 ArrowUp 回退到 value', () => {
       const onChange = vi.fn();
       render(<NumberInput value={50} onChange={onChange} />);
-      const input = screen.getByRole('textbox') as HTMLInputElement;
+      const input = screen.getByRole('textbox');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: 'abc' } });
       keyDown(input, 'ArrowUp');

@@ -154,19 +154,21 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   // 视图
   {
     id: 'zoomIn',
-    keys: 'mod+=',
+    // react-hotkeys-hook 5.x 用 e.code 匹配（非 e.key），故使用 code 名 'equal' 而非字面量 '='
+    keys: 'mod+equal',
     description: '放大画布',
     category: 'view',
     scope: 'global',
     preventDefault: 'always',
     browserConflict: 'overridable',
     enableOnFormTags: true,
-    // US 键盘 + 需要 Shift+=，浏览器原生 Ctrl++ = Ctrl+Shift+=，加别名兼容
-    aliases: ['mod+shift+='],
+    // 别名：兼容 Ctrl+Shift+=（US 键盘 Ctrl++ 浏览器原生习惯）
+    aliases: ['mod+shift+equal'],
   },
   {
     id: 'zoomOut',
-    keys: 'mod+-',
+    // 同 zoomIn：使用 code 名 'minus' 而非字面量 '-'
+    keys: 'mod+minus',
     description: '缩小画布',
     category: 'view',
     scope: 'global',
@@ -195,7 +197,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   },
   {
     id: 'toggleGuides',
-    keys: 'mod+;',
+    // e.code = 'Semicolon'，库内 f() 转换后为 'semicolon'
+    keys: 'mod+semicolon',
     description: '切换参考线显示',
     category: 'view',
     scope: 'global',
@@ -207,7 +210,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   // 组件
   {
     id: 'bringToFront',
-    keys: 'mod+]',
+    // e.code = 'BracketRight'，库内 f() 转换后为 'bracketright'
+    keys: 'mod+bracketright',
     description: '置顶',
     category: 'component',
     scope: 'canvas',
@@ -216,7 +220,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   },
   {
     id: 'sendToBack',
-    keys: 'mod+[',
+    // e.code = 'BracketLeft'，库内 f() 转换后为 'bracketleft'
+    keys: 'mod+bracketleft',
     description: '置底',
     category: 'component',
     scope: 'canvas',
@@ -468,7 +473,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   // 帮助
   {
     id: 'showHelp',
-    keys: 'mod+/',
+    // e.code = 'Slash'，库内 f() 转换后为 'slash'
+    keys: 'mod+slash',
     description: '快捷键帮助',
     category: 'help',
     scope: 'global',
@@ -480,7 +486,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   // 工具
   {
     id: 'brushSizeDecrease',
-    keys: '[',
+    // e.code = 'BracketLeft'，库内 f() 转换后为 'bracketleft'
+    keys: 'bracketleft',
     description: '减小画笔尺寸',
     category: 'tool',
     scope: 'canvas',
@@ -489,7 +496,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
   },
   {
     id: 'brushSizeIncrease',
-    keys: ']',
+    // e.code = 'BracketRight'，库内 f() 转换后为 'bracketright'
+    keys: 'bracketright',
     description: '增大画笔尺寸',
     category: 'tool',
     scope: 'canvas',
@@ -565,7 +573,33 @@ export function isMac(): boolean {
  * 多个键位用逗号分隔时只显示第一个（如 'delete,backspace' → ['Delete']）
  *
  * 共享给 shortcuts-help-dialog、菜单项 ShortcutBadge 等，避免重复实现。
+ *
+ * 注意：react-hotkeys-hook 5.x 用 e.code 匹配，所以 registry 中符号快捷键
+ * 存的是 code 名（如 'equal' / 'minus' / 'bracketleft'），而非字面量（'=' / '-' / '['）。
+ * 这里把 code 名映射回可读字符，确保帮助面板对用户友好。
  */
+const CODE_TO_DISPLAY: Readonly<Record<string, string>> = {
+  equal: '=',
+  minus: '-',
+  semicolon: ';',
+  bracketleft: '[',
+  bracketright: ']',
+  slash: '/',
+  backslash: '\\',
+  quote: "'",
+  backquote: '`',
+  comma: ',',
+  period: '.',
+  enter: 'Enter',
+  escape: 'Esc',
+  space: 'Space',
+  tab: 'Tab',
+  arrowup: '↑',
+  arrowdown: '↓',
+  arrowleft: '←',
+  arrowright: '→',
+};
+
 export function formatKeys(keys: string): string[] {
   const mac = isMac();
   const first = keys.split(',')[0]?.trim() ?? '';
@@ -580,9 +614,13 @@ export function formatKeys(keys: string): string[] {
         return mac ? 'Option' : 'Alt';
       case 'ctrl':
         return mac ? '⌃' : 'Ctrl';
-      default:
+      default: {
+        // code 名（如 'equal' / 'bracketleft'）映射回可读字符
+        const display = CODE_TO_DISPLAY[key];
+        if (display) return display;
         // 单字母大写显示
         return key.length === 1 ? key.toUpperCase() : key;
+      }
     }
   });
 }
