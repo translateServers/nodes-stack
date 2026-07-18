@@ -1,13 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { DataTable } from '../data-table';
-import { ConfirmDialogProvider } from '@/components/confirm-dialog';
 import type { ColumnDef } from '@tanstack/react-table';
 import { TextFilter } from '../filters/text-filter';
 import { SelectFilter } from '../filters/select-filter';
-import { hasActiveFilter, getFilterRenderer } from '../filters';
-import { EditableCell, createEditableColumns } from '../features/cell-editing';
+import { getFilterRenderer } from '../filters';
+import { createEditableColumns } from '../features/cell-editing';
 import { getEditor } from '../editors';
 import { wrapWithTreeExpand } from '../features/tree-data';
 import { buildTableQuery, buildSortQuery, buildFilterConditions } from '../features/server-side';
@@ -134,7 +132,7 @@ describe('DataTable 新增特性', () => {
       expect(query.search).toBe('search-term');
     });
 
-    it('should call onQueryChange when server side is enabled', async () => {
+    it('should call onQueryChange when server side is enabled', () => {
       const onQueryChange = vi.fn();
       render(
         <DataTable
@@ -309,8 +307,7 @@ describe('DataTable 新增特性', () => {
   });
 
   describe('主从展开', () => {
-    it('should render expanded row content', async () => {
-      const user = userEvent.setup();
+    it('should render expanded row content', () => {
       render(
         <DataTable
           data={mockData.slice(0, 1)}

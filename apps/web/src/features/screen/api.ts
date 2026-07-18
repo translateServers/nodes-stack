@@ -3,6 +3,7 @@ import {
   ScreenProjectSchema,
   CreateScreenProjectSchema,
   UpdateScreenProjectSchema,
+  PublishScreenProjectSchema,
 } from '@nebula/shared';
 import { ENDPOINTS } from '@/api/core/endpoints';
 import { del, get, patch, post } from '@/api/core/http';
@@ -29,8 +30,15 @@ export function updateScreenProject(id: string, params: z.infer<typeof UpdateScr
   );
 }
 
-export function publishScreenProject(id: string) {
-  return post(`${ENDPOINTS.screen}/${id}/publish`, {}, ScreenProjectSchema);
+export function publishScreenProject(
+  id: string,
+  params: z.infer<typeof PublishScreenProjectSchema>,
+) {
+  return post(
+    `${ENDPOINTS.screen}/${id}/publish`,
+    PublishScreenProjectSchema.parse(params),
+    ScreenProjectSchema,
+  );
 }
 
 export function deleteScreenProject(id: string) {

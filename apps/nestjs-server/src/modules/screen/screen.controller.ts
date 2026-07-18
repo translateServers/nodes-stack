@@ -14,6 +14,7 @@ import { ScreenService } from '@/modules/screen/screen.service';
 import {
   type CreateScreenProjectDto,
   type UpdateScreenProjectDto,
+  type PublishScreenProjectDto,
   ScreenProjectResponseDto,
   type ScreenProjectResponse,
 } from '@/modules/screen/dto/screen.dto';
@@ -67,10 +68,16 @@ export class ScreenController {
   }
 
   @Post(':id/publish')
-  @ApiOperation({ summary: '发布大屏项目', description: '将大屏项目状态设为已发布。' })
+  @ApiOperation({
+    summary: '发布大屏项目',
+    description: '基于保存基线将大屏项目状态设为已发布。',
+  })
   @ApiSuccessResponse(ScreenProjectResponseDto)
-  publishProject(@Param('id') id: string): Promise<ScreenProjectResponse> {
-    return this.screenService.publishProject(id);
+  publishProject(
+    @Param('id') id: string,
+    @Body() dto: PublishScreenProjectDto,
+  ): Promise<ScreenProjectResponse> {
+    return this.screenService.publishProject(id, dto);
   }
 
   @Delete(':id')
@@ -89,6 +96,6 @@ export class ScreenController {
   })
   @ApiSuccessResponse(ScreenProjectResponseDto)
   previewProject(@Param('id') id: string): Promise<ScreenProjectResponse> {
-    return this.screenService.findProjectById(id);
+    return this.screenService.findPublishedProjectById(id);
   }
 }

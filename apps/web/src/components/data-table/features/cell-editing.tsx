@@ -17,6 +17,14 @@ interface EditableCellProps<TData> {
   onCellEdit?: (row: TData, columnId: string, newValue: unknown) => void | Promise<void>;
 }
 
+/** 将 unknown 值安全转为字符串，避免对象触发 [object Object] */
+function toDisplayString(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
 /** 可编辑单元格组件：双击进入编辑态，Enter 确认、Escape 取消 */
 export function EditableCell<TData>({
   ctx,
@@ -39,27 +47,29 @@ export function EditableCell<TData>({
       >
         {originalCell
           ? flexRender(originalCell as ColumnDef<TData>['cell'], ctx)
-          : String(ctx.getValue() ?? '')}
+          : toDisplayString(ctx.getValue())}
       </div>
     );
   }
 
   const Editor = getEditor(editorType);
 
-  const handleCommit = async (newValue: unknown) => {
-    // 校验
-    const validationError = validate?.(newValue, ctx.row.original);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setError(undefined);
-    setIsEditing(false);
+  const handleCommit = (newValue: unknown): void => {
+    void (async () => {
+      // 校验
+      const validationError = validate?.(newValue, ctx.row.original);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      setError(undefined);
+      setIsEditing(false);
 
-    // 回调
-    if (onCellEdit && newValue !== ctx.getValue()) {
-      await onCellEdit(ctx.row.original, ctx.column.id, newValue);
-    }
+      // 回调
+      if (onCellEdit && newValue !== ctx.getValue()) {
+        await onCellEdit(ctx.row.original, ctx.column.id, newValue);
+      }
+    })();
   };
 
   const handleCancel = () => {
@@ -90,11 +100,11 @@ export function createEditableColumns<TData>(
   if (!onCellEdit) return columns;
 
   return columns.map((col) => {
-    const meta = col.meta as DataTableColumnMeta<TData> | undefined;
+    const meta: DataTableColumnMeta<TData> | undefined = col.meta;
     if (!meta?.editable) return col;
 
     const originalCell = col.cell;
-    const editorType = (meta.editorType ?? 'text') as EditorType;
+    const editorType: EditorType = meta.editorType ?? 'text';
 
     return {
       ...col,
@@ -118,6 +128,8 @@ export function createEditableColumns<TData>(
 export function createCellEditingFeature<TData>(
   onCellEdit?: (row: TData, columnId: string, newValue: unknown) => void | Promise<void>,
 ): DataTableFeature<TData> {
+  // 参数由 createEditableColumns 在主组件中直接使用，此处保留 API 一致性
+  void onCellEdit;
   return {
     id: 'cell-editing',
     columnEnhancers: () => [],

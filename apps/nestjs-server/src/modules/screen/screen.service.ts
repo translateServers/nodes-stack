@@ -5,6 +5,7 @@ import { BusinessException } from '@/common/exceptions/business.exception';
 import type {
   CreateScreenProjectDto,
   UpdateScreenProjectDto,
+  PublishScreenProjectDto,
   ScreenProjectResponse,
 } from '@/modules/screen/dto/screen.dto';
 import { ScreenProjectResponseSchema } from '@/modules/screen/dto/screen.dto';
@@ -28,6 +29,9 @@ export class ScreenService {
       scaleMode: 'fit',
     };
 
+    // 截断到秒精度，与 DateTimeStringSchema 的 "YYYY-MM-DD HH:mm:ss" 格式一致，
+    // 避免毫秒精度丢失导致后续乐观锁比较（updateMany where updatedAt）失败。
+    const now = this.truncateToSeconds(new Date());
     const created = await this.prisma.screenProject.create({
       data: {
         name: dto.name,
@@ -35,6 +39,8 @@ export class ScreenService {
         canvas: JSON.stringify(dto.canvas ?? defaultCanvas),
         components: '[]',
         status: 'draft',
+        createdAt: now,
+        updatedAt: now,
       },
     });
 
@@ -58,9 +64,17 @@ export class ScreenService {
     return this.toProjectResponse(project);
   }
 
-  async updateProject(id: string, dto: UpdateScreenProjectDto): Promise<ScreenProjectResponse> {
-    await this.findProjectById(id);
+  async findPublishedProjectById(id: string): Promise<ScreenProjectResponse> {
+    const project = await this.prisma.screenProject.findFirst({
+      where: { id, status: 'published' },
+    });
+    if (!project) {
+      throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+    }
+    return this.toProjectResponse(project);
+  }
 
+  async updateProject(id: string, dto: UpdateScreenProjectDto): Promise<ScreenProjectResponse> {
     if (dto.name !== undefined) {
       const duplicate = await this.prisma.screenProject.findFirst({
         where: { name: dto.name, NOT: { id } },
@@ -70,28 +84,73 @@ export class ScreenService {
       }
     }
 
-    const updated = await this.prisma.screenProject.update({
-      where: { id },
+    // 单次条件写入：仅当数据库 updatedAt 与请求 expectedUpdatedAt 一致时才更新，
+    // 避免先读后无条件 update 的竞态窗口；保存内容后状态统一回到 draft，
+    // 已发布项目保存后退出公开可见。
+    // updatedAt 显式截断到秒精度，覆盖 @updatedAt 的毫秒精度，
+    // 确保后续乐观锁基线与 DateTimeStringSchema 格式一致。
+    const result = await this.prisma.screenProject.updateMany({
+      where: { id, updatedAt: new Date(dto.expectedUpdatedAt) },
       data: {
         ...(dto.name !== undefined ? { name: dto.name } : {}),
         ...(dto.description !== undefined ? { description: dto.description ?? null } : {}),
         ...(dto.canvas !== undefined ? { canvas: JSON.stringify(dto.canvas) } : {}),
         ...(dto.components !== undefined ? { components: JSON.stringify(dto.components) } : {}),
         ...(dto.thumbnail !== undefined ? { thumbnail: dto.thumbnail ?? null } : {}),
+        status: 'draft',
+        updatedAt: this.truncateToSeconds(new Date()),
       },
     });
 
+    if (result.count === 0) {
+      // 任务 6.2：条件写入未命中可能是项目不存在或基线过期，
+      // 通过只读 id 字段区分两类错误；此处"先读"不影响原子写入语义，
+      // 冲突分支不会执行任何覆盖写入。
+      const existing = await this.prisma.screenProject.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+      }
+      throw new BusinessException(BizCode.SCREEN_SAVE_CONFLICT);
+    }
+
+    const updated = await this.prisma.screenProject.findUnique({ where: { id } });
+    if (!updated) {
+      throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+    }
     return this.toProjectResponse(updated);
   }
 
-  async publishProject(id: string): Promise<ScreenProjectResponse> {
-    await this.findProjectById(id);
-
-    const updated = await this.prisma.screenProject.update({
-      where: { id },
-      data: { status: 'published' },
+  async publishProject(id: string, dto: PublishScreenProjectDto): Promise<ScreenProjectResponse> {
+    // 单次条件写入：仅当数据库 updatedAt 与请求 expectedUpdatedAt 一致时才发布，
+    // 发布只改状态，不接收可编辑内容；避免先读后无条件 update 的竞态窗口。
+    // updatedAt 显式截断到秒精度，覆盖 @updatedAt 的毫秒精度，
+    // 确保后续乐观锁基线与 DateTimeStringSchema 格式一致。
+    const result = await this.prisma.screenProject.updateMany({
+      where: { id, updatedAt: new Date(dto.expectedUpdatedAt) },
+      data: { status: 'published', updatedAt: this.truncateToSeconds(new Date()) },
     });
 
+    if (result.count === 0) {
+      // 任务 6.3：条件写入未命中可能是项目不存在或基线过期，
+      // 通过只读 id 字段区分两类错误；此处"先读"不影响原子写入语义，
+      // 冲突分支不会执行任何覆盖写入，过期基线不改变状态。
+      const existing = await this.prisma.screenProject.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+      }
+      throw new BusinessException(BizCode.SCREEN_SAVE_CONFLICT);
+    }
+
+    const updated = await this.prisma.screenProject.findUnique({ where: { id } });
+    if (!updated) {
+      throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+    }
     return this.toProjectResponse(updated);
   }
 
@@ -113,16 +172,33 @@ export class ScreenService {
     createdAt: Date;
     updatedAt: Date;
   }): ScreenProjectResponse {
+    // JSON.parse 返回 any,先收窄为 unknown 交给 ScreenProjectResponseSchema 运行时验证
+    const canvas: unknown = JSON.parse(entity.canvas);
+    const components: unknown = JSON.parse(entity.components);
     return ScreenProjectResponseSchema.parse({
       id: entity.id,
       name: entity.name,
       description: entity.description,
-      canvas: JSON.parse(entity.canvas),
-      components: JSON.parse(entity.components),
+      canvas,
+      components,
       status: entity.status,
       thumbnail: entity.thumbnail,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
     });
+  }
+
+  /**
+   * 将 Date 截断到秒精度（毫秒置 0）。
+   *
+   * DateTimeStringSchema 使用 "YYYY-MM-DD HH:mm:ss" 格式，不包含毫秒。
+   * Prisma @updatedAt 默认存储毫秒精度，导致 round-trip 后客户端回传的
+   * expectedUpdatedAt（.000 毫秒）与数据库值（非零毫秒）不匹配，触发 409。
+   * 截断后数据库存储的 updatedAt 始终为 .000 毫秒，与格式化字符串一致。
+   */
+  private truncateToSeconds(date: Date): Date {
+    const result = new Date(date);
+    result.setMilliseconds(0);
+    return result;
   }
 }

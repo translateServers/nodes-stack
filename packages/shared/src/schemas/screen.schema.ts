@@ -140,5 +140,15 @@ export const UpdateScreenProjectSchema = z.object({
   canvas: CanvasConfigSchema.optional().describe('画布配置'),
   components: z.array(ScreenComponentSchema).optional().describe('组件实例列表'),
   thumbnail: z.string().optional().describe('缩略图'),
+  expectedUpdatedAt: DateTimeStringSchema.describe(
+    '本次更新基于的保存基线，值来自客户端最后确认的服务端 updatedAt',
+  ),
 });
 export type UpdateScreenProjectParams = z.infer<typeof UpdateScreenProjectSchema>;
+
+export const PublishScreenProjectSchema = z.object({
+  expectedUpdatedAt: DateTimeStringSchema.describe(
+    '本次发布基于的保存基线，值来自客户端最后确认的服务端 updatedAt',
+  ),
+});
+export type PublishScreenProjectParams = z.infer<typeof PublishScreenProjectSchema>;

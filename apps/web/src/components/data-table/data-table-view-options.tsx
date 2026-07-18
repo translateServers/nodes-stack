@@ -23,7 +23,6 @@ export function DataTableViewOptions<TData>({ table }: { table: Table<TData> }) 
 
   const moveColumn = (columnId: string, direction: 'up' | 'down') => {
     const currentOrder = table.getState().columnOrder;
-    const visibleColumns = table.getVisibleLeafColumns();
     const orderedIds = currentOrder.length > 0 ? currentOrder : allColumns.map((c) => c.id);
 
     const index = orderedIds.indexOf(columnId);

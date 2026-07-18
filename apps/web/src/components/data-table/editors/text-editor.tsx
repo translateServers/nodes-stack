@@ -13,7 +13,11 @@ export interface EditorProps {
 
 /** 文本编辑器：Enter 确认、Escape 取消、失焦确认 */
 export function TextEditor({ value, onCommit, onCancel }: EditorProps) {
-  const [localValue, setLocalValue] = useState(String(value ?? ''));
+  const [localValue, setLocalValue] = useState(
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? String(value)
+      : '',
+  );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {

@@ -83,6 +83,78 @@ describe('NumberInput', () => {
       expect(onChange).toHaveBeenCalledWith(42);
     });
 
+    it('Enter 提交后 blur 不重复触发 onChange（精确断言次数与参数）', () => {
+      const onChange = vi.fn();
+      render(<NumberInput value={10} onChange={onChange} />);
+      const input = screen.getByRole('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '42' } });
+      keyDown(input, 'Enter');
+      // Enter 内部已 commit，并主动 blur；blur 不应再次提交
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(42);
+    });
+
+    it('Enter 后显式 blur 也不再触发 onChange', () => {
+      const onChange = vi.fn();
+      render(<NumberInput value={10} onChange={onChange} />);
+      const input = screen.getByRole('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '42' } });
+      keyDown(input, 'Enter');
+      expect(onChange).toHaveBeenCalledTimes(1);
+      // 显式触发 blur（模拟真实浏览器中 .blur() 同步派发的 blur 事件）
+      fireEvent.blur(input);
+      // 仍只有 1 次，blur 没有重复提交
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(42);
+    });
+
+    it('Enter 提交无效 draft 时 blur 也不触发 onChange', () => {
+      const onChange = vi.fn();
+      render(<NumberInput value={10} onChange={onChange} />);
+      const input = screen.getByRole('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: 'abc' } });
+      keyDown(input, 'Enter');
+      // Enter commit 解析失败不调用 onChange；blur 也不应再次尝试
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('Escape 后显式 blur 不触发 onChange（精确断言 0 次）', () => {
+      const onChange = vi.fn();
+      render(<NumberInput value={10} onChange={onChange} />);
+      const input = screen.getByRole('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '999' } });
+      keyDown(input, 'Escape');
+      // Escape 已放弃编辑，blur 不应提交
+      fireEvent.blur(input);
+      expect(onChange).toHaveBeenCalledTimes(0);
+    });
+
+    it('连续两次 Enter 编辑各自只触发一次 onChange', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(<NumberInput value={10} onChange={onChange} />);
+      let input = screen.getByRole('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '42' } });
+      keyDown(input, 'Enter');
+      // 第一次提交：1 次
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenLastCalledWith(42);
+
+      // 模拟 store 回写新值
+      rerender(<NumberInput value={42} onChange={onChange} />);
+      input = screen.getByRole('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '100' } });
+      keyDown(input, 'Enter');
+      // 第二次提交：累计 2 次
+      expect(onChange).toHaveBeenCalledTimes(2);
+      expect(onChange).toHaveBeenLastCalledWith(100);
+    });
+
     it('Blur 提交 draft 值', () => {
       const onChange = vi.fn();
       render(<NumberInput value={10} onChange={onChange} />);
@@ -212,6 +284,65 @@ describe('NumberInput', () => {
       keyDown(input, 'ArrowUp');
       // 解析失败 → 用 value 50 → +1 = 51
       expect(onChange).toHaveBeenCalledWith(51);
+    });
+  });
+
+  describe('外部 value 变更同步', () => {
+    it('未聚焦时外部 value 变化，显示新值', () => {
+      const { rerender } = render(<NumberInput value={10} onChange={vi.fn()} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('10');
+      // 外部 store 更新（如拖拽提交、协同推送）
+      rerender(<NumberInput value={30} onChange={vi.fn()} />);
+      expect(input.value).toBe('30');
+    });
+
+    it('编辑 draft 时外部 value 变化，按"外部值优先"显示新值', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(<NumberInput value={10} onChange={onChange} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      // 进入编辑态：focus 触发 setDraft(String(value))
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '15' } });
+      expect(input.value).toBe('15');
+      // 编辑过程中外部 store 被更新（如拖拽联动、协同推送）
+      rerender(<NumberInput value={30} onChange={onChange} />);
+      // 外部值优先：旧 draft 失效，显示新值
+      expect(input.value).toBe('30');
+    });
+
+    it('切换 syncKey（选中对象/字段）后旧 draft 被清除', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <NumberInput value={10} onChange={onChange} syncKey="componentA.x" />,
+      );
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      // 进入编辑态并输入 '15'
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '15' } });
+      expect(input.value).toBe('15');
+      // 切换到另一个对象（syncKey 变化），value 也随之变为新对象的 20
+      rerender(<NumberInput value={20} onChange={onChange} syncKey="componentB.x" />);
+      // 旧 draft 被清除，显示新值
+      expect(input.value).toBe('20');
+      // blur 时不应把旧 draft '15' 提交到 componentB
+      fireEvent.blur(input);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('syncKey 不变时仅 value 变化也会丢弃 draft', () => {
+      const onChange = vi.fn();
+      const { rerender } = render(
+        <NumberInput value={10} onChange={onChange} syncKey="componentA.x" />,
+      );
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      fireEvent.focus(input);
+      fireEvent.change(input, { target: { value: '15' } });
+      expect(input.value).toBe('15');
+      // 仅 value 变化（如拖拽联动），syncKey 不变
+      rerender(<NumberInput value={30} onChange={onChange} syncKey="componentA.x" />);
+      // 外部值优先：显示新值
+      expect(input.value).toBe('30');
     });
   });
 });

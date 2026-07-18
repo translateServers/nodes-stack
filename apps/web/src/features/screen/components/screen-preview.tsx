@@ -2,6 +2,7 @@ import { useParams } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
 import type { ScreenProject } from '@nebula/shared';
 import { useScreenPreview } from '../hooks';
+import { resolveComponentContainerStyle } from '../registry/component-container-style';
 import { ComponentRenderer } from '../registry/renderer';
 
 function fitScale(canvasW: number, canvasH: number, scaleMode: string): number {
@@ -46,24 +47,7 @@ function PreviewCanvas({ project }: { project: ScreenProject }) {
           .filter((c) => !c.status.hidden)
           .sort((a, b) => a.zIndex - b.zIndex)
           .map((component) => (
-            <div
-              key={component.id}
-              style={{
-                position: 'absolute',
-                left: component.position.x,
-                top: component.position.y,
-                width: component.position.width,
-                height: component.position.height,
-                zIndex: component.zIndex,
-                opacity: component.style.opacity ?? 1,
-                borderRadius: component.style.borderRadius,
-                borderWidth: component.style.borderWidth,
-                borderColor: component.style.borderColor,
-                borderStyle: component.style.borderStyle,
-                backgroundColor: component.style.backgroundColor,
-                overflow: component.style.overflow ?? 'hidden',
-              }}
-            >
+            <div key={component.id} style={resolveComponentContainerStyle(component)}>
               <ComponentRenderer component={component} />
             </div>
           ))}

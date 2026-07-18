@@ -50,6 +50,7 @@ export const BizCode = {
   SCREEN_NOT_FOUND: 70001,
   SCREEN_NAME_EXISTS: 70002,
   SCREEN_PUBLISH_FAILED: 70003,
+  SCREEN_SAVE_CONFLICT: 70004,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];
@@ -174,6 +175,7 @@ const BIZ_CODE_TO_HTTP_STATUS: Record<BizCodeValue, number> = {
   [BizCode.SCREEN_NOT_FOUND]: 404,
   [BizCode.SCREEN_NAME_EXISTS]: 409,
   [BizCode.SCREEN_PUBLISH_FAILED]: 400,
+  [BizCode.SCREEN_SAVE_CONFLICT]: 409,
 };
 
 /**

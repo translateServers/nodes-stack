@@ -5,6 +5,7 @@ import Selecto from 'react-selecto';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useModifierKeys } from '../hooks/use-modifier-keys';
+import { resolveComponentContainerStyle } from '../registry/component-container-style';
 import { ComponentRenderer } from '../registry/renderer';
 import { handleSelectEnd, zoomAtPoint, type ClickRecord } from '../lib/canvas-event-router';
 import { findAlignmentLines, snapPosition, type AlignmentRect } from '../lib/smart-guides';
@@ -192,21 +193,8 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
       data-component-id={component.id}
       className="absolute"
       style={{
-        left: component.position.x,
-        top: component.position.y,
-        width: component.position.width,
-        height: component.position.height,
-        zIndex: component.zIndex,
-        opacity: component.style.opacity ?? 1,
-        borderRadius: component.style.borderRadius,
-        borderWidth: component.style.borderWidth,
-        borderColor: component.style.borderColor,
-        borderStyle: component.style.borderStyle,
-        backgroundColor: component.style.backgroundColor,
-        overflow: component.style.overflow ?? 'hidden',
-        transform: component.position.rotation
-          ? `rotate(${component.position.rotation}deg)`
-          : undefined,
+        ...resolveComponentContainerStyle(component),
+        // 编辑器专用叠加：未选中态下显示辅助边框；选中态由 Moveable 控制点接管
         outline: showBorderGuides && !selected ? '1px dashed rgba(147, 197, 253, 0.5)' : undefined,
       }}
     >

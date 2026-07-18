@@ -5,12 +5,7 @@
 import { useMemo, useState } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import {
-  DataTable,
-  DataTableColumnHeader,
-  filterFns,
-  type DataTableColumnMeta,
-} from '@/components/data-table';
+import { DataTable, DataTableColumnHeader, filterFns } from '@/components/data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +18,6 @@ import {
   formatSalary,
   formatDate,
   type Employee,
-  type EmployeeStatus,
 } from './mock-data';
 
 const columnHelper = createColumnHelper<Employee>();
@@ -73,7 +67,7 @@ export function SortingFilteringSection() {
           <DataTableColumnHeader column={column} table={table} title="姓名" />
         ),
         size: 120,
-        meta: { filterType: 'text' } as DataTableColumnMeta<Employee>,
+        meta: { filterType: 'text' },
       }),
       columnHelper.accessor('department', {
         header: ({ column, table }) => (
@@ -83,7 +77,7 @@ export function SortingFilteringSection() {
         meta: {
           filterType: 'select',
           filterOptions: [...DEPARTMENTS],
-        } as DataTableColumnMeta<Employee>,
+        },
         filterFn: filterFns.select,
       }),
       columnHelper.accessor('position', {
@@ -98,7 +92,7 @@ export function SortingFilteringSection() {
         ),
         size: 130,
         cell: (info) => formatSalary(info.getValue()),
-        meta: { filterType: 'number-range' } as DataTableColumnMeta<Employee>,
+        meta: { filterType: 'number-range' },
         filterFn: filterFns.numberRange,
       }),
       columnHelper.accessor('joinDate', {
@@ -107,7 +101,7 @@ export function SortingFilteringSection() {
         ),
         size: 140,
         cell: (info) => formatDate(info.getValue()),
-        meta: { filterType: 'date-range' } as DataTableColumnMeta<Employee>,
+        meta: { filterType: 'date-range' },
         filterFn: filterFns.dateRange,
       }),
     ],
@@ -196,7 +190,7 @@ export function RowSelectionSection() {
         header: '状态',
         size: 100,
         cell: (info) => {
-          const cfg = STATUS_CONFIG[info.getValue() as EmployeeStatus];
+          const cfg = STATUS_CONFIG[info.getValue()];
           return <Badge variant={cfg.variant}>{cfg.label}</Badge>;
         },
       }),
@@ -310,7 +304,7 @@ export function CustomCellSection() {
         header: '状态',
         size: 100,
         cell: (info) => {
-          const cfg = STATUS_CONFIG[info.getValue() as EmployeeStatus];
+          const cfg = STATUS_CONFIG[info.getValue()];
           return (
             <Badge variant={cfg.variant} className="gap-1">
               <span

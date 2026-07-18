@@ -7,7 +7,6 @@ import { confirmDialog } from '@/components/confirm-dialog';
 import { DataTableViewOptions } from './data-table-view-options';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useState, useEffect } from 'react';
-import { hasActiveFilter } from './filters';
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;

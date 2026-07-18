@@ -5,7 +5,9 @@ import type { EditorProps } from './text-editor';
 /** 数字编辑器：Enter 确认、Escape 取消、失焦确认 */
 export function NumberEditor({ value, onCommit, onCancel }: EditorProps) {
   const [localValue, setLocalValue] = useState(
-    value !== undefined && value !== null ? String(value) : '',
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? String(value)
+      : '',
   );
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

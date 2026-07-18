@@ -8,7 +8,7 @@ export interface FilterRendererProps<TData> {
 
 /** 文本筛选器：支持包含匹配，与现有搜索行为一致 */
 export function TextFilter<TData>({ column }: FilterRendererProps<TData>) {
-  const value = ((column.getFilterValue() as string | undefined) ?? '') as string;
+  const value = (column.getFilterValue() as string | undefined) ?? '';
 
   return (
     <Input

@@ -35,6 +35,7 @@ export const BizMessage: Record<number, string> = {
   [BizCode.SCREEN_NOT_FOUND]: '大屏项目不存在',
   [BizCode.SCREEN_NAME_EXISTS]: '大屏项目名称已存在',
   [BizCode.SCREEN_PUBLISH_FAILED]: '大屏发布失败',
+  [BizCode.SCREEN_SAVE_CONFLICT]: '项目已被其他会话修改，请重新加载后再保存',
 };
 
 // 业务异常类

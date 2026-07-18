@@ -20,6 +20,8 @@ import { ImportDialog } from './import-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
 import { EventBlueprintSheet } from './event-blueprint-sheet';
 import { CodeEditorSheet } from './code-editor-sheet';
+import { SaveConflictDialog } from './save-conflict-dialog';
+import { isSaveConflictError } from '../lib/is-save-conflict-error';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
@@ -27,10 +29,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
 export function ScreenEditor() {
-  const { id } = useParams({ from: '/screen/$id' });
+  const { id } = useParams({ from: '/_app/screen/$id' });
   const navigate = useNavigate();
 
-  const { data: project, isLoading } = useScreenProject(id);
+  const { data: project, isLoading, refetch } = useScreenProject(id);
   const updateMutation = useUpdateScreenProject();
   const publishMutation = usePublishScreenProject();
 
@@ -57,6 +59,7 @@ export function ScreenEditor() {
   const [showCanvasSettings, setShowCanvasSettings] = useState(false);
   const [showEventBlueprint, setShowEventBlueprint] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [showConflictDialog, setShowConflictDialog] = useState(false);
   const toolStateMachine = useToolStateMachine();
 
   useEffect(() => {
@@ -67,21 +70,81 @@ export function ScreenEditor() {
 
   const handleSave = useCallback(() => {
     if (!storeProject) return;
-    updateMutation.mutate({
-      id: storeProject.id,
-      params: {
-        name: storeProject.name,
-        description: storeProject.description ?? undefined,
-        canvas: storeProject.canvas,
-        components: storeProject.components,
+    updateMutation.mutate(
+      {
+        id: storeProject.id,
+        params: {
+          name: storeProject.name,
+          description: storeProject.description ?? undefined,
+          canvas: storeProject.canvas,
+          components: storeProject.components,
+          expectedUpdatedAt: storeProject.updatedAt,
+        },
       },
-    });
-  }, [storeProject, updateMutation]);
+      {
+        onSuccess: (response) => {
+          // 保存成功后用服务端响应（含新 updatedAt 与 draft 状态）回写 Store，
+          // 作为下次保存/发布基线；保存失败时不调用，保持本地内容
+          loadProject(response);
+        },
+        onError: (error) => {
+          // 保存冲突：打开冲突对话框，不调用 loadProject，保持本地 Store/历史/基线不变
+          // 非冲突错误由全局错误拦截器处理 Toast
+          if (isSaveConflictError(error)) {
+            setShowConflictDialog(true);
+          }
+        },
+      },
+    );
+  }, [storeProject, updateMutation, loadProject]);
+
+  // 重新加载服务端版本：放弃本地未保存修改，用服务端最新项目整体替换 Store 项目、基线、选中态和本地历史
+  // 重新加载失败时（refetch 抛出异常或 result.data 为空）保持本地内容，不关闭对话框，用户可重试或取消
+  const handleReloadFromConflict = useCallback(async () => {
+    try {
+      const result = await refetch();
+      if (!result.data) {
+        // refetch 返回但数据为空：保持本地内容，不调用 loadProject，不关闭对话框
+        toast.error('重新加载失败，请重试');
+        return;
+      }
+      loadProject(result.data);
+      setShowConflictDialog(false);
+    } catch {
+      // refetch 抛出异常：保持本地内容，不调用 loadProject，不关闭对话框
+      toast.error('重新加载失败，请重试');
+    }
+  }, [refetch, loadProject]);
 
   const handlePublish = useCallback(() => {
     if (!storeProject) return;
-    publishMutation.mutate(storeProject.id);
-  }, [storeProject, publishMutation]);
+    // 任务 8.3：存在本地脏状态时阻止直接发布，要求用户显式保存
+    if (useScreenEditorStore.getState().isDirty) {
+      toast.warning('请先保存修改后再发布');
+      return;
+    }
+    publishMutation.mutate(
+      {
+        id: storeProject.id,
+        expectedUpdatedAt: storeProject.updatedAt,
+      },
+      {
+        onSuccess: (response) => {
+          // 发布成功后用服务端响应（含新 updatedAt 与 published 状态）回写 Store，
+          // 作为下次保存/发布基线；发布失败时不调用，保持本地内容
+          loadProject(response);
+        },
+        onError: (error) => {
+          // 发布冲突：复用保存冲突对话框，不调用 loadProject，保持本地 Store/历史/基线不变，
+          // 也不更新详情缓存与公开预览缓存（mutation 的 onSuccess 未触发）
+          // 非冲突错误由全局错误拦截器处理 Toast
+          if (isSaveConflictError(error)) {
+            setShowConflictDialog(true);
+          }
+        },
+      },
+    );
+  }, [storeProject, publishMutation, loadProject]);
 
   const handlePreview = useCallback(() => {
     window.open(`/screen-preview/${id}`, '_blank');
@@ -278,6 +341,11 @@ export function ScreenEditor() {
       />
       <EventBlueprintSheet open={showEventBlueprint} onOpenChange={setShowEventBlueprint} />
       <CodeEditorSheet open={showCodeEditor} onOpenChange={setShowCodeEditor} />
+      <SaveConflictDialog
+        open={showConflictDialog}
+        onReload={() => void handleReloadFromConflict()}
+        onCancel={() => setShowConflictDialog(false)}
+      />
     </TooltipProvider>
   );
 }

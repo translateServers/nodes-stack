@@ -48,6 +48,6 @@ export function renderSlot<TData, K extends keyof DataTableSlots<TData>>(
 ): React.ReactNode {
   const slot = slots[key];
   if (!slot) return undefined;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   return (slot as (...a: unknown[]) => React.ReactNode)(...args);
 }

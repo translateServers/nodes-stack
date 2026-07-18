@@ -96,12 +96,14 @@ function PositionFields({
           value={position.x}
           onChange={(v) => onUpdate({ position: { ...position, x: v } })}
           className={numberInputClass}
+          syncKey={`${component.id}:position.x`}
         />
         <NumberInput
           label="Y"
           value={position.y}
           onChange={(v) => onUpdate({ position: { ...position, y: v } })}
           className={numberInputClass}
+          syncKey={`${component.id}:position.y`}
         />
         <NumberInput
           label="宽"
@@ -109,6 +111,7 @@ function PositionFields({
           min={1}
           onChange={(v) => onUpdate({ position: { ...position, width: v } })}
           className={numberInputClass}
+          syncKey={`${component.id}:position.width`}
         />
         <NumberInput
           label="高"
@@ -116,6 +119,7 @@ function PositionFields({
           min={1}
           onChange={(v) => onUpdate({ position: { ...position, height: v } })}
           className={numberInputClass}
+          syncKey={`${component.id}:position.height`}
         />
         {position.rotation != null && position.rotation !== 0 && (
           <NumberInput
@@ -123,6 +127,7 @@ function PositionFields({
             value={position.rotation}
             onChange={(v) => onUpdate({ position: { ...position, rotation: v } })}
             className={numberInputClass}
+            syncKey={`${component.id}:position.rotation`}
           />
         )}
       </div>
@@ -155,6 +160,7 @@ function StyleFields({
         max={1}
         onChange={(v) => onUpdate({ style: { ...style, opacity: v } })}
         className={numberInputClass}
+        syncKey={`${component.id}:style.opacity`}
       />
       <NumberInput
         label="边框"
@@ -162,6 +168,7 @@ function StyleFields({
         min={0}
         onChange={(v) => onUpdate({ style: { ...style, borderWidth: v } })}
         className={numberInputClass}
+        syncKey={`${component.id}:style.borderWidth`}
       />
       <ColorInput
         label="边框色"
@@ -174,6 +181,7 @@ function StyleFields({
         min={0}
         onChange={(v) => onUpdate({ style: { ...style, borderRadius: v } })}
         className={numberInputClass}
+        syncKey={`${component.id}:style.borderRadius`}
       />
     </div>
   );
@@ -205,6 +213,7 @@ function TextPropsFields({
         min={1}
         onChange={(v) => onUpdate({ style: { ...style, fontSize: v } })}
         className={numberInputClass}
+        syncKey={`${component.id}:style.fontSize`}
       />
       <ColorInput
         label="字色"
@@ -268,6 +277,7 @@ function CanvasSettingsFields({
         min={1}
         onChange={(v) => onUpdate({ width: v })}
         className={numberInputClass}
+        syncKey="canvas:width"
       />
       <NumberInput
         label="高度"
@@ -275,6 +285,7 @@ function CanvasSettingsFields({
         min={1}
         onChange={(v) => onUpdate({ height: v })}
         className={numberInputClass}
+        syncKey="canvas:height"
       />
       <ColorInput
         label="背景"

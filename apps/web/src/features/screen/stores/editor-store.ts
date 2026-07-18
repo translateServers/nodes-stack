@@ -72,6 +72,14 @@ interface ScreenEditorData {
    * 与 `uiVisible` 独立 —— `uiVisible=false` 优先级更高，会强制隐藏所有 UI。
    */
   screenMode: 'standard' | 'withMenu' | 'fullscreen';
+  /**
+   * 编辑器本地脏状态：当前内容是否相对最后一次加载/保存响应发生变化。
+   * - `loadProject` 时置为 false（包括首次加载和保存成功后回写）
+   * - 任何修改 project 内容的操作（updateComponent / addComponent / undo 等）后置为 true
+   * - 用于阻止未保存时直接发布（任务 8.3）
+   * - 仅布尔标志，不做内容 diff，不进入历史栈
+   */
+  isDirty: boolean;
 }
 
 interface ScreenEditorActions {
@@ -187,6 +195,7 @@ const initialData: ScreenEditorData = {
   gridSize: 10,
   uiVisible: true,
   screenMode: 'standard',
+  isDirty: false,
 };
 
 /**
@@ -225,6 +234,9 @@ function pushHistory(set: ScreenEditorSet): void {
  * 1. 先调用 `pushHistory(set)`：把当前 `project.components` 快照推入 `history.past`，并清空 `future`
  * 2. 再调用 `set(updater, false, actionName)`：应用业务更新，并在 devtools 中标记 actionName
  *
+ * 脏状态：所有进入历史栈的修改操作均视为"相对最后加载/保存响应发生变化"，自动置 `isDirty=true`。
+ * 不影响历史栈本身的行为（past / future 推入与清空逻辑不变）。
+ *
  * 不迁移任何现有 action（仅提供 API，迁移见 Task 2.16–2.20）。
  *
  * @param set zustand set 函数（由 store creator 提供）
@@ -237,7 +249,7 @@ export function withHistory(
   updater: (state: ScreenEditorState) => Partial<ScreenEditorState>,
 ): void {
   pushHistory(set);
-  set(updater, false, actionName);
+  set((state: ScreenEditorState) => ({ ...updater(state), isDirty: true }), false, actionName);
 }
 
 export const useScreenEditorStore = create<ScreenEditorState>()(
@@ -251,6 +263,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             project,
             selectedComponentIds: [],
             history: { past: [], future: [] },
+            isDirty: false,
           },
           false,
           'loadProject',
@@ -354,6 +367,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                 ...state.project,
                 canvas: { ...state.project.canvas, ...updates },
               },
+              isDirty: true,
             };
           },
           false,
@@ -682,6 +696,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
               // 浅拷贝当前 components 存入 future（同 pushHistory 的immutable前提）
               future: [[...(state.project?.components ?? [])], ...state.history.future],
             },
+            isDirty: true,
           }),
           false,
           'undo',
@@ -700,6 +715,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
               past: [...state.history.past, [...(state.project?.components ?? [])]],
               future: state.history.future.slice(1),
             },
+            isDirty: true,
           }),
           false,
           'redo',

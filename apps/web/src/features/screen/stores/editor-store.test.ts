@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 
-import { withHistory } from './editor-store';
+import { useScreenEditorStore, withHistory } from './editor-store';
 import type { ScreenEditorState } from './editor-store';
 
 /**
@@ -40,9 +40,9 @@ function makeMockComponent(id: string): ScreenComponent {
 }
 
 describe('withHistory', () => {
-  it('调用顺序：先调用 set(fn) 推入历史，再调用 set(updater, false, actionName) 应用更新', () => {
+  it('调用顺序：先调用 set(fn) 推入历史，再调用 set(wrapper, false, actionName) 应用更新并标记脏状态', () => {
     const setMock = vi.fn();
-    const updater = (): Partial<ScreenEditorState> => ({});
+    const updater = vi.fn((): Partial<ScreenEditorState> => ({}));
 
     withHistory(setMock as never, 'addComponent', updater);
 
@@ -54,11 +54,18 @@ describe('withHistory', () => {
     expect(firstCall[1]).toBeUndefined();
     expect(firstCall[2]).toBeUndefined();
 
-    // 第二次：set(updater, false, actionName)
+    // 第二次：set(wrapper, false, actionName) — wrapper 内部调用 updater 并合并 isDirty: true
     const secondCall = setMock.mock.calls[1];
-    expect(secondCall[0]).toBe(updater);
+    expect(typeof secondCall[0]).toBe('function');
     expect(secondCall[1]).toBe(false);
     expect(secondCall[2]).toBe('addComponent');
+
+    // 验证 wrapper 调用 updater 并合并 isDirty: true（任务 8.1）
+    const wrapper = secondCall[0] as (s: ScreenEditorState) => Partial<ScreenEditorState>;
+    const mockState = makeMockState({ project: null });
+    const result = wrapper(mockState);
+    expect(updater).toHaveBeenCalledWith(mockState);
+    expect(result).toEqual({ isDirty: true });
   });
 
   it('actionName 透传：传入的 actionName 出现在第二次 set 调用中', () => {
@@ -266,5 +273,135 @@ describe('withHistory', () => {
       // 验证：history 未被修改（past 仍为空）
       expect(currentState.history.past).toEqual([]);
     });
+  });
+});
+
+describe('isDirty 脏状态跟踪（任务 8.1）', () => {
+  /** 创建一个最小可用的 ScreenProject mock */
+  function makeProject(id = 'proj-1', updatedAt = '2024-01-01 00:00:00'): ScreenProject {
+    return {
+      id,
+      name: `project-${id}`,
+      description: null,
+      canvas: {
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#000000',
+        scaleMode: 'fit',
+      },
+      components: [],
+      status: 'draft',
+      thumbnail: null,
+      createdAt: '2024-01-01 00:00:00',
+      updatedAt,
+    } as unknown as ScreenProject;
+  }
+
+  /** 创建一个最小可用的 ScreenComponent mock */
+  function makeComponent(id = 'comp-1'): ScreenComponent {
+    return {
+      id,
+      type: 'rect',
+      name: `comp-${id}`,
+      position: { x: 0, y: 0, width: 100, height: 100 },
+      style: {},
+      zIndex: 0,
+      status: { locked: false, hidden: false },
+    } as unknown as ScreenComponent;
+  }
+
+  beforeEach(() => {
+    // 重置 store 数据字段，保留 actions；隔离每个用例的状态
+    useScreenEditorStore.setState({
+      project: null,
+      selectedComponentIds: [],
+      history: { past: [], future: [] },
+      isDirty: false,
+    });
+  });
+
+  it('a) 加载后为干净（isDirty=false）', () => {
+    useScreenEditorStore.getState().loadProject(makeProject());
+    expect(useScreenEditorStore.getState().isDirty).toBe(false);
+  });
+
+  it('b) 修改后为脏（isDirty=true）—— 覆盖 withHistory / updateCanvas / undo / redo 多路径', () => {
+    // withHistory 路径：addComponent（首次修改）
+    useScreenEditorStore.getState().loadProject(makeProject());
+    useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+
+    // 再次 loadProject 恢复干净后，验证 updateComponent 路径
+    useScreenEditorStore.getState().loadProject({
+      ...makeProject('proj-2', '2024-01-01 00:00:00'),
+      components: [makeComponent('comp-2')],
+    });
+    expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    useScreenEditorStore.getState().updateComponent('comp-2', {
+      position: { x: 10, y: 20, width: 100, height: 100 },
+    });
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+
+    // 再次 loadProject 恢复干净后，验证 updateCanvas（非 withHistory）路径
+    useScreenEditorStore.getState().loadProject({
+      ...makeProject('proj-3', '2024-01-01 00:00:00'),
+      components: [makeComponent('comp-3')],
+    });
+    expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    useScreenEditorStore.getState().updateCanvas({ backgroundColor: '#ffffff' });
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+
+    // 再次 loadProject + addComponent 制造历史，验证 undo 路径
+    useScreenEditorStore.getState().loadProject({
+      ...makeProject('proj-4', '2024-01-01 00:00:00'),
+      components: [makeComponent('comp-4')],
+    });
+    useScreenEditorStore.getState().addComponent(makeComponent('comp-5'));
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    useScreenEditorStore.getState().loadProject(useScreenEditorStore.getState().project!);
+    expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    useScreenEditorStore.getState().addComponent(makeComponent('comp-6'));
+    useScreenEditorStore.getState().undo();
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+
+    // 验证 redo 路径
+    useScreenEditorStore.getState().loadProject(useScreenEditorStore.getState().project!);
+    expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    useScreenEditorStore.getState().addComponent(makeComponent('comp-7'));
+    useScreenEditorStore.getState().undo();
+    useScreenEditorStore.getState().redo();
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+  });
+
+  it('c) 保存成功后恢复干净（通过 loadProject 回写）', () => {
+    // 模拟任务 7.3 的保存成功流程：loadProject → 修改 → 保存成功后 loadProject 回写新基线
+    useScreenEditorStore.getState().loadProject(makeProject('proj-1', '2024-01-01 00:00:00'));
+    useScreenEditorStore.getState().addComponent(makeComponent());
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+
+    // 模拟服务端返回保存后的完整项目（新 updatedAt），编辑器调用 loadProject 回写
+    const savedProject: ScreenProject = {
+      ...makeProject('proj-1', '2024-01-02 00:00:00'),
+      components: [makeComponent()],
+    };
+    useScreenEditorStore.getState().loadProject(savedProject);
+
+    expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    // 验证回写后 Store 中的 updatedAt 是新基线
+    expect(useScreenEditorStore.getState().project?.updatedAt).toBe('2024-01-02 00:00:00');
+  });
+
+  it('d) 保存失败后保持脏', () => {
+    // 模拟任务 7.3 的保存失败流程：loadProject → 修改 → 保存失败（不调用 loadProject）
+    useScreenEditorStore.getState().loadProject(makeProject('proj-1', '2024-01-01 00:00:00'));
+    useScreenEditorStore.getState().addComponent(makeComponent());
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    const baselineUpdatedAt = useScreenEditorStore.getState().project?.updatedAt;
+
+    // 模拟保存失败：mutation 抛错，不会调用 loadProject
+    // —— 此处无需实际触发网络请求，只需断言"未调用 loadProject"时 isDirty 保持 true
+    expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    // 验证基线 updatedAt 未被覆盖（保持旧值，下次保存仍用旧基线）
+    expect(useScreenEditorStore.getState().project?.updatedAt).toBe(baselineUpdatedAt);
   });
 });

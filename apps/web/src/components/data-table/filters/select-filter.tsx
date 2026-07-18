@@ -5,9 +5,9 @@ import type { FilterRendererProps } from './text-filter';
 
 /** 多选筛选器：通过 Checkbox 选择多个值 */
 export function SelectFilter<TData>({ column }: FilterRendererProps<TData>) {
-  const meta = column.columnDef.meta as DataTableColumnMeta<TData> | undefined;
+  const meta: DataTableColumnMeta<TData> | undefined = column.columnDef.meta;
   const options = meta?.filterOptions ?? [];
-  const selectedValues = ((column.getFilterValue() as string[]) ?? []) as string[];
+  const selectedValues: string[] = (column.getFilterValue() as string[]) ?? [];
 
   const handleToggle = (value: string) => {
     const newValues = selectedValues.includes(value)
@@ -55,5 +55,8 @@ export function selectFilterFn<TData>(
 ): boolean {
   const cellValue = (row.original as Record<string, unknown>)[columnId];
   if (cellValue === undefined || cellValue === null) return false;
-  return filterValue.includes(String(cellValue));
+  if (typeof cellValue === 'string' || typeof cellValue === 'number') {
+    return filterValue.includes(String(cellValue));
+  }
+  return false;
 }

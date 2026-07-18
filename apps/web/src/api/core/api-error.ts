@@ -1,4 +1,5 @@
 import { toast } from 'sonner';
+import { BizCode } from '@nebula/shared';
 import { BusinessError, getBizMessage, isBusinessError } from '@nebula/shared/errors';
 
 export type ApiErrorSeverity = 'error' | 'warning';
@@ -15,6 +16,11 @@ export function emitApiError(error: unknown, severity: ApiErrorSeverity = 'error
       return;
     }
     notifiedErrors.add(error);
+  }
+
+  // SCREEN_SAVE_CONFLICT 由保存冲突对话框（任务 9.3）处理，不显示全局 Toast
+  if (isBusinessError(error) && error.code === BizCode.SCREEN_SAVE_CONFLICT) {
+    return;
   }
 
   const message = isBusinessError(error)

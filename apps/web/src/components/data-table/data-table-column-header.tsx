@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { DataTableColumnMeta } from './types';
-import { getFilterRenderer, hasActiveFilter, type FilterType } from './filters';
+import { getFilterRenderer, hasActiveFilter } from './filters';
 
 interface DataTableColumnHeaderProps<TData, TValue> extends React.HTMLAttributes<HTMLDivElement> {
   column: Column<TData, TValue>;
@@ -35,8 +35,8 @@ export function DataTableColumnHeader<TData, TValue>({
   const isSorted = sortIndex >= 0;
 
   // 高级筛选：通过 column meta 的 filterType 判断
-  const meta = column.columnDef.meta as DataTableColumnMeta<TData> | undefined;
-  const filterType = meta?.filterType as FilterType | undefined;
+  const meta: DataTableColumnMeta<TData> | undefined = column.columnDef.meta;
+  const filterType = meta?.filterType;
   const FilterComponent = filterType ? getFilterRenderer<TData>(filterType) : undefined;
   const hasFilter = hasActiveFilter(column);
 
@@ -92,7 +92,7 @@ export function DataTableColumnHeader<TData, TValue>({
               <DropdownMenuSeparator />
               <div className="p-2">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">筛选</p>
-                <FilterComponent column={column as Column<TData, unknown>} />
+                <FilterComponent column={column} />
               </div>
             </>
           )}

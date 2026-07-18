@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
-import { Route as ScreenIdRouteImport } from './routes/screen.$id'
 import { Route as ScreenPreviewIdRouteImport } from './routes/screen-preview.$id'
 import { Route as AppUsersRouteImport } from './routes/_app.users'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
@@ -20,6 +19,7 @@ import { Route as AppMenusRouteImport } from './routes/_app.menus'
 import { Route as AppDictRouteImport } from './routes/_app.dict'
 import { Route as AppDataTablePlaygroundRouteImport } from './routes/_app.data-table-playground'
 import { Route as AppScreenIndexRouteImport } from './routes/_app.screen.index'
+import { Route as AppScreenIdRouteImport } from './routes/_app.screen.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -34,11 +34,6 @@ const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRoute,
-} as any)
-const ScreenIdRoute = ScreenIdRouteImport.update({
-  id: '/screen/$id',
-  path: '/screen/$id',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const ScreenPreviewIdRoute = ScreenPreviewIdRouteImport.update({
   id: '/screen-preview/$id',
@@ -75,6 +70,11 @@ const AppScreenIndexRoute = AppScreenIndexRouteImport.update({
   path: '/screen/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppScreenIdRoute = AppScreenIdRouteImport.update({
+  id: '/screen/$id',
+  path: '/screen/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -85,7 +85,7 @@ export interface FileRoutesByFullPath {
   '/roles': typeof AppRolesRoute
   '/users': typeof AppUsersRoute
   '/screen-preview/$id': typeof ScreenPreviewIdRoute
-  '/screen/$id': typeof ScreenIdRoute
+  '/screen/$id': typeof AppScreenIdRoute
   '/screen/': typeof AppScreenIndexRoute
 }
 export interface FileRoutesByTo {
@@ -96,8 +96,8 @@ export interface FileRoutesByTo {
   '/roles': typeof AppRolesRoute
   '/users': typeof AppUsersRoute
   '/screen-preview/$id': typeof ScreenPreviewIdRoute
-  '/screen/$id': typeof ScreenIdRoute
   '/': typeof AppIndexRoute
+  '/screen/$id': typeof AppScreenIdRoute
   '/screen': typeof AppScreenIndexRoute
 }
 export interface FileRoutesById {
@@ -110,8 +110,8 @@ export interface FileRoutesById {
   '/_app/roles': typeof AppRolesRoute
   '/_app/users': typeof AppUsersRoute
   '/screen-preview/$id': typeof ScreenPreviewIdRoute
-  '/screen/$id': typeof ScreenIdRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/screen/$id': typeof AppScreenIdRoute
   '/_app/screen/': typeof AppScreenIndexRoute
 }
 export interface FileRouteTypes {
@@ -136,8 +136,8 @@ export interface FileRouteTypes {
     | '/roles'
     | '/users'
     | '/screen-preview/$id'
-    | '/screen/$id'
     | '/'
+    | '/screen/$id'
     | '/screen'
   id:
     | '__root__'
@@ -149,8 +149,8 @@ export interface FileRouteTypes {
     | '/_app/roles'
     | '/_app/users'
     | '/screen-preview/$id'
-    | '/screen/$id'
     | '/_app/'
+    | '/_app/screen/$id'
     | '/_app/screen/'
   fileRoutesById: FileRoutesById
 }
@@ -158,7 +158,6 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   ScreenPreviewIdRoute: typeof ScreenPreviewIdRoute
-  ScreenIdRoute: typeof ScreenIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -183,13 +182,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
-    }
-    '/screen/$id': {
-      id: '/screen/$id'
-      path: '/screen/$id'
-      fullPath: '/screen/$id'
-      preLoaderRoute: typeof ScreenIdRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/screen-preview/$id': {
       id: '/screen-preview/$id'
@@ -240,6 +232,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScreenIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/screen/$id': {
+      id: '/_app/screen/$id'
+      path: '/screen/$id'
+      fullPath: '/screen/$id'
+      preLoaderRoute: typeof AppScreenIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -250,6 +249,7 @@ interface AppRouteChildren {
   AppRolesRoute: typeof AppRolesRoute
   AppUsersRoute: typeof AppUsersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppScreenIdRoute: typeof AppScreenIdRoute
   AppScreenIndexRoute: typeof AppScreenIndexRoute
 }
 
@@ -260,6 +260,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRolesRoute: AppRolesRoute,
   AppUsersRoute: AppUsersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppScreenIdRoute: AppScreenIdRoute,
   AppScreenIndexRoute: AppScreenIndexRoute,
 }
 
@@ -269,7 +270,6 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ScreenPreviewIdRoute: ScreenPreviewIdRoute,
-  ScreenIdRoute: ScreenIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

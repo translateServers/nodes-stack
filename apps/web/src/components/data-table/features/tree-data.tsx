@@ -1,6 +1,5 @@
 import { flexRender, type CellContext, type ColumnDef, type Row } from '@tanstack/react-table';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import type { DataTableFeature } from '../types';
 
 /** 树形展开/折叠按钮 */
@@ -54,7 +53,13 @@ export function wrapWithTreeExpand<TData>(
         )}
         <TreeExpandButton row={ctx.row} />
         <span className="ml-1">
-          {originalCell ? flexRender(originalCell, ctx) : String(ctx.getValue() ?? '')}
+          {originalCell
+            ? flexRender(originalCell, ctx)
+            : typeof ctx.getValue() === 'string' ||
+                typeof ctx.getValue() === 'number' ||
+                typeof ctx.getValue() === 'boolean'
+              ? String(ctx.getValue())
+              : ''}
         </span>
       </div>
     ),
@@ -77,7 +82,7 @@ export function createTreeDataFeature<TData>(): DataTableFeature<TData> {
  * 选择父行时自动选择所有子行，取消父行时自动取消所有子行。
  * 通过 TanStack Table 的 enableSubRowSelection 配置自动支持。
  */
-export function enableTreeRowSelection<TData>(): Partial<{
+export function enableTreeRowSelection(): Partial<{
   enableSubRowSelection: boolean;
 }> {
   return {

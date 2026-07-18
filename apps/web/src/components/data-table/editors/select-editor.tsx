@@ -15,7 +15,11 @@ interface SelectEditorProps extends EditorProps {
 
 /** 下拉编辑器：选择即确认 */
 export function SelectEditor({ value, onCommit, onCancel, options = [] }: SelectEditorProps) {
-  const [localValue, setLocalValue] = useState(String(value ?? ''));
+  const initialValue =
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      ? String(value)
+      : '';
+  const [localValue, setLocalValue] = useState(initialValue);
 
   return (
     <Select
@@ -25,7 +29,7 @@ export function SelectEditor({ value, onCommit, onCancel, options = [] }: Select
         onCommit(v);
       }}
       onOpenChange={(open) => {
-        if (!open && localValue === String(value ?? '')) onCancel();
+        if (!open && localValue === initialValue) onCancel();
       }}
     >
       <SelectTrigger className="h-8" autoFocus>
