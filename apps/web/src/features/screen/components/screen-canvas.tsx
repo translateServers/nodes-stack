@@ -7,9 +7,22 @@ import { useScreenEditorStore } from '../stores/editor-store';
 import { useModifierKeys } from '../hooks/use-modifier-keys';
 import { resolveComponentContainerStyle } from '../registry/component-container-style';
 import { ComponentRenderer } from '../registry/renderer';
-import { handleSelectEnd, zoomAtPoint, type ClickRecord } from '../lib/canvas-event-router';
+import { createComponentInstance } from '../registry';
+import { handleSelectEnd, type ClickRecord } from '../lib/canvas-event-router';
 import { findAlignmentLines, snapPosition, type AlignmentRect } from '../lib/smart-guides';
+import { DEFAULT_TEXT_CONTENT } from '../lib/text-editing-contract';
+import { computeShapeCreation } from '../lib/shape-creation-geometry';
+import { pickImageFile, type ImageFileResult } from '../lib/image-file-adapter';
+import { zoomWithBoundary, zoomToolClick, WHEEL_ZOOM_FACTOR } from '../lib/zoom-boundary';
+import {
+  sampleColorFromElement,
+  sampleColorFromCanvas,
+  getColorApplyTarget,
+  applyColorToStyle,
+} from '../lib/color-sampler';
 import { SmartGuidesOverlay, useAlignmentLinesStore } from './smart-guides-overlay';
+import type { EditorSessionApi } from '../hooks/use-editor-session';
+import { getToolById } from '../hooks/tool-registry';
 
 interface DimensionInfo {
   x: number;
@@ -203,13 +216,61 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
   );
 });
 
+/**
+ * 任务 2.3：会话控制器接入 ScreenCanvas
+ *
+ * 画布按活动工具的能力派生 Moveable/Selecto 启用状态：
+ * - Moveable 的 `draggable`/`resizable`/`rotatable` 来自 `canDrag`/`canResize`/`canRotate`
+ * - Selecto 的 `selectByClick` 来自 `canSelect`
+ * - 容器 cursor 来自 `TOOL_REGISTRY` 中工具定义的 cursor，平移期间临时覆盖为 `grabbing`
+ *
+ * 本任务只交付"不同工具改变画布允许能力"的可观察结果，具体工具行为留给 4.x-9.x。
+ */
 export function ScreenCanvas({
   onDrop,
   onDragOver,
+  editorSession,
 }: {
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  editorSession: Pick<
+    EditorSessionApi,
+    | 'activeTool'
+    | 'activeCapabilities'
+    | 'dispatchInteraction'
+    | 'interactionState'
+    | 'textEditing'
+    | 'beginTextEditing'
+    | 'endTextEditing'
+    | 'isEditingText'
+    | 'setActiveColor'
+  >;
 }) {
+  const { activeTool, activeCapabilities: capabilities } = editorSession;
+  const { dispatchInteraction } = editorSession;
+  const { interactionState } = editorSession;
+  const { beginTextEditing } = editorSession;
+  // 任务 9.4：吸管工具点击采样后写入会话活动颜色
+  const { setActiveColor } = editorSession;
+
+  /**
+   * 任务 13.7：用 ref 读取最新的 activeTool 和 interactionState，
+   * 供 setTimeout 等异步回调 guard 使用，避免 closure 捕获旧值导致状态卡死。
+   *
+   * 修复 bug：Selecto onSelectEnd 末尾的 setTimeout(dragStart, 0) 在用户切换工具后
+   * 仍会触发 Moveable.dragStart，导致 interactionState 进入 dragging 但 activeTool
+   * 已不是 select，后续抓手/形状等工具因 interactionState !== idle 而拒绝交互，
+   * 且 Moveable 内部 dragging 状态无法恢复（onDragEnd 不会被调用），最终选择工具
+   * 的所有能力失效。
+   */
+  const activeToolRef = useRef(activeTool);
+  const interactionStateRef = useRef(interactionState);
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+    interactionStateRef.current = interactionState;
+  }, [activeTool, interactionState]);
+  // 任务 4.5：isPanning 从交互状态机派生，避免重复平移布尔状态。
+  const isPanning = interactionState === 'panning';
   const project = useScreenEditorStore((s) => s.project);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
@@ -221,6 +282,9 @@ export function ScreenCanvas({
   const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateComponentsBatch = useScreenEditorStore((s) => s.updateComponentsBatch);
+  // 任务 5.2：文字工具点击创建需要 addComponent / selectComponent
+  const addComponent = useScreenEditorStore((s) => s.addComponent);
+  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
   // Alt+拖拽复制（适配表 #12）：onDragEnd 时调用，复制选中到光标位置
   const duplicateSelectedToPosition = useScreenEditorStore((s) => s.duplicateSelectedToPosition);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
@@ -246,11 +310,35 @@ export function ScreenCanvas({
   const panState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
     null,
   );
-  const [isPanning, setIsPanning] = useState(false);
-  // 修饰键状态由 useModifierKeys 集中管理（替换原独立的 keydown/keyup 监听）
-  // spaceHeld 重命名为 spaceHeldUI 保持原 UI 状态语义
-  // altHeld 用于切换 copy 光标（Alt+拖拽复制，适配表 #12）
-  const { spaceRef, shiftRef, spaceHeld: spaceHeldUI, shiftHeld, altHeld } = useModifierKeys();
+  // 修饰键状态由 useModifierKeys 集中管理。
+  // 任务 4.3：Space 临时抓手不再通过 spaceRef 直接控制画布，而是通过工具栈
+  // （pushTemporaryTool('hand')）使 activeTool 变为 'hand'，画布按 activeTool 派生行为。
+  // spaceRef/spaceHeld 不再被画布消费，保留修饰键 hook 供未来其他用途。
+  // altHeld 用于切换 copy 光标（Alt+拖拽复制，适配表 #12），仅在允许拖拽的工具下生效。
+  const { shiftRef, shiftHeld, altHeld } = useModifierKeys();
+
+  /**
+   * 任务 2.3：按活动工具能力派生 Moveable/Selecto 启用状态。
+   *
+   * 这是从 `editorSession.activeCapabilities` 到 Moveable/Selecto props 的唯一映射点。
+   * 当活动工具不具备某项能力时，对应的交互入口被关闭，确保非选择工具不会误触
+   * 组件变换。具体工具行为（如抓手平移、文字创建）由后续任务实现。
+   */
+  const moveableDraggable = capabilities.canDrag;
+  const moveableResizable = capabilities.canResize;
+  const moveableRotatable = capabilities.canRotate;
+  const selectoSelectByClick = capabilities.canSelect;
+
+  /**
+   * 任务 2.3：按活动工具派生容器 cursor。
+   *
+   * 优先级：平移中（grabbing） > Alt 修饰（copy） > 工具 cursor > Space 临时抓手（grab）。
+   * 当工具自身 cursor 与 Space 临时抓手冲突时（如 hand 工具），保持工具 cursor。
+   */
+  const toolCursor = useMemo(() => {
+    const tool = getToolById(activeTool);
+    return tool?.cursor ?? 'default';
+  }, [activeTool]);
 
   /** 稳定的 ref 注册回调，避免作为 prop 传入 memo 组件时引起重渲染 */
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
@@ -280,12 +368,402 @@ export function ScreenCanvas({
     }
   }, [selectedComponentIds, project?.components]);
 
-  const handlePanStart = useCallback(
+  /**
+   * 任务 5.2：文字工具点击画布创建文本组件。
+   *
+   * 当 activeTool === 'text' 且 capabilities.canCreate 时，pointer-down 在画布空白处
+   * 创建文本组件，选中新组件并进入编辑态。
+   *
+   * 坐标转换：屏幕坐标 → 画布坐标
+   *   canvasX = (clientX - rect.left - canvasOffset.x) / canvasScale
+   *   canvasY = (clientY - rect.top - canvasOffset.y) / canvasScale
+   *
+   * 派发到交互状态机：
+   * - 'start-create'：idle → creating（标记创建态）
+   * - 'double-click'：creating → text-editing（进入编辑态）
+   *
+   * 提交/取消语义（任务 5.1 契约）：
+   * - 用户输入有效内容提交：写入历史一条
+   * - 用户输入空内容提交：删除组件，不写入历史
+   * - 用户 Escape 取消：删除组件（新建路径），不写入历史
+   */
+  const handleCreateText = useCallback(
     (e: React.PointerEvent) => {
-      if (e.button !== 0 || !spaceRef.current) return;
+      if (e.button !== 0) return;
+      // 仅在 idle/hovering 状态下可以开始创建，避免与其他交互重入
+      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      const el = containerRef.current;
+      const proj = project;
+      if (!el || !proj) return;
+      const rect = el.getBoundingClientRect();
+      // 屏幕坐标 → 画布坐标
+      const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
+      const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+      // 计算最大 zIndex
+      const maxZ = proj.components.reduce(
+        (m: number, c: ScreenComponent) => Math.max(m, c.zIndex),
+        0,
+      );
+      const instance = createComponentInstance('text', canvasX, canvasY, maxZ + 1, proj.components);
+      if (!instance) return;
+      // 写入 Store
+      addComponent(instance);
+      selectComponent(instance.id);
+      // 进入文本编辑态
+      beginTextEditing({
+        componentId: instance.id,
+        initialContent: DEFAULT_TEXT_CONTENT,
+        isNewlyCreated: true,
+      });
+      // 派发到交互状态机：先标记创建态，再进入编辑态
+      dispatchInteraction('start-create');
+      dispatchInteraction('double-click');
       e.preventDefault();
       e.stopPropagation();
-      setIsPanning(true);
+    },
+    [
+      interactionState,
+      project,
+      canvasScale,
+      canvasOffset,
+      addComponent,
+      selectComponent,
+      beginTextEditing,
+      dispatchInteraction,
+    ],
+  );
+
+  /**
+   * 任务 6.3/6.4：形状（矩形/椭圆）拖拽创建状态。
+   *
+   * 与文本创建不同，形状需要拖拽确定尺寸：
+   * - pointer-down：记录起点，进入 creating 状态
+   * - pointer-move：更新当前点，渲染预览矩形
+   * - pointer-up：根据 hasValidSize 判定提交或取消
+   *
+   * 坐标均为画布坐标系（已经过 canvasScale 反向换算）。
+   */
+  interface ShapeCreationState {
+    readonly tool: 'rect' | 'ellipse';
+    readonly startX: number;
+    readonly startY: number;
+    readonly currentX: number;
+    readonly currentY: number;
+  }
+
+  const [shapeCreation, setShapeCreation] = useState<ShapeCreationState | null>(null);
+
+  /**
+   * 任务 13.6：交互状态恢复到 idle/hovering 时清理画布局部状态。
+   *
+   * 修复 bug：用户在 panning/creating 态直接切换工具时，setToolWithCleanup 派发
+   * cancel 让交互状态机回到 idle，但 ScreenCanvas 的 panState（useRef）和
+   * shapeCreation（useState）不会自动清理。如果不清理：
+   * - panState.current 残留 → 下次 handlePanMove 误以为在平移，offset 异常跳变
+   * - shapeCreation 残留 → 下次 handlePanMove 误以为在创建形状，渲染异常预览
+   * - pointer capture 残留 → 后续点击事件被原 target 捕获，Selecto 接收不到
+   *
+   * 触发条件：interactionState 从非 idle/hovering 状态"恢复到" idle/hovering。
+   * 用 ref 追踪前一次状态，避免在 idle 状态下 shapeCreation 正常变化时误清理
+   *（例如测试中 mock 的 interactionState 固定为 idle，handleCreateShapeStart
+   *  设置 shapeCreation 后此 effect 会立即清空它，破坏创建流程）。
+   */
+  const prevInteractionStateRef = useRef(interactionState);
+  useEffect(() => {
+    const prev = prevInteractionStateRef.current;
+    const curr = interactionState;
+    prevInteractionStateRef.current = curr;
+
+    // 仅在"从非 idle/hovering 恢复到 idle/hovering"时清理
+    const isRecovery =
+      (curr === 'idle' || curr === 'hovering') && prev !== 'idle' && prev !== 'hovering';
+    if (!isRecovery) return;
+
+    if (panState.current) {
+      panState.current = null;
+    }
+    if (shapeCreation) {
+      setShapeCreation(null);
+    }
+  }, [interactionState, shapeCreation]);
+
+  /**
+   * 任务 6.3/6.4：形状工具拖拽创建起点。
+   *
+   * 当 activeTool 为 rect/ellipse 且 canCreate 时，pointer-down 记录起点并进入 creating 状态。
+   * 实际创建在 pointer-up 时根据拖拽尺寸判定。
+   */
+  const handleCreateShapeStart = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
+      const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+      setShapeCreation({
+        tool: activeTool as 'rect' | 'ellipse',
+        startX: canvasX,
+        startY: canvasY,
+        currentX: canvasX,
+        currentY: canvasY,
+      });
+      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      dispatchInteraction('start-create');
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [interactionState, canvasScale, canvasOffset, activeTool, dispatchInteraction],
+  );
+
+  /**
+   * 任务 7.4：图片工具点击创建图片组件。
+   *
+   * 与文字/形状工具不同，图片工具需要用户通过文件选择器选择图片文件：
+   * - pointer-down：记录点击位置（画布坐标）
+   * - 调用 pickImageFile() 弹出文件选择器
+   * - 用户选择文件：创建图片组件，按图片自然尺寸设置 customSize（受 maxDimension 约束）
+   * - 用户取消：不创建组件，不入历史
+   *
+   * 派发到交互状态机：
+   * - 'start-create'：进入 creating 状态（等待文件选择）
+   * - 'commit-create'：用户选择文件并成功创建
+   * - 'cancel'：用户取消文件选择或创建失败
+   *
+   * 提交语义（任务 7.1 资源契约）：
+   * - 仅持久化 data URL 或 http(s) URL，拒绝 file:// 和 blob:
+   * - 图片尺寸按自然尺寸等比缩放，最大不超过 maxImageDimension
+   */
+  const handleCreateImage = useCallback(
+    async (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      const el = containerRef.current;
+      const proj = project;
+      if (!el || !proj) return;
+      const rect = el.getBoundingClientRect();
+      const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
+      const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+      e.preventDefault();
+      e.stopPropagation();
+      dispatchInteraction('start-create');
+      let imageResult: ImageFileResult | null;
+      try {
+        imageResult = await pickImageFile();
+      } catch {
+        // 文件读取/类型校验失败：取消创建，不入历史
+        dispatchInteraction('cancel');
+        return;
+      }
+      if (!imageResult) {
+        // 用户取消文件选择：不创建组件
+        dispatchInteraction('cancel');
+        return;
+      }
+      const maxZ = proj.components.reduce(
+        (m: number, c: ScreenComponent) => Math.max(m, c.zIndex),
+        0,
+      );
+      // 按图片自然尺寸等比缩放，最大不超过 maxImageDimension
+      const maxImageDimension = 800;
+      let width = imageResult.width;
+      let height = imageResult.height;
+      if (width > maxImageDimension || height > maxImageDimension) {
+        const ratio = Math.min(maxImageDimension / width, maxImageDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      // 防御性尺寸下限
+      if (width < 1) width = 1;
+      if (height < 1) height = 1;
+      const instance = createComponentInstance(
+        'image',
+        canvasX,
+        canvasY,
+        maxZ + 1,
+        proj.components,
+        {
+          customSize: { width, height },
+        },
+      );
+      if (!instance) {
+        dispatchInteraction('cancel');
+        return;
+      }
+      // 写入 src 和 alt（任务 7.1 资源契约：data URL 可持久化）
+      instance.props.src = imageResult.dataUrl;
+      instance.props.alt = imageResult.name;
+      addComponent(instance);
+      selectComponent(instance.id);
+      dispatchInteraction('commit-create');
+    },
+    [
+      interactionState,
+      project,
+      canvasScale,
+      canvasOffset,
+      addComponent,
+      selectComponent,
+      dispatchInteraction,
+    ],
+  );
+
+  /**
+   * 任务 8.2/8.3：缩放工具点击放大/反向缩小。
+   *
+   * - 左键点击：围绕指针位置放大（factor = ZOOM_TOOL_IN_FACTOR）
+   * - Alt+左键点击：围绕指针位置缩小（factor = ZOOM_TOOL_OUT_FACTOR）
+   *
+   * 与 Alt+拖拽复制（选择工具）的语义不冲突：缩放工具下 canDrag=false，
+   * Alt 仅作为缩放反向修饰键，不会触发组件复制。
+   *
+   * 边界约束由 zoomToolClick 内部调用 zoomWithBoundary 处理，
+   * 达到上下限时点击无效果（无变化不写入历史）。
+   *
+   * 任务 12.2：缩放工具由状态机仲裁。
+   * - 仅在 idle/hovering 状态下可开始缩放，避免与拖拽/框选/创建等手势重入。
+   * - 派发 start-zoom（idle → zooming）标记进入缩放态，操作完成后派发 end-zoom（zooming → idle）。
+   * - 操作本身为同步瞬时行为，状态机事件用于互斥仲裁与诊断断言。
+   */
+  const handleZoomToolClick = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      // 任务 12.2：缩放由状态机仲裁，拒绝非法重入
+      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+      // Alt 修饰键：反向缩小（任务 8.3）
+      const zoomOut = e.altKey;
+      // 任务 12.2：进入 zooming 态以仲裁后续重入
+      dispatchInteraction('start-zoom');
+      const result = zoomToolClick({
+        currentScale: canvasScale,
+        currentOffset: canvasOffset,
+        cursorX,
+        cursorY,
+        zoomOut,
+      });
+      setCanvasScaleAndOffset(result.scale, result.offset);
+      // 任务 12.2：缩放操作完成，退出 zooming 态
+      dispatchInteraction('end-zoom');
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [interactionState, canvasScale, canvasOffset, setCanvasScaleAndOffset, dispatchInteraction],
+  );
+
+  /**
+   * 任务 9.4：吸管工具点击采样颜色
+   *
+   * 点击流程：
+   * 1. 通过 `elementsFromPoint` 找到鼠标下所有元素
+   * 2. 跳过 Moveable 控件层 / Radix 浮层（与 findComponentIdAtPoint 同款跳过规则）
+   * 3. 找到首个 component 元素时：从该元素采样颜色
+   * 4. 未命中组件时：从画布容器采样背景色
+   * 5. 采样成功：调用 setActiveColor 写入会话活动颜色
+   * 6. 对当前选中的支持颜色的组件应用颜色（任务 9.3 策略），写入历史
+   *
+   * 与其他工具的互斥：
+   * - 不派发 start-pan / start-create（与平移/创建互斥）
+   * - 不启动 Selecto/Moveable（capabilities.canSelect/canDrag 为 false）
+   *
+   * 失败反馈：当所有可采样表面均透明时，不修改 activeColor；
+   * 状态栏可在 activeTool === 'eyedropper' 时显示当前 activeColor，
+   * 用户可通过对比点击前后的颜色变化感知采样失败。
+   */
+  const handleEyedropperClick = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      const containerEl = containerRef.current;
+      if (!containerEl) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 1. 命中测试：找到鼠标下首个可采样元素
+      const elements = document.elementsFromPoint(e.clientX, e.clientY);
+      let sampledElement: Element | null = null;
+      for (const el of elements) {
+        if (!(el instanceof HTMLElement)) continue;
+        if (el.closest('[data-slot="context-menu-content"]')) continue;
+        if (el.closest('[data-radix-popper-content-wrapper]')) continue;
+        if (el.closest('.moveable-control-box')) continue;
+        sampledElement = el;
+        break;
+      }
+
+      // 2. 采样：优先从组件元素采样，未命中组件时从画布容器采样
+      let sampled = sampleColorFromElement(sampledElement);
+      if (sampled.color === null && sampledElement !== containerEl) {
+        // 元素本身无可采样颜色，尝试画布容器
+        sampled = sampleColorFromCanvas(containerEl);
+      }
+      if (sampled.color === null) {
+        // 采样失败：不修改 activeColor，由状态栏反馈
+        return;
+      }
+
+      // 3. 写入会话活动颜色
+      setActiveColor(sampled.color);
+
+      // 4. 任务 9.3：对当前选中的支持颜色的组件应用颜色
+      const proj = project;
+      if (!proj) return;
+      for (const id of selectedComponentIds) {
+        const component = proj.components.find((c: ScreenComponent) => c.id === id);
+        if (!component) continue;
+        const target = getColorApplyTarget(component);
+        if (!target) continue;
+        const nextStyle = applyColorToStyle(component.style, target, sampled.color);
+        updateComponent(component.id, { style: nextStyle });
+      }
+    },
+    [project, selectedComponentIds, setActiveColor, updateComponent],
+  );
+
+  const handlePanStart = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      // 任务 5.2：文字工具优先处理点击创建
+      if (activeTool === 'text' && capabilities.canCreate) {
+        handleCreateText(e);
+        return;
+      }
+      // 任务 6.3/6.4：矩形与椭圆工具拖拽创建
+      if ((activeTool === 'rect' || activeTool === 'ellipse') && capabilities.canCreate) {
+        handleCreateShapeStart(e);
+        return;
+      }
+      // 任务 7.4：图片工具点击创建（异步弹出文件选择器）
+      if (activeTool === 'image' && capabilities.canCreate) {
+        void handleCreateImage(e);
+        return;
+      }
+      // 任务 8.2/8.3：缩放工具点击放大/反向缩小
+      if (activeTool === 'zoom' && capabilities.canZoom) {
+        handleZoomToolClick(e);
+        return;
+      }
+      // 任务 9.4：吸管工具点击采样颜色（不触发选择/拖拽/平移）
+      if (activeTool === 'eyedropper' && capabilities.canSample) {
+        handleEyedropperClick(e);
+        return;
+      }
+      // 任务 4.3：平移完全由 activeTool 仲裁。
+      // - 主工具为抓手：activeTool === 'hand'，可直接平移
+      // - 其他工具 + Space 临时抓手：use-keyboard-shortcuts 通过 pushTemporaryTool('hand')
+      //   使 activeTool 变为 'hand'，此处自动放行
+      // - 其他工具且未按 Space：activeTool !== 'hand'，拒绝平移
+      if (activeTool !== 'hand') return;
+      // 任务 4.4：平移与其他交互互斥由统一状态机仲裁。
+      // 仅在 idle/hovering 状态下可以开始平移，避免拖拽/缩放/旋转/框选中重入平移。
+      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      e.preventDefault();
+      e.stopPropagation();
       (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
       panState.current = {
         startX: e.clientX,
@@ -293,12 +771,39 @@ export function ScreenCanvas({
         origX: canvasOffset.x,
         origY: canvasOffset.y,
       };
+      // 任务 3.6：镜像平移开始到交互状态机
+      dispatchInteraction('start-pan');
     },
-    [canvasOffset],
+    [
+      canvasOffset,
+      dispatchInteraction,
+      activeTool,
+      interactionState,
+      capabilities.canCreate,
+      capabilities.canZoom,
+      capabilities.canSample,
+      handleCreateText,
+      handleCreateShapeStart,
+      handleCreateImage,
+      handleZoomToolClick,
+      handleEyedropperClick,
+    ],
   );
 
   const handlePanMove = useCallback(
     (e: React.PointerEvent) => {
+      // 任务 6.3/6.4：形状拖拽创建中，更新预览当前点
+      if (shapeCreation) {
+        const el = containerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
+        const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+        setShapeCreation((prev) =>
+          prev ? { ...prev, currentX: canvasX, currentY: canvasY } : null,
+        );
+        return;
+      }
       if (!panState.current) return;
       const dx = e.clientX - panState.current.startX;
       const dy = e.clientY - panState.current.startY;
@@ -307,23 +812,71 @@ export function ScreenCanvas({
         y: panState.current.origY + dy,
       });
     },
-    [canvasScale, setCanvasScaleAndOffset],
+    [shapeCreation, canvasScale, canvasOffset, setCanvasScaleAndOffset],
   );
 
-  const handlePanEnd = useCallback((e: React.PointerEvent) => {
-    if (!panState.current) return;
-    panState.current = null;
-    setIsPanning(false);
-    (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-  }, []);
+  const handlePanEnd = useCallback(
+    (e: React.PointerEvent) => {
+      // 任务 6.3/6.4：形状拖拽结束，根据尺寸判定提交或取消
+      if (shapeCreation) {
+        const proj = project;
+        const geometry = computeShapeCreation(
+          shapeCreation.startX,
+          shapeCreation.startY,
+          shapeCreation.currentX,
+          shapeCreation.currentY,
+        );
+        (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+        if (geometry.hasValidSize && proj) {
+          const maxZ = proj.components.reduce(
+            (m: number, c: ScreenComponent) => Math.max(m, c.zIndex),
+            0,
+          );
+          const instance = createComponentInstance(
+            shapeCreation.tool,
+            geometry.rect.x,
+            geometry.rect.y,
+            maxZ + 1,
+            proj.components,
+            {
+              customSize: {
+                width: geometry.rect.width,
+                height: geometry.rect.height,
+              },
+            },
+          );
+          if (instance) {
+            addComponent(instance);
+            selectComponent(instance.id);
+            dispatchInteraction('commit-create');
+          } else {
+            dispatchInteraction('cancel');
+          }
+        } else {
+          // 微小拖拽或项目未就绪：取消创建，不入历史
+          dispatchInteraction('cancel');
+        }
+        setShapeCreation(null);
+        return;
+      }
+      if (!panState.current) return;
+      panState.current = null;
+      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+      // 任务 3.6：镜像平移结束到交互状态机（panning → idle）
+      dispatchInteraction('pointer-up');
+    },
+    [shapeCreation, project, addComponent, selectComponent, dispatchInteraction],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     const handleWheel = (e: WheelEvent) => {
+      // 任务 8.4：浏览器默认行为隔离。
       // 缩放手势：Alt+滚轮（原有）或 Ctrl/Cmd+滚轮（主流编辑器习惯）
-      // 拦截浏览器原生页面缩放
+      // 拦截浏览器原生页面缩放（Ctrl/Cmd+滚轮）与图片缩放（Alt+滚轮），
+      // 统一走 zoomWithBoundary 边界约束。
       const isZoomGesture = e.altKey || e.ctrlKey || e.metaKey;
       if (!isZoomGesture) return;
       e.preventDefault();
@@ -331,22 +884,16 @@ export function ScreenCanvas({
       const rect = el.getBoundingClientRect();
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
-      // 计算原始 factor 并对最终 scale 做 [0.1, 5] 边界限制，
-      // 用 clampedScale / canvasScale 得到实际 factor，确保 offset 与 scale 一致
-      const rawFactor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
-      const rawNewScale = state.canvasScale * rawFactor;
-      const clampedScale = Math.min(5, Math.max(0.1, rawNewScale));
-      const actualFactor = clampedScale / state.canvasScale;
-      const result = zoomAtPoint({
+      // 任务 8.1：统一调用 zoomWithBoundary，边界约束与锚点不变性由其内部保证
+      const factor = e.deltaY > 0 ? 1 / WHEEL_ZOOM_FACTOR : WHEEL_ZOOM_FACTOR;
+      const result = zoomWithBoundary({
         currentScale: state.canvasScale,
         currentOffset: state.canvasOffset,
         cursorX,
         cursorY,
-        factor: actualFactor,
+        factor,
       });
       setCanvasScaleAndOffset(result.scale, result.offset);
-      // TODO: Z 工具点击放大接入点：复用 zoomAtPoint 计算，factor 固定 1.5
-      // TODO: Ctrl+= / Ctrl+- 快捷键接入点：复用 zoomAtPoint，factor 1.1 / 1/1.1
     };
 
     el.addEventListener('wheel', handleWheel, { passive: false });
@@ -485,9 +1032,14 @@ export function ScreenCanvas({
   return (
     <div
       ref={containerRef}
+      data-testid="canvas-surface"
       className="relative h-full w-full overflow-hidden bg-muted"
       style={{
-        cursor: isPanning ? 'grabbing' : spaceHeldUI ? 'grab' : altHeld ? 'copy' : undefined,
+        // 任务 4.3：cursor 完全由 activeTool 派生（toolCursor 来自 TOOL_REGISTRY）。
+        // - hand 工具（主或临时）：toolCursor = 'grab'，平移中 = 'grabbing'
+        // - select 工具 + Alt：'copy'（Alt+拖拽复制）
+        // - 其他工具：toolCursor
+        cursor: isPanning ? 'grabbing' : altHeld && capabilities.canDrag ? 'copy' : toolCursor,
       }}
       onPointerDown={handlePanStart}
       onPointerMove={handlePanMove}
@@ -537,15 +1089,43 @@ export function ScreenCanvas({
 
           {/* Smart Guides 智能对齐线浮层 */}
           <SmartGuidesOverlay canvasWidth={canvas.width} canvasHeight={canvas.height} />
+
+          {/* 任务 6.3/6.4：形状拖拽创建预览（与组件同画布坐标系） */}
+          {shapeCreation &&
+            (() => {
+              const geometry = computeShapeCreation(
+                shapeCreation.startX,
+                shapeCreation.startY,
+                shapeCreation.currentX,
+                shapeCreation.currentY,
+              );
+              return (
+                <div
+                  className="pointer-events-none absolute"
+                  style={{
+                    left: geometry.rect.x,
+                    top: geometry.rect.y,
+                    width: geometry.rect.width,
+                    height: geometry.rect.height,
+                    backgroundColor:
+                      shapeCreation.tool === 'rect'
+                        ? 'rgba(59, 130, 246, 0.5)'
+                        : 'rgba(16, 185, 129, 0.5)',
+                    border: '1px dashed #ffffff',
+                    borderRadius: shapeCreation.tool === 'ellipse' ? '50%' : 0,
+                  }}
+                />
+              );
+            })()}
         </div>
 
         <Moveable
           ref={moveableRef}
           target={targets}
           container={contentRef.current}
-          draggable
-          resizable
-          rotatable
+          draggable={moveableDraggable}
+          resizable={moveableResizable}
+          rotatable={moveableRotatable}
           snappable={snapEnabled || gridEnabled}
           keepRatio={shiftHeld}
           throttleRotate={shiftHeld ? 15 : 0}
@@ -573,6 +1153,14 @@ export function ScreenCanvas({
           renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}
           // --- Single target events ---
           onDragStart={(e) => {
+            // 任务 12.1：拖拽由状态机仲裁，拒绝非法重入
+            if (
+              interactionState !== 'idle' &&
+              interactionState !== 'hovering' &&
+              interactionState !== 'marquee-selecting'
+            ) {
+              return false;
+            }
             const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
             const comp = components.find((c: ScreenComponent) => c.id === id);
@@ -592,6 +1180,8 @@ export function ScreenCanvas({
               w: Math.round(comp?.position.width ?? 0),
               h: Math.round(comp?.position.height ?? 0),
             }));
+            // 任务 3.3：镜像拖拽开始到交互状态机
+            dispatchInteraction('start-drag');
           }}
           onDrag={(e) => {
             const datas = e.datas as unknown as DragDatas;
@@ -634,8 +1224,14 @@ export function ScreenCanvas({
             }
             setDimension((d) => ({ ...d, visible: false }));
             clearAlignmentLines();
+            // 任务 3.3：镜像拖拽结束到交互状态机（恢复正常结束 → idle）
+            dispatchInteraction('pointer-up');
           }}
           onResizeStart={(e) => {
+            // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
+            if (interactionState !== 'idle' && interactionState !== 'hovering') {
+              return false;
+            }
             const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
             const comp = components.find((c: ScreenComponent) => c.id === id);
@@ -653,6 +1249,8 @@ export function ScreenCanvas({
             if (datas.isAltCenter) {
               setDimension((d) => ({ ...d, mode: '中心变换' }));
             }
+            // 任务 3.4：镜像缩放开始到交互状态机
+            dispatchInteraction('start-resize');
           }}
           onResize={(e) => {
             const datas = e.datas as unknown as ResizeDatas;
@@ -716,8 +1314,14 @@ export function ScreenCanvas({
               },
             });
             setDimension((d) => ({ ...d, visible: false, mode: undefined }));
+            // 任务 3.4：镜像缩放结束到交互状态机
+            dispatchInteraction('pointer-up');
           }}
           onRotateStart={(e) => {
+            // 任务 12.1：旋转由状态机仲裁，拒绝非法重入
+            if (interactionState !== 'idle' && interactionState !== 'hovering') {
+              return false;
+            }
             const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
             const comp = components.find((c: ScreenComponent) => c.id === id);
@@ -725,6 +1329,8 @@ export function ScreenCanvas({
             const datas = e.datas as unknown as RotateDatas;
             datas.id = id;
             datas.snapRotate = shiftRef.current;
+            // 任务 3.4：镜像旋转开始到交互状态机
+            dispatchInteraction('start-rotate');
           }}
           onRotate={(e) => {
             const datas = e.datas as unknown as RotateDatas;
@@ -758,9 +1364,19 @@ export function ScreenCanvas({
               position: { ...comp.position, rotation: Math.round(rotation) },
             });
             setDimension((d) => ({ ...d, visible: false }));
+            // 任务 3.4：镜像旋转结束到交互状态机
+            dispatchInteraction('pointer-up');
           }}
           // --- Group target events ---
           onDragGroupStart={(e) => {
+            // 任务 12.1：组拖拽由状态机仲裁，拒绝非法重入
+            if (
+              interactionState !== 'idle' &&
+              interactionState !== 'hovering' &&
+              interactionState !== 'marquee-selecting'
+            ) {
+              return false;
+            }
             const ids: string[] = [];
             for (const t of e.targets) {
               const id = getComponentIdFromTarget(t);
@@ -772,6 +1388,8 @@ export function ScreenCanvas({
             }
             const datas = e.datas as unknown as GroupDragDatas;
             datas.ids = ids;
+            // 任务 3.3：镜像组拖拽开始到交互状态机
+            dispatchInteraction('start-drag');
           }}
           onDragGroup={(e) => {
             for (const ev of e.events) {
@@ -803,8 +1421,14 @@ export function ScreenCanvas({
               })
               .filter((u): u is NonNullable<typeof u> => u != null);
             updateComponentsBatch(updates);
+            // 任务 3.3：镜像组拖拽结束到交互状态机
+            dispatchInteraction('pointer-up');
           }}
           onResizeGroupStart={(e) => {
+            // 任务 12.1：组缩放由状态机仲裁，拒绝非法重入
+            if (interactionState !== 'idle' && interactionState !== 'hovering') {
+              return false;
+            }
             for (const t of e.targets) {
               const id = getComponentIdFromTarget(t);
               if (id) {
@@ -812,6 +1436,8 @@ export function ScreenCanvas({
                 if (comp?.status.locked) return false;
               }
             }
+            // 任务 3.4：镜像组缩放开始到交互状态机
+            dispatchInteraction('start-resize');
           }}
           onResizeGroup={(e) => {
             for (const ev of e.events) {
@@ -846,6 +1472,8 @@ export function ScreenCanvas({
               })
               .filter((u): u is NonNullable<typeof u> => u != null);
             updateComponentsBatch(updates);
+            // 任务 3.4：镜像组缩放结束到交互状态机
+            dispatchInteraction('pointer-up');
           }}
           onChangeTargets={() => {}}
         />
@@ -854,11 +1482,27 @@ export function ScreenCanvas({
       <Selecto
         dragContainer={containerRef.current}
         selectableTargets={['[data-component-id]']}
-        selectByClick
+        selectByClick={selectoSelectByClick}
         selectFromInside={false}
         hitRate={0}
         toggleContinueSelect={['ctrl']}
+        // 任务 4.1：只有允许选择的工具能启动 Selecto。
+        // Selecto 无 disabled prop，通过 onDragStart 中 e.stop() 阻止非选择工具启动框选。
         onDragStart={(e) => {
+          // 任务 4.1：抓手/创建/缩放/吸管工具不允许启动 Selecto
+          if (!capabilities.canSelect) {
+            e.stop();
+            return;
+          }
+          // 任务 12.2：框选由状态机仲裁，拒绝非法重入。
+          // 仅在 idle/hovering 状态下可开始框选，避免与拖拽/缩放/旋转/平移/创建等手势重入。
+          // 拒绝时调用 e.stop() 阻止 Selecto 启动拖拽，状态保持不变以便后续从合法状态继续。
+          if (interactionState !== 'idle' && interactionState !== 'hovering') {
+            e.stop();
+            return;
+          }
+          // 任务 3.5：镜像框选开始到交互状态机（从 idle → marquee-selecting）
+          dispatchInteraction('pointer-down');
           if (moveableRef.current) {
             // Selecto inputEvent 为 any，可能是 MouseEvent / TouchEvent / PointerEvent。
             // 通过 instanceof 收敛到 HTMLElement 后再使用，避免 as HTMLElement 越过类型检查
@@ -905,14 +1549,59 @@ export function ScreenCanvas({
             setActiveGroupId(result.newActiveGroupId);
           }
           selectComponents(result.selection);
+
+          // 任务 5.3：双击文本组件进入编辑，不触发分组进入
+          // 仅在选择工具下生效（其他工具的创建行为由各自处理器负责）
+          if (result.isDoubleClick && activeTool === 'select' && result.selection.length === 1) {
+            const clickedComp = components.find(
+              (c: ScreenComponent) => c.id === result.selection[0],
+            );
+            if (clickedComp?.type === 'text') {
+              // 进入文本编辑态
+              const content = (clickedComp.props as { content?: unknown }).content;
+              const initialContent = typeof content === 'string' ? content : DEFAULT_TEXT_CONTENT;
+              beginTextEditing({
+                componentId: clickedComp.id,
+                initialContent,
+                isNewlyCreated: false,
+              });
+              // 派发到交互状态机：idle → text-editing
+              dispatchInteraction('double-click');
+              // 文本双击不进入分组，强制保持 activeGroupId 为 null
+              if (activeGroupId !== null) {
+                setActiveGroupId(null);
+              }
+              // 任务 3.5：镜像框选结束到交互状态机
+              dispatchInteraction('pointer-up');
+              return;
+            }
+          }
+
           if (!result.isDoubleClick && e.isDragStart) {
             // Moveable dragStart 期望 MouseEvent；TouchEvent 不支持，跳过以避免运行时错误
             if (inputEvent instanceof MouseEvent) {
               setTimeout(() => {
+                // 任务 13.7：异步触发 dragStart 前用 ref 读取最新状态做 guard。
+                //
+                // onSelectEnd 在 pointerup 时派发 pointer-up（→ idle）后立即调度此
+                // setTimeout。若用户在 setTimeout 触发前切换工具或进入其他交互态：
+                // - activeTool !== 'select'：Moveable draggable prop 已为 false，
+                //   外部调用 dragStart 会让 Moveable 内部进入异常 dragging 态，
+                //   后续 onDragEnd 永不触发，选择工具能力永久失效
+                // - interactionState 非 idle/hovering/marquee-selecting：与 onDragStart
+                //   仲裁条件不一致，调用会绕过状态机触发非法转换
+                // 两种情况下都应放弃 dragStart，由用户下次点击重新触发。
+                if (activeToolRef.current !== 'select') return;
+                const state = interactionStateRef.current;
+                if (state !== 'idle' && state !== 'hovering' && state !== 'marquee-selecting') {
+                  return;
+                }
                 moveableRef.current?.dragStart(inputEvent);
               }, 0);
             }
           }
+          // 任务 3.5：镜像框选结束到交互状态机（marquee-selecting → idle）
+          dispatchInteraction('pointer-up');
         }}
       />
 

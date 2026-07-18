@@ -505,11 +505,96 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
     browserConflict: 'none',
   },
   {
-    // 仅文档化：alt 作为临时吸管工具的修饰键，由 use-keyboard-shortcuts.ts
-    // 通过 keydown/keyup 监听 altKey 实现，不通过 useHotkeys 绑定
-    id: 'eyedropperTemp',
-    keys: 'alt',
-    description: '临时吸管（按住）',
+    id: 'toolSelect',
+    keys: 'v',
+    description: '选择工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  {
+    id: 'toolHand',
+    keys: 'h',
+    description: '抓手工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  {
+    id: 'toolText',
+    keys: 't',
+    description: '文字工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  {
+    id: 'toolRect',
+    keys: 'r',
+    description: '矩形工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  {
+    id: 'toolEllipse',
+    keys: 'e',
+    description: '椭圆工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  {
+    id: 'toolImage',
+    keys: 'i',
+    description: '图片工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  {
+    id: 'toolZoom',
+    keys: 'z',
+    description: '缩放工具',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  // 临时抓手（Space 按住）：键盘快捷键，由 use-keyboard-shortcuts.ts 直接绑定
+  // keydown 压栈、keyup 出栈；这里仅文档化键位和说明
+  {
+    id: 'toolHandTemp',
+    keys: 'space',
+    description: '临时抓手（按住）',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'callback-only',
+    browserConflict: 'overridable',
+  },
+  // Alt+拖拽复制：鼠标快捷键（onDragStart/onDragEnd 检测 altKey），
+  // 不经过 useHotkeys；这里文档化以便帮助面板与实际行为一致
+  {
+    id: 'altDragCopy',
+    keys: 'alt+drag',
+    description: '按住 Alt 拖拽复制组件',
+    category: 'tool',
+    scope: 'canvas',
+    preventDefault: 'none',
+    browserConflict: 'none',
+  },
+  // Alt+滚轮反向缩放：滚轮快捷键（onWheel 检测 altKey），
+  // 不经过 useHotkeys；这里文档化以便帮助面板与实际行为一致
+  {
+    id: 'zoomReverse',
+    keys: 'alt+wheel',
+    description: '反向缩放（Alt+滚轮）',
     category: 'tool',
     scope: 'canvas',
     preventDefault: 'none',
@@ -598,6 +683,9 @@ const CODE_TO_DISPLAY: Readonly<Record<string, string>> = {
   arrowdown: '↓',
   arrowleft: '←',
   arrowright: '→',
+  // 鼠标/滚轮快捷键文档化展示（不经过 useHotkeys，仅用于帮助面板）
+  drag: '拖拽',
+  wheel: '滚轮',
 };
 
 export function formatKeys(keys: string): string[] {

@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
+import type { InteractionState } from '../hooks/use-interaction-state-machine';
 import { ShortcutBadge } from './shortcut-badge';
 import { getShortcutKeys } from '../hooks/shortcuts-registry';
 import {
@@ -66,6 +67,26 @@ interface CanvasContextMenuProps {
   onZoomOut: () => void;
   onFitToScreen: () => void;
   children: React.ReactNode;
+  /**
+   * 任务 3.7：交互状态机 dispatch 函数。
+   *
+   * 菜单打开时 dispatch 'open-context-menu'，关闭时 dispatch 'close-context-menu'。
+   * 状态机负责仲裁菜单打开期间允许的画布行为，本组件不直接判断互斥规则。
+   * 未传入时（如单元测试中独立渲染）跳过状态机镜像，不影响菜单本身行为。
+   */
+  dispatchInteraction?: (event: 'open-context-menu' | 'close-context-menu') => void;
+  /**
+   * 任务 12.3：当前交互状态，用于仲裁菜单打开。
+   *
+   * 仅在 idle/hovering/marquee-selecting/context-menu-open 状态下允许打开菜单：
+   * - idle/hovering/marquee-selecting：正常右键打开，派发 open-context-menu
+   * - context-menu-open：重定位场景（再次右键），允许重新打开
+   * - 其他状态（dragging/resizing/rotating/panning/zooming/text-editing/creating/sampling）：
+   *   拒绝打开菜单，避免与进行中的手势冲突
+   *
+   * 未传入时（如单元测试中独立渲染）不进行状态机仲裁，菜单按原行为打开。
+   */
+  interactionState?: InteractionState;
 }
 
 /** 菜单项的图标 + 文本 + 快捷键徽章组合 */
@@ -314,6 +335,8 @@ export function CanvasContextMenu({
   onZoomOut,
   onFitToScreen,
   children,
+  dispatchInteraction,
+  interactionState,
 }: CanvasContextMenuProps) {
   const [mode, setMode] = useState<'component' | 'canvas'>('canvas');
   const [open, setOpen] = useState(false);
@@ -322,10 +345,49 @@ export function CanvasContextMenu({
   const selectComponent = useScreenEditorStore((s) => s.selectComponent);
   const clearSelection = useScreenEditorStore((s) => s.clearSelection);
 
-  const handleOpenChange = useCallback((next: boolean) => {
-    openRef.current = next;
-    setOpen(next);
-  }, []);
+  /**
+   * 任务 12.3：判断当前交互状态是否允许打开右键菜单。
+   *
+   * 合法源状态：idle / hovering / marquee-selecting / context-menu-open
+   * - 前三者：正常右键打开菜单
+   * - context-menu-open：重定位场景（再次右键），由 attachContextMenuRedistributor 处理
+   * 非法源状态：dragging / resizing / rotating / panning / zooming / text-editing / creating / sampling
+   * - 这些状态下拒绝打开菜单，避免与进行中的手势或文本编辑冲突
+   *
+   * 未传入 interactionState 时（如单元测试）不进行仲裁，保持原行为。
+   */
+  const canOpenContextMenu = useCallback((): boolean => {
+    if (!interactionState) return true;
+    return (
+      interactionState === 'idle' ||
+      interactionState === 'hovering' ||
+      interactionState === 'marquee-selecting' ||
+      interactionState === 'context-menu-open'
+    );
+  }, [interactionState]);
+
+  // 任务 3.7：菜单打开/关闭镜像到交互状态机。
+  // - open=true 时 dispatch 'open-context-menu'（idle/hovering/marquee-selecting → context-menu-open）
+  // - open=false 时 dispatch 'close-context-menu'（context-menu-open → idle）
+  // 状态机负责仲裁菜单打开期间允许的画布行为，本组件不直接判断互斥规则。
+  //
+  // 任务 12.3：打开菜单前由状态机仲裁。
+  // - 非法源状态下拒绝打开（next=true 时检查），保持菜单关闭，不派发 open-context-menu。
+  // - 关闭菜单（next=false）不做状态检查，确保菜单总能关闭。
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      // 任务 12.3：打开菜单前检查状态机是否允许
+      if (next && !canOpenContextMenu()) {
+        return;
+      }
+      openRef.current = next;
+      setOpen(next);
+      if (dispatchInteraction) {
+        dispatchInteraction(next ? 'open-context-menu' : 'close-context-menu');
+      }
+    },
+    [dispatchInteraction, canOpenContextMenu],
+  );
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -368,11 +430,13 @@ export function CanvasContextMenu({
       isOpen: () => openRef.current,
       // 同步关闭菜单 + 递增 menuKey 强制 ContextMenu 重建（清空 DOM 状态）。
       // 两者合并到同一个 flushSync 内，等价于重构前的原子提交行为。
+      // 任务 3.7：重新定位路径同样镜像到交互状态机，避免状态卡在 context-menu-open。
       onClose: () => {
         flushSync(() => {
           openRef.current = false;
           setOpen(false);
           setMenuKey((k) => k + 1);
+          if (dispatchInteraction) dispatchInteraction('close-context-menu');
         });
       },
       // menuKey 已在 onClose 的 flushSync 内更新，此处无需重复触发
@@ -382,11 +446,12 @@ export function CanvasContextMenu({
         flushSync(() => {
           openRef.current = true;
           setOpen(true);
+          if (dispatchInteraction) dispatchInteraction('open-context-menu');
         });
       },
     });
     return cleanup;
-  }, []);
+  }, [dispatchInteraction]);
 
   const child = (isValidElement(children) ? children : <div>{children}</div>) as ReactElement<{
     onContextMenu?: MouseEventHandler<HTMLDivElement>;

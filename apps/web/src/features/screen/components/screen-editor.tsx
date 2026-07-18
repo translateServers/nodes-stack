@@ -1,9 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { ArrowLeft, Save, Layers, Package } from 'lucide-react';
+import type { TextEditExitKind } from '../lib/text-editing-contract';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { ScreenCanvas } from '../components/screen-canvas';
+import { TextEditorOverlay } from '../components/text-editor-overlay';
 import { ComponentLibrary, useCanvasDrop } from '../components/component-library';
 import { PropertyPanel } from '../components/property-panel';
 import { LayerPanel } from '../components/layer-panel';
@@ -11,8 +13,11 @@ import { CanvasContextMenu } from '../components/canvas-context-menu';
 import { CanvasRulers, type RulersHandle } from '../components/canvas-rulers';
 import { CanvasGuides } from '../components/canvas-guides';
 import { CanvasStatusBar } from './canvas-status-bar';
+import { ToolSelector } from './tool-selector';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { useToolStateMachine } from '../hooks/use-tool-state-machine';
+import { useInteractionStateMachine } from '../hooks/use-interaction-state-machine';
+import { useEditorSession } from '../hooks/use-editor-session';
 import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
 import { ProjectMenubar } from './project-menubar';
 import { CanvasSettingsDialog } from './canvas-settings-dialog';
@@ -61,12 +66,153 @@ export function ScreenEditor() {
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const toolStateMachine = useToolStateMachine();
+  const interactionStateMachine = useInteractionStateMachine();
+  // 任务 2.2：编辑器只创建一套会话控制器，下发给画布、工具入口、状态栏和快捷键
+  const editorSession = useEditorSession({
+    toolStateMachine,
+    interactionStateMachine,
+  });
+  // 任务 5.4：文本编辑器提交/取消所需的 Store actions
+  const updateComponent = useScreenEditorStore((s) => s.updateComponent);
+  const removeComponent = useScreenEditorStore((s) => s.removeComponent);
+  // 任务 13.7：切换主工具时清除选中
+  const clearSelection = useScreenEditorStore((s) => s.clearSelection);
+
+  /**
+   * 任务 5.4：文本编辑器退出回调。
+   *
+   * 根据 5.1 契约处理提交/取消：
+   * - cancel + isNewlyCreated：删除组件（取消创建），不写入历史
+   * - cancel + !isNewlyCreated：不修改组件（保留初始内容），不写入历史
+   * - commit + shouldDeleteComponent：删除组件（空内容新建），不写入历史
+   * - commit + shouldCommitHistory：更新组件 content，写入历史一条
+   * - commit + !shouldCommitHistory：不修改组件（无变化），不写入历史
+   *
+   * 派发到交互状态机：commit/escape → text-editing → idle
+   * 同步会话控制器：endTextEditing 清空 textEditing 上下文
+   */
+  const handleTextEditorExit = useCallback(
+    (result: {
+      exitKind: TextEditExitKind;
+      content: string;
+      shouldCommitHistory: boolean;
+      shouldDeleteComponent: boolean;
+    }) => {
+      const ctx = editorSession.textEditing;
+      if (!ctx) return;
+      const { componentId, isNewlyCreated } = ctx;
+
+      if (result.exitKind === 'cancel') {
+        // 取消：新建路径删除组件，编辑路径不修改
+        if (isNewlyCreated) {
+          removeComponent(componentId);
+        }
+        editorSession.endTextEditing();
+        editorSession.dispatchInteraction('escape');
+        return;
+      }
+
+      // commit 路径
+      if (result.shouldDeleteComponent) {
+        // 空内容 + 新建 → 删除组件
+        removeComponent(componentId);
+      } else if (result.shouldCommitHistory) {
+        // 有效内容 + 有变化 → 更新组件
+        updateComponent(componentId, {
+          props: { ...({ content: result.content } as Record<string, unknown>) },
+        });
+      }
+      // shouldCommitHistory=false 时无变化，不修改组件
+
+      editorSession.endTextEditing();
+      editorSession.dispatchInteraction('commit');
+    },
+    [editorSession, removeComponent, updateComponent],
+  );
 
   useEffect(() => {
     if (project) {
       loadProject(project);
     }
   }, [project, loadProject]);
+
+  /**
+   * 任务 13.7：切换主工具时清除选中组件。
+   *
+   * 选中态只对选择工具有意义，切换到其他工具（抓手/文字/形状/图片/缩放/吸管）时
+   * 应清除选中，避免 Moveable 控制框残留在画布上干扰新工具的交互。
+   *
+   * 监听 currentTool（主工具）而非 activeTool（含临时栈），原因：
+   * - Space 临时抓手通过 pushTemporaryTool 使 activeTool 变为 'hand'，但 currentTool
+   *   保持不变。临时抓手期间选中应保留（松开 Space 回到选择工具后继续编辑）
+   * - 只有用户主动切换主工具（点击工具栏）时才清除选中
+   *
+   * 用 ref 追踪前一次 currentTool，避免初始化时触发 clearSelection。
+   */
+  const prevCurrentToolRef = useRef(editorSession.currentTool);
+  useEffect(() => {
+    if (prevCurrentToolRef.current === editorSession.currentTool) return;
+    prevCurrentToolRef.current = editorSession.currentTool;
+    clearSelection();
+  }, [editorSession.currentTool, clearSelection]);
+
+  /**
+   * 任务 13.6：文本编辑被外部取消时清理 textEditing 上下文。
+   *
+   * 修复 bug：用户在文本编辑态直接切换工具时，setToolWithCleanup 派发 cancel
+   * 让交互状态机回到 idle，但 textEditing 上下文（会话控制器持有）不会自动清理，
+   * 导致 TextEditorOverlay 仍渲染、新建的文本组件残留在画布上。
+   *
+   * 当 interactionState 不再是 text-editing 但 textEditing 仍存在时，按 cancel 语义处理：
+   * - isNewlyCreated=true：删除组件（同 Escape 取消新建路径，不写入历史）
+   * - isNewlyCreated=false：保留原内容（同 Escape 取消编辑路径，不写入历史）
+   * 然后清空 textEditing 上下文。
+   *
+   * 注意：不调用 dispatchInteraction('escape')，因为状态已由 setToolWithCleanup 的
+   * cancel 派发恢复到 idle，对 idle 派发 escape 是 no-op（但会触发诊断 console.warn）。
+   */
+  useEffect(() => {
+    if (editorSession.interactionState === 'text-editing') return;
+    const ctx = editorSession.textEditing;
+    if (!ctx) return;
+    // interactionState 已离开 text-editing，但 textEditing 上下文仍残留 → 外部取消
+    if (ctx.isNewlyCreated) {
+      removeComponent(ctx.componentId);
+    }
+    editorSession.endTextEditing();
+  }, [
+    editorSession.interactionState,
+    editorSession.textEditing,
+    editorSession.endTextEditing,
+    removeComponent,
+  ]);
+
+  // 任务 11.1：E2E fallback — 暴露 beginTextEditing 到 window
+  // 原因：Moveable 控制框在第一次点击选中文本后拦截第二次点击，
+  // 导致 Playwright dblclick() 无法触发 Selecto 的双击检测。
+  // 仅在 DEV 环境暴露，供 E2E 测试直接调用以进入文本编辑态。
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (
+      window as unknown as { __startTextEditing?: (componentId: string) => void }
+    ).__startTextEditing = (componentId: string) => {
+      const comp = useScreenEditorStore
+        .getState()
+        .project?.components.find((c) => c.id === componentId);
+      if (!comp || comp.type !== 'text') return;
+      const content = (comp.props as { content?: unknown }).content;
+      const initialContent = typeof content === 'string' ? content : '请输入文本';
+      editorSession.beginTextEditing({
+        componentId,
+        initialContent,
+        isNewlyCreated: false,
+      });
+      editorSession.dispatchInteraction('double-click');
+    };
+    return () => {
+      delete (window as unknown as { __startTextEditing?: unknown }).__startTextEditing;
+    };
+  }, [editorSession]);
 
   const handleSave = useCallback(() => {
     if (!storeProject) return;
@@ -198,7 +344,7 @@ export function ScreenEditor() {
     onZoomOut: handleZoomOut,
     onFitToScreen: handleFitToScreen,
     onShowHelp: () => setShowHelp(true),
-    toolStateMachine,
+    editorSession,
   });
 
   if (isLoading) {
@@ -225,6 +371,10 @@ export function ScreenEditor() {
             <div className="text-sm font-medium text-foreground">
               {storeProject?.name ?? '加载中...'}
             </div>
+
+            <Separator orientation="vertical" className="mx-2 h-5" />
+
+            <ToolSelector editorSession={editorSession} />
 
             <Separator orientation="vertical" className="mx-2 h-5" />
 
@@ -305,6 +455,8 @@ export function ScreenEditor() {
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onFitToScreen={handleFitToScreen}
+            dispatchInteraction={editorSession.dispatchInteraction}
+            interactionState={editorSession.interactionState}
           >
             <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
               <CanvasRulers
@@ -314,13 +466,34 @@ export function ScreenEditor() {
                 containerRef={canvasContainerRef}
               />
               <div className="absolute inset-0" style={{ top: 20, left: 20 }}>
-                <ScreenCanvas onDrop={handleDrop} onDragOver={handleDragOver} />
+                <ScreenCanvas
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  editorSession={editorSession}
+                />
               </div>
               <CanvasGuides
                 containerRef={canvasContainerRef}
                 canvasWidth={canvasWidth}
                 canvasHeight={canvasHeight}
               />
+              {/* 任务 5.4：文本编辑器浮层，仅在 textEditing 非空时渲染 */}
+              {editorSession.textEditing &&
+                storeProject?.components.find(
+                  (c) => c.id === editorSession.textEditing?.componentId,
+                ) && (
+                  <TextEditorOverlay
+                    component={
+                      storeProject.components.find(
+                        (c) => c.id === editorSession.textEditing?.componentId,
+                      )!
+                    }
+                    isNewlyCreated={editorSession.textEditing.isNewlyCreated}
+                    canvasScale={canvasScale}
+                    canvasOffset={canvasOffset}
+                    onExit={handleTextEditorExit}
+                  />
+                )}
             </div>
           </CanvasContextMenu>
 
@@ -329,7 +502,7 @@ export function ScreenEditor() {
         </div>
 
         {/* Status bar（仅 standard 模式显示） */}
-        {showPanels && <CanvasStatusBar toolStateMachine={toolStateMachine} />}
+        {showPanels && <CanvasStatusBar editorSession={editorSession} />}
       </div>
       <ShortcutsHelpDialog open={showHelp} onOpenChange={setShowHelp} />
       <CanvasSettingsDialog open={showCanvasSettings} onOpenChange={setShowCanvasSettings} />

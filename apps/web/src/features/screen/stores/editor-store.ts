@@ -31,11 +31,6 @@ interface ScreenEditorData {
   /** 吸附开关：控制 Moveable 的 snappable 行为（会话级，不持久化） */
   snapEnabled: boolean;
   /**
-   * 原生事件触发开关：编辑模式下是否允许组件触发原生 onClick/onHover 等事件。
-   * 默认关闭（编辑模式下仅响应拖拽/选中），开启时用于调试组件交互。
-   */
-  nativeEventEnabled: boolean;
-  /**
    * 当前进入的分组 ID（"编辑模式"下选中的组）。
    * - null：未进入任何分组，单击组内组件会选中整个分组
    * - 设置为某 groupId：用户已双击进入该分组，此时单击组内子组件仅选中该组件；
@@ -157,8 +152,6 @@ interface ScreenEditorActions {
   ungroupSelected: () => void;
   /** 切换吸附开关 */
   toggleSnap: () => void;
-  /** 切换原生事件触发开关 */
-  toggleNativeEvent: () => void;
   /** 设置智能对齐线开关（接受显式 value，便于未来接入设置面板） */
   setSmartGuidesEnabled: (value: boolean) => void;
   /** 设置网格吸附开关（接受显式 value，便于未来接入设置面板） */
@@ -188,7 +181,6 @@ const initialData: ScreenEditorData = {
   clipboard: null,
   pasteCount: 0,
   snapEnabled: true,
-  nativeEventEnabled: false,
   activeGroupId: null,
   smartGuidesEnabled: true,
   gridEnabled: false,
@@ -930,16 +922,6 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         );
       },
 
-      toggleNativeEvent: () => {
-        set(
-          (state: ScreenEditorState) => ({
-            nativeEventEnabled: !state.nativeEventEnabled,
-          }),
-          false,
-          'toggleNativeEvent',
-        );
-      },
-
       setSmartGuidesEnabled: (value) => {
         set({ smartGuidesEnabled: value }, false, 'setSmartGuidesEnabled');
       },
@@ -978,3 +960,18 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
     { name: 'ScreenEditorStore' },
   ),
 );
+
+/**
+ * E2E 测试辅助：在开发模式下将 store 暴露到 window，供 Playwright 通过 page.evaluate 直接调用
+ * store actions（如 duplicateSelectedToPosition / reorderLayerToIndex）。
+ * 仅在 import.meta.env.DEV 为 true 时生效，生产构建无副作用。
+ */
+declare global {
+  interface Window {
+    __screenEditorStore?: typeof useScreenEditorStore;
+  }
+}
+
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+  window.__screenEditorStore = useScreenEditorStore;
+}

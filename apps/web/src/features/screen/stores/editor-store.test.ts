@@ -20,7 +20,6 @@ function makeMockState(overrides: Partial<ScreenEditorState> = {}): ScreenEditor
     clipboard: null,
     pasteCount: 0,
     snapEnabled: true,
-    nativeEventEnabled: false,
     activeGroupId: null,
     ...overrides,
   } as unknown as ScreenEditorState;

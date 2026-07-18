@@ -70,6 +70,8 @@ function SortableLayerRow({
   return (
     <div
       ref={setNodeRef}
+      data-testid="layer-row"
+      data-component-id={id}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -302,8 +304,12 @@ export function LayerPanel() {
     const isSelected = selectedIdSet.has(comp.id);
     // 在活动分组内的子组件使用更明显的选中态
     const inActiveGroup = comp.parentId !== null && comp.parentId === activeGroupId;
+    // depth=0（顶层组件）由外层 SortableLayerRow 提供 data-testid="layer-row"，
+    // depth>0（分组子组件）无外层包装，在此直接打 testid 供 E2E 定位
     return (
       <div
+        data-testid={depth > 0 ? 'layer-row' : undefined}
+        data-component-id={depth > 0 ? comp.id : undefined}
         className={`flex cursor-pointer items-center gap-2 border-b border-border/60 py-2 pr-3 text-sm transition-colors ${
           isSelected ? 'bg-primary/10' : 'hover:bg-accent'
         }`}

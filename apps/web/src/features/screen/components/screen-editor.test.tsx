@@ -67,6 +67,10 @@ vi.mock('./canvas-status-bar', () => ({
   CanvasStatusBar: () => null,
 }));
 
+vi.mock('./tool-selector', () => ({
+  ToolSelector: () => null,
+}));
+
 vi.mock('../hooks/use-keyboard-shortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
@@ -79,8 +83,6 @@ vi.mock('../hooks/use-tool-state-machine', () => ({
     setTool: vi.fn(),
     pushTemporaryTool: vi.fn(),
     popTemporaryTool: vi.fn(),
-    isEditingText: false,
-    setEditingText: vi.fn(),
   })),
 }));
 

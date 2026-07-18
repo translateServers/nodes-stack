@@ -5,8 +5,8 @@
  * - 所有快捷键的键位、描述、分组、preventDefault 语义在 shortcuts-registry.ts 中单一维护
  * - useHotkeys 的 options 由 buildHotkeysOptions(entry, enabled) 统一生成，消除双轨制
  * - 全局快捷键（save/zoom/guides）通过 enableOnFormTags: true 在输入框内也放行
- * - 画布作用域快捷键通过 enabled: !isEditingText 控制
- * - 工具切换走 toolStateMachine（PS 级临时切换栈）
+ * - 画布作用域快捷键通过 enabled: !isEditingText 控制（来自会话控制器）
+ * - 工具切换走会话控制器（PS 级临时切换栈）
  * - useHotkeys 在组件卸载时自动解绑，无需手动 unbind
  *
  * 防冲突方法论：
@@ -19,7 +19,8 @@ import { useCallback, useRef } from 'react';
 import { useHotkeys, type Options } from 'react-hotkeys-hook';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { getShortcutById, type ShortcutDefinition } from './shortcuts-registry';
-import type { ToolStateMachineApi } from './use-tool-state-machine';
+import { isFormElementFocused } from './use-modifier-keys';
+import type { EditorSessionApi } from './use-editor-session';
 import type { ScreenComponent } from '@nebula/shared';
 
 interface KeyboardShortcutsOptions {
@@ -32,8 +33,20 @@ interface KeyboardShortcutsOptions {
   onFitToScreen?: () => void;
   /** 显示快捷键帮助面板（Ctrl/Cmd + /） */
   onShowHelp?: () => void;
-  /** 工具状态机（PS 级临时切换栈） */
-  toolStateMachine: ToolStateMachineApi;
+  /**
+   * 编辑器会话控制器（任务 12.4：唯一来源，原 toolStateMachine 回退已删除）。
+   * 工具切换和 canvasEnabled 都走会话控制器。
+   * 任务 13.2：新增 dispatchInteraction 用于 Escape 派发到交互状态机。
+   */
+  editorSession: Pick<
+    EditorSessionApi,
+    | 'activeTool'
+    | 'setTool'
+    | 'pushTemporaryTool'
+    | 'popTemporaryTool'
+    | 'isEditingText'
+    | 'dispatchInteraction'
+  >;
 }
 
 /** 用 ref 包裹外部回调，使 useHotkeys 的 callback 始终调用最新值 */
@@ -66,8 +79,9 @@ function getAllKeys(entry: ShortcutDefinition): string {
 }
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
-  const { toolStateMachine } = options;
-  const { isEditingText } = toolStateMachine;
+  const { editorSession } = options;
+  const { setTool, pushTemporaryTool, popTemporaryTool, isEditingText, dispatchInteraction } =
+    editorSession;
 
   const saveRef = useLatestRef(options.onSave);
   const zoomInRef = useLatestRef(options.onZoomIn);
@@ -77,6 +91,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
 
   const getStore = useCallback(() => useScreenEditorStore.getState(), []);
   // canvas 作用域：非文本编辑态时才触发画布相关快捷键
+  // 任务 12.4：isEditingText 唯一来源是会话控制器（派生自交互状态机 'text-editing' 状态）
   const canvasEnabled = useCallback(() => !isEditingText, [isEditingText]);
 
   // ===== 文件 =====
@@ -283,6 +298,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   useHotkeys(
     getAllKeys(clearSelectionEntry),
     () => {
+      // 任务 13.2：Escape 键首先派发 escape 事件到交互状态机，恢复任意瞬时状态到 idle。
+      // 修复 bug：原实现只操作 store，状态机可能卡在 dragging/resizing/rotating/panning/creating，
+      // 导致后续 Selecto onDragStart 仲裁（非 idle/hovering 拒绝）阻塞单击选中。
+      dispatchInteraction('escape');
       const store = getStore();
       // 分层语义：先退出当前活动分组（保留选中），再次 Esc 才清空选中。
       if (store.activeGroupId) {
@@ -457,29 +476,84 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   );
 
   // ===== 工具切换（PS 级） =====
-  // 单字母切换主工具（仅画布作用域，不在 registry 中文档化）
-  useHotkeys('v', () => toolStateMachine.setTool('select'), {
-    enabled: canvasEnabled,
-  });
-  useHotkeys('h', () => toolStateMachine.setTool('hand'), {
-    enabled: canvasEnabled,
-  });
-  useHotkeys('t', () => toolStateMachine.setTool('text'), {
-    enabled: canvasEnabled,
-  });
+  // 7 个主工具切换：键位由 SHORTCUTS_REGISTRY 单一数据源提供
+  // 吸管工具没有 shortcutId（null），不绑定快捷键
+  const toolSelectEntry = getShortcutById('toolSelect')!;
+  useHotkeys(
+    getAllKeys(toolSelectEntry),
+    () => setTool('select'),
+    buildHotkeysOptions(toolSelectEntry, canvasEnabled),
+  );
+  const toolHandEntry = getShortcutById('toolHand')!;
+  useHotkeys(
+    getAllKeys(toolHandEntry),
+    () => setTool('hand'),
+    buildHotkeysOptions(toolHandEntry, canvasEnabled),
+  );
+  const toolTextEntry = getShortcutById('toolText')!;
+  useHotkeys(
+    getAllKeys(toolTextEntry),
+    () => setTool('text'),
+    buildHotkeysOptions(toolTextEntry, canvasEnabled),
+  );
+  const toolRectEntry = getShortcutById('toolRect')!;
+  useHotkeys(
+    getAllKeys(toolRectEntry),
+    () => setTool('rect'),
+    buildHotkeysOptions(toolRectEntry, canvasEnabled),
+  );
+  const toolEllipseEntry = getShortcutById('toolEllipse')!;
+  useHotkeys(
+    getAllKeys(toolEllipseEntry),
+    () => setTool('ellipse'),
+    buildHotkeysOptions(toolEllipseEntry, canvasEnabled),
+  );
+  const toolImageEntry = getShortcutById('toolImage')!;
+  useHotkeys(
+    getAllKeys(toolImageEntry),
+    () => setTool('image'),
+    buildHotkeysOptions(toolImageEntry, canvasEnabled),
+  );
+  const toolZoomEntry = getShortcutById('toolZoom')!;
+  useHotkeys(
+    getAllKeys(toolZoomEntry),
+    () => setTool('zoom'),
+    buildHotkeysOptions(toolZoomEntry, canvasEnabled),
+  );
 
   // 临时切换：按住 Space → 抓手，松开恢复
-  // 注意：Space 的 preventDefault 与修饰键状态在 use-modifier-keys.ts 中已处理，
-  // 这里只负责工具状态机的压栈/出栈
-  useHotkeys('space', () => toolStateMachine.pushTemporaryTool('hand'), {
-    keydown: true,
-    keyup: false,
-    enabled: canvasEnabled,
-  });
-  useHotkeys('space', () => toolStateMachine.popTemporaryTool('hand'), {
-    keydown: false,
-    keyup: true,
-  });
+  // 任务 4.3：Space 临时抓手完全由工具栈仲裁，不再依赖 use-modifier-keys 的 spaceRef。
+  // - keydown：检查表单焦点（contenteditable 等 enableOnFormTags 未覆盖的场景），
+  //   preventDefault 阻止页面滚动，pushTemporaryTool('hand') 使 activeTool 变为 'hand'
+  // - keyup：popTemporaryTool('hand') 恢复原工具
+  // - 失焦/异常取消：useToolStateMachine 的 window blur 监听清空临时栈
+  // 键位 'space' 由 SHORTCUTS_REGISTRY 中 toolHandTemp 条目文档化（帮助面板展示）
+  const toolHandTempEntry = getShortcutById('toolHandTemp')!;
+  useHotkeys(
+    getAllKeys(toolHandTempEntry),
+    (e) => {
+      // contenteditable 等 enableOnFormTags 未覆盖的表单元素中不抢占 Space
+      if (isFormElementFocused()) return;
+      e.preventDefault();
+      pushTemporaryTool('hand');
+    },
+    {
+      ...buildHotkeysOptions(toolHandTempEntry, canvasEnabled),
+      keydown: true,
+      keyup: false,
+    },
+  );
+  useHotkeys(
+    getAllKeys(toolHandTempEntry),
+    () => {
+      popTemporaryTool('hand');
+    },
+    {
+      ...buildHotkeysOptions(toolHandTempEntry, true),
+      keydown: false,
+      keyup: true,
+    },
+  );
 
   // [/] 边框宽度调整（适配表 #18，复用 Task 2.2 的 brushSize 条目）：
   // [ 减小 1px，] 增大 1px，范围 [0, 20]，文本类型忽略

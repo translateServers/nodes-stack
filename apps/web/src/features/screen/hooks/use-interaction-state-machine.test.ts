@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { transition } from './use-interaction-state-machine';
+import type { InteractionState, InteractionEvent } from './use-interaction-state-machine';
 
 describe('transition（交互状态机纯函数）', () => {
   describe('合法转换', () => {
@@ -30,6 +31,18 @@ describe('transition（交互状态机纯函数）', () => {
 
     it('marquee-selecting + start-drag → dragging', () => {
       expect(transition('marquee-selecting', 'start-drag')).toBe('dragging');
+    });
+
+    it('idle + start-drag → dragging（任务 12.1：Moveable 可从 idle 直接开始拖拽）', () => {
+      expect(transition('idle', 'start-drag')).toBe('dragging');
+    });
+
+    it('hovering + start-drag → dragging（任务 12.1：hovering 也可直接开始拖拽）', () => {
+      expect(transition('hovering', 'start-drag')).toBe('dragging');
+    });
+
+    it('marquee-selecting + double-click → text-editing（任务 12.3：Selecto onSelectEnd 双击文本）', () => {
+      expect(transition('marquee-selecting', 'double-click')).toBe('text-editing');
     });
 
     it('marquee-selecting + pointer-up → idle', () => {
@@ -123,13 +136,334 @@ describe('transition（交互状态机纯函数）', () => {
     });
   });
 
+  describe('任务 3.1：创建态（creating）转换', () => {
+    it('idle + start-create → creating', () => {
+      expect(transition('idle', 'start-create')).toBe('creating');
+    });
+
+    it('hovering + start-create → creating', () => {
+      expect(transition('hovering', 'start-create')).toBe('creating');
+    });
+
+    it('creating + commit-create → idle', () => {
+      expect(transition('creating', 'commit-create')).toBe('idle');
+    });
+
+    it('creating + pointer-up → idle（拖拽创建释放即提交）', () => {
+      expect(transition('creating', 'pointer-up')).toBe('idle');
+    });
+
+    it('完整流程：idle → creating → idle（commit-create 提交）', () => {
+      let state = transition('idle', 'start-create');
+      expect(state).toBe('creating');
+      state = transition(state, 'commit-create');
+      expect(state).toBe('idle');
+    });
+
+    it('完整流程：idle → creating → idle（pointer-up 提交）', () => {
+      let state = transition('idle', 'start-create');
+      expect(state).toBe('creating');
+      state = transition(state, 'pointer-up');
+      expect(state).toBe('idle');
+    });
+  });
+
+  describe('任务 3.1：采样态（sampling）转换', () => {
+    it('idle + start-sample → sampling', () => {
+      expect(transition('idle', 'start-sample')).toBe('sampling');
+    });
+
+    it('hovering + start-sample → sampling', () => {
+      expect(transition('hovering', 'start-sample')).toBe('sampling');
+    });
+
+    it('sampling + end-sample → idle', () => {
+      expect(transition('sampling', 'end-sample')).toBe('idle');
+    });
+
+    it('sampling + pointer-up → idle', () => {
+      expect(transition('sampling', 'pointer-up')).toBe('idle');
+    });
+
+    it('完整流程：idle → sampling → idle（end-sample 结束）', () => {
+      let state = transition('idle', 'start-sample');
+      expect(state).toBe('sampling');
+      state = transition(state, 'end-sample');
+      expect(state).toBe('idle');
+    });
+
+    it('完整流程：idle → sampling → idle（pointer-up 结束）', () => {
+      let state = transition('idle', 'start-sample');
+      expect(state).toBe('sampling');
+      state = transition(state, 'pointer-up');
+      expect(state).toBe('idle');
+    });
+  });
+
+  describe('任务 3.1：cancel 事件（任意瞬时状态恢复）', () => {
+    const nonIdleStates: InteractionState[] = [
+      'hovering',
+      'marquee-selecting',
+      'dragging',
+      'resizing',
+      'rotating',
+      'panning',
+      'zooming',
+      'text-editing',
+      'context-menu-open',
+      'creating',
+      'sampling',
+    ];
+
+    for (const state of nonIdleStates) {
+      it(`${state} + cancel → idle`, () => {
+        expect(transition(state, 'cancel')).toBe('idle');
+      });
+    }
+
+    it('idle + cancel → idle（idle 状态保持不变）', () => {
+      expect(transition('idle', 'cancel')).toBe('idle');
+    });
+
+    it('cancel 在 dragging 状态下优先于 pointer-up（中断拖拽）', () => {
+      expect(transition('dragging', 'cancel')).toBe('idle');
+    });
+
+    it('cancel 在 creating 状态下中断创建（不提交）', () => {
+      expect(transition('creating', 'cancel')).toBe('idle');
+    });
+
+    it('cancel 在 text-editing 状态下退出文本编辑（文本编辑优先退出）', () => {
+      expect(transition('text-editing', 'cancel')).toBe('idle');
+    });
+  });
+
+  describe('任务 3.1：window-blur 事件（任意瞬时状态恢复）', () => {
+    const nonIdleStates: InteractionState[] = [
+      'hovering',
+      'marquee-selecting',
+      'dragging',
+      'resizing',
+      'rotating',
+      'panning',
+      'zooming',
+      'text-editing',
+      'context-menu-open',
+      'creating',
+      'sampling',
+    ];
+
+    for (const state of nonIdleStates) {
+      it(`${state} + window-blur → idle`, () => {
+        expect(transition(state, 'window-blur')).toBe('idle');
+      });
+    }
+
+    it('idle + window-blur → idle（idle 状态保持不变）', () => {
+      expect(transition('idle', 'window-blur')).toBe('idle');
+    });
+
+    it('window-blur 在 text-editing 状态下退出文本编辑', () => {
+      expect(transition('text-editing', 'window-blur')).toBe('idle');
+    });
+  });
+
+  describe('任务 3.1：pointer-cancel 事件（pointer 捕获态恢复）', () => {
+    const pointerCaptureStates: InteractionState[] = [
+      'marquee-selecting',
+      'dragging',
+      'resizing',
+      'rotating',
+      'panning',
+      'creating',
+    ];
+
+    for (const state of pointerCaptureStates) {
+      it(`${state} + pointer-cancel → idle`, () => {
+        expect(transition(state, 'pointer-cancel')).toBe('idle');
+      });
+    }
+
+    it('idle + pointer-cancel → idle（idle 状态保持不变）', () => {
+      expect(transition('idle', 'pointer-cancel')).toBe('idle');
+    });
+
+    it('hovering + pointer-cancel → hovering（非 pointer 捕获态不响应）', () => {
+      expect(transition('hovering', 'pointer-cancel')).toBe('hovering');
+    });
+
+    it('text-editing + pointer-cancel → text-editing（文本编辑不响应 pointer-cancel）', () => {
+      expect(transition('text-editing', 'pointer-cancel')).toBe('text-editing');
+    });
+
+    it('context-menu-open + pointer-cancel → context-menu-open（菜单不响应 pointer-cancel）', () => {
+      expect(transition('context-menu-open', 'pointer-cancel')).toBe('context-menu-open');
+    });
+
+    it('zooming + pointer-cancel → zooming（缩放不响应 pointer-cancel）', () => {
+      expect(transition('zooming', 'pointer-cancel')).toBe('zooming');
+    });
+
+    it('sampling + pointer-cancel → sampling（采样不响应 pointer-cancel）', () => {
+      expect(transition('sampling', 'pointer-cancel')).toBe('sampling');
+    });
+  });
+
+  describe('任务 3.1：lost-pointer-capture 事件（pointer 捕获态恢复）', () => {
+    const pointerCaptureStates: InteractionState[] = [
+      'marquee-selecting',
+      'dragging',
+      'resizing',
+      'rotating',
+      'panning',
+      'creating',
+    ];
+
+    for (const state of pointerCaptureStates) {
+      it(`${state} + lost-pointer-capture → idle`, () => {
+        expect(transition(state, 'lost-pointer-capture')).toBe('idle');
+      });
+    }
+
+    it('idle + lost-pointer-capture → idle', () => {
+      expect(transition('idle', 'lost-pointer-capture')).toBe('idle');
+    });
+
+    it('text-editing + lost-pointer-capture → text-editing（文本编辑不响应）', () => {
+      expect(transition('text-editing', 'lost-pointer-capture')).toBe('text-editing');
+    });
+
+    it('context-menu-open + lost-pointer-capture → context-menu-open（菜单不响应）', () => {
+      expect(transition('context-menu-open', 'lost-pointer-capture')).toBe('context-menu-open');
+    });
+
+    it('sampling + lost-pointer-capture → sampling（采样不响应）', () => {
+      expect(transition('sampling', 'lost-pointer-capture')).toBe('sampling');
+    });
+  });
+
+  describe('任务 3.1：文本编辑优先退出语义', () => {
+    /**
+     * 验证任务 3.1 的核心目标：
+     * "文本编辑优先退出" - text-editing 状态对全局恢复事件响应（escape/commit/cancel/window-blur），
+     * 对其他事件保持 text-editing 状态，避免画布交互打断文本输入。
+     */
+    it('text-editing + escape → idle（escape 退出）', () => {
+      expect(transition('text-editing', 'escape')).toBe('idle');
+    });
+
+    it('text-editing + commit → idle（commit 提交退出）', () => {
+      expect(transition('text-editing', 'commit')).toBe('idle');
+    });
+
+    it('text-editing + cancel → idle（cancel 强制退出）', () => {
+      expect(transition('text-editing', 'cancel')).toBe('idle');
+    });
+
+    it('text-editing + window-blur → idle（窗口失焦退出）', () => {
+      expect(transition('text-editing', 'window-blur')).toBe('idle');
+    });
+
+    it('text-editing + pointer-down → text-editing（不响应画布指针）', () => {
+      expect(transition('text-editing', 'pointer-down')).toBe('text-editing');
+    });
+
+    it('text-editing + pointer-up → text-editing（不响应画布指针）', () => {
+      expect(transition('text-editing', 'pointer-up')).toBe('text-editing');
+    });
+
+    it('text-editing + start-drag → text-editing（不响应拖拽开始）', () => {
+      expect(transition('text-editing', 'start-drag')).toBe('text-editing');
+    });
+
+    it('text-editing + start-create → text-editing（不响应创建开始）', () => {
+      expect(transition('text-editing', 'start-create')).toBe('text-editing');
+    });
+
+    it('text-editing + start-sample → text-editing（不响应采样开始）', () => {
+      expect(transition('text-editing', 'start-sample')).toBe('text-editing');
+    });
+
+    it('text-editing + start-pan → text-editing（不响应平移开始）', () => {
+      expect(transition('text-editing', 'start-pan')).toBe('text-editing');
+    });
+
+    it('text-editing + double-click → text-editing（已在编辑时不重入）', () => {
+      expect(transition('text-editing', 'double-click')).toBe('text-editing');
+    });
+
+    it('text-editing + pointer-cancel → text-editing（不响应 pointer 取消）', () => {
+      expect(transition('text-editing', 'pointer-cancel')).toBe('text-editing');
+    });
+
+    it('text-editing + lost-pointer-capture → text-editing（不响应 pointer 丢失）', () => {
+      expect(transition('text-editing', 'lost-pointer-capture')).toBe('text-editing');
+    });
+
+    it('text-editing + open-context-menu → text-editing（不响应右键菜单）', () => {
+      expect(transition('text-editing', 'open-context-menu')).toBe('text-editing');
+    });
+  });
+
+  describe('任务 3.1：任意瞬时状态恢复矩阵', () => {
+    /**
+     * 验证全局恢复事件矩阵：
+     * - escape / cancel / window-blur 对所有非 idle 状态都恢复到 idle
+     * - pointer-cancel / lost-pointer-capture 仅对 pointer 捕获态恢复
+     *
+     * 任务 13.2：escape 加入全局恢复事件矩阵，修复 Escape 无法退出
+     * dragging/resizing/rotating/panning/creating 的 bug。
+     */
+    const allStates: InteractionState[] = [
+      'idle',
+      'hovering',
+      'marquee-selecting',
+      'dragging',
+      'resizing',
+      'rotating',
+      'panning',
+      'zooming',
+      'text-editing',
+      'context-menu-open',
+      'creating',
+      'sampling',
+    ];
+
+    const globalRecoveryEvents: InteractionEvent[] = ['escape', 'cancel', 'window-blur'];
+    const pointerRecoveryEvents: InteractionEvent[] = ['pointer-cancel', 'lost-pointer-capture'];
+
+    // 全局恢复事件：所有非 idle 状态都恢复到 idle
+    for (const event of globalRecoveryEvents) {
+      for (const state of allStates) {
+        const expected: InteractionState = state === 'idle' ? 'idle' : 'idle';
+        it(`${state} + ${event} → ${expected}`, () => {
+          expect(transition(state, event)).toBe(expected);
+        });
+      }
+    }
+
+    // pointer 恢复事件：仅 pointer 捕获态恢复到 idle
+    const pointerCaptureStates = new Set<InteractionState>([
+      'marquee-selecting',
+      'dragging',
+      'resizing',
+      'rotating',
+      'panning',
+      'creating',
+    ]);
+    for (const event of pointerRecoveryEvents) {
+      for (const state of allStates) {
+        const expected: InteractionState = pointerCaptureStates.has(state) ? 'idle' : state;
+        it(`${state} + ${event} → ${expected}`, () => {
+          expect(transition(state, event)).toBe(expected);
+        });
+      }
+    }
+  });
+
   describe('非法转换（保持当前状态）', () => {
     it('idle + pointer-up → idle（idle 状态无指针释放动作）', () => {
       expect(transition('idle', 'pointer-up')).toBe('idle');
-    });
-
-    it('idle + start-drag → idle（drag 必须先经过 marquee-selecting）', () => {
-      expect(transition('idle', 'start-drag')).toBe('idle');
     });
 
     it('dragging + double-click → dragging（拖拽中不能直接进入文本编辑）', () => {
@@ -154,6 +488,30 @@ describe('transition（交互状态机纯函数）', () => {
 
     it('context-menu-open + start-drag → context-menu-open（菜单打开时不开始拖拽）', () => {
       expect(transition('context-menu-open', 'start-drag')).toBe('context-menu-open');
+    });
+
+    it('creating + start-drag → creating（创建中不响应拖拽开始）', () => {
+      expect(transition('creating', 'start-drag')).toBe('creating');
+    });
+
+    it('creating + double-click → creating（创建中不响应双击）', () => {
+      expect(transition('creating', 'double-click')).toBe('creating');
+    });
+
+    it('sampling + start-drag → sampling（采样中不响应拖拽开始）', () => {
+      expect(transition('sampling', 'start-drag')).toBe('sampling');
+    });
+
+    it('sampling + start-create → sampling（采样中不响应创建开始）', () => {
+      expect(transition('sampling', 'start-create')).toBe('sampling');
+    });
+
+    it('dragging + start-create → dragging（拖拽中不响应创建开始）', () => {
+      expect(transition('dragging', 'start-create')).toBe('dragging');
+    });
+
+    it('marquee-selecting + start-sample → marquee-selecting（框选中不响应采样开始）', () => {
+      expect(transition('marquee-selecting', 'start-sample')).toBe('marquee-selecting');
     });
   });
 

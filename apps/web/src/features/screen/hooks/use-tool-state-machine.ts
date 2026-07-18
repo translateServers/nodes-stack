@@ -5,21 +5,19 @@
  * 例如：用户当前在"移动"工具，按住 Space 临时切到"抓手"，
  * 松开 Space 自动恢复"移动"。支持多个修饰键压栈。
  *
+ * 任务 2.4 补充恢复语义：
+ * - 窗口失焦（window blur）时清空临时栈，避免用户按住 Space 切到其他应用后
+ *   工具卡在"抓手"状态（松开 Space 的 keyup 事件不会到达本窗口）
+ * - 任何异常结束后 `activeTool` 必须恢复为 `currentTool`，栈中不残留临时工具
+ *
  * 本文件仅提供状态机骨架，工具切换的实际副作用
  * （光标样式、画布交互模式等）由调用方根据 activeTool 自行实现。
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type EditorTool } from './tool-registry';
 
-export type EditorTool =
-  | 'select' // V - 移动/选择（默认）
-  | 'hand' // H / Space 临时 - 抓手平移
-  | 'text' // T - 文本
-  | 'rect' // R - 矩形
-  | 'ellipse' // E - 椭圆
-  | 'image' // I - 图片
-  | 'zoom' // Z - 缩放
-  | 'eyedropper'; // Alt 临时 - 吸管
+export type { EditorTool };
 
 export interface ToolStateMachineApi {
   /** 当前生效的工具（可能是临时工具，栈顶非空时取栈顶） */
@@ -34,10 +32,8 @@ export interface ToolStateMachineApi {
   pushTemporaryTool: (tool: EditorTool) => void;
   /** 松开修饰键时弹出临时工具（移除栈中所有该工具实例） */
   popTemporaryTool: (tool: EditorTool) => void;
-  /** 是否处于文本编辑态（影响快捷键 enabled） */
-  isEditingText: boolean;
-  /** 设置文本编辑态 */
-  setEditingText: (editing: boolean) => void;
+  /** 手动清空临时工具栈（如异常恢复、菜单关闭） */
+  clearTemporaryTools: () => void;
 }
 
 /**
@@ -54,7 +50,6 @@ export interface ToolStateMachineApi {
 export function useToolStateMachine(): ToolStateMachineApi {
   const [currentTool, setCurrentTool] = useState<EditorTool>('select');
   const [temporaryTop, setTemporaryTop] = useState<EditorTool | null>(null);
-  const [isEditingText, setIsEditingText] = useState(false);
 
   // 临时工具栈，用 ref 维护避免高频 keydown 触发重渲染
   const stackRef = useRef<EditorTool[]>([]);
@@ -95,6 +90,32 @@ export function useToolStateMachine(): ToolStateMachineApi {
     [syncTop],
   );
 
+  const clearTemporaryTools = useCallback(() => {
+    if (stackRef.current.length === 0) return;
+    stackRef.current = [];
+    syncTop();
+  }, [syncTop]);
+
+  /**
+   * 任务 2.4：监听 window blur 事件，失焦时清空临时栈
+   *
+   * 用户按住 Space 临时切到抓手后，如果切到其他应用（window blur），
+   * 松开 Space 的 keyup 事件不会到达本窗口，导致 activeTool 卡在 'hand'。
+   * 失焦时主动清空栈，确保 activeTool 恢复为 currentTool。
+   *
+   * 注意：仅在浏览器环境执行，SSR / 测试环境（无 window）安全跳过。
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleBlur = () => {
+      clearTemporaryTools();
+    };
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [clearTemporaryTools]);
+
   const activeTool = useMemo<EditorTool>(
     () => temporaryTop ?? currentTool,
     [temporaryTop, currentTool],
@@ -109,7 +130,6 @@ export function useToolStateMachine(): ToolStateMachineApi {
     setTool,
     pushTemporaryTool,
     popTemporaryTool,
-    isEditingText,
-    setEditingText: setIsEditingText,
+    clearTemporaryTools,
   };
 }

@@ -2,6 +2,9 @@ import { memo } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
 import { TextComponent } from './components/text-component';
 import { BarChartComponent } from './components/bar-chart-component';
+import { RectComponent } from './components/rect-component';
+import { EllipseComponent } from './components/ellipse-component';
+import { ImageComponent } from './components/image-component';
 
 interface ComponentRendererProps {
   component: ScreenComponent;
@@ -13,6 +16,11 @@ const RENDERERS: Record<
 > = {
   text: TextComponent,
   'bar-chart': BarChartComponent,
+  // 任务 6.2：矩形与椭圆组件 renderer
+  rect: RectComponent,
+  ellipse: EllipseComponent,
+  // 任务 7.2：图片组件 renderer
+  image: ImageComponent,
 };
 
 /**
