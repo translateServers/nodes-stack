@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ScreenComponent, ScreenProject } from '@nebula/shared';
+import type { CanvasConfig, ScreenComponent, ScreenProject } from '@nebula/shared';
 
 import { useScreenEditorStore, withHistory } from './editor-store';
 import type { ScreenEditorState } from './editor-store';
@@ -36,6 +36,17 @@ function makeMockComponent(id: string): ScreenComponent {
     zIndex: 0,
     status: { locked: false, hidden: false },
   } as unknown as ScreenComponent;
+}
+
+/** 创建一个最小可用的 CanvasConfig mock */
+function makeMockCanvas(overrides: Partial<CanvasConfig> = {}): CanvasConfig {
+  return {
+    width: 1920,
+    height: 1080,
+    backgroundColor: '#000000',
+    scaleMode: 'fit',
+    ...overrides,
+  };
 }
 
 describe('withHistory', () => {
@@ -89,7 +100,7 @@ describe('withHistory', () => {
       expect(pushHistoryUpdater(emptyState)).toEqual({});
     });
 
-    it('当 project 存在时推入 components 快照到 past 并清空 future', () => {
+    it('当 project 存在时推入 components 与 canvas 快照到 past 并清空 future', () => {
       const setMock = vi.fn();
       withHistory(setMock as never, 'test', () => ({}));
 
@@ -99,14 +110,20 @@ describe('withHistory', () => {
 
       const mockComponent = makeMockComponent('comp-1');
       const state = makeMockState({
-        project: { components: [mockComponent] } as unknown as ScreenProject,
-        history: { past: [], future: [{ id: 'stale' } as unknown as ScreenComponent[]] },
+        project: {
+          components: [mockComponent],
+          canvas: makeMockCanvas(),
+        } as unknown as ScreenProject,
+        history: {
+          past: [],
+          future: [{ components: [], canvas: makeMockCanvas() }],
+        },
       });
 
       const result = pushHistoryUpdater(state);
       expect(result).toEqual({
         history: {
-          past: [[mockComponent]],
+          past: [{ components: [mockComponent], canvas: makeMockCanvas() }],
           future: [],
         },
       });
@@ -120,15 +137,21 @@ describe('withHistory', () => {
         state: ScreenEditorState,
       ) => Partial<ScreenEditorState>;
 
-      const oldSnapshot: ScreenComponent[] = [makeMockComponent('old')];
+      const oldEntry = { components: [makeMockComponent('old')], canvas: makeMockCanvas() };
       const newComponent = makeMockComponent('new');
       const state = makeMockState({
-        project: { components: [newComponent] } as unknown as ScreenProject,
-        history: { past: [oldSnapshot], future: [] },
+        project: {
+          components: [newComponent],
+          canvas: makeMockCanvas(),
+        } as unknown as ScreenProject,
+        history: { past: [oldEntry], future: [] },
       });
 
       const result = pushHistoryUpdater(state);
-      expect(result.history?.past).toEqual([oldSnapshot, [newComponent]]);
+      expect(result.history?.past).toEqual([
+        oldEntry,
+        { components: [newComponent], canvas: makeMockCanvas() },
+      ]);
       expect(result.history?.future).toEqual([]);
     });
 
@@ -141,12 +164,16 @@ describe('withHistory', () => {
       ) => Partial<ScreenEditorState>;
 
       // 创建 60 个旧快照
-      const oldSnapshots: ScreenComponent[][] = Array.from({ length: 60 }, (_, i) => [
-        makeMockComponent(`old-${i}`),
-      ]);
+      const oldSnapshots = Array.from({ length: 60 }, (_, i) => ({
+        components: [makeMockComponent(`old-${i}`)],
+        canvas: makeMockCanvas(),
+      }));
       const newComponent = makeMockComponent('new');
       const state = makeMockState({
-        project: { components: [newComponent] } as unknown as ScreenProject,
+        project: {
+          components: [newComponent],
+          canvas: makeMockCanvas(),
+        } as unknown as ScreenProject,
         history: { past: oldSnapshots, future: [] },
       });
 
@@ -154,9 +181,15 @@ describe('withHistory', () => {
       // 60 + 1 = 61，slice(-50) 保留最后 50 个，丢弃最旧的 11 个
       expect(result.history?.past.length).toBe(50);
       // 最旧的应该是 oldSnapshots[11]（index 0-10 被丢弃）
-      expect(result.history?.past[0]).toEqual([makeMockComponent('old-11')]);
-      // 最新的是 [newComponent]
-      expect(result.history?.past[49]).toEqual([newComponent]);
+      expect(result.history?.past[0]).toEqual({
+        components: [makeMockComponent('old-11')],
+        canvas: makeMockCanvas(),
+      });
+      // 最新的是 newComponent 快照
+      expect(result.history?.past[49]).toEqual({
+        components: [newComponent],
+        canvas: makeMockCanvas(),
+      });
     });
   });
 
@@ -169,6 +202,7 @@ describe('withHistory', () => {
           id: 'proj-1',
           name: 'test',
           components: initialComponents,
+          canvas: makeMockCanvas(),
         } as unknown as ScreenProject,
         history: { past: [], future: [] },
       });
@@ -192,8 +226,8 @@ describe('withHistory', () => {
         },
       }));
 
-      // 验证：history.past 已推入旧快照（空数组）
-      expect(currentState.history.past).toEqual([[]]);
+      // 验证：history.past 已推入旧快照（空组件数组 + 旧画布配置）
+      expect(currentState.history.past).toEqual([{ components: [], canvas: makeMockCanvas() }]);
       // 验证：state 已更新，project.components 包含新组件
       expect(currentState.project?.components).toEqual([newComponent]);
       // 验证：future 已清空（即使原本就为空）
@@ -206,6 +240,7 @@ describe('withHistory', () => {
           id: 'proj-1',
           name: 'test',
           components: [],
+          canvas: makeMockCanvas(),
         } as unknown as ScreenProject,
         history: { past: [], future: [] },
       });
@@ -239,8 +274,11 @@ describe('withHistory', () => {
         },
       }));
 
-      // 验证：history.past 累积为 2 个快照（第一次为 []，第二次为 [comp1]）
-      expect(currentState.history.past).toEqual([[], [comp1]]);
+      // 验证：history.past 累积为 2 个快照（第一次组件为 []，第二次为 [comp1]）
+      expect(currentState.history.past).toEqual([
+        { components: [], canvas: makeMockCanvas() },
+        { components: [comp1], canvas: makeMockCanvas() },
+      ]);
       // 验证：state 已累积更新，project.components 包含两个组件
       expect(currentState.project?.components).toEqual([comp1, comp2]);
     });
@@ -402,5 +440,218 @@ describe('isDirty 脏状态跟踪（任务 8.1）', () => {
     expect(useScreenEditorStore.getState().isDirty).toBe(true);
     // 验证基线 updatedAt 未被覆盖（保持旧值，下次保存仍用旧基线）
     expect(useScreenEditorStore.getState().project?.updatedAt).toBe(baselineUpdatedAt);
+  });
+});
+
+describe('画布配置进入历史栈（阶段 2 链路 B）', () => {
+  /** 创建一个最小可用的 ScreenProject mock */
+  function makeProject(id = 'proj-1', canvasOverrides: Partial<CanvasConfig> = {}): ScreenProject {
+    return {
+      id,
+      name: `project-${id}`,
+      description: null,
+      canvas: makeMockCanvas(canvasOverrides),
+      components: [],
+      status: 'draft',
+      thumbnail: null,
+      createdAt: '2024-01-01 00:00:00',
+      updatedAt: '2024-01-01 00:00:00',
+    } as unknown as ScreenProject;
+  }
+
+  /** 创建一个最小可用的 ScreenComponent mock */
+  function makeComponent(id = 'comp-1'): ScreenComponent {
+    return {
+      id,
+      type: 'rect',
+      name: `comp-${id}`,
+      position: { x: 0, y: 0, width: 100, height: 100 },
+      style: {},
+      zIndex: 0,
+      status: { locked: false, hidden: false },
+    } as unknown as ScreenComponent;
+  }
+
+  beforeEach(() => {
+    // 重置 store 数据字段，保留 actions；隔离每个用例的状态
+    useScreenEditorStore.setState({
+      project: null,
+      selectedComponentIds: [],
+      history: { past: [], future: [] },
+      isDirty: false,
+    });
+  });
+
+  describe('任务 8.1 历史条目同时记录组件与画布快照', () => {
+    it('undo 同时恢复组件与画布配置，组件编辑与画布编辑共享同一时间线', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      useScreenEditorStore.getState().updateCanvas({ backgroundColor: '#ffffff' });
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(2);
+
+      // 第一次 undo：回退画布修改，组件保留
+      useScreenEditorStore.getState().undo();
+      expect(useScreenEditorStore.getState().project?.canvas.backgroundColor).toBe('#000000');
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(1);
+
+      // 第二次 undo：回退组件新增
+      useScreenEditorStore.getState().undo();
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(0);
+      expect(useScreenEditorStore.getState().project?.canvas.backgroundColor).toBe('#000000');
+    });
+
+    it('redo 同时恢复组件与画布配置', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      useScreenEditorStore.getState().updateCanvas({ backgroundColor: '#ffffff' });
+      useScreenEditorStore.getState().undo();
+      useScreenEditorStore.getState().undo();
+
+      // 第一次 redo：恢复组件
+      useScreenEditorStore.getState().redo();
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(1);
+      expect(useScreenEditorStore.getState().project?.canvas.backgroundColor).toBe('#000000');
+
+      // 第二次 redo：恢复画布
+      useScreenEditorStore.getState().redo();
+      expect(useScreenEditorStore.getState().project?.canvas.backgroundColor).toBe('#ffffff');
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(1);
+    });
+
+    it('组件编辑产生的历史条目同样携带画布快照，undo 组件操作不会误回退画布', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      // undo 组件新增：组件回退，画布保持 1280（条目快照语义一致）
+      useScreenEditorStore.getState().undo();
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(0);
+      expect(useScreenEditorStore.getState().project?.canvas.width).toBe(1280);
+    });
+
+    it('loadProject 清空历史（既有语义不变）', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(2);
+
+      useScreenEditorStore.getState().loadProject(makeProject('proj-2'));
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      expect(useScreenEditorStore.getState().history.future).toHaveLength(0);
+    });
+  });
+
+  describe('任务 8.2 updateCanvas 接入历史栈', () => {
+    it('宽度/高度/背景色/背景图/缩放模式修改均入栈，可逐步撤销与重做', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      const originalCanvas = useScreenEditorStore.getState().project?.canvas;
+
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      useScreenEditorStore.getState().updateCanvas({ height: 720 });
+      useScreenEditorStore.getState().updateCanvas({ backgroundColor: '#123456' });
+      useScreenEditorStore.getState().updateCanvas({
+        backgroundImage: 'https://example.com/bg.png',
+      });
+      useScreenEditorStore.getState().updateCanvas({ scaleMode: 'full' });
+
+      const modified = useScreenEditorStore.getState().project?.canvas;
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(5);
+      expect(modified).toEqual({
+        width: 1280,
+        height: 720,
+        backgroundColor: '#123456',
+        backgroundImage: 'https://example.com/bg.png',
+        scaleMode: 'full',
+      });
+
+      // 逐步撤销恢复原始画布
+      for (let i = 0; i < 5; i++) {
+        useScreenEditorStore.getState().undo();
+      }
+      expect(useScreenEditorStore.getState().project?.canvas).toEqual(originalCanvas);
+
+      // 逐步重做恢复修改后画布
+      for (let i = 0; i < 5; i++) {
+        useScreenEditorStore.getState().redo();
+      }
+      expect(useScreenEditorStore.getState().project?.canvas).toEqual(modified);
+    });
+
+    it('无实际变化时不入栈也不置脏（不产生空历史记录）', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+
+      // 各字段提交与当前值相同
+      useScreenEditorStore.getState().updateCanvas({ width: 1920 });
+      useScreenEditorStore.getState().updateCanvas({ height: 1080 });
+      useScreenEditorStore.getState().updateCanvas({ backgroundColor: '#000000' });
+      useScreenEditorStore.getState().updateCanvas({ scaleMode: 'fit' });
+      useScreenEditorStore.getState().updateCanvas({ backgroundImage: undefined });
+      useScreenEditorStore.getState().updateCanvas({});
+
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      expect(useScreenEditorStore.getState().history.future).toHaveLength(0);
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    });
+
+    it('混合提交（部分字段相同、部分不同）时按实际变化入栈一条，且仅应用差异字段', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+
+      // width 相同、height 不同：应入栈一条且只改 height
+      useScreenEditorStore.getState().updateCanvas({ width: 1920, height: 720 });
+
+      const state = useScreenEditorStore.getState();
+      expect(state.history.past).toHaveLength(1);
+      expect(state.project?.canvas.width).toBe(1920);
+      expect(state.project?.canvas.height).toBe(720);
+      expect(state.isDirty).toBe(true);
+    });
+
+    it('有实际变化时入栈并置脏（脏状态语义与既有约定一致）', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      expect(useScreenEditorStore.getState().isDirty).toBe(true);
+
+      // 撤销/重做路径同样置脏
+      useScreenEditorStore.getState().undo();
+      expect(useScreenEditorStore.getState().isDirty).toBe(true);
+      useScreenEditorStore.getState().redo();
+      expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it('project 为 null 时 updateCanvas 不产生历史', () => {
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+    });
+  });
+
+  describe('任务 8.3 连续输入的单条历史语义', () => {
+    it('一次业务修改（draft 提交语义下单次 updateCanvas）只产生一条历史，快照为修改前状态', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+
+      // 模拟属性面板 NumberInput / 画布设置对话框的 draft 提交：
+      // 连续微调过程不调用 store，仅在 Enter/Blur/确认时提交一次
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+
+      const state = useScreenEditorStore.getState();
+      expect(state.history.past).toHaveLength(1);
+      // 唯一的历史条目是修改前的完整快照（组件 + 画布）
+      expect(state.history.past[0]).toEqual({
+        components: [],
+        canvas: makeMockCanvas(),
+      });
+    });
+
+    it('重复提交相同值不产生空历史记录', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
+
+      // 再次提交当前值（如对话框二次确认但未修改）：不入栈
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
+      expect(useScreenEditorStore.getState().history.future).toHaveLength(0);
+    });
   });
 });

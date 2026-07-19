@@ -2,9 +2,18 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ScreenProject, ScreenComponent, CanvasConfig } from '@nebula/shared';
 
+/**
+ * 历史栈条目：组件数组 + 画布配置的双重快照。
+ * 撤销/重做时同步恢复两者，画布配置（宽高/背景/缩放模式）与组件编辑共享同一时间线。
+ */
+interface HistoryEntry {
+  components: ScreenComponent[];
+  canvas: CanvasConfig;
+}
+
 interface HistoryState {
-  past: ScreenComponent[][];
-  future: ScreenComponent[][];
+  past: HistoryEntry[];
+  future: HistoryEntry[];
 }
 
 interface GuidesState {
@@ -209,9 +218,12 @@ function pushHistory(set: ScreenEditorSet): void {
     return {
       history: {
         // 浅拷贝即可：store 内所有 update 操作均为 immutable（用展开符产生新对象/新数组），
-        // 不会原地修改 component 对象，因此旧数组及其内部引用始终保留历史快照语义。
+        // 不会原地修改 component / canvas 对象，因此旧引用始终保留历史快照语义。
         // 改用浅拷贝避免大组件树深拷贝（structuredClone）带来的性能开销。
-        past: [...state.history.past, [...state.project.components]].slice(-HISTORY_LIMIT),
+        past: [
+          ...state.history.past,
+          { components: [...state.project.components], canvas: { ...state.project.canvas } },
+        ].slice(-HISTORY_LIMIT),
         future: [],
       },
     };
@@ -223,7 +235,8 @@ function pushHistory(set: ScreenEditorSet): void {
  * 用于替代 editor-store 中所有 action 的 `pushHistory(set); set(updater, false, name);` 模式。
  *
  * 行为：
- * 1. 先调用 `pushHistory(set)`：把当前 `project.components` 快照推入 `history.past`，并清空 `future`
+ * 1. 先调用 `pushHistory(set)`：把当前 `project.components` 与 `project.canvas` 快照推入
+ *    `history.past`，并清空 `future`
  * 2. 再调用 `set(updater, false, actionName)`：应用业务更新，并在 devtools 中标记 actionName
  *
  * 脏状态：所有进入历史栈的修改操作均视为"相对最后加载/保存响应发生变化"，自动置 `isDirty=true`。
@@ -351,20 +364,23 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       },
 
       updateCanvas: (updates) => {
-        set(
-          (state: ScreenEditorState) => {
-            if (!state.project) return state;
-            return {
-              project: {
-                ...state.project,
-                canvas: { ...state.project.canvas, ...updates },
-              },
-              isDirty: true,
-            };
-          },
-          false,
-          'updateCanvas',
+        const { project } = get();
+        if (!project) return;
+        // 无实际变化时不入栈也不置脏（任务 8.2/8.3：一次业务修改只产生一条历史，
+        // 无变化提交不产生空历史记录或错误脏状态）
+        const hasChange = (Object.keys(updates) as Array<keyof CanvasConfig>).some(
+          (key) => updates[key] !== project.canvas[key],
         );
+        if (!hasChange) return;
+        withHistory(set, 'updateCanvas', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              canvas: { ...state.project.canvas, ...updates },
+            },
+          };
+        });
       },
 
       setCanvasScale: (scale) => {
@@ -680,16 +696,29 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         if (history.past.length === 0 || !project) return;
         const previous = history.past[history.past.length - 1];
         set(
-          (state: ScreenEditorState) => ({
-            project: state.project ? { ...state.project, components: previous } : state.project,
-            selectedComponentIds: [],
-            history: {
-              past: state.history.past.slice(0, -1),
-              // 浅拷贝当前 components 存入 future（同 pushHistory 的immutable前提）
-              future: [[...(state.project?.components ?? [])], ...state.history.future],
-            },
-            isDirty: true,
-          }),
+          (state: ScreenEditorState) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: previous.components,
+                canvas: previous.canvas,
+              },
+              selectedComponentIds: [],
+              history: {
+                past: state.history.past.slice(0, -1),
+                // 浅拷贝当前快照存入 future（同 pushHistory 的 immutable 前提）
+                future: [
+                  {
+                    components: [...state.project.components],
+                    canvas: { ...state.project.canvas },
+                  },
+                  ...state.history.future,
+                ],
+              },
+              isDirty: true,
+            };
+          },
           false,
           'undo',
         );
@@ -700,15 +729,28 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         if (history.future.length === 0 || !project) return;
         const next = history.future[0];
         set(
-          (state: ScreenEditorState) => ({
-            project: state.project ? { ...state.project, components: next } : state.project,
-            selectedComponentIds: [],
-            history: {
-              past: [...state.history.past, [...(state.project?.components ?? [])]],
-              future: state.history.future.slice(1),
-            },
-            isDirty: true,
-          }),
+          (state: ScreenEditorState) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: next.components,
+                canvas: next.canvas,
+              },
+              selectedComponentIds: [],
+              history: {
+                past: [
+                  ...state.history.past,
+                  {
+                    components: [...state.project.components],
+                    canvas: { ...state.project.canvas },
+                  },
+                ],
+                future: state.history.future.slice(1),
+              },
+              isDirty: true,
+            };
+          },
           false,
           'redo',
         );

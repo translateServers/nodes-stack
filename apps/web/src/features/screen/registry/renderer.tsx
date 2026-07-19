@@ -1,5 +1,10 @@
 import { memo } from 'react';
-import type { ScreenComponent } from '@nebula/shared';
+import type {
+  DataSourceConfig,
+  InteractionConfig,
+  LogicConfig,
+  ScreenComponent,
+} from '@nebula/shared';
 import { TextComponent } from './components/text-component';
 import { BarChartComponent } from './components/bar-chart-component';
 import { RectComponent } from './components/rect-component';
@@ -10,10 +15,21 @@ interface ComponentRendererProps {
   component: ScreenComponent;
 }
 
-const RENDERERS: Record<
-  string,
-  React.ComponentType<{ props: Record<string, unknown>; style: Record<string, unknown> }>
-> = {
+/**
+ * 组件 renderer 统一入参（阶段 2 任务 3.2）。
+ *
+ * 除 props/style 外，透传四层配置中渲染链路需要的
+ * dataSource / logic / interaction；非图表组件忽略即可。
+ */
+export interface RendererComponentProps {
+  props: Record<string, unknown>;
+  style: Record<string, unknown>;
+  dataSource?: DataSourceConfig;
+  logic?: LogicConfig;
+  interaction?: InteractionConfig;
+}
+
+const RENDERERS: Record<string, React.ComponentType<RendererComponentProps>> = {
   text: TextComponent,
   'bar-chart': BarChartComponent,
   // 任务 6.2：矩形与椭圆组件 renderer
@@ -39,5 +55,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({
       </div>
     );
   }
-  return <Renderer props={component.props} style={component.style} />;
+  return (
+    <Renderer
+      props={component.props}
+      style={component.style}
+      dataSource={component.dataSource}
+      logic={component.logic}
+      interaction={component.interaction}
+    />
+  );
 });

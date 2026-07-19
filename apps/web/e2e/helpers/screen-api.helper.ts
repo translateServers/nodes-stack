@@ -196,6 +196,25 @@ export function createRectComponent(overrides?: Partial<ScreenComponent>): Scree
   };
 }
 
+/** 构造柱状图组件（阶段 2 数据源 E2E 数据工厂） */
+export function createBarChartComponent(overrides?: Partial<ScreenComponent>): ScreenComponent {
+  return {
+    id: uniqueId('e2e-bar-chart'),
+    type: 'bar-chart',
+    name: 'E2E 柱状图',
+    position: { x: 100, y: 100, width: 400, height: 300 },
+    style: {
+      backgroundColor: '#3b82f6',
+      color: '#ffffff',
+    },
+    props: { title: 'E2E 图表' },
+    status: { locked: false, hidden: false },
+    zIndex: 1,
+    parentId: null,
+    ...overrides,
+  };
+}
+
 /** 构造椭圆组件 */
 export function createEllipseComponent(overrides?: Partial<ScreenComponent>): ScreenComponent {
   return {

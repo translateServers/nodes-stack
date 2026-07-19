@@ -1,18 +1,46 @@
-interface BarChartComponentProps {
-  props: Record<string, unknown>;
-  style: Record<string, unknown>;
-}
+import { useMemo } from 'react';
+import type { DataSourceConfig } from '@nebula/shared';
+import type { RendererComponentProps } from '../renderer';
+import { useChartData } from '../../hooks/use-chart-data';
 
-interface DataItem {
-  name: string;
-  value: number;
-}
+/**
+ * bar-chart renderer（阶段 2 任务 3.2/3.3 改造）
+ *
+ * 数据来自数据层解析结果（useChartData）：
+ * - 有数据层配置时，数据层为唯一生效数据源，遗留 props.data 不再生效
+ * - 无数据层配置时，回退读取遗留 props.data（任务 3.3 兼容语义；
+ *   首次通过数据层 UI 提交后 props.data 被一次性迁移清除）
+ * 标题与颜色仍取视觉层 props/style，渲染行为不回退。
+ * 交互层 interaction.tooltipOnHover 开启时，悬停柱条经 SVG <title> 展示名称与数值
+ * （任务 4.5，默认关闭，关闭时视觉与既有行为一致）。
+ * 错误态为 6.x 统一三态契约前的简化占位。
+ */
+export function BarChartComponent({
+  props,
+  style,
+  dataSource,
+  logic,
+  interaction,
+}: RendererComponentProps) {
+  // 任务 3.3：无数据层配置时回退遗留 props.data；有数据层时数据层唯一生效
+  const effectiveDataSource = useMemo<DataSourceConfig | undefined>(() => {
+    if (dataSource !== undefined) return dataSource;
+    if (!('data' in props)) return undefined;
+    return { type: 'static', staticData: props.data };
+  }, [dataSource, props]);
 
-export function BarChartComponent({ props, style }: BarChartComponentProps) {
-  const data = (props.data as DataItem[]) ?? [];
+  const parseResult = useChartData(effectiveDataSource, logic);
   const title = (props.title as string) ?? '';
 
-  if (data.length === 0) {
+  if (parseResult.status === 'error') {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-2 text-center text-sm text-red-400">
+        数据解析失败：{parseResult.message}
+      </div>
+    );
+  }
+
+  if (parseResult.status === 'empty') {
     return (
       <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
         暂无数据
@@ -20,9 +48,11 @@ export function BarChartComponent({ props, style }: BarChartComponentProps) {
     );
   }
 
+  const data = parseResult.data;
   const maxValue = Math.max(...data.map((d) => d.value), 1);
   const barColor = (style.backgroundColor as string) || '#3b82f6';
   const padding = { top: title ? 30 : 10, right: 10, bottom: 30, left: 40 };
+  const tooltipOnHover = interaction?.tooltipOnHover ?? false;
 
   return (
     <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
@@ -48,6 +78,7 @@ export function BarChartComponent({ props, style }: BarChartComponentProps) {
 
         return (
           <g key={item.name}>
+            {tooltipOnHover && <title>{`${item.name}: ${item.value}`}</title>}
             <rect x={x} y={y} width={barWidth} height={barHeight} fill={barColor} rx={2} />
             <text
               x={x + barWidth / 2}

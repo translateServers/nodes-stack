@@ -477,8 +477,8 @@ describe('usePublishScreenProject', () => {
     it('isDirty=true 时发布 mutation 未调用', async () => {
       const store = useScreenEditorStore;
       store.getState().loadProject(makeProject({ updatedAt: BASELINE_UPDATED_AT }));
-      // 通过 updateCanvas 模拟用户修改，触发 isDirty=true
-      store.getState().updateCanvas({ width: 1920 });
+      // 通过 updateCanvas 模拟用户修改，触发 isDirty=true（须为实际变化：无变化提交不入栈不置脏）
+      store.getState().updateCanvas({ width: 1280 });
       expect(store.getState().isDirty).toBe(true);
 
       const response = makeProject({ updatedAt: SERVER_UPDATED_AT_V1, status: 'published' });

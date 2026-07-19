@@ -318,16 +318,7 @@ describe('任务 2.4：工具状态机恢复测试', () => {
     });
 
     it('所有可能的 EditorTool 都能作为 currentTool 经异常恢复正确生效', () => {
-      const tools: EditorTool[] = [
-        'select',
-        'hand',
-        'text',
-        'rect',
-        'ellipse',
-        'image',
-        'zoom',
-        'eyedropper',
-      ];
+      const tools: EditorTool[] = ['select', 'hand', 'text', 'rect', 'ellipse', 'image', 'zoom'];
       for (const tool of tools) {
         const { result } = renderHook(() => useToolStateMachine());
         act(() => result.current.setTool(tool));

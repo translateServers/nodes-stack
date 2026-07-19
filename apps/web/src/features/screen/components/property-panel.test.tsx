@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 // Mock editor-store：属性面板依赖 zustand store，测试用 vi.fn() 替换以便控制返回值
 vi.mock('../stores/editor-store', () => ({
@@ -314,6 +314,192 @@ describe('PropertyPanel', () => {
 
       // 属性面板显示新的 rotation
       expect(findInputByLabel('旋转').value).toBe('45');
+    });
+  });
+
+  describe('画布设置连续输入的单条历史语义（任务 8.3）', () => {
+    it('宽度数值连续输入仅在提交时调用一次 updateCanvas（draft 提交语义）', () => {
+      const updateCanvas = vi.fn();
+      setStoreState({
+        project: { components: [], canvas: createCanvas() },
+        selectedComponentIds: [],
+        updateComponent: vi.fn(),
+        updateCanvas,
+        removeComponent: vi.fn(),
+      });
+
+      render(<PropertyPanel />);
+
+      // 连续输入多个字符（模拟用户逐键输入 '1280'）：draft 阶段不提交
+      const widthInput = findInputByLabel('宽度');
+      fireEvent.focus(widthInput);
+      fireEvent.change(widthInput, { target: { value: '1' } });
+      fireEvent.change(widthInput, { target: { value: '12' } });
+      fireEvent.change(widthInput, { target: { value: '128' } });
+      fireEvent.change(widthInput, { target: { value: '1280' } });
+      expect(updateCanvas).not.toHaveBeenCalled();
+
+      // Blur 提交：一次业务修改只产生一次 updateCanvas 调用（即只入栈一条历史）
+      fireEvent.blur(widthInput);
+      expect(updateCanvas).toHaveBeenCalledTimes(1);
+      expect(updateCanvas).toHaveBeenCalledWith({ width: 1280 });
+    });
+
+    it('宽度数值未变化时提交不调用 updateCanvas（不产生空历史记录）', () => {
+      const updateCanvas = vi.fn();
+      setStoreState({
+        project: { components: [], canvas: createCanvas() },
+        selectedComponentIds: [],
+        updateComponent: vi.fn(),
+        updateCanvas,
+        removeComponent: vi.fn(),
+      });
+
+      render(<PropertyPanel />);
+
+      // 聚焦后未做任何修改直接 blur：NumberInput 检测到值未变化，不触发 onChange
+      const widthInput = findInputByLabel('宽度');
+      fireEvent.focus(widthInput);
+      fireEvent.blur(widthInput);
+      expect(updateCanvas).not.toHaveBeenCalled();
+    });
+
+    it('背景颜色选择一次变更只调用一次 updateCanvas', () => {
+      const updateCanvas = vi.fn();
+      setStoreState({
+        project: { components: [], canvas: createCanvas() },
+        selectedComponentIds: [],
+        updateComponent: vi.fn(),
+        updateCanvas,
+        removeComponent: vi.fn(),
+      });
+
+      const { container } = render(<PropertyPanel />);
+
+      // 画布设置区仅有一个取色器（背景）
+      const colorInput = container.querySelector('input[type="color"]');
+      if (!colorInput) throw new Error('color input not found');
+      fireEvent.change(colorInput, { target: { value: '#ff0000' } });
+
+      expect(updateCanvas).toHaveBeenCalledTimes(1);
+      expect(updateCanvas).toHaveBeenCalledWith({ backgroundColor: '#ff0000' });
+    });
+  });
+
+  describe('bar-chart 四层分组（阶段 2 任务 4.1）', () => {
+    function makeBarChartComponent(overrides: Partial<ScreenComponent> = {}): ScreenComponent {
+      return makeComponent({
+        id: 'chart-1',
+        type: 'bar-chart',
+        name: '柱状图',
+        position: { x: 0, y: 0, width: 400, height: 300 },
+        props: { title: '销售', data: [{ name: '一月', value: 30 }] },
+        ...overrides,
+      });
+    }
+
+    function setSelectedComponent(component: ScreenComponent): void {
+      setStoreState({
+        project: { components: [component], canvas: createCanvas() },
+        selectedComponentIds: [component.id],
+        updateComponent: vi.fn(),
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+    }
+
+    it('选中 bar-chart 时按数据、逻辑、视觉、交互四层分组展示且顺序固定', () => {
+      setSelectedComponent(makeBarChartComponent());
+
+      const { container } = render(<PropertyPanel />);
+
+      const sections = container.querySelectorAll('section[data-testid$="-section"]');
+      expect([...sections].map((el) => el.getAttribute('data-testid'))).toEqual([
+        'datasource-section',
+        'logic-section',
+        'visual-section',
+        'interaction-section',
+      ]);
+      expect(within(screen.getByTestId('datasource-section')).getByText('数据')).toBeDefined();
+      expect(within(screen.getByTestId('logic-section')).getByText('逻辑')).toBeDefined();
+      expect(within(screen.getByTestId('visual-section')).getByText('视觉')).toBeDefined();
+      expect(within(screen.getByTestId('interaction-section')).getByText('交互')).toBeDefined();
+    });
+
+    it('分组归属：各层配置项归入对应分组', () => {
+      setSelectedComponent(makeBarChartComponent());
+
+      render(<PropertyPanel />);
+
+      // 数据层：静态数据编辑器与字段映射下拉
+      const datasource = screen.getByTestId('datasource-section');
+      expect(within(datasource).getByTestId('static-data-editor')).toBeDefined();
+      expect(within(datasource).getByRole('combobox', { name: '维度字段' })).toBeDefined();
+      expect(within(datasource).getByRole('combobox', { name: '数值字段' })).toBeDefined();
+
+      // 逻辑层：排序字段、排序方向、条数限制
+      const logic = screen.getByTestId('logic-section');
+      expect(within(logic).getByRole('combobox', { name: '排序字段' })).toBeDefined();
+      expect(within(logic).getByRole('combobox', { name: '排序方向' })).toBeDefined();
+      expect(within(logic).getByRole('spinbutton', { name: '条数限制' })).toBeDefined();
+
+      // 视觉层：标题与既有样式编辑归入视觉分组
+      const visual = screen.getByTestId('visual-section');
+      expect(within(visual).getByText('标题')).toBeDefined();
+      expect(within(visual).getByText('样式')).toBeDefined();
+      expect(within(visual).getByText('背景')).toBeDefined();
+
+      // 交互层：悬停提示开关
+      const interaction = screen.getByTestId('interaction-section');
+      expect(within(interaction).getByRole('switch', { name: '悬停提示' })).toBeDefined();
+    });
+
+    it('既有位置与尺寸编辑保留且行为不回退', () => {
+      const updateComponent = vi.fn();
+      const component = makeBarChartComponent();
+      setStoreState({
+        project: { components: [component], canvas: createCanvas() },
+        selectedComponentIds: [component.id],
+        updateComponent,
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+
+      render(<PropertyPanel />);
+
+      const xInput = findInputByLabel('X');
+      expect(xInput.value).toBe('0');
+      fireEvent.focus(xInput);
+      fireEvent.change(xInput, { target: { value: '12' } });
+      fireEvent.blur(xInput);
+      expect(updateComponent).toHaveBeenCalledTimes(1);
+      expect(updateComponent).toHaveBeenCalledWith('chart-1', {
+        position: { x: 12, y: 0, width: 400, height: 300 },
+      });
+    });
+
+    it('非图表组件（shape）不出现四层分组，既有样式编辑不回退', () => {
+      setSelectedComponent(makeComponent({ id: 'shape-1', type: 'shape', name: '矩形' }));
+
+      render(<PropertyPanel />);
+
+      expect(screen.queryByTestId('datasource-section')).toBeNull();
+      expect(screen.queryByTestId('logic-section')).toBeNull();
+      expect(screen.queryByTestId('visual-section')).toBeNull();
+      expect(screen.queryByTestId('interaction-section')).toBeNull();
+      expect(screen.getByText('位置与尺寸')).toBeDefined();
+      expect(screen.getByText('样式')).toBeDefined();
+    });
+
+    it('非图表组件（text）不出现数据源分组，文本属性编辑不回退', () => {
+      setSelectedComponent(makeComponent({ id: 'text-1', type: 'text', name: '文本' }));
+
+      render(<PropertyPanel />);
+
+      expect(screen.queryByTestId('datasource-section')).toBeNull();
+      expect(screen.queryByTestId('logic-section')).toBeNull();
+      expect(screen.queryByTestId('interaction-section')).toBeNull();
+      expect(screen.getByText('文本属性')).toBeDefined();
     });
   });
 });

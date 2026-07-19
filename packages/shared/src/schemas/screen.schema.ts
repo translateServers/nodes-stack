@@ -71,12 +71,74 @@ export const ApiDataSourceConfigSchema = z.object({
 });
 export type ApiDataSourceConfig = z.infer<typeof ApiDataSourceConfigSchema>;
 
+/**
+ * 字段映射：将数据源字段映射到图表需要的维度和数值。
+ * 未配置时按默认推断规则：name → 维度、value → 数值。
+ */
+export const FieldMappingSchema = z.object({
+  dimension: z.string().min(1).describe('维度字段名（对应图表 x 轴/名称）'),
+  value: z.string().min(1).describe('数值字段名（对应图表 y 轴/值）'),
+});
+export type FieldMapping = z.infer<typeof FieldMappingSchema>;
+
 export const DataSourceConfigSchema = z.object({
   type: DataSourceTypeSchema.describe('数据源类型'),
   staticData: z.unknown().optional().describe('静态数据'),
   apiConfig: ApiDataSourceConfigSchema.optional().describe('API 数据源配置'),
+  dataPath: z
+    .string()
+    .optional()
+    .describe('数据路径（点分隔，如 "data.list"），用于从嵌套响应中提取目标数组'),
+  fieldMapping: FieldMappingSchema.optional().describe(
+    '字段映射，未配置时按 name→维度、value→数值默认推断',
+  ),
 });
 export type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
+
+// ===== 逻辑层 =====
+
+export const SortDirectionSchema = z.enum(['asc', 'desc']);
+export type SortDirection = z.infer<typeof SortDirectionSchema>;
+
+export const LogicConfigSchema = z.object({
+  sortField: z.enum(['dimension', 'value']).optional().describe('排序字段（维度/数值）'),
+  sortDirection: SortDirectionSchema.optional().describe('排序方向'),
+  limit: z.number().int().positive().optional().describe('条数限制（正整数）'),
+});
+export type LogicConfig = z.infer<typeof LogicConfigSchema>;
+
+// ===== 交互层 =====
+
+export const InteractionConfigSchema = z.object({
+  tooltipOnHover: z.boolean().default(false).describe('悬停时显示名称与数值提示'),
+});
+export type InteractionConfig = z.infer<typeof InteractionConfigSchema>;
+
+// ===== bar-chart 视觉 props =====
+
+export const BarChartVisualPropsSchema = z.object({
+  title: z.string().optional().describe('图表标题'),
+});
+export type BarChartVisualProps = z.infer<typeof BarChartVisualPropsSchema>;
+
+// ===== 敏感请求头识别 =====
+
+/** 内置敏感请求头键名（小写），可通过追加扩展 */
+export const SENSITIVE_HEADER_KEYS: ReadonlySet<string> = new Set([
+  'authorization',
+  'cookie',
+  'x-api-key',
+  'x-auth-token',
+  'proxy-authorization',
+]);
+
+/**
+ * 判断请求头键名是否为敏感键（大小写不敏感）。
+ * 前后端共用此规则，避免第二份实现。
+ */
+export function isSensitiveHeaderKey(key: string): boolean {
+  return SENSITIVE_HEADER_KEYS.has(key.toLowerCase());
+}
 
 export const ScreenComponentSchema = z.object({
   id: z.string().describe('组件实例唯一标识'),
@@ -85,7 +147,9 @@ export const ScreenComponentSchema = z.object({
   position: ComponentPositionSchema.describe('位置与尺寸'),
   style: ComponentStyleSchema.describe('基础样式'),
   props: z.record(z.string(), z.unknown()).describe('组件专属配置'),
-  dataSource: DataSourceConfigSchema.optional().describe('数据源配置'),
+  dataSource: DataSourceConfigSchema.optional().describe('数据层：数据源、数据路径与字段映射'),
+  logic: LogicConfigSchema.optional().describe('逻辑层：排序与条数限制'),
+  interaction: InteractionConfigSchema.optional().describe('交互层：悬停提示等交互行为'),
   status: ComponentStatusSchema.describe('组件状态'),
   zIndex: z.number().int().describe('层级'),
   parentId: z.string().nullable().optional().describe('父组件 ID'),

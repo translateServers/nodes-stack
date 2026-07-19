@@ -5,7 +5,10 @@ import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 import { ScreenCanvas } from './screen-canvas';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { pickImageFile } from '../lib/image-file-adapter';
-import type { InteractionState } from '../hooks/use-interaction-state-machine';
+import type {
+  InteractionState,
+  InteractionStateMachineApi,
+} from '../hooks/use-interaction-state-machine';
 import type { EditorTool } from '../hooks/tool-registry';
 import { TOOL_REGISTRY, getToolById } from '../hooks/tool-registry';
 
@@ -301,7 +304,7 @@ function makeSession(
   return {
     activeTool,
     activeCapabilities: tool.capabilities,
-    dispatchInteraction,
+    dispatchInteraction: dispatchInteraction as InteractionStateMachineApi['dispatch'],
     interactionState,
     textEditing: null,
     beginTextEditing: vi.fn(),
