@@ -171,7 +171,6 @@ describe('任务 3.2：统一 finalize/cancel 协议', () => {
       'panning',
       'marquee-selecting',
       'creating',
-      'sampling',
       'zooming',
     ];
 

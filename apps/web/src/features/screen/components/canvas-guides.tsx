@@ -5,6 +5,47 @@ const RULER_SIZE = 20;
 /** 参考线拖出画布外多少距离后删除（屏幕像素） */
 const REMOVE_THRESHOLD = 30;
 
+/**
+ * 安全地设置指针捕获。
+ *
+ * 指针已不活跃时（同步 pointerup、触摸指针被系统取消等）setPointerCapture
+ * 抛出 NotFoundError。参考线拖拽依赖 window 级 pointermove/pointerup 监听，
+ * 捕获失败不影响拖拽主流程，降级为静默失败。
+ */
+function trySetPointerCapture(target: EventTarget, pointerId: number): void {
+  if (!(target instanceof HTMLElement)) return;
+  try {
+    target.setPointerCapture(pointerId);
+  } catch {
+    // 指针已不活跃：忽略，拖拽由 window 监听继续
+  }
+}
+
+/**
+ * 屏幕坐标 → 画布坐标换算（纯函数，导出供单元测试）。
+ *
+ * 几何约定（与 screen-editor 布局一致）：
+ * - containerRef 指向含标尺的外层容器，标尺占据左/上各 RULER_SIZE px
+ * - 画布内容在外层容器中的起点为 (RULER_SIZE + canvasOffset.x, RULER_SIZE + canvasOffset.y)
+ * - 渲染参考线时 screenPos = RULER_SIZE + canvasOffset + canvasPos * scale（见下方渲染代码）
+ *
+ * 因此逆换算必须同时减去 RULER_SIZE 与 canvasOffset 再除以 scale。
+ * 历史 bug：漏减 RULER_SIZE，导致拖拽参考线落点比鼠标位置偏移 20/scale 画布单位
+ *（scale=1 时偏差 20 屏幕像素，缩放越小说差越大）。
+ */
+export function screenToCanvasPosition(
+  screenX: number,
+  screenY: number,
+  containerRect: { readonly left: number; readonly top: number },
+  canvasOffset: { readonly x: number; readonly y: number },
+  canvasScale: number,
+): { x: number; y: number } {
+  return {
+    x: (screenX - containerRect.left - RULER_SIZE - canvasOffset.x) / canvasScale,
+    y: (screenY - containerRect.top - RULER_SIZE - canvasOffset.y) / canvasScale,
+  };
+}
+
 type Orientation = 'vertical' | 'horizontal';
 
 interface DraggingState {
@@ -53,9 +94,7 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
       const container = containerRef.current;
       if (!container) return { x: 0, y: 0 };
       const rect = container.getBoundingClientRect();
-      const x = (screenX - rect.left - canvasOffset.x) / canvasScale;
-      const y = (screenY - rect.top - canvasOffset.y) / canvasScale;
-      return { x, y };
+      return screenToCanvasPosition(screenX, screenY, rect, canvasOffset, canvasScale);
     },
     [containerRef, canvasOffset, canvasScale],
   );
@@ -66,7 +105,7 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
       if (guides.locked) return;
       e.preventDefault();
       e.stopPropagation();
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      trySetPointerCapture(e.target, e.pointerId);
       const startScreen = orientation === 'vertical' ? e.clientX : e.clientY;
       setDragging({ orientation, index: -1, startScreen });
     },
@@ -79,7 +118,7 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
       if (guides.locked) return;
       e.preventDefault();
       e.stopPropagation();
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      trySetPointerCapture(e.target, e.pointerId);
       const startScreen = orientation === 'vertical' ? e.clientX : e.clientY;
       setDragging({ orientation, index, startScreen });
     },

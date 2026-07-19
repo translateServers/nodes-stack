@@ -148,7 +148,11 @@ export const ProjectMenubar = memo(function ProjectMenubar({
   const handleSelectAll = useMemo(() => {
     return () => {
       if (!project) return;
-      selectComponents(project.components.map((c) => c.id));
+      // 与快捷键 selectAll 行为一致：过滤锁定和隐藏组件
+      const selectableIds = project.components
+        .filter((c) => !c.status.locked && !c.status.hidden)
+        .map((c) => c.id);
+      selectComponents(selectableIds);
     };
   }, [project, selectComponents]);
 

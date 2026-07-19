@@ -122,7 +122,6 @@ describe('ToolSelector 任务 1.5：可访问的工具选择入口', () => {
       'ellipse',
       'image',
       'zoom',
-      'eyedropper',
     ]);
 
     const selectBtn = screen.getByRole('button', { name: '选择' });

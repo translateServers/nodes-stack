@@ -17,8 +17,8 @@ describe('tool-registry', () => {
       expect(uniqueIds.size).toBe(ids.length);
     });
 
-    it('注册表包含 8 种工具', () => {
-      expect(TOOL_REGISTRY).toHaveLength(8);
+    it('注册表包含 7 种工具', () => {
+      expect(TOOL_REGISTRY).toHaveLength(7);
     });
 
     it('包含所有预期工具 ID', () => {
@@ -30,7 +30,6 @@ describe('tool-registry', () => {
         'ellipse',
         'image',
         'zoom',
-        'eyedropper',
       ];
       const actualIds = TOOL_REGISTRY.map((t) => t.id);
       expect(actualIds.sort()).toEqual(expectedIds.sort());
@@ -70,7 +69,6 @@ describe('tool-registry', () => {
         'canRotate',
         'canPan',
         'canCreate',
-        'canSample',
         'canZoom',
       ];
       for (const tool of TOOL_REGISTRY) {
@@ -117,11 +115,6 @@ describe('tool-registry', () => {
       const uniqueKeys = new Set(keys);
       expect(uniqueKeys.size).toBe(keys.length);
     });
-
-    it('吸管工具没有快捷键（shortcutId 为 null）', () => {
-      const eyedropper = getToolById('eyedropper');
-      expect(eyedropper?.shortcutId).toBeNull();
-    });
   });
 
   describe('工具能力一致性', () => {
@@ -133,11 +126,10 @@ describe('tool-registry', () => {
       expect(select?.capabilities.canRotate).toBe(true);
     });
 
-    it('选择工具不能平移、创建、采样或缩放', () => {
+    it('选择工具不能平移、创建或缩放', () => {
       const select = getToolById('select');
       expect(select?.capabilities.canPan).toBe(false);
       expect(select?.capabilities.canCreate).toBe(false);
-      expect(select?.capabilities.canSample).toBe(false);
       expect(select?.capabilities.canZoom).toBe(false);
     });
 
@@ -166,14 +158,6 @@ describe('tool-registry', () => {
       expect(zoom?.capabilities.canSelect).toBe(false);
       expect(zoom?.capabilities.canDrag).toBe(false);
       expect(zoom?.capabilities.canCreate).toBe(false);
-    });
-
-    it('吸管工具只能采样', () => {
-      const eyedropper = getToolById('eyedropper');
-      expect(eyedropper?.capabilities.canSample).toBe(true);
-      expect(eyedropper?.capabilities.canSelect).toBe(false);
-      expect(eyedropper?.capabilities.canDrag).toBe(false);
-      expect(eyedropper?.capabilities.canCreate).toBe(false);
     });
   });
 
@@ -216,7 +200,6 @@ describe('tool-registry', () => {
       expect(hasCapability('hand', 'canPan')).toBe(true);
       expect(hasCapability('hand', 'canDrag')).toBe(false);
       expect(hasCapability('zoom', 'canZoom')).toBe(true);
-      expect(hasCapability('eyedropper', 'canSample')).toBe(true);
       expect(hasCapability('select', 'canPan')).toBe(false);
     });
 
@@ -226,11 +209,6 @@ describe('tool-registry', () => {
   });
 
   describe('与 SHORTCUTS_REGISTRY 的一致性', () => {
-    it('SHORTCUTS_REGISTRY 中不存在 eyedropperTemp 条目', () => {
-      const result = SHORTCUTS_REGISTRY.find((s) => s.id === 'eyedropperTemp');
-      expect(result).toBeUndefined();
-    });
-
     it('SHORTCUTS_REGISTRY 中存在所有工具切换快捷键', () => {
       const expectedShortcutIds = [
         'toolSelect',

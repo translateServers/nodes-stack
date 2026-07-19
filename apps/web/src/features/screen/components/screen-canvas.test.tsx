@@ -291,7 +291,6 @@ function makeEditorSession(
   | 'beginTextEditing'
   | 'endTextEditing'
   | 'isEditingText'
-  | 'setActiveColor'
 > {
   return {
     activeTool,
@@ -302,7 +301,6 @@ function makeEditorSession(
     beginTextEditing: vi.fn(),
     endTextEditing: vi.fn(),
     isEditingText: false,
-    setActiveColor: vi.fn(),
   };
 }
 
@@ -370,12 +368,9 @@ describe('任务 2.3：activeTool 接入 ScreenCanvas 能力派生', () => {
     expect(capturedSelecto!.selectByClick).toBe(false);
   });
 
-  it('吸管工具禁用 Moveable 和 Selecto 选择', () => {
-    renderCanvas('eyedropper');
-    expect(capturedMoveable!.draggable).toBe(false);
-    expect(capturedMoveable!.resizable).toBe(false);
-    expect(capturedMoveable!.rotatable).toBe(false);
-    expect(capturedSelecto!.selectByClick).toBe(false);
+  it('吸管工具已移除，注册表不再包含 eyedropper', () => {
+    // 阶段 1 移除吸管工具：无调色板等应用场景，不宣称无效能力
+    expect(getToolById('eyedropper' as EditorTool)).toBeUndefined();
   });
 
   it('容器 cursor 来自活动工具的 cursor 定义', () => {
@@ -403,8 +398,8 @@ describe('任务 2.3：activeTool 接入 ScreenCanvas 能力派生', () => {
     expect(canvasContainer.style.cursor).toBe('zoom-in');
   });
 
-  it('矩形/椭圆/图片/吸管工具的 cursor 均为 crosshair', () => {
-    const crosshairTools: EditorTool[] = ['rect', 'ellipse', 'image', 'eyedropper'];
+  it('矩形/椭圆/图片工具的 cursor 均为 crosshair', () => {
+    const crosshairTools: EditorTool[] = ['rect', 'ellipse', 'image'];
     for (const tool of crosshairTools) {
       const { container } = renderCanvas(tool);
       const canvasContainer = container.firstChild as HTMLElement;
@@ -426,15 +421,7 @@ describe('任务 2.3：activeTool 接入 ScreenCanvas 能力派生', () => {
 
   it('非选择工具不应启动 Moveable 任何变换能力（证明能力改变不仅影响状态栏）', () => {
     // 这是任务 2.3 验证的关键：不同工具改变画布允许能力
-    const nonSelectTools: EditorTool[] = [
-      'hand',
-      'text',
-      'rect',
-      'ellipse',
-      'image',
-      'zoom',
-      'eyedropper',
-    ];
+    const nonSelectTools: EditorTool[] = ['hand', 'text', 'rect', 'ellipse', 'image', 'zoom'];
     for (const tool of nonSelectTools) {
       renderCanvas(tool);
       // 非选择工具不应同时具备 canDrag/canResize/canRotate
@@ -488,11 +475,6 @@ describe('任务 4.1：选择工具成为 Selecto/Moveable 能力源', () => {
     expect(capturedSelecto!.disabled).toBe(true);
   });
 
-  it('吸管工具下 Selecto 被禁用，不会误触选择', () => {
-    renderCanvas('eyedropper');
-    expect(capturedSelecto!.disabled).toBe(true);
-  });
-
   it('TOOL_REGISTRY 中所有 !canSelect 工具均使 Selecto disabled', () => {
     for (const tool of TOOL_REGISTRY) {
       renderCanvas(tool.id);
@@ -503,15 +485,7 @@ describe('任务 4.1：选择工具成为 Selecto/Moveable 能力源', () => {
 
   it('非选择工具不会同时启用 Moveable 变换和 Selecto 选择', () => {
     // 这是 4.1 的关键验证：抓手和创建工具不会误触组件变换或选择
-    const nonSelectTools: EditorTool[] = [
-      'hand',
-      'text',
-      'rect',
-      'ellipse',
-      'image',
-      'zoom',
-      'eyedropper',
-    ];
+    const nonSelectTools: EditorTool[] = ['hand', 'text', 'rect', 'ellipse', 'image', 'zoom'];
     for (const tool of nonSelectTools) {
       renderCanvas(tool);
       const moveableDisabled =
@@ -549,7 +523,6 @@ describe('任务 4.2：抓手主工具支持直接平移', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -567,8 +540,8 @@ describe('任务 4.2：抓手主工具支持直接平移', () => {
     expect(dispatchInteraction).not.toHaveBeenCalledWith('start-pan');
   });
 
-  it('文字/矩形/椭圆/图片/缩放/吸管工具下左键按下不派发 start-pan', () => {
-    const nonHandTools: EditorTool[] = ['text', 'rect', 'ellipse', 'image', 'zoom', 'eyedropper'];
+  it('文字/矩形/椭圆/图片/缩放工具下左键按下不派发 start-pan', () => {
+    const nonHandTools: EditorTool[] = ['text', 'rect', 'ellipse', 'image', 'zoom'];
     for (const tool of nonHandTools) {
       const { dispatchInteraction } = triggerPointerDown(tool);
       expect(dispatchInteraction, `${tool} 不应派发 start-pan`).not.toHaveBeenCalledWith(
@@ -589,7 +562,6 @@ describe('任务 4.2：抓手主工具支持直接平移', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -620,7 +592,6 @@ describe('任务 4.4：将平移状态切换为状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -696,7 +667,6 @@ describe('任务 4.5：删除重复平移布尔状态（isPanning 从交互状�
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -714,7 +684,6 @@ describe('任务 4.5：删除重复平移布尔状态（isPanning 从交互状�
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -733,7 +702,6 @@ describe('任务 4.5：删除重复平移布尔状态（isPanning 从交互状�
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -752,7 +720,6 @@ describe('任务 4.5：删除重复平移布尔状态（isPanning 从交互状�
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container, rerender } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -802,7 +769,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -867,7 +833,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -924,7 +889,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -977,7 +941,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1029,7 +992,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1068,7 +1030,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1088,7 +1049,6 @@ describe('任务 6.3/6.4/6.5：矩形与椭圆拖拽创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1141,7 +1101,6 @@ describe('任务 7.4：图片工具点击创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1233,7 +1192,6 @@ describe('任务 7.4：图片工具点击创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1301,7 +1259,6 @@ describe('任务 7.4：图片工具点击创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1336,7 +1293,6 @@ describe('任务 7.4：图片工具点击创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1359,7 +1315,6 @@ describe('任务 7.4：图片工具点击创建', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1481,7 +1436,6 @@ describe('任务 8.2/8.3/8.4：缩放工具点击放大与反向缩小', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />);
     const canvasContainer = container.firstChild as HTMLElement;
@@ -1606,258 +1560,6 @@ describe('任务 8.2/8.3/8.4：缩放工具点击放大与反向缩小', () => {
 });
 
 /**
- * 任务 9.4：吸管工具画布行为
- *
- * 测试策略：
- * - mock document.elementsFromPoint 控制命中元素
- * - mock window.getComputedStyle 控制采样颜色（jsdom 限制）
- * - 验证：
- *   1. 点击采样成功：setActiveColor 被调用，updateComponent 应用到选中组件
- *   2. 采样失败（全透明）：setActiveColor 不被调用
- *   3. 右键不触发采样
- *   4. 不派发 start-pan / start-create（与平移/创建互斥）
- *   5. 选中多个支持颜色的组件时全部应用
- *   6. 不支持颜色的组件（image/bar-chart）跳过应用
- */
-describe('任务 9.4：吸管工具点击采样颜色', () => {
-  let setActiveColorMock: Mock<(color: string) => void>;
-  let updateComponentMock: Mock<(id: string, patch: Record<string, unknown>) => void>;
-
-  beforeEach(() => {
-    mockUseStore.mockReset();
-    setActiveColorMock = vi.fn();
-    updateComponentMock = vi.fn();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  /**
-   * 渲染画布并返回容器与 session 中的 mock。
-   * 可指定选中组件 ID 列表与项目组件数据。
-   */
-  function renderEyedropperCanvas(
-    options: {
-      selectedComponentIds?: string[];
-      components?: ScreenComponent[];
-      interactionState?: InteractionState;
-    } = {},
-  ) {
-    const project = makeProject();
-    if (options.components) {
-      project.components = options.components;
-    }
-    const selectedComponentIds = options.selectedComponentIds ?? [];
-    const store: Record<string, unknown> = {
-      project,
-      canvasScale: 1,
-      canvasOffset: { x: 0, y: 0 },
-      selectedComponentIds,
-      showBorderGuides: false,
-      activeGroupId: null,
-      guides: { visible: true, vertical: [], horizontal: [] },
-      snapEnabled: false,
-      smartGuidesEnabled: false,
-      gridEnabled: false,
-      gridSize: 10,
-      selectComponents: vi.fn(),
-      clearSelection: vi.fn(),
-      setActiveGroupId: vi.fn(),
-      updateComponent: updateComponentMock,
-      updateComponentsBatch: vi.fn(),
-      duplicateSelectedToPosition: vi.fn(),
-      setCanvasScaleAndOffset: vi.fn(),
-      addComponent: vi.fn(),
-      selectComponent: vi.fn(),
-      removeComponent: vi.fn(),
-    };
-    mockUseStore.mockImplementation(<T,>(selector: (s: typeof store) => T): T => selector(store));
-
-    const tool = getToolById('eyedropper')!;
-    const dispatchInteraction = vi.fn();
-    const session = {
-      activeTool: 'eyedropper' as const,
-      activeCapabilities: tool.capabilities,
-      dispatchInteraction,
-      interactionState: options.interactionState ?? 'idle',
-      textEditing: null,
-      beginTextEditing: vi.fn(),
-      endTextEditing: vi.fn(),
-      isEditingText: false,
-      setActiveColor: setActiveColorMock,
-    };
-    const { container } = render(<ScreenCanvas editorSession={session} />);
-    return { container, dispatchInteraction, session };
-  }
-
-  /** 配置 elementsFromPoint 返回指定元素，并 mock getComputedStyle 返回指定颜色 */
-  function setupSamplingSurface(values: {
-    backgroundColor?: string;
-    borderColor?: string;
-    borderWidth?: string;
-    color?: string;
-  }): HTMLElement {
-    const el = document.createElement('div');
-    const mockComputed = {
-      backgroundColor: values.backgroundColor ?? '',
-      borderColor: values.borderColor ?? '',
-      borderWidth: values.borderWidth ?? '0px',
-      color: values.color ?? '',
-    };
-    vi.spyOn(window, 'getComputedStyle').mockReturnValue(mockComputed as CSSStyleDeclaration);
-    vi.spyOn(document, 'elementsFromPoint').mockReturnValue([el]);
-    return el;
-  }
-
-  it('点击命中组件元素时采样背景色并写入 activeColor', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(59, 130, 246)' });
-    const { container } = renderEyedropperCanvas();
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(setActiveColorMock).toHaveBeenCalledWith('#3b82f6');
-  });
-
-  it('采样成功时对选中的支持颜色的组件应用颜色', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(59, 130, 246)' });
-    const rectComponent: ScreenComponent = {
-      id: 'r1',
-      type: 'rect',
-      name: '矩形 1',
-      position: { x: 0, y: 0, width: 100, height: 100 },
-      style: { backgroundColor: '#ff0000' },
-      props: {},
-      status: { locked: false, hidden: false },
-      zIndex: 0,
-    };
-    const { container } = renderEyedropperCanvas({
-      selectedComponentIds: ['r1'],
-      components: [rectComponent],
-    });
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(updateComponentMock).toHaveBeenCalledTimes(1);
-    const [, patch] = updateComponentMock.mock.calls[0];
-    expect(patch).toMatchObject({ style: { backgroundColor: '#3b82f6' } });
-  });
-
-  it('text 组件采样颜色应用到 color 字段', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(0, 128, 255)' });
-    const textComponent: ScreenComponent = {
-      id: 't1',
-      type: 'text',
-      name: '文本 1',
-      position: { x: 0, y: 0, width: 100, height: 30 },
-      style: { color: '#000000', fontSize: 14 },
-      props: { content: 'hello' },
-      status: { locked: false, hidden: false },
-      zIndex: 0,
-    };
-    const { container } = renderEyedropperCanvas({
-      selectedComponentIds: ['t1'],
-      components: [textComponent],
-    });
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(updateComponentMock).toHaveBeenCalledTimes(1);
-    const [, patch] = updateComponentMock.mock.calls[0];
-    expect(patch).toMatchObject({ style: { color: '#0080ff' } });
-  });
-
-  it('image 组件不支持颜色，采样成功但不应用', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(0, 128, 255)' });
-    const imageComponent: ScreenComponent = {
-      id: 'i1',
-      type: 'image',
-      name: '图片 1',
-      position: { x: 0, y: 0, width: 100, height: 100 },
-      style: {},
-      props: { src: '', alt: '' },
-      status: { locked: false, hidden: false },
-      zIndex: 0,
-    };
-    const { container } = renderEyedropperCanvas({
-      selectedComponentIds: ['i1'],
-      components: [imageComponent],
-    });
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(setActiveColorMock).toHaveBeenCalledWith('#0080ff');
-    expect(updateComponentMock).not.toHaveBeenCalled();
-  });
-
-  it('采样失败（全透明）不调用 setActiveColor', () => {
-    setupSamplingSurface({ backgroundColor: 'transparent' });
-    const { container } = renderEyedropperCanvas();
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(setActiveColorMock).not.toHaveBeenCalled();
-    expect(updateComponentMock).not.toHaveBeenCalled();
-  });
-
-  it('右键不触发采样', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(59, 130, 246)' });
-    const { container, dispatchInteraction } = renderEyedropperCanvas();
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 2, clientX: 100, clientY: 100 });
-    expect(setActiveColorMock).not.toHaveBeenCalled();
-    expect(dispatchInteraction).not.toHaveBeenCalledWith('start-pan');
-  });
-
-  it('不派发 start-pan 与 start-create（与平移/创建互斥）', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(59, 130, 246)' });
-    const { container, dispatchInteraction } = renderEyedropperCanvas();
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(dispatchInteraction).not.toHaveBeenCalledWith('start-pan');
-    expect(dispatchInteraction).not.toHaveBeenCalledWith('start-create');
-  });
-
-  it('选中多个支持颜色的组件时全部应用', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(59, 130, 246)' });
-    const rect1: ScreenComponent = {
-      id: 'r1',
-      type: 'rect',
-      name: '矩形 1',
-      position: { x: 0, y: 0, width: 100, height: 100 },
-      style: { backgroundColor: '#ff0000' },
-      props: {},
-      status: { locked: false, hidden: false },
-      zIndex: 0,
-    };
-    const ellipse1: ScreenComponent = {
-      id: 'e1',
-      type: 'ellipse',
-      name: '椭圆 1',
-      position: { x: 100, y: 100, width: 80, height: 80 },
-      style: { backgroundColor: '#00ff00' },
-      props: {},
-      status: { locked: false, hidden: false },
-      zIndex: 1,
-    };
-    const { container } = renderEyedropperCanvas({
-      selectedComponentIds: ['r1', 'e1'],
-      components: [rect1, ellipse1],
-    });
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(updateComponentMock).toHaveBeenCalledTimes(2);
-    expect(updateComponentMock).toHaveBeenCalledWith('r1', expect.anything());
-    expect(updateComponentMock).toHaveBeenCalledWith('e1', expect.anything());
-  });
-
-  it('非 idle 状态仍可采样（采样不进入状态机）', () => {
-    setupSamplingSurface({ backgroundColor: 'rgb(59, 130, 246)' });
-    const { container } = renderEyedropperCanvas({
-      interactionState: 'hovering',
-    });
-    const canvasContainer = container.firstChild as HTMLElement;
-    fireEvent.pointerDown(canvasContainer, { button: 0, clientX: 100, clientY: 100 });
-    expect(setActiveColorMock).toHaveBeenCalledWith('#3b82f6');
-  });
-});
-
-/**
  * 任务 12.1：拖拽、缩放和旋转由状态机仲裁
  *
  * 测试策略：
@@ -1897,7 +1599,6 @@ describe('任务 12.1：拖拽、缩放和旋转由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     render(<ScreenCanvas editorSession={session} />);
     expect(capturedMoveable).not.toBeNull();
@@ -2239,7 +1940,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     render(<ScreenCanvas editorSession={session} />);
     expect(capturedSelecto).not.toBeNull();
@@ -2310,12 +2010,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
     expect(dispatchInteraction).not.toHaveBeenCalledWith('pointer-down');
   });
 
-  it('Selecto onDragStart: sampling 状态下拒绝重入', () => {
-    const { dispatchInteraction } = renderCanvasWithSelecto('sampling');
-    expect(capturedSelecto!.disabled).toBe(true);
-    expect(dispatchInteraction).not.toHaveBeenCalledWith('pointer-down');
-  });
-
   // ===== Selecto 恢复语义 =====
   it('Selecto 恢复语义：dragging 状态下拒绝后，恢复 idle 可继续框选', () => {
     // dragging 状态下被拒绝
@@ -2354,7 +2048,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />) as unknown as {
       container: HTMLElement;
@@ -2490,7 +2183,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />) as unknown as {
       container: HTMLElement;
@@ -2517,7 +2209,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />) as unknown as {
       container: HTMLElement;
@@ -2543,7 +2234,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />) as unknown as {
       container: HTMLElement;
@@ -2569,7 +2259,6 @@ describe('任务 12.2：框选、创建和缩放由状态机仲裁', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { container } = render(<ScreenCanvas editorSession={session} />) as unknown as {
       container: HTMLElement;
@@ -2647,7 +2336,6 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
       | 'beginTextEditing'
       | 'endTextEditing'
       | 'isEditingText'
-      | 'setActiveColor'
     > = {
       activeTool: 'select',
       activeCapabilities: tool.capabilities,
@@ -2657,7 +2345,6 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     const { rerender } = render(<ScreenCanvas editorSession={session} />);
     return { dispatchInteraction, rerender, session };
@@ -2878,7 +2565,6 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
       | 'beginTextEditing'
       | 'endTextEditing'
       | 'isEditingText'
-      | 'setActiveColor'
     > = {
       activeTool: 'select',
       activeCapabilities: tool.capabilities,
@@ -2888,7 +2574,6 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
       beginTextEditing: vi.fn(),
       endTextEditing: vi.fn(),
       isEditingText: false,
-      setActiveColor: vi.fn(),
     };
     render(<ScreenCanvas editorSession={session} />);
     expect(capturedMoveable).not.toBeNull();

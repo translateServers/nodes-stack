@@ -94,8 +94,8 @@ describe('任务 2.2：ScreenEditor 创建唯一会话控制器实例', () => {
     // 间接证明两者读取同一会话控制器
     render(<TestEditorShell />);
     const toolButtons = screen.getAllByRole('button');
-    // ToolSelector 应有 8 个工具按钮
-    expect(toolButtons.filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(8);
+    // ToolSelector 应有 7 个工具按钮
+    expect(toolButtons.filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(7);
     // 状态栏左侧"选择"文本应与 ToolSelector 的 aria-pressed=true 工具一致
     const pressedButton = toolButtons.find((b) => b.getAttribute('aria-pressed') === 'true');
     expect(pressedButton).toBeDefined();
@@ -155,11 +155,11 @@ describe('任务 2.2：ScreenEditor 创建唯一会话控制器实例', () => {
     // 阶段 1 闭环后所有工具均 implemented=true，无 disabled 按钮
     // CanvasStatusBar 显示当前工具（select）
     expect(screen.getByText('选择')).toBeInTheDocument();
-    // 切换到吸管
-    const eyedropperBtn = screen.getByRole('button', { name: '吸管' });
-    expect(eyedropperBtn).not.toBeDisabled();
-    fireEvent.click(eyedropperBtn);
-    // CanvasStatusBar 应更新显示"吸管"
-    expect(screen.getByText('吸管')).toBeInTheDocument();
+    // 切换到缩放（ToolSelector 中的按钮带 aria-pressed，与状态栏 zoom dropdown 区分）
+    const zoomBtn = screen.getByRole('button', { name: '缩放', pressed: false });
+    expect(zoomBtn).not.toBeDisabled();
+    fireEvent.click(zoomBtn);
+    // CanvasStatusBar 应更新显示"缩放"
+    expect(screen.getByText('缩放')).toBeInTheDocument();
   });
 });

@@ -298,6 +298,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   useHotkeys(
     getAllKeys(clearSelectionEntry),
     () => {
+      // 显式防御：文本编辑态下 Escape 应由文本编辑器自身处理（提交/取消），
+      // 不应触发画布清空选中。虽然 canvasEnabled 在 isEditingText 时为 false，
+      // 此处显式判断使防御逻辑显式化，避免未来 canvasEnabled 逻辑变更引入 bug。
+      if (isEditingText) return;
       // 任务 13.2：Escape 键首先派发 escape 事件到交互状态机，恢复任意瞬时状态到 idle。
       // 修复 bug：原实现只操作 store，状态机可能卡在 dragging/resizing/rotating/panning/creating，
       // 导致后续 Selecto onDragStart 仲裁（非 idle/hovering 拒绝）阻塞单击选中。
@@ -314,12 +318,33 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   );
 
   // 微移（键位由 shortcuts-registry 单一数据源提供，便于帮助面板自动显示）
+  // 任务：增加锁定组件前置检查，避免用户按下方向键时无法感知操作被部分拒绝
+  const nudgeWithLockCheck = useCallback(
+    (dx: number, dy: number) => {
+      const store = getStore();
+      const selectedIds = store.selectedComponentIds;
+      if (selectedIds.length === 0) return;
+      const project = store.project;
+      if (!project) return;
+      const selectedComps = project.components.filter((c: ScreenComponent) =>
+        selectedIds.includes(c.id),
+      );
+      const unlockedComps = selectedComps.filter((c: ScreenComponent) => !c.status.locked);
+      if (unlockedComps.length === 0) {
+        // 所有选中组件均被锁定，直接返回（可配合 toast 提示）
+        return;
+      }
+      store.nudgeSelected(dx, dy);
+    },
+    [getStore],
+  );
+
   const nudgeUpEntry = getShortcutById('nudgeUp')!;
   useHotkeys(
     getAllKeys(nudgeUpEntry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(0, -1);
+      nudgeWithLockCheck(0, -1);
     },
     buildHotkeysOptions(nudgeUpEntry, canvasEnabled),
   );
@@ -328,7 +353,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeDownEntry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(0, 1);
+      nudgeWithLockCheck(0, 1);
     },
     buildHotkeysOptions(nudgeDownEntry, canvasEnabled),
   );
@@ -337,7 +362,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeLeftEntry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(-1, 0);
+      nudgeWithLockCheck(-1, 0);
     },
     buildHotkeysOptions(nudgeLeftEntry, canvasEnabled),
   );
@@ -346,7 +371,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeRightEntry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(1, 0);
+      nudgeWithLockCheck(1, 0);
     },
     buildHotkeysOptions(nudgeRightEntry, canvasEnabled),
   );
@@ -355,7 +380,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeUp10Entry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(0, -10);
+      nudgeWithLockCheck(0, -10);
     },
     buildHotkeysOptions(nudgeUp10Entry, canvasEnabled),
   );
@@ -364,7 +389,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeDown10Entry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(0, 10);
+      nudgeWithLockCheck(0, 10);
     },
     buildHotkeysOptions(nudgeDown10Entry, canvasEnabled),
   );
@@ -373,7 +398,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeLeft10Entry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(-10, 0);
+      nudgeWithLockCheck(-10, 0);
     },
     buildHotkeysOptions(nudgeLeft10Entry, canvasEnabled),
   );
@@ -382,7 +407,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(nudgeRight10Entry),
     (e) => {
       e.preventDefault();
-      getStore().nudgeSelected(10, 0);
+      nudgeWithLockCheck(10, 0);
     },
     buildHotkeysOptions(nudgeRight10Entry, canvasEnabled),
   );
@@ -477,47 +502,68 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
 
   // ===== 工具切换（PS 级） =====
   // 7 个主工具切换：键位由 SHORTCUTS_REGISTRY 单一数据源提供
-  // 吸管工具没有 shortcutId（null），不绑定快捷键
+  // 避免重复切换：若当前已处于目标工具，直接返回，防止不必要的 clearSelection
   const toolSelectEntry = getShortcutById('toolSelect')!;
   useHotkeys(
     getAllKeys(toolSelectEntry),
-    () => setTool('select'),
+    () => {
+      if (editorSession.activeTool === 'select') return;
+      setTool('select');
+    },
     buildHotkeysOptions(toolSelectEntry, canvasEnabled),
   );
   const toolHandEntry = getShortcutById('toolHand')!;
   useHotkeys(
     getAllKeys(toolHandEntry),
-    () => setTool('hand'),
+    () => {
+      if (editorSession.activeTool === 'hand') return;
+      setTool('hand');
+    },
     buildHotkeysOptions(toolHandEntry, canvasEnabled),
   );
   const toolTextEntry = getShortcutById('toolText')!;
   useHotkeys(
     getAllKeys(toolTextEntry),
-    () => setTool('text'),
+    () => {
+      if (editorSession.activeTool === 'text') return;
+      setTool('text');
+    },
     buildHotkeysOptions(toolTextEntry, canvasEnabled),
   );
   const toolRectEntry = getShortcutById('toolRect')!;
   useHotkeys(
     getAllKeys(toolRectEntry),
-    () => setTool('rect'),
+    () => {
+      if (editorSession.activeTool === 'rect') return;
+      setTool('rect');
+    },
     buildHotkeysOptions(toolRectEntry, canvasEnabled),
   );
   const toolEllipseEntry = getShortcutById('toolEllipse')!;
   useHotkeys(
     getAllKeys(toolEllipseEntry),
-    () => setTool('ellipse'),
+    () => {
+      if (editorSession.activeTool === 'ellipse') return;
+      setTool('ellipse');
+    },
     buildHotkeysOptions(toolEllipseEntry, canvasEnabled),
   );
   const toolImageEntry = getShortcutById('toolImage')!;
   useHotkeys(
     getAllKeys(toolImageEntry),
-    () => setTool('image'),
+    () => {
+      if (editorSession.activeTool === 'image') return;
+      setTool('image');
+    },
     buildHotkeysOptions(toolImageEntry, canvasEnabled),
   );
   const toolZoomEntry = getShortcutById('toolZoom')!;
   useHotkeys(
     getAllKeys(toolZoomEntry),
-    () => setTool('zoom'),
+    () => {
+      if (editorSession.activeTool === 'zoom') return;
+      setTool('zoom');
+    },
     buildHotkeysOptions(toolZoomEntry, canvasEnabled),
   );
 
@@ -546,6 +592,9 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   useHotkeys(
     getAllKeys(toolHandTempEntry),
     () => {
+      // 在表单元素内按下 Space 时 keydown 已提前返回，
+      // keyup 若仍触发则不应 pop（临时工具从未 push），防止状态机栈被破坏
+      if (isFormElementFocused()) return;
       popTemporaryTool('hand');
     },
     {

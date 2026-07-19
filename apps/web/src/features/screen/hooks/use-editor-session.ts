@@ -17,7 +17,6 @@
  *   （任务 12.4：isEditingText 的唯一来源是交互状态机，工具状态机不再持有镜像）
  * - 活动工具能力（capabilities）→ 由 TOOL_REGISTRY 派生，会话控制器只读
  * - 文本编辑对象（textEditing）→ 会话控制器持有，由交互状态机 text-editing 状态联动
- * - 会话活动颜色（activeColor）→ 会话控制器持有，供吸管工具写入、颜色面板读取
  *
  * 不包含：
  * - 持久项目副本（project/components/selectedIds 等仍在编辑器 Store）
@@ -98,12 +97,6 @@ export interface EditorSessionApi {
   readonly beginTextEditing: (context: TextEditingContext) => void;
   /** 退出文本编辑（不传 componentId 表示退出任意） */
   readonly endTextEditing: () => void;
-
-  // ===== 会话活动颜色（拥有者：会话控制器）=====
-  /** 会话当前颜色（供吸管工具写入、颜色面板读取） */
-  readonly activeColor: string;
-  /** 设置会话活动颜色 */
-  readonly setActiveColor: (color: string) => void;
 }
 
 /**
@@ -167,9 +160,6 @@ export function useEditorSession({
     setTextEditing(null);
   }, []);
 
-  // 会话活动颜色（会话控制器持有）
-  const [activeColor, setActiveColor] = useState<string>('#ffffff');
-
   /**
    * 任务 13.6：包装 setTool，工具切换时清理交互状态。
    *
@@ -221,8 +211,5 @@ export function useEditorSession({
     textEditing,
     beginTextEditing,
     endTextEditing,
-    // 会话活动颜色
-    activeColor,
-    setActiveColor,
   };
 }

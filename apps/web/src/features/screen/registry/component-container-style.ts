@@ -11,6 +11,11 @@ export function resolveComponentContainerStyle(component: ScreenComponent): CSSP
   const { position, style, zIndex } = component;
   const rotation = position.rotation;
 
+  // 椭圆组件的填充/边框/圆角完全由 EllipseComponent 内部渲染（固定 borderRadius: 50%）。
+  // 容器若再应用 backgroundColor/border，会形成一个同色的实心矩形衬底，
+  // 遮住内部椭圆的透明四角，视觉上椭圆退化为矩形。
+  const isEllipse = component.type === 'ellipse';
+
   return {
     position: 'absolute',
     left: position.x,
@@ -19,11 +24,11 @@ export function resolveComponentContainerStyle(component: ScreenComponent): CSSP
     height: position.height,
     zIndex,
     opacity: style.opacity ?? 1,
-    borderRadius: style.borderRadius,
-    borderWidth: style.borderWidth,
-    borderColor: style.borderColor,
-    borderStyle: style.borderStyle,
-    backgroundColor: style.backgroundColor,
+    borderRadius: isEllipse ? undefined : style.borderRadius,
+    borderWidth: isEllipse ? undefined : style.borderWidth,
+    borderColor: isEllipse ? undefined : style.borderColor,
+    borderStyle: isEllipse ? undefined : style.borderStyle,
+    backgroundColor: isEllipse ? undefined : style.backgroundColor,
     overflow: style.overflow ?? 'hidden',
     transform: rotation ? `rotate(${rotation}deg)` : undefined,
   };

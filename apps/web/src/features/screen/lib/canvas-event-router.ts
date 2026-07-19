@@ -295,12 +295,19 @@ export function attachContextMenuRedistributor(
       requestAnimationFrame(() => {
         redistributeContextMenu(x, y);
 
-        setTimeout(() => {
+        // 使用 requestIdleCallback 替代 setTimeout，减少主线程阻塞；
+        // 兜底 100ms 超时确保在极端繁忙场景下仍能复位
+        const resetRedistributing = (): void => {
           isRedistributing = false;
           if (!callbacks.isOpen()) {
             callbacks.onReopenIfClosed();
           }
-        }, 50);
+        };
+        if (typeof requestIdleCallback !== 'undefined') {
+          requestIdleCallback(resetRedistributing, { timeout: 100 });
+        } else {
+          setTimeout(resetRedistributing, 50);
+        }
       });
     });
   };
@@ -319,17 +326,21 @@ export function attachContextMenuRedistributor(
 // ============================================================================
 
 /**
- * 双击判定的负载：上一次（或当前）点击的组件 ID 与时间戳。
+ * 双击判定的负载：上一次（或当前）点击的组件 ID、时间戳与屏幕坐标。
  */
 export interface ClickRecord {
   /** 命中组件 ID */
   readonly id: string;
   /** 点击时间戳（通常是 Date.now()） */
   readonly time: number;
+  /** 点击的屏幕 X 坐标 */
+  readonly x?: number;
+  /** 点击的屏幕 Y 坐标 */
+  readonly y?: number;
 }
 
 /**
- * 判定两次点击是否构成双击（同一组件 + 时间间隔 < 阈值）。
+ * 判定两次点击是否构成双击（同一组件 + 时间间隔 < 阈值 + 位置偏移 < 阈值）。
  *
  * 归一化场景（spec.md 热点 2）：
  * 原本 `screen-canvas.tsx` 在 `onSelectEnd` 中内联实现双击判定，
@@ -337,20 +348,39 @@ export interface ClickRecord {
  * 必须手动基于 timestamp 实现。该逻辑被多处需要复用（图层面板双击重命名等），
  * 抽取为纯函数便于单元测试。
  *
+ * 位置偏移阈值：防止用户在 400ms 内点击同一组件的不同位置被误判为双击。
+ * 若未传入坐标（向后兼容），则仅按时间阈值判定。
+ *
  * @param prev - 上一次点击记录（null 表示无历史）
  * @param current - 当前点击记录
  * @param thresholdMs - 双击时间阈值，默认 400ms
+ * @param positionThresholdPx - 双击位置偏移阈值，默认 5px
  * @returns true 表示构成双击
  */
 export function detectDoubleClick(
   prev: ClickRecord | null,
   current: ClickRecord,
   thresholdMs = 400,
+  positionThresholdPx = 5,
 ): boolean {
   if (prev === null) return false;
   if (prev.id !== current.id) return false;
   if (current.time - prev.time < 0) return false;
-  return current.time - prev.time <= thresholdMs;
+  if (current.time - prev.time > thresholdMs) return false;
+
+  // 若两次点击均携带坐标，校验位置偏移
+  if (
+    typeof prev.x === 'number' &&
+    typeof prev.y === 'number' &&
+    typeof current.x === 'number' &&
+    typeof current.y === 'number'
+  ) {
+    const dx = Math.abs(current.x - prev.x);
+    const dy = Math.abs(current.y - prev.y);
+    if (dx > positionThresholdPx || dy > positionThresholdPx) return false;
+  }
+
+  return true;
 }
 
 // ============================================================================
@@ -450,6 +480,10 @@ export interface HandleSelectEndParams {
   readonly isDragStart: boolean;
   /** 当前时间戳（默认 Date.now()，便于测试注入） */
   readonly currentTime?: number;
+  /** 点击的屏幕 X 坐标（用于双击位置偏移判定） */
+  readonly clientX?: number;
+  /** 点击的屏幕 Y 坐标（用于双击位置偏移判定） */
+  readonly clientY?: number;
 }
 
 /**
@@ -499,6 +533,8 @@ export function handleSelectEnd(params: HandleSelectEndParams): HandleSelectEndR
     components,
     isDragStart,
     currentTime = Date.now(),
+    clientX,
+    clientY,
   } = params;
 
   const hasModifier = inputEvent.ctrlKey || inputEvent.metaKey || inputEvent.shiftKey;
@@ -518,7 +554,12 @@ export function handleSelectEnd(params: HandleSelectEndParams): HandleSelectEndR
 
   // 单击场景：检测双击
   const clickedId = selected[0];
-  const current: ClickRecord = { id: clickedId, time: currentTime };
+  const current: ClickRecord = {
+    id: clickedId,
+    time: currentTime,
+    ...(typeof clientX === 'number' ? { x: clientX } : {}),
+    ...(typeof clientY === 'number' ? { y: clientY } : {}),
+  };
   newLastClick = current;
 
   if (detectDoubleClick(lastClick, current)) {

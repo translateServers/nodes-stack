@@ -14,12 +14,8 @@ import { DEFAULT_TEXT_CONTENT } from '../lib/text-editing-contract';
 import { computeShapeCreation } from '../lib/shape-creation-geometry';
 import { pickImageFile, type ImageFileResult } from '../lib/image-file-adapter';
 import { zoomWithBoundary, zoomToolClick, WHEEL_ZOOM_FACTOR } from '../lib/zoom-boundary';
-import {
-  sampleColorFromElement,
-  sampleColorFromCanvas,
-  getColorApplyTarget,
-  applyColorToStyle,
-} from '../lib/color-sampler';
+import { createRafThrottler, type RafThrottler } from '../lib/raf-throttle';
+import { SELECTO_ALLOWED_STATES } from '../hooks/use-interaction-state-machine';
 import { SmartGuidesOverlay, useAlignmentLinesStore } from './smart-guides-overlay';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
@@ -103,6 +99,23 @@ function readAltKey(inputEvent: unknown): boolean {
     return inputEvent.altKey === true;
   }
   return false;
+}
+
+/**
+ * 安全地设置指针捕获。
+ *
+ * 浏览器在指针已不活跃时（如同步 pointerup、触摸指针被系统取消、合成事件等）
+ * 对 setPointerCapture 抛出 NotFoundError。指针捕获只是把后续 move/up 事件
+ * 重定向到 target 的优化手段，失败时事件仍会沿 DOM 冒泡到容器，拖拽创建/平移
+ * 主流程不受影响，因此此处降级为静默失败。
+ */
+function trySetPointerCapture(target: EventTarget, pointerId: number): void {
+  if (!(target instanceof HTMLElement)) return;
+  try {
+    target.setPointerCapture(pointerId);
+  } catch {
+    // 指针已不活跃：忽略，交互通过容器冒泡继续
+  }
 }
 
 const initialDimension: DimensionInfo = {
@@ -243,15 +256,12 @@ export function ScreenCanvas({
     | 'beginTextEditing'
     | 'endTextEditing'
     | 'isEditingText'
-    | 'setActiveColor'
   >;
 }) {
   const { activeTool, activeCapabilities: capabilities } = editorSession;
   const { dispatchInteraction } = editorSession;
   const { interactionState } = editorSession;
   const { beginTextEditing } = editorSession;
-  // 任务 9.4：吸管工具点击采样后写入会话活动颜色
-  const { setActiveColor } = editorSession;
 
   /**
    * 任务 13.7：用 ref 读取最新的 activeTool 和 interactionState，
@@ -269,6 +279,26 @@ export function ScreenCanvas({
     activeToolRef.current = activeTool;
     interactionStateRef.current = interactionState;
   }, [activeTool, interactionState]);
+
+  /**
+   * L1 性能优化：拖拽/缩放/旋转过程中的高频副作用
+   * （Smart Guides 对齐线计算、尺寸提示更新、DOM style 写入）通过 rAF 节流，
+   * 同帧内多次事件仅执行最后一次，降低主线程压力与 store 更新频率。
+   *
+   * 使用契约（与 raf-throttle.ts 文档一致）：
+   * - onDragEnd：cancel()（最终值取自 e.lastEvent，无需落地挂起帧）
+   * - onResizeEnd / onRotateEnd：flush()（最终值从 DOM style 读取，需先落地最后一帧）
+   * - 组拖拽/组缩放不做节流：过程中无 store 更新，仅 style 写入，开销极低
+   */
+  const gestureRafThrottlerRef = useRef<RafThrottler | null>(null);
+  if (gestureRafThrottlerRef.current === null) {
+    gestureRafThrottlerRef.current = createRafThrottler();
+  }
+  // 卸载时丢弃挂起任务，防止手势外的延迟任务写入已卸载组件
+  useEffect(() => {
+    const throttler = gestureRafThrottlerRef.current;
+    return () => throttler?.cancel();
+  }, []);
   // 任务 4.5：isPanning 从交互状态机派生，避免重复平移布尔状态。
   const isPanning = interactionState === 'panning';
   const project = useScreenEditorStore((s) => s.project);
@@ -391,7 +421,7 @@ export function ScreenCanvas({
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       // 仅在 idle/hovering 状态下可以开始创建，避免与其他交互重入
-      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
       const el = containerRef.current;
       const proj = project;
       if (!el || !proj) return;
@@ -496,7 +526,7 @@ export function ScreenCanvas({
   const handleCreateShapeStart = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -509,7 +539,7 @@ export function ScreenCanvas({
         currentX: canvasX,
         currentY: canvasY,
       });
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      trySetPointerCapture(e.target, e.pointerId);
       dispatchInteraction('start-create');
       e.preventDefault();
       e.stopPropagation();
@@ -538,7 +568,7 @@ export function ScreenCanvas({
   const handleCreateImage = useCallback(
     async (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
       const el = containerRef.current;
       const proj = project;
       if (!el || !proj) return;
@@ -630,7 +660,7 @@ export function ScreenCanvas({
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
       // 任务 12.2：缩放由状态机仲裁，拒绝非法重入
-      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -656,75 +686,6 @@ export function ScreenCanvas({
     [interactionState, canvasScale, canvasOffset, setCanvasScaleAndOffset, dispatchInteraction],
   );
 
-  /**
-   * 任务 9.4：吸管工具点击采样颜色
-   *
-   * 点击流程：
-   * 1. 通过 `elementsFromPoint` 找到鼠标下所有元素
-   * 2. 跳过 Moveable 控件层 / Radix 浮层（与 findComponentIdAtPoint 同款跳过规则）
-   * 3. 找到首个 component 元素时：从该元素采样颜色
-   * 4. 未命中组件时：从画布容器采样背景色
-   * 5. 采样成功：调用 setActiveColor 写入会话活动颜色
-   * 6. 对当前选中的支持颜色的组件应用颜色（任务 9.3 策略），写入历史
-   *
-   * 与其他工具的互斥：
-   * - 不派发 start-pan / start-create（与平移/创建互斥）
-   * - 不启动 Selecto/Moveable（capabilities.canSelect/canDrag 为 false）
-   *
-   * 失败反馈：当所有可采样表面均透明时，不修改 activeColor；
-   * 状态栏可在 activeTool === 'eyedropper' 时显示当前 activeColor，
-   * 用户可通过对比点击前后的颜色变化感知采样失败。
-   */
-  const handleEyedropperClick = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return;
-      const containerEl = containerRef.current;
-      if (!containerEl) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      // 1. 命中测试：找到鼠标下首个可采样元素
-      const elements = document.elementsFromPoint(e.clientX, e.clientY);
-      let sampledElement: Element | null = null;
-      for (const el of elements) {
-        if (!(el instanceof HTMLElement)) continue;
-        if (el.closest('[data-slot="context-menu-content"]')) continue;
-        if (el.closest('[data-radix-popper-content-wrapper]')) continue;
-        if (el.closest('.moveable-control-box')) continue;
-        sampledElement = el;
-        break;
-      }
-
-      // 2. 采样：优先从组件元素采样，未命中组件时从画布容器采样
-      let sampled = sampleColorFromElement(sampledElement);
-      if (sampled.color === null && sampledElement !== containerEl) {
-        // 元素本身无可采样颜色，尝试画布容器
-        sampled = sampleColorFromCanvas(containerEl);
-      }
-      if (sampled.color === null) {
-        // 采样失败：不修改 activeColor，由状态栏反馈
-        return;
-      }
-
-      // 3. 写入会话活动颜色
-      setActiveColor(sampled.color);
-
-      // 4. 任务 9.3：对当前选中的支持颜色的组件应用颜色
-      const proj = project;
-      if (!proj) return;
-      for (const id of selectedComponentIds) {
-        const component = proj.components.find((c: ScreenComponent) => c.id === id);
-        if (!component) continue;
-        const target = getColorApplyTarget(component);
-        if (!target) continue;
-        const nextStyle = applyColorToStyle(component.style, target, sampled.color);
-        updateComponent(component.id, { style: nextStyle });
-      }
-    },
-    [project, selectedComponentIds, setActiveColor, updateComponent],
-  );
-
   const handlePanStart = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
@@ -748,11 +709,6 @@ export function ScreenCanvas({
         handleZoomToolClick(e);
         return;
       }
-      // 任务 9.4：吸管工具点击采样颜色（不触发选择/拖拽/平移）
-      if (activeTool === 'eyedropper' && capabilities.canSample) {
-        handleEyedropperClick(e);
-        return;
-      }
       // 任务 4.3：平移完全由 activeTool 仲裁。
       // - 主工具为抓手：activeTool === 'hand'，可直接平移
       // - 其他工具 + Space 临时抓手：use-keyboard-shortcuts 通过 pushTemporaryTool('hand')
@@ -761,10 +717,10 @@ export function ScreenCanvas({
       if (activeTool !== 'hand') return;
       // 任务 4.4：平移与其他交互互斥由统一状态机仲裁。
       // 仅在 idle/hovering 状态下可以开始平移，避免拖拽/缩放/旋转/框选中重入平移。
-      if (interactionState !== 'idle' && interactionState !== 'hovering') return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
       e.preventDefault();
       e.stopPropagation();
-      (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+      trySetPointerCapture(e.target, e.pointerId);
       panState.current = {
         startX: e.clientX,
         startY: e.clientY,
@@ -781,12 +737,10 @@ export function ScreenCanvas({
       interactionState,
       capabilities.canCreate,
       capabilities.canZoom,
-      capabilities.canSample,
       handleCreateText,
       handleCreateShapeStart,
       handleCreateImage,
       handleZoomToolClick,
-      handleEyedropperClick,
     ],
   );
 
@@ -969,19 +923,19 @@ export function ScreenCanvas({
    * 在 onDrag 中用于 findAlignmentLines 计算，避免每次拖拽都重新 filter。
    * 排除当前选中的组件（自身不需要与自己对齐）。
    */
-  const smartGuidesReferenceRects = useMemo<AlignmentRect[]>(
-    () =>
-      visibleComponents
-        .filter((c: ScreenComponent) => !selectedIdSet.has(c.id))
-        .map((c: ScreenComponent) => ({
-          x: c.position.x,
-          y: c.position.y,
-          width: c.position.width,
-          height: c.position.height,
-          id: c.id,
-        })),
-    [visibleComponents, selectedIdSet],
-  );
+  const smartGuidesReferenceRects = useMemo<AlignmentRect[]>(() => {
+    // L2 优化：功能禁用时跳过 filter/map 计算
+    if (!smartGuidesEnabled) return [];
+    return visibleComponents
+      .filter((c: ScreenComponent) => !selectedIdSet.has(c.id))
+      .map((c: ScreenComponent) => ({
+        x: c.position.x,
+        y: c.position.y,
+        width: c.position.width,
+        height: c.position.height,
+        id: c.id,
+      }));
+  }, [smartGuidesEnabled, visibleComponents, selectedIdSet]);
 
   /**
    * 在拖拽过程中计算并更新 Smart Guides 对齐线，并返回吸附后的坐标。
@@ -1185,21 +1139,24 @@ export function ScreenCanvas({
           }}
           onDrag={(e) => {
             const datas = e.datas as unknown as DragDatas;
-            // Smart Guides：计算对齐线 + 吸附（距离 < 3px 自动吸附）
-            const { snappedLeft, snappedTop } = updateAlignmentLines(
-              e.left,
-              e.top,
-              datas.origW || 0,
-              datas.origH || 0,
-            );
-            e.target.style.left = `${snappedLeft}px`;
-            e.target.style.top = `${snappedTop}px`;
-            setDimension((d) => ({
-              ...d,
-              x: Math.round(snappedLeft),
-              y: Math.round(snappedTop),
-              visible: true,
-            }));
+            // L1：同步提取事件值，副作用合并到下一帧执行（同帧多次事件仅生效最后一次）
+            const target = e.target as HTMLElement;
+            const left = e.left;
+            const top = e.top;
+            const w = datas.origW || 0;
+            const h = datas.origH || 0;
+            gestureRafThrottlerRef.current?.schedule(() => {
+              // Smart Guides：计算对齐线 + 吸附（距离 < 3px 自动吸附）
+              const { snappedLeft, snappedTop } = updateAlignmentLines(left, top, w, h);
+              target.style.left = `${snappedLeft}px`;
+              target.style.top = `${snappedTop}px`;
+              setDimension((d) => ({
+                ...d,
+                x: Math.round(snappedLeft),
+                y: Math.round(snappedTop),
+                visible: true,
+              }));
+            });
           }}
           onDragEnd={(e) => {
             // 任务 13.8：手势结束必须无条件恢复交互状态机。
@@ -1207,6 +1164,8 @@ export function ScreenCanvas({
             // 状态机卡在 dragging，后续 Selecto onDragStart 仲裁拒绝一切交互
             //（反复选中/取消数次后出现一次零位移点击即无法选中组件）。
             dispatchInteraction('pointer-up');
+            // L1：丢弃挂起帧（最终值取自 e.lastEvent），防止延迟任务覆盖 visible:false
+            gestureRafThrottlerRef.current?.cancel();
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<DragDatas>;
             const id = datas.id;
@@ -1232,7 +1191,7 @@ export function ScreenCanvas({
           }}
           onResizeStart={(e) => {
             // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
-            if (interactionState !== 'idle' && interactionState !== 'hovering') {
+            if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
               return false;
             }
             const id = getComponentIdFromTarget(e.target);
@@ -1257,49 +1216,61 @@ export function ScreenCanvas({
           }}
           onResize={(e) => {
             const datas = e.datas as unknown as ResizeDatas;
-            let w = e.width;
-            let h = e.height;
-            if (datas.keepRatio && datas.origW && datas.origH) {
-              const ratio = datas.origW / datas.origH;
-              const [dx, dy] = e.direction;
-              if (dx !== 0 && dy !== 0) {
-                const newH = w / ratio;
-                const newW = h * ratio;
-                if (Math.abs(w - datas.origW) > Math.abs(h - datas.origH)) {
-                  h = newH;
-                } else {
-                  w = newW;
+            // L1：同步提取事件值，副作用合并到下一帧执行（同帧多次事件仅生效最后一次）
+            const target = e.target as HTMLElement;
+            const eventWidth = e.width;
+            const eventHeight = e.height;
+            const direction = e.direction;
+            const dragLeft = e.drag ? e.drag.left : null;
+            const dragTop = e.drag ? e.drag.top : null;
+            const { origW, origH, origX, origY, keepRatio, isAltCenter } = datas;
+            gestureRafThrottlerRef.current?.schedule(() => {
+              let w = eventWidth;
+              let h = eventHeight;
+              if (keepRatio && origW && origH) {
+                const ratio = origW / origH;
+                const [dx, dy] = direction;
+                if (dx !== 0 && dy !== 0) {
+                  const newH = w / ratio;
+                  const newW = h * ratio;
+                  if (Math.abs(w - origW) > Math.abs(h - origH)) {
+                    h = newH;
+                  } else {
+                    w = newW;
+                  }
+                } else if (dx !== 0) {
+                  h = w / ratio;
+                } else if (dy !== 0) {
+                  w = h * ratio;
                 }
-              } else if (dx !== 0) {
-                h = w / ratio;
-              } else if (dy !== 0) {
-                w = h * ratio;
               }
-            }
-            e.target.style.width = `${w}px`;
-            e.target.style.height = `${h}px`;
-            if (datas.isAltCenter) {
-              // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
-              const newX = datas.origX + (datas.origW - w) / 2;
-              const newY = datas.origY + (datas.origH - h) / 2;
-              e.target.style.left = `${newX}px`;
-              e.target.style.top = `${newY}px`;
-            } else if (e.drag) {
-              e.target.style.left = `${e.drag.left}px`;
-              e.target.style.top = `${e.drag.top}px`;
-            }
-            setDimension((d) => ({
-              ...d,
-              x: Math.round(Number.parseInt(e.target.style.left || '0')),
-              y: Math.round(Number.parseInt(e.target.style.top || '0')),
-              w: Math.round(w),
-              h: Math.round(h),
-              visible: true,
-            }));
+              target.style.width = `${w}px`;
+              target.style.height = `${h}px`;
+              if (isAltCenter) {
+                // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
+                const newX = origX + (origW - w) / 2;
+                const newY = origY + (origH - h) / 2;
+                target.style.left = `${newX}px`;
+                target.style.top = `${newY}px`;
+              } else if (dragLeft !== null && dragTop !== null) {
+                target.style.left = `${dragLeft}px`;
+                target.style.top = `${dragTop}px`;
+              }
+              setDimension((d) => ({
+                ...d,
+                x: Math.round(Number.parseInt(target.style.left || '0')),
+                y: Math.round(Number.parseInt(target.style.top || '0')),
+                w: Math.round(w),
+                h: Math.round(h),
+                visible: true,
+              }));
+            });
           }}
           onResizeEnd={(e) => {
             // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
             dispatchInteraction('pointer-up');
+            // L1：先落地最后一帧（本处理器从 DOM style 读取最终值），再提交
+            gestureRafThrottlerRef.current?.flush();
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<ResizeDatas>;
             const id = datas.id;
@@ -1322,7 +1293,7 @@ export function ScreenCanvas({
           }}
           onRotateStart={(e) => {
             // 任务 12.1：旋转由状态机仲裁，拒绝非法重入
-            if (interactionState !== 'idle' && interactionState !== 'hovering') {
+            if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
               return false;
             }
             const id = getComponentIdFromTarget(e.target);
@@ -1337,25 +1308,33 @@ export function ScreenCanvas({
           }}
           onRotate={(e) => {
             const datas = e.datas as unknown as RotateDatas;
-            let rotation = e.rotation;
-            if (datas.snapRotate) {
-              rotation = Math.round(rotation / 15) * 15;
-            }
-            const currentTransform = e.target.style.transform || '';
-            const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
-            if (rotateMatch) {
-              e.target.style.transform = currentTransform.replace(
-                rotateMatch[0],
-                `rotate(${rotation}deg)`,
-              );
-            } else {
-              e.target.style.transform = `${currentTransform} rotate(${rotation}deg)`.trim();
-            }
-            setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
+            // L1：同步提取事件值，副作用合并到下一帧执行（同帧多次事件仅生效最后一次）
+            const target = e.target as HTMLElement;
+            const eventRotation = e.rotation;
+            const { snapRotate } = datas;
+            gestureRafThrottlerRef.current?.schedule(() => {
+              let rotation = eventRotation;
+              if (snapRotate) {
+                rotation = Math.round(rotation / 15) * 15;
+              }
+              const currentTransform = target.style.transform || '';
+              const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
+              if (rotateMatch) {
+                target.style.transform = currentTransform.replace(
+                  rotateMatch[0],
+                  `rotate(${rotation}deg)`,
+                );
+              } else {
+                target.style.transform = `${currentTransform} rotate(${rotation}deg)`.trim();
+              }
+              setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
+            });
           }}
           onRotateEnd={(e) => {
             // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
             dispatchInteraction('pointer-up');
+            // L1：先落地最后一帧（本处理器从 DOM style.transform 读取最终值），再提交
+            gestureRafThrottlerRef.current?.flush();
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<RotateDatas>;
             const id = datas.id;
@@ -1373,6 +1352,7 @@ export function ScreenCanvas({
           // --- Group target events ---
           onDragGroupStart={(e) => {
             // 任务 12.1：组拖拽由状态机仲裁，拒绝非法重入
+            // 允许 marquee-selecting：框选后未释放鼠标即可拖拽（与单组件拖拽行为一致）
             if (
               interactionState !== 'idle' &&
               interactionState !== 'hovering' &&
@@ -1406,7 +1386,7 @@ export function ScreenCanvas({
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<GroupDragDatas>;
             const ids = datas.ids;
-            if (!ids) return;
+            if (!ids || ids.length === 0) return;
             const updates = e.events
               .map((ev) => {
                 const id = getComponentIdFromTarget(ev.target);
@@ -1425,11 +1405,19 @@ export function ScreenCanvas({
                 };
               })
               .filter((u): u is NonNullable<typeof u> => u != null);
-            updateComponentsBatch(updates);
+            // 防御性检查：若部分组件更新失败（如拖拽期间被删除），记录警告并仅更新有效组件
+            if (updates.length !== ids.length) {
+              console.warn(
+                `[ScreenCanvas] 组拖拽结束：期望更新 ${ids.length} 个组件，实际有效 ${updates.length} 个`,
+              );
+            }
+            if (updates.length > 0) {
+              updateComponentsBatch(updates);
+            }
           }}
           onResizeGroupStart={(e) => {
             // 任务 12.1：组缩放由状态机仲裁，拒绝非法重入
-            if (interactionState !== 'idle' && interactionState !== 'hovering') {
+            if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
               return false;
             }
             for (const t of e.targets) {
@@ -1476,7 +1464,15 @@ export function ScreenCanvas({
                 };
               })
               .filter((u): u is NonNullable<typeof u> => u != null);
-            updateComponentsBatch(updates);
+            // 防御性检查：若部分组件更新失败（如缩放期间被删除），记录警告并仅更新有效组件
+            if (updates.length !== e.events.length) {
+              console.warn(
+                `[ScreenCanvas] 组缩放结束：期望更新 ${e.events.length} 个组件，实际有效 ${updates.length} 个`,
+              );
+            }
+            if (updates.length > 0) {
+              updateComponentsBatch(updates);
+            }
           }}
           onChangeTargets={() => {}}
         />
@@ -1492,7 +1488,7 @@ export function ScreenCanvas({
         // 任务 4.1：只有允许选择的工具能启动 Selecto。
         // Selecto 无 disabled prop，通过 onDragStart 中 e.stop() 阻止非选择工具启动框选。
         onDragStart={(e) => {
-          // 任务 4.1：抓手/创建/缩放/吸管工具不允许启动 Selecto
+          // 任务 4.1：抓手/创建/缩放工具不允许启动 Selecto
           if (!capabilities.canSelect) {
             e.stop();
             return;
@@ -1500,7 +1496,7 @@ export function ScreenCanvas({
           // 任务 12.2：框选由状态机仲裁，拒绝非法重入。
           // 仅在 idle/hovering 状态下可开始框选，避免与拖拽/缩放/旋转/平移/创建等手势重入。
           // 拒绝时调用 e.stop() 阻止 Selecto 启动拖拽，状态保持不变以便后续从合法状态继续。
-          if (interactionState !== 'idle' && interactionState !== 'hovering') {
+          if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
             e.stop();
             return;
           }
@@ -1544,6 +1540,8 @@ export function ScreenCanvas({
             activeGroupId,
             components,
             isDragStart: e.isDragStart,
+            clientX: inputEvent.clientX,
+            clientY: inputEvent.clientY,
           });
 
           // 应用副作用：lastClick → activeGroupId → selection → Moveable dragStart

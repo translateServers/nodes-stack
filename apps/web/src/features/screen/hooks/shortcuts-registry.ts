@@ -95,6 +95,11 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
     scope: 'global',
     preventDefault: 'callback-only',
     browserConflict: 'overridable',
+    // 故意禁用：input/textarea 聚焦时让位给浏览器原生输入撤销，
+    // 否则画布 undo 会劫持 mod+z 并 preventDefault，导致属性面板输入框
+    // 既无法原生撤销、又被回退到无关的历史快照（表现为"撤销完全失效"）。
+    // 与 toggleUI 保留 input 内 Tab 焦点切换同一处理模式。
+    enableOnFormTags: false,
   },
   {
     id: 'redo',
@@ -104,6 +109,8 @@ export const SHORTCUTS_REGISTRY: readonly ShortcutDefinition[] = [
     scope: 'global',
     preventDefault: 'callback-only',
     browserConflict: 'overridable',
+    // 同 undo：input 聚焦时让位给浏览器原生输入重做
+    enableOnFormTags: false,
   },
   {
     id: 'delete',

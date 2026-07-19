@@ -18,7 +18,6 @@ import type { InteractionEvent, InteractionEventPayload } from './use-interactio
  * - mock react-hotkeys-hook 的 useHotkeys 捕获所有调用
  * - 验证每个 TOOL_REGISTRY 中非空 shortcutId 都有对应的 useHotkeys 注册
  * - 验证 toolHandTemp（Space 临时抓手）以 keydown/keyup 分两次注册
- * - 验证吸管工具（shortcutId=null）不注册快捷键
  * - 验证 canvas 作用域：文本编辑态禁用工具切换
  */
 
@@ -160,6 +159,9 @@ describe('useKeyboardShortcuts 任务 1.4：接入全部声明的工具快捷键
     for (let i = 0; i < toolShortcutIds.length; i++) {
       const call = findCallByShortcutId(toolShortcutIds[i]);
       expect(call).toBeDefined();
+      // 先切换到其他工具，再按下快捷键，避免"当前工具已等于目标工具"的防御逻辑拦截
+      // 注意：必须选与 expectedTools[i] 不同的工具，否则 callback 会直接 return
+      tsm.activeTool = expectedTools[i] === 'hand' ? 'select' : 'hand';
       call!.callback(fakeEvent);
       expect(setTool).toHaveBeenCalledWith(expectedTools[i]);
     }
@@ -196,14 +198,6 @@ describe('useKeyboardShortcuts 任务 1.4：接入全部声明的工具快捷键
     // keyup 调用 popTemporaryTool('hand')
     matches[1].callback(fakeEvent);
     expect(popTemporaryTool).toHaveBeenCalledWith('hand');
-  });
-
-  it('吸管工具没有快捷键注册（shortcutId=null）', () => {
-    const eyedropper = getToolById('eyedropper');
-    expect(eyedropper?.shortcutId).toBeNull();
-    // 注册表中不应有吸管相关快捷键条目
-    const eyedropperEntries = SHORTCUTS_REGISTRY.filter((s) => s.description.includes('吸管'));
-    expect(eyedropperEntries).toHaveLength(0);
   });
 
   it('文本编辑态时工具切换快捷键被禁用（canvasEnabled 返回 false）', () => {

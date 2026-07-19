@@ -42,6 +42,7 @@ import {
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { InteractionState } from '../hooks/use-interaction-state-machine';
+import { CONTEXT_MENU_ALLOWED_STATES } from '../hooks/use-interaction-state-machine';
 import { ShortcutBadge } from './shortcut-badge';
 import { getShortcutKeys } from '../hooks/shortcuts-registry';
 import {
@@ -81,7 +82,7 @@ interface CanvasContextMenuProps {
    * 仅在 idle/hovering/marquee-selecting/context-menu-open 状态下允许打开菜单：
    * - idle/hovering/marquee-selecting：正常右键打开，派发 open-context-menu
    * - context-menu-open：重定位场景（再次右键），允许重新打开
-   * - 其他状态（dragging/resizing/rotating/panning/zooming/text-editing/creating/sampling）：
+   * - 其他状态（dragging/resizing/rotating/panning/zooming/text-editing/creating）：
    *   拒绝打开菜单，避免与进行中的手势冲突
    *
    * 未传入时（如单元测试中独立渲染）不进行状态机仲裁，菜单按原行为打开。
@@ -351,19 +352,14 @@ export function CanvasContextMenu({
    * 合法源状态：idle / hovering / marquee-selecting / context-menu-open
    * - 前三者：正常右键打开菜单
    * - context-menu-open：重定位场景（再次右键），由 attachContextMenuRedistributor 处理
-   * 非法源状态：dragging / resizing / rotating / panning / zooming / text-editing / creating / sampling
+   * 非法源状态：dragging / resizing / rotating / panning / zooming / text-editing / creating
    * - 这些状态下拒绝打开菜单，避免与进行中的手势或文本编辑冲突
    *
    * 未传入 interactionState 时（如单元测试）不进行仲裁，保持原行为。
    */
   const canOpenContextMenu = useCallback((): boolean => {
     if (!interactionState) return true;
-    return (
-      interactionState === 'idle' ||
-      interactionState === 'hovering' ||
-      interactionState === 'marquee-selecting' ||
-      interactionState === 'context-menu-open'
-    );
+    return CONTEXT_MENU_ALLOWED_STATES.has(interactionState);
   }, [interactionState]);
 
   // 任务 3.7：菜单打开/关闭镜像到交互状态机。

@@ -18,20 +18,11 @@ import {
   Circle,
   Image as ImageIcon,
   ZoomIn,
-  Pipette,
   type LucideIcon,
 } from 'lucide-react';
 
 /** 编辑器工具 ID */
-export type EditorTool =
-  | 'select'
-  | 'hand'
-  | 'text'
-  | 'rect'
-  | 'ellipse'
-  | 'image'
-  | 'zoom'
-  | 'eyedropper';
+export type EditorTool = 'select' | 'hand' | 'text' | 'rect' | 'ellipse' | 'image' | 'zoom';
 
 /** 工具能力定义 */
 export interface ToolCapabilities {
@@ -47,8 +38,6 @@ export interface ToolCapabilities {
   readonly canPan: boolean;
   /** 允许创建新组件 */
   readonly canCreate: boolean;
-  /** 允许颜色采样 */
-  readonly canSample: boolean;
   /** 允许点击缩放视口 */
   readonly canZoom: boolean;
 }
@@ -79,7 +68,6 @@ const FULL_EDIT_CAPABILITIES: ToolCapabilities = {
   canRotate: true,
   canPan: false,
   canCreate: false,
-  canSample: false,
   canZoom: false,
 };
 
@@ -91,7 +79,6 @@ const NO_EDIT_CAPABILITIES: ToolCapabilities = {
   canRotate: false,
   canPan: false,
   canCreate: false,
-  canSample: false,
   canZoom: false,
 };
 
@@ -101,7 +88,8 @@ const NO_EDIT_CAPABILITIES: ToolCapabilities = {
  * 阶段 1 实施状态：
  * - select: 已实现（Selecto/Moveable 始终启用）
  * - hand: 已实现（任务 4.2 让 activeTool==='hand' 直接平移）
- * - text/rect/ellipse/image/zoom/eyedropper: 已实现（任务 5-9 闭环）
+ * - text/rect/ellipse/image/zoom: 已实现（任务 5-8 闭环）
+ * - 吸管工具已移出阶段 1 范围（无调色板等应用场景，不宣称无效能力）
  */
 export const TOOL_REGISTRY: readonly ToolDefinition[] = [
   {
@@ -182,18 +170,6 @@ export const TOOL_REGISTRY: readonly ToolDefinition[] = [
     capabilities: {
       ...NO_EDIT_CAPABILITIES,
       canZoom: true,
-    },
-    implemented: true,
-  },
-  {
-    id: 'eyedropper',
-    name: '吸管',
-    icon: Pipette,
-    shortcutId: null,
-    cursor: 'crosshair',
-    capabilities: {
-      ...NO_EDIT_CAPABILITIES,
-      canSample: true,
     },
     implemented: true,
   },

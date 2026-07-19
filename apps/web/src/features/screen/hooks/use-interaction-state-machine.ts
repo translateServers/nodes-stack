@@ -10,7 +10,7 @@
  * - 与 use-keyboard-shortcuts.ts 的 canvasEnabled 联动（text-editing 时禁用画布快捷键）
  *
  * 任务 3.1 扩展：
- * - 新增 creating / sampling 状态，覆盖形状/文字/图片创建与吸管采样
+ * - 新增 creating 状态，覆盖形状/文字/图片创建
  * - 新增 cancel / window-blur / pointer-cancel / lost-pointer-capture 事件，
  *   支持任意瞬时状态恢复（与工具状态机 2.4 的恢复语义对齐）
  * - 文本编辑优先退出：text-editing 对全局恢复事件响应（escape/commit/cancel/window-blur）
@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
- * 交互状态机的 12 个状态。
+ * 交互状态机的 11 个状态。
  *
  * 状态语义：
  * - idle：无交互
@@ -38,7 +38,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
  * - text-editing：文本组件编辑态（双击进入）
  * - context-menu-open：右键菜单已打开
  * - creating：创建工具拖拽中（矩形/椭圆/文字/图片创建预览）
- * - sampling：吸管采样中（点击采样颜色）
  */
 export type InteractionState =
   | 'idle'
@@ -51,8 +50,7 @@ export type InteractionState =
   | 'zooming'
   | 'text-editing'
   | 'context-menu-open'
-  | 'creating'
-  | 'sampling';
+  | 'creating';
 
 /**
  * 交互状态机的触发事件。
@@ -60,7 +58,7 @@ export type InteractionState =
  * 事件命名约定：`动作-对象` 或 `阶段-目标`，描述引起状态转换的用户行为。
  *
  * 任务 3.1 新增事件分组：
- * - 创建/采样：start-create / commit-create / start-sample / end-sample
+ * - 创建：start-create / commit-create
  * - 全局恢复：cancel / window-blur / pointer-cancel / lost-pointer-capture
  */
 export type InteractionEvent =
@@ -74,8 +72,6 @@ export type InteractionEvent =
   | 'start-zoom' // 开始缩放（idle → zooming）
   | 'start-create' // 开始创建（idle → creating）
   | 'commit-create' // 提交创建（creating → idle）
-  | 'start-sample' // 开始采样（idle → sampling）
-  | 'end-sample' // 结束采样（sampling → idle）
   | 'double-click' // 双击进入文本编辑（idle → text-editing）
   | 'open-context-menu' // 打开右键菜单（idle → context-menu-open）
   | 'pointer-up' // 释放指针（拖拽/框选/调整/旋转/平移 → idle 或 hovering）
@@ -117,6 +113,33 @@ const POINTER_CAPTURE_STATES: ReadonlySet<InteractionState> = new Set([
 ]);
 
 /**
+ * 允许打开右键菜单的交互状态集合。
+ *
+ * 合法源状态：
+ * - idle / hovering / marquee-selecting：正常右键打开菜单
+ * - context-menu-open：重定位场景（再次右键），由 attachContextMenuRedistributor 处理
+ *
+ * 非法源状态：dragging / resizing / rotating / panning / zooming / text-editing / creating
+ * - 这些状态下拒绝打开菜单，避免与进行中的手势或文本编辑冲突
+ *
+ * 新增交互状态时需同步评估是否应加入此集合，保持与状态机转换表一致。
+ */
+export const CONTEXT_MENU_ALLOWED_STATES: ReadonlySet<InteractionState> = new Set([
+  'idle',
+  'hovering',
+  'marquee-selecting',
+  'context-menu-open',
+]);
+
+/**
+ * 允许 Selecto 框选启动的交互状态集合。
+ *
+ * 仅在 idle / hovering 状态下可开始框选，避免与拖拽/缩放/旋转/平移/创建等手势重入。
+ * 拒绝时调用 e.stop() 阻止 Selecto 启动拖拽，状态保持不变以便后续从合法状态继续。
+ */
+export const SELECTO_ALLOWED_STATES: ReadonlySet<InteractionState> = new Set(['idle', 'hovering']);
+
+/**
  * 状态转换表：`[currentState][event] → nextState`。
  *
  * 未在表中列出的 (state, event) 组合视为非法转换，
@@ -143,7 +166,6 @@ const TRANSITION_TABLE: Partial<
     'start-pan': 'panning',
     'start-zoom': 'zooming',
     'start-create': 'creating',
-    'start-sample': 'sampling',
     'double-click': 'text-editing',
     'open-context-menu': 'context-menu-open',
   },
@@ -155,7 +177,6 @@ const TRANSITION_TABLE: Partial<
     'start-rotate': 'rotating',
     'start-pan': 'panning',
     'start-create': 'creating',
-    'start-sample': 'sampling',
     'double-click': 'text-editing',
     'open-context-menu': 'context-menu-open',
   },
@@ -196,12 +217,37 @@ const TRANSITION_TABLE: Partial<
   creating: {
     'commit-create': 'idle',
     'pointer-up': 'idle', // 拖拽创建释放即提交（与 commit-create 等价，便于复用 pointer-up 路径）
-  },
-  sampling: {
-    'end-sample': 'idle',
-    'pointer-up': 'idle',
+    // 文字工具单击创建：handleCreateText 先派发 start-create（idle → creating），
+    // 再派发 double-click 进入文本编辑态。缺少此规则时状态卡在 creating，
+    // screen-editor 的外部取消清理 effect 会立即删除新建的文本组件，导致文字工具完全不可用。
+    'double-click': 'text-editing',
   },
 };
+
+/**
+ * L3 优化：非法转换诊断去重。
+ * 相同 (state, event) 组合在时间窗口内仅警告一次，避免复杂交互中
+ * （如拖拽期间每帧派发事件）产生大量重复噪声淹没有效诊断。
+ * 组合空间有限（state × event ≤ 数百），Map 不会无限增长。
+ */
+const ILLEGAL_TRANSITION_WARN_WINDOW_MS = 1000;
+const illegalTransitionWarnedAt = new Map<string, number>();
+
+function warnIllegalTransition(state: InteractionState, event: InteractionEvent): void {
+  const key = `${state}+${event}`;
+  const now = Date.now();
+  const last = illegalTransitionWarnedAt.get(key);
+  if (last !== undefined && now - last < ILLEGAL_TRANSITION_WARN_WINDOW_MS) return;
+  illegalTransitionWarnedAt.set(key, now);
+  console.warn(
+    `[InteractionStateMachine] 非法转换: ${state} + ${event} → 保持 ${state}（无对应转换规则）`,
+  );
+}
+
+/** 清空非法转换诊断去重缓存（仅供测试使用） */
+export function resetIllegalTransitionWarnCache(): void {
+  illegalTransitionWarnedAt.clear();
+}
 
 /**
  * 计算状态转换的纯函数。
@@ -220,6 +266,7 @@ const TRANSITION_TABLE: Partial<
  * 任务 3.8 诊断断言：
  * - 开发/测试环境下，非法转换（返回原状态）会通过 console.warn 输出诊断信息
  * - 生产环境不输出噪声
+ * - L3 优化：相同 (state, event) 组合在时间窗口内仅警告一次（去重）
  *
  * @param state - 当前状态
  * @param event - 触发事件
@@ -262,11 +309,9 @@ export function transition(
   const nextState = eventMap?.[event];
   const result = nextState ?? state;
 
-  // 任务 3.8：开发环境诊断断言 - 检测非法转换
+  // 任务 3.8：开发环境诊断断言 - 检测非法转换（L3：去重后输出）
   if (result === state && process.env['NODE_ENV'] !== 'production') {
-    console.warn(
-      `[InteractionStateMachine] 非法转换: ${state} + ${event} → 保持 ${state}（无对应转换规则）`,
-    );
+    warnIllegalTransition(state, event);
   }
 
   return result;

@@ -33,7 +33,6 @@ export type InteractionKind =
   | 'panning'
   | 'marquee-selecting'
   | 'creating'
-  | 'sampling'
   | 'zooming';
 
 /**
@@ -220,7 +219,6 @@ export function requiresProtocol(state: InteractionState): boolean {
     state === 'panning' ||
     state === 'marquee-selecting' ||
     state === 'creating' ||
-    state === 'sampling' ||
     state === 'zooming'
   );
 }

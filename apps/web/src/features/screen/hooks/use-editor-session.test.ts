@@ -148,11 +148,6 @@ describe('useEditorSession 任务 2.1：编辑器会话交互控制器 API', () 
       const { result } = renderSession();
       expect(result.current.textEditing).toBeNull();
     });
-
-    it('会话活动颜色由会话控制器持有（初始为 #ffffff）', () => {
-      const { result } = renderSession();
-      expect(result.current.activeColor).toBe('#ffffff');
-    });
   });
 
   describe('工具状态透传', () => {
@@ -380,22 +375,6 @@ describe('useEditorSession 任务 2.1：编辑器会话交互控制器 API', () 
     });
   });
 
-  describe('会话活动颜色', () => {
-    it('setActiveColor 更新活动颜色', () => {
-      const { result } = renderSession();
-      act(() => result.current.setActiveColor('#ff0000'));
-      expect(result.current.activeColor).toBe('#ff0000');
-    });
-
-    it('setActiveColor 可被多次调用', () => {
-      const { result } = renderSession();
-      act(() => result.current.setActiveColor('#ff0000'));
-      act(() => result.current.setActiveColor('#00ff00'));
-      act(() => result.current.setActiveColor('#0000ff'));
-      expect(result.current.activeColor).toBe('#0000ff');
-    });
-  });
-
   describe('API 边界约束（任务 2.1 验证要求）', () => {
     it('API 不包含持久项目副本（project/components）', () => {
       const { result } = renderSession();
@@ -451,8 +430,6 @@ describe('useEditorSession 任务 2.1：编辑器会话交互控制器 API', () 
         'textEditing',
         'beginTextEditing',
         'endTextEditing',
-        'activeColor',
-        'setActiveColor',
       ];
       const actualKeys = Object.keys(result.current).sort();
       expect(actualKeys).toEqual(expectedKeys.sort());
@@ -480,7 +457,6 @@ describe('useEditorSession 任务 2.1：编辑器会话交互控制器 API', () 
         { tool: 'ellipse' as EditorTool, trueCaps: ['canCreate'] as const },
         { tool: 'image' as EditorTool, trueCaps: ['canCreate'] as const },
         { tool: 'zoom' as EditorTool, trueCaps: ['canZoom'] as const },
-        { tool: 'eyedropper' as EditorTool, trueCaps: ['canSample'] as const },
       ];
       for (const { tool, trueCaps } of cases) {
         const tsm = makeToolStateMachine({ activeTool: tool });

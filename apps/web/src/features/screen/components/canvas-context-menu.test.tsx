@@ -184,7 +184,7 @@ describe('任务 3.7：右键菜单状态镜像到交互状态机', () => {
  * - 渲染 CanvasContextMenu 时传入 interactionState，模拟不同交互状态
  * - 调用捕获的 onOpenChange(true) 验证菜单是否允许打开
  * - 合法源状态（idle/hovering/marquee-selecting/context-menu-open）：允许打开，派发 open-context-menu
- * - 非法源状态（dragging/resizing/rotating/panning/zooming/text-editing/creating/sampling）：
+ * - 非法源状态（dragging/resizing/rotating/panning/zooming/text-editing/creating）：
  *   拒绝打开，不派发 open-context-menu
  * - 关闭菜单（onOpenChange(false)）不做状态检查，确保菜单总能关闭
  */
@@ -281,12 +281,6 @@ describe('任务 12.3：右键菜单由状态机仲裁', () => {
 
   it('creating 状态下拒绝打开菜单', () => {
     const { dispatchInteraction } = renderWithState('creating');
-    capturedRef.current!(true);
-    expect(dispatchInteraction).not.toHaveBeenCalledWith('open-context-menu');
-  });
-
-  it('sampling 状态下拒绝打开菜单', () => {
-    const { dispatchInteraction } = renderWithState('sampling');
     capturedRef.current!(true);
     expect(dispatchInteraction).not.toHaveBeenCalledWith('open-context-menu');
   });

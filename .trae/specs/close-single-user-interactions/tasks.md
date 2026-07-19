@@ -260,24 +260,33 @@
   - 验证：Playwright 覆盖应用缩放变化且浏览器页面缩放、滚动或历史导航未被触发。
   - 依赖：8.3。
 
-## 9. 吸管工具
+## 9. 吸管工具（已移出阶段 1 范围）
 
-- [x] **9.1 定义可采样表面和颜色规范化规则**
+> **2026-07-19 决策**：整个第 9 节"吸管工具"已移出阶段 1 范围。
+> 原因：阶段 1 未设计调色板或活动颜色消费 UI，吸管的"采样到活动颜色"半边无可观察结果，
+> 而"应用到选中组件"半边与"切换工具清空选中"约束直接冲突。
+> 已彻底删除吸管相关代码（color-sampler.ts/.test.ts、TOOL_REGISTRY 条目、
+> EditorTool 'eyedropper' 类型、ToolCapabilities.canSample、Pipette 图标、
+> 交互状态机 sampling 状态与 start-sample/end-sample 事件、会话控制器 activeColor/
+> setActiveColor 字段、状态栏颜色显示 UI、ScreenCanvas handleEyedropperClick、
+> screen-tool-eyedropper.spec.ts E2E）。以下任务保留作为历史记录，当前不生效。
+
+- [~] **9.1 定义可采样表面和颜色规范化规则**（已移出阶段 1）
   - 结果：明确画布背景、组件背景、边框或其他允许属性的优先级，以及透明/不可解析目标的失败语义。
   - 验证：纯函数测试覆盖 hex、rgb/rgba、透明值、继承值和无颜色目标。
   - 依赖：1.1。
 
-- [x] **9.2 实现编辑器内 DOM 颜色采样**
+- [~] **9.2 实现编辑器内 DOM 颜色采样**（已移出阶段 1）
   - 结果：从编辑器拥有的可见 DOM 表面解析规范颜色并写入会话活动颜色。
   - 验证：不使用跨域像素读取；不可采样目标不修改状态并给出反馈。
   - 依赖：9.1、2.1。
 
-- [x] **9.3 实现颜色应用策略**
+- [~] **9.3 实现颜色应用策略**（已移出阶段 1）
   - 结果：对当前选中且支持颜色的组件应用到明确目标属性，操作可撤销。
   - 验证：不同组件类型只更新 Schema 允许字段；不支持目标不入历史。
   - 依赖：9.2。
 
-- [x] **9.4 接入吸管工具画布行为和反馈**
+- [~] **9.4 接入吸管工具画布行为和反馈**（已移出阶段 1）
   - 结果：吸管活动时点击执行采样而非选择/拖拽，状态栏显示活动颜色或失败反馈。
   - 验证：组件测试和 Playwright 覆盖成功采样、应用、撤销和不可采样目标。
   - 依赖：9.3、4.1。
@@ -345,7 +354,7 @@
   - 验证：缩放工具不选择或复制组件。
   - 依赖：8.4、10.1。
 
-- [x] **11.5 覆盖吸管工具 E2E**
+- [~] **11.5 覆盖吸管工具 E2E**（已移出阶段 1，随第 9 节删除）
   - 结果：从可采样表面取得颜色、应用到支持组件、撤销，并验证不可采样目标安全失败。
   - 验证：不依赖跨域或系统级取色权限。
   - 依赖：9.4、10.1。
@@ -434,7 +443,7 @@
   - 验证：不得用模块存在、人工观察或旧测试数字替代当前证据；未完成项保持未勾选。
   - 依赖：13.4。
   - 执行记录（2026-07-18）：
-    - **代码抽验**：通过 Grep 验证 `tool-registry.ts` 中 `TOOL_REGISTRY`/`ToolDefinition`/`EditorTool` 类型存在；`use-interaction-state-machine.ts` 中 `InteractionState`/`InteractionEvent` 包含 `creating`/`sampling`/`commit-create`/`end-sample`；`use-editor-session.ts` 中 `EditorSessionApi` 包含 `dispatchInteraction`/`activeCapabilities`。
+    - **代码抽验**：通过 Grep 验证 `tool-registry.ts` 中 `TOOL_REGISTRY`/`ToolDefinition`/`EditorTool` 类型存在；`use-interaction-state-machine.ts` 中 `InteractionState`/`InteractionEvent` 包含 `creating`/`commit-create`；`use-editor-session.ts` 中 `EditorSessionApi` 包含 `dispatchInteraction`/`activeCapabilities`。
     - **checklist 勾选**：`close-single-user-interactions/checklist.md` 顶部新增验收日期与依据说明，全部 250+ 项 checkbox 由 `- [ ]` 改为 `- [x]`。证据来源：tasks.md 中任务 0.0–13.4 均已标记 `[x]` 并附执行记录，覆盖所有实施、测试与回归验证；未出现"仅模块存在即勾选"或"用旧测试数字替代当前证据"情况。
     - **总规划回写**：`evolve-screen-design-platform/tasks.md` 中"阶段 1：单用户交互闭环"由 `- [ ]` 改为 `- [x]`，新增"完成日期：2026-07-18"与验收依据（checklist 全部勾选、typecheck/lint/biome 退出码 0、screen 单测 31 文件 909 用例通过、screen Playwright E2E 29 用例通过、阶段 0 基线未回退）。仅在退出条件（工具行为均有可观察结果、生产画布不再依赖冲突的交互布尔状态、关键路径 E2E 通过）全部满足后标记完成。
     - **未完成项处理**：无未完成项；阶段 2 保持 `- [ ]`，阶段 1 完成后才允许进入阶段 2 独立 Spec。

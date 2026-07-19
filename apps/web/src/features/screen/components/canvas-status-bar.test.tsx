@@ -58,12 +58,11 @@ function makeComponent(overrides: Partial<ScreenComponent> = {}): ScreenComponen
 
 function makeEditorSession(
   activeTool: EditorTool,
-  overrides: Partial<Pick<EditorSessionApi, 'interactionState' | 'activeColor'>> = {},
-): Pick<EditorSessionApi, 'activeTool' | 'interactionState' | 'activeColor'> {
+  overrides: Partial<Pick<EditorSessionApi, 'interactionState'>> = {},
+): Pick<EditorSessionApi, 'activeTool' | 'interactionState'> {
   return {
     activeTool,
     interactionState: overrides.interactionState ?? 'idle',
-    activeColor: overrides.activeColor ?? '#000000',
   };
 }
 

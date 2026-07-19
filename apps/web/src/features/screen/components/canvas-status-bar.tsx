@@ -27,7 +27,7 @@ const ZOOM_PRESETS = [25, 50, 75, 100, 125, 150, 200];
 
 interface CanvasStatusBarProps {
   /** 编辑器会话控制器（任务 2.2 起为唯一来源） */
-  editorSession: Pick<EditorSessionApi, 'activeTool' | 'interactionState' | 'activeColor'>;
+  editorSession: Pick<EditorSessionApi, 'activeTool' | 'interactionState'>;
 }
 
 /** 状态栏开关按钮（VSCode 风格） */
@@ -88,10 +88,6 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
   const ToolIcon = toolMeta.icon;
   const toolName = toolMeta.name;
 
-  // 任务 9.4：吸管工具活动时显示当前活动颜色，作为采样结果反馈
-  const activeColor = editorSession.activeColor;
-  const isEyedropperActive = activeTool === 'eyedropper';
-
   const selectedCount = selectedComponentIds.length;
   const selectedComponentName =
     selectedCount === 1 && project
@@ -107,7 +103,7 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
       className="flex h-7 items-center justify-between border-t border-border bg-card px-2 text-xs text-muted-foreground"
       data-testid="canvas-status-bar"
     >
-      {/* 左侧：工具 + 选中信息 + 吸管采样颜色 */}
+      {/* 左侧：工具 + 选中信息 */}
       <div className="flex items-center gap-2">
         <span className="flex items-center gap-1 text-foreground">
           <ToolIcon className="size-3.5" />
@@ -121,23 +117,6 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
               ? (selectedComponentName ?? '已选中 1 个')
               : `已选中 ${selectedCount} 个组件`}
         </span>
-        {isEyedropperActive && (
-          <>
-            <Divider />
-            <span
-              className="flex items-center gap-1.5"
-              aria-label="当前活动颜色"
-              data-testid="active-color"
-            >
-              <span
-                className="size-3 rounded-sm border border-border"
-                style={{ backgroundColor: activeColor }}
-                aria-hidden="true"
-              />
-              <span className="font-mono uppercase">{activeColor}</span>
-            </span>
-          </>
-        )}
       </div>
 
       {/* 中间：画布尺寸 */}

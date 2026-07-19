@@ -15,7 +15,6 @@ import { TOOL_REGISTRY } from '../hooks/tool-registry';
  * 测试策略：
  * - 不 mock shortcuts-registry 或 tool-registry，验证帮助面板真实消费注册表
  * - 验证工具快捷键和说明由注册表生成或引用
- * - 验证已删除的"Alt 临时吸管"说明不再出现
  * - 验证 Alt 拖拽复制、Space 临时抓手和缩放工具反向操作说明存在且与实际一致
  */
 
@@ -44,7 +43,7 @@ describe('ShortcutsHelpDialog 任务 1.3：接入统一工具注册表', () => {
   it('每个工具快捷键条目都能在帮助面板找到对应描述', () => {
     render(<ShortcutsHelpDialog open={true} onOpenChange={vi.fn()} />);
     for (const tool of TOOL_REGISTRY) {
-      if (tool.shortcutId === null) continue; // 吸管无快捷键
+      if (tool.shortcutId === null) continue;
       const shortcut = getShortcutById(tool.shortcutId);
       expect(shortcut).toBeDefined();
       expect(screen.getByText(shortcut!.description)).toBeInTheDocument();
@@ -82,14 +81,6 @@ describe('ShortcutsHelpDialog 任务 1.3：接入统一工具注册表', () => {
     expect(keys).toContain('滚轮');
   });
 
-  it('帮助面板不再包含"Alt 临时吸管"错误说明', () => {
-    render(<ShortcutsHelpDialog open={true} onOpenChange={vi.fn()} />);
-    // eyedropperTemp 条目应已从注册表中删除
-    expect(getShortcutById('eyedropperTemp')).toBeUndefined();
-    // 帮助面板不应出现"临时吸管"字样
-    expect(screen.queryByText(/临时吸管/)).not.toBeInTheDocument();
-  });
-
   it('帮助面板按 category 分组展示', () => {
     render(<ShortcutsHelpDialog open={true} onOpenChange={vi.fn()} />);
     // 验证所有非 hidden 条目的 category 都有对应的分组标题
@@ -109,15 +100,6 @@ describe('ShortcutsHelpDialog 任务 1.3：接入统一工具注册表', () => {
     for (const entry of toolShortcuts) {
       expect(screen.getByText(entry.description)).toBeInTheDocument();
     }
-  });
-
-  it('吸管工具没有快捷键，帮助面板不展示吸管快捷键说明', () => {
-    render(<ShortcutsHelpDialog open={true} onOpenChange={vi.fn()} />);
-    const eyedropper = TOOL_REGISTRY.find((t) => t.id === 'eyedropper');
-    expect(eyedropper?.shortcutId).toBeNull();
-    // 注册表里不应有吸管相关快捷键条目
-    const eyedropperEntries = SHORTCUTS_REGISTRY.filter((s) => s.description.includes('吸管'));
-    expect(eyedropperEntries).toHaveLength(0);
   });
 
   it('hidden 条目（noop 拦截）不展示在帮助面板', () => {

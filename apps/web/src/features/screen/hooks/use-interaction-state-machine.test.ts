@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-import { transition } from './use-interaction-state-machine';
+import { transition, resetIllegalTransitionWarnCache } from './use-interaction-state-machine';
 import type { InteractionState, InteractionEvent } from './use-interaction-state-machine';
 
 describe('transition（交互状态机纯函数）', () => {
@@ -168,38 +168,6 @@ describe('transition（交互状态机纯函数）', () => {
     });
   });
 
-  describe('任务 3.1：采样态（sampling）转换', () => {
-    it('idle + start-sample → sampling', () => {
-      expect(transition('idle', 'start-sample')).toBe('sampling');
-    });
-
-    it('hovering + start-sample → sampling', () => {
-      expect(transition('hovering', 'start-sample')).toBe('sampling');
-    });
-
-    it('sampling + end-sample → idle', () => {
-      expect(transition('sampling', 'end-sample')).toBe('idle');
-    });
-
-    it('sampling + pointer-up → idle', () => {
-      expect(transition('sampling', 'pointer-up')).toBe('idle');
-    });
-
-    it('完整流程：idle → sampling → idle（end-sample 结束）', () => {
-      let state = transition('idle', 'start-sample');
-      expect(state).toBe('sampling');
-      state = transition(state, 'end-sample');
-      expect(state).toBe('idle');
-    });
-
-    it('完整流程：idle → sampling → idle（pointer-up 结束）', () => {
-      let state = transition('idle', 'start-sample');
-      expect(state).toBe('sampling');
-      state = transition(state, 'pointer-up');
-      expect(state).toBe('idle');
-    });
-  });
-
   describe('任务 3.1：cancel 事件（任意瞬时状态恢复）', () => {
     const nonIdleStates: InteractionState[] = [
       'hovering',
@@ -212,7 +180,6 @@ describe('transition（交互状态机纯函数）', () => {
       'text-editing',
       'context-menu-open',
       'creating',
-      'sampling',
     ];
 
     for (const state of nonIdleStates) {
@@ -250,7 +217,6 @@ describe('transition（交互状态机纯函数）', () => {
       'text-editing',
       'context-menu-open',
       'creating',
-      'sampling',
     ];
 
     for (const state of nonIdleStates) {
@@ -303,10 +269,6 @@ describe('transition（交互状态机纯函数）', () => {
     it('zooming + pointer-cancel → zooming（缩放不响应 pointer-cancel）', () => {
       expect(transition('zooming', 'pointer-cancel')).toBe('zooming');
     });
-
-    it('sampling + pointer-cancel → sampling（采样不响应 pointer-cancel）', () => {
-      expect(transition('sampling', 'pointer-cancel')).toBe('sampling');
-    });
   });
 
   describe('任务 3.1：lost-pointer-capture 事件（pointer 捕获态恢复）', () => {
@@ -335,10 +297,6 @@ describe('transition（交互状态机纯函数）', () => {
 
     it('context-menu-open + lost-pointer-capture → context-menu-open（菜单不响应）', () => {
       expect(transition('context-menu-open', 'lost-pointer-capture')).toBe('context-menu-open');
-    });
-
-    it('sampling + lost-pointer-capture → sampling（采样不响应）', () => {
-      expect(transition('sampling', 'lost-pointer-capture')).toBe('sampling');
     });
   });
 
@@ -378,10 +336,6 @@ describe('transition（交互状态机纯函数）', () => {
 
     it('text-editing + start-create → text-editing（不响应创建开始）', () => {
       expect(transition('text-editing', 'start-create')).toBe('text-editing');
-    });
-
-    it('text-editing + start-sample → text-editing（不响应采样开始）', () => {
-      expect(transition('text-editing', 'start-sample')).toBe('text-editing');
     });
 
     it('text-editing + start-pan → text-editing（不响应平移开始）', () => {
@@ -426,7 +380,6 @@ describe('transition（交互状态机纯函数）', () => {
       'text-editing',
       'context-menu-open',
       'creating',
-      'sampling',
     ];
 
     const globalRecoveryEvents: InteractionEvent[] = ['escape', 'cancel', 'window-blur'];
@@ -494,24 +447,15 @@ describe('transition（交互状态机纯函数）', () => {
       expect(transition('creating', 'start-drag')).toBe('creating');
     });
 
-    it('creating + double-click → creating（创建中不响应双击）', () => {
-      expect(transition('creating', 'double-click')).toBe('creating');
-    });
-
-    it('sampling + start-drag → sampling（采样中不响应拖拽开始）', () => {
-      expect(transition('sampling', 'start-drag')).toBe('sampling');
-    });
-
-    it('sampling + start-create → sampling（采样中不响应创建开始）', () => {
-      expect(transition('sampling', 'start-create')).toBe('sampling');
+    it('creating + double-click → text-editing（文字工具单击创建后双击进入编辑）', () => {
+      // 文字工具单击创建：handleCreateText 先派发 start-create（idle → creating），
+      // 再派发 double-click 进入文本编辑态。缺少此规则时状态卡在 creating，
+      // 导致文字工具完全不可用。
+      expect(transition('creating', 'double-click')).toBe('text-editing');
     });
 
     it('dragging + start-create → dragging（拖拽中不响应创建开始）', () => {
       expect(transition('dragging', 'start-create')).toBe('dragging');
-    });
-
-    it('marquee-selecting + start-sample → marquee-selecting（框选中不响应采样开始）', () => {
-      expect(transition('marquee-selecting', 'start-sample')).toBe('marquee-selecting');
     });
   });
 
@@ -532,6 +476,48 @@ describe('transition（交互状态机纯函数）', () => {
 
     it('pointer-down 在 dragging 状态下保持原状态（不响应）', () => {
       expect(transition('dragging', 'pointer-down', { isPanGesture: true })).toBe('dragging');
+    });
+  });
+
+  describe('非法转换诊断去重（L3）', () => {
+    beforeEach(() => {
+      resetIllegalTransitionWarnCache();
+      vi.restoreAllMocks();
+    });
+
+    it('相同 (state, event) 组合在时间窗口内仅警告一次', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // 'idle + pointer-up' 为非法转换（保持 idle）
+      transition('idle', 'pointer-up');
+      transition('idle', 'pointer-up');
+      transition('idle', 'pointer-up');
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('不同 (state, event) 组合各自独立警告', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      transition('idle', 'pointer-up');
+      transition('dragging', 'double-click');
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('超出时间窗口后相同组合再次警告', () => {
+      vi.useFakeTimers();
+      try {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        transition('idle', 'pointer-up');
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        // 窗口内：不重复警告
+        vi.setSystemTime(Date.now() + 500);
+        transition('idle', 'pointer-up');
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        // 超出窗口（1000ms）：再次警告
+        vi.setSystemTime(Date.now() + 600);
+        transition('idle', 'pointer-up');
+        expect(warnSpy).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
