@@ -8,6 +8,7 @@ import {
   handleSelectEnd,
   redistributeContextMenu,
   zoomAtPoint,
+  type ContextMenuRedistributorCallbacks,
 } from './canvas-event-router';
 
 /** 创建带 data-component-id 的元素 */
@@ -22,6 +23,68 @@ function createElementWithClass(className: string): HTMLElement {
   const el = document.createElement('div');
   el.className = className;
   return el;
+}
+
+/** 暂存原始 elementsFromPoint 以便恢复（jsdom 中可能为 undefined） */
+// eslint-disable-next-line @typescript-eslint/unbound-method -- 仅用于存储引用以恢复，不调用此方法
+const originalElementsFromPoint = document.elementsFromPoint;
+
+/** 替换 document.elementsFromPoint 返回指定元素数组 */
+function mockElementsFromPoint(elements: Element[]): void {
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: () => elements,
+    writable: true,
+  });
+}
+
+function restoreElementsFromPoint(): void {
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    value: originalElementsFromPoint,
+    writable: true,
+  });
+}
+
+/**
+ * jsdom 不支持 `view: window` 的 PointerEvent / MouseEvent 构造，
+ * 因此在测试前 mock 两者为简化版 Event。
+ * 仅验证事件类型、坐标、button 字段，不验证完整事件语义。
+ */
+class MockMouseEvent extends Event {
+  readonly clientX: number;
+  readonly clientY: number;
+  readonly button: number;
+  readonly buttons: number;
+
+  constructor(type: string, init: Record<string, unknown> = {}) {
+    super(type, {
+      bubbles: init.bubbles as boolean | undefined,
+      cancelable: init.cancelable as boolean | undefined,
+    });
+    this.clientX = (init.clientX as number) ?? 0;
+    this.clientY = (init.clientY as number) ?? 0;
+    this.button = (init.button as number) ?? 0;
+    this.buttons = (init.buttons as number) ?? 0;
+  }
+}
+
+class MockPointerEvent extends MockMouseEvent {
+  readonly pointerId: number;
+  readonly isPrimary: boolean;
+  readonly pointerType: string;
+
+  constructor(type: string, init: Record<string, unknown> = {}) {
+    super(type, init);
+    this.pointerId = (init.pointerId as number) ?? 0;
+    this.isPrimary = (init.isPrimary as boolean) ?? false;
+    this.pointerType = (init.pointerType as string) ?? '';
+  }
+}
+
+function stubPointerEvents(): void {
+  vi.stubGlobal('PointerEvent', MockPointerEvent);
+  vi.stubGlobal('MouseEvent', MockMouseEvent);
 }
 
 describe('getComponentIdFromElement', () => {
@@ -39,13 +102,8 @@ describe('getComponentIdFromElement', () => {
     expect(getComponentIdFromElement(child)).toBe('comp-parent');
   });
 
-  it('未命中：元素链中无 data-component-id', () => {
-    const el = document.createElement('div');
-
-    expect(getComponentIdFromElement(el)).toBeNull();
-  });
-
-  it('未命中：传入 null', () => {
+  it('未命中：元素链中无 data-component-id 或传入 null', () => {
+    expect(getComponentIdFromElement(document.createElement('div'))).toBeNull();
     expect(getComponentIdFromElement(null)).toBeNull();
   });
 
@@ -65,37 +123,13 @@ describe('getComponentIdFromElement', () => {
     moveableBox.appendChild(control);
 
     expect(getComponentIdFromElement(control)).toBeNull();
-  });
-
-  it('终止：起点本身即为 moveable-control-box', () => {
-    const moveableBox = createElementWithClass('moveable-control-box');
-
+    // 起点本身即为 moveable-control-box
     expect(getComponentIdFromElement(moveableBox)).toBeNull();
   });
 });
 
 describe('findComponentIdAtPoint', () => {
-  /** 暂存原始实现以便 afterEach 恢复 */
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- 仅用于存储引用以恢复，不调用此方法
-  const originalElementsFromPoint = document.elementsFromPoint;
-
-  afterEach(() => {
-    // 恢复原始实现（jsdom 中可能为 undefined）
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: originalElementsFromPoint,
-      writable: true,
-    });
-  });
-
-  /** 替换 document.elementsFromPoint 返回指定元素数组 */
-  function mockElementsFromPoint(elements: Element[]): void {
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: () => elements,
-      writable: true,
-    });
-  }
+  afterEach(restoreElementsFromPoint);
 
   it('命中：返回第一个带 data-component-id 的元素', () => {
     const component = createElementWithId('comp-1');
@@ -105,23 +139,34 @@ describe('findComponentIdAtPoint', () => {
     expect(findComponentIdAtPoint(100, 100)).toBe('comp-1');
   });
 
-  it('跳过：[data-slot="context-menu-content"] 元素', () => {
-    const menuContent = document.createElement('div');
-    menuContent.setAttribute('data-slot', 'context-menu-content');
-    const component = createElementWithId('comp-1');
-    mockElementsFromPoint([menuContent, component]);
+  // 覆盖层选择器统一参数化：均应被跳过并命中后方组件
+  const skippedOverlays: Array<[string, () => HTMLElement]> = [
+    [
+      '[data-slot="context-menu-content"]',
+      () => {
+        const el = document.createElement('div');
+        el.setAttribute('data-slot', 'context-menu-content');
+        return el;
+      },
+    ],
+    [
+      '[data-radix-popper-content-wrapper]',
+      () => {
+        const el = document.createElement('div');
+        el.setAttribute('data-radix-popper-content-wrapper', '');
+        return el;
+      },
+    ],
+  ];
 
-    expect(findComponentIdAtPoint(100, 100)).toBe('comp-1');
-  });
+  for (const [name, createOverlay] of skippedOverlays) {
+    it(`跳过：${name} 元素`, () => {
+      const component = createElementWithId('comp-1');
+      mockElementsFromPoint([createOverlay(), component]);
 
-  it('跳过：[data-radix-popper-content-wrapper] 元素', () => {
-    const popper = document.createElement('div');
-    popper.setAttribute('data-radix-popper-content-wrapper', '');
-    const component = createElementWithId('comp-1');
-    mockElementsFromPoint([popper, component]);
-
-    expect(findComponentIdAtPoint(100, 100)).toBe('comp-1');
-  });
+      expect(findComponentIdAtPoint(100, 100)).toBe('comp-1');
+    });
+  }
 
   it('跳过：.moveable-control-box 元素（含其内部嵌套元素）', () => {
     const moveableBox = createElementWithClass('moveable-control-box');
@@ -136,81 +181,22 @@ describe('findComponentIdAtPoint', () => {
     expect(findComponentIdAtPoint(100, 100)).toBeNull();
   });
 
-  it('未命中：鼠标下方无任何带 data-component-id 的元素', () => {
-    const plain = document.createElement('div');
-    mockElementsFromPoint([plain]);
-
+  it('未命中：无组件元素或 elementsFromPoint 返回空数组', () => {
+    mockElementsFromPoint([document.createElement('div')]);
     expect(findComponentIdAtPoint(100, 100)).toBeNull();
-  });
 
-  it('未命中：elementsFromPoint 返回空数组', () => {
     mockElementsFromPoint([]);
-
     expect(findComponentIdAtPoint(100, 100)).toBeNull();
   });
 });
 
 describe('redistributeContextMenu', () => {
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- 仅用于存储引用以恢复，不调用此方法
-  const originalElementsFromPoint = document.elementsFromPoint;
-
-  /**
-   * jsdom 不支持 `view: window` 的 PointerEvent / MouseEvent 构造，
-   * 因此在测试前 mock 两者为简化版 Event。
-   * 仅验证事件类型、坐标、button 字段，不验证完整事件语义。
-   */
-  class MockMouseEvent extends Event {
-    readonly clientX: number;
-    readonly clientY: number;
-    readonly button: number;
-    readonly buttons: number;
-
-    constructor(type: string, init: Record<string, unknown> = {}) {
-      super(type, {
-        bubbles: init.bubbles as boolean | undefined,
-        cancelable: init.cancelable as boolean | undefined,
-      });
-      this.clientX = (init.clientX as number) ?? 0;
-      this.clientY = (init.clientY as number) ?? 0;
-      this.button = (init.button as number) ?? 0;
-      this.buttons = (init.buttons as number) ?? 0;
-    }
-  }
-
-  class MockPointerEvent extends MockMouseEvent {
-    readonly pointerId: number;
-    readonly isPrimary: boolean;
-    readonly pointerType: string;
-
-    constructor(type: string, init: Record<string, unknown> = {}) {
-      super(type, init);
-      this.pointerId = (init.pointerId as number) ?? 0;
-      this.isPrimary = (init.isPrimary as boolean) ?? false;
-      this.pointerType = (init.pointerType as string) ?? '';
-    }
-  }
-
-  beforeEach(() => {
-    vi.stubGlobal('PointerEvent', MockPointerEvent);
-    vi.stubGlobal('MouseEvent', MockMouseEvent);
-  });
+  beforeEach(stubPointerEvents);
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: originalElementsFromPoint,
-      writable: true,
-    });
+    restoreElementsFromPoint();
   });
-
-  function mockElementsFromPoint(elements: Element[]): void {
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: () => elements,
-      writable: true,
-    });
-  }
 
   it('派发完整事件序列：pointerdown → mousedown → pointerup → mouseup → contextmenu', () => {
     const target = document.createElement('div');
@@ -224,7 +210,7 @@ describe('redistributeContextMenu', () => {
     expect(eventTypes).toEqual(['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'contextmenu']);
   });
 
-  it('事件坐标：所有事件均使用传入的 x/y 作为 clientX/clientY', () => {
+  it('事件属性：所有事件使用传入坐标且均为右键（button === 2）', () => {
     const target = document.createElement('div');
     mockElementsFromPoint([target]);
     const dispatchSpy = vi.spyOn(target, 'dispatchEvent');
@@ -235,18 +221,6 @@ describe('redistributeContextMenu', () => {
       const event = call[0] as MouseEvent;
       expect(event.clientX).toBe(333);
       expect(event.clientY).toBe(444);
-    }
-  });
-
-  it('事件 button：所有事件均为右键（button === 2）', () => {
-    const target = document.createElement('div');
-    mockElementsFromPoint([target]);
-    const dispatchSpy = vi.spyOn(target, 'dispatchEvent');
-
-    redistributeContextMenu(100, 100);
-
-    for (const call of dispatchSpy.mock.calls) {
-      const event = call[0] as MouseEvent;
       expect(event.button).toBe(2);
     }
   });
@@ -302,65 +276,26 @@ describe('redistributeContextMenu', () => {
 });
 
 describe('attachContextMenuRedistributor', () => {
-  // eslint-disable-next-line @typescript-eslint/unbound-method -- 仅用于存储引用以恢复，不调用此方法
-  const originalElementsFromPoint = document.elementsFromPoint;
-
-  /**
-   * jsdom 不支持 `view: window` 的 PointerEvent / MouseEvent 构造，
-   * 复用与 redistributeContextMenu describe 相同的 mock 模式。
-   */
-  class MockMouseEvent extends Event {
-    readonly clientX: number;
-    readonly clientY: number;
-    readonly button: number;
-    readonly buttons: number;
-
-    constructor(type: string, init: Record<string, unknown> = {}) {
-      super(type, {
-        bubbles: init.bubbles as boolean | undefined,
-        cancelable: init.cancelable as boolean | undefined,
-      });
-      this.clientX = (init.clientX as number) ?? 0;
-      this.clientY = (init.clientY as number) ?? 0;
-      this.button = (init.button as number) ?? 0;
-      this.buttons = (init.buttons as number) ?? 0;
-    }
-  }
-
-  class MockPointerEvent extends MockMouseEvent {
-    readonly pointerId: number;
-    readonly isPrimary: boolean;
-    readonly pointerType: string;
-
-    constructor(type: string, init: Record<string, unknown> = {}) {
-      super(type, init);
-      this.pointerId = (init.pointerId as number) ?? 0;
-      this.isPrimary = (init.isPrimary as boolean) ?? false;
-      this.pointerType = (init.pointerType as string) ?? '';
-    }
-  }
-
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.stubGlobal('PointerEvent', MockPointerEvent);
-    vi.stubGlobal('MouseEvent', MockMouseEvent);
+    stubPointerEvents();
     // redistributeContextMenu 在 rAF 中调用 elementsFromPoint，需提供有效 mock
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: () => [],
-      writable: true,
-    });
+    mockElementsFromPoint([]);
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: originalElementsFromPoint,
-      writable: true,
-    });
+    restoreElementsFromPoint();
   });
+
+  /** 创建菜单 Content 元素并挂载到 body */
+  function mountMenuContent(): HTMLElement {
+    const menuContent = document.createElement('div');
+    menuContent.setAttribute('data-slot', 'context-menu-content');
+    document.body.appendChild(menuContent);
+    return menuContent;
+  }
 
   /** 在 document.body 上派发右键 contextmenu 事件（让 document 捕获监听器触发） */
   function fireContextmenu(x = 100, y = 100): void {
@@ -394,27 +329,25 @@ describe('attachContextMenuRedistributor', () => {
     vi.advanceTimersByTime(50);
   }
 
-  it('返回 cleanup 函数', () => {
-    const cleanup = attachContextMenuRedistributor({
+  /** 用 noop 回调快速构造 callbacks，可按需覆盖 */
+  function makeCallbacks(
+    overrides: Partial<ContextMenuRedistributorCallbacks> = {},
+  ): ContextMenuRedistributorCallbacks {
+    return {
       isOpen: () => false,
       onClose: () => {},
       onMenuKeyBump: () => {},
       onReopenIfClosed: () => {},
-    });
+      ...overrides,
+    };
+  }
 
-    expect(typeof cleanup).toBe('function');
-    cleanup();
-  });
-
-  it('注册时在 document 上添加 contextmenu 与 pointerdown capture 监听器', () => {
+  it('注册时添加 contextmenu 与 pointerdown capture 监听器，cleanup 移除后不再触发回调', () => {
     const addSpy = vi.spyOn(document, 'addEventListener');
+    const onClose = vi.fn();
 
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => false,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
+    const cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => true, onClose }));
+    expect(typeof cleanup).toBe('function');
 
     const contextmenuCalls = addSpy.mock.calls.filter(([type]) => type === 'contextmenu');
     const pointerdownCalls = addSpy.mock.calls.filter(([type]) => type === 'pointerdown');
@@ -424,77 +357,34 @@ describe('attachContextMenuRedistributor', () => {
     expect(contextmenuCalls[0][2]).toBe(true);
     expect(pointerdownCalls).toHaveLength(1);
     expect(pointerdownCalls[0][2]).toBe(true);
-
-    cleanup();
     addSpy.mockRestore();
-  });
 
-  it('cleanup 移除两个 capture 监听器', () => {
     const removeSpy = vi.spyOn(document, 'removeEventListener');
-
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => false,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
     cleanup();
 
-    const contextmenuCalls = removeSpy.mock.calls.filter(([type]) => type === 'contextmenu');
-    const pointerdownCalls = removeSpy.mock.calls.filter(([type]) => type === 'pointerdown');
-
-    expect(contextmenuCalls).toHaveLength(1);
-    expect(contextmenuCalls[0][2]).toBe(true);
-    expect(pointerdownCalls).toHaveLength(1);
-    expect(pointerdownCalls[0][2]).toBe(true);
-
+    expect(removeSpy.mock.calls.filter(([type]) => type === 'contextmenu')).toHaveLength(1);
+    expect(removeSpy.mock.calls.filter(([type]) => type === 'pointerdown')).toHaveLength(1);
     removeSpy.mockRestore();
-  });
 
-  it('cleanup 后事件不再触发回调', () => {
-    const onClose = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose,
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
-    cleanup();
-
+    // cleanup 后事件不再触发回调
     fireContextmenu();
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('pointerdown capture：非右键（button !== 2）不隐藏现有 Content', () => {
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
-
-    const menuContent = document.createElement('div');
-    menuContent.setAttribute('data-slot', 'context-menu-content');
-    document.body.appendChild(menuContent);
+  it('pointerdown capture：非右键或菜单关闭时不隐藏现有 Content', () => {
+    // 非右键（左键）+ 菜单打开
+    let cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => true }));
+    let menuContent = mountMenuContent();
 
     firePointerdown(0); // 左键
     expect(menuContent.style.opacity).toBe('');
 
     menuContent.remove();
     cleanup();
-  });
 
-  it('pointerdown capture：菜单关闭时不隐藏现有 Content', () => {
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => false,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
-
-    const menuContent = document.createElement('div');
-    menuContent.setAttribute('data-slot', 'context-menu-content');
-    document.body.appendChild(menuContent);
+    // 右键 + 菜单关闭
+    cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => false }));
+    menuContent = mountMenuContent();
 
     firePointerdown(2);
     expect(menuContent.style.opacity).toBe('');
@@ -504,16 +394,8 @@ describe('attachContextMenuRedistributor', () => {
   });
 
   it('pointerdown capture：右键 + 菜单打开 → 隐藏现有 Content', () => {
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
-
-    const menuContent = document.createElement('div');
-    menuContent.setAttribute('data-slot', 'context-menu-content');
-    document.body.appendChild(menuContent);
+    const cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => true }));
+    const menuContent = mountMenuContent();
 
     firePointerdown(2);
 
@@ -526,15 +408,11 @@ describe('attachContextMenuRedistributor', () => {
     cleanup();
   });
 
-  it('contextmenu capture：非右键不处理（不调用 onClose）', () => {
+  it('contextmenu capture：非右键或菜单关闭时不处理（不调用 onClose）', () => {
     const onClose = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose,
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
+    let cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => true, onClose }));
 
+    // 非右键
     document.body.dispatchEvent(
       new MockMouseEvent('contextmenu', {
         bubbles: true,
@@ -542,38 +420,28 @@ describe('attachContextMenuRedistributor', () => {
         button: 0,
       }),
     );
-
     expect(onClose).not.toHaveBeenCalled();
     cleanup();
-  });
 
-  it('contextmenu capture：菜单关闭时不处理', () => {
-    const onClose = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => false,
-      onClose,
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
-
+    // 菜单关闭
+    cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => false, onClose }));
     fireContextmenu();
     expect(onClose).not.toHaveBeenCalled();
     cleanup();
   });
 
-  it('contextmenu capture：拦截事件（stopImmediatePropagation + preventDefault）', () => {
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
+  it('contextmenu capture：拦截事件（stopImmediatePropagation + preventDefault）并调用 onClose 与 onMenuKeyBump', () => {
+    const onClose = vi.fn();
+    const onMenuKeyBump = vi.fn();
+    const cleanup = attachContextMenuRedistributor(
+      makeCallbacks({ isOpen: () => true, onClose, onMenuKeyBump }),
+    );
 
     const event = new MockMouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
-      clientX: 100,
-      clientY: 100,
+      clientX: 150,
+      clientY: 250,
       button: 2,
       buttons: 0,
     });
@@ -584,22 +452,6 @@ describe('attachContextMenuRedistributor', () => {
 
     expect(stopSpy).toHaveBeenCalledTimes(1);
     expect(preventSpy).toHaveBeenCalledTimes(1);
-
-    cleanup();
-  });
-
-  it('contextmenu capture：调用 onClose 与 onMenuKeyBump', () => {
-    const onClose = vi.fn();
-    const onMenuKeyBump = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose,
-      onMenuKeyBump,
-      onReopenIfClosed: () => {},
-    });
-
-    fireContextmenu(150, 250);
-
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onMenuKeyBump).toHaveBeenCalledTimes(1);
 
@@ -609,19 +461,10 @@ describe('attachContextMenuRedistributor', () => {
 
   it('contextmenu capture：通过双 rAF 调度 redistributeContextMenu', () => {
     const target = document.createElement('div');
-    Object.defineProperty(document, 'elementsFromPoint', {
-      configurable: true,
-      value: () => [target],
-      writable: true,
-    });
+    mockElementsFromPoint([target]);
     const dispatchSpy = vi.spyOn(target, 'dispatchEvent');
 
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose: () => {},
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
+    const cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => true }));
 
     fireContextmenu(150, 250);
     expect(dispatchSpy).not.toHaveBeenCalled(); // 尚未到 rAF
@@ -638,12 +481,7 @@ describe('attachContextMenuRedistributor', () => {
 
   it('isRedistributing 标志：阻止重派发期间的事件再次进入', () => {
     const onClose = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => true,
-      onClose,
-      onMenuKeyBump: () => {},
-      onReopenIfClosed: () => {},
-    });
+    const cleanup = attachContextMenuRedistributor(makeCallbacks({ isOpen: () => true, onClose }));
 
     fireContextmenu();
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -663,17 +501,19 @@ describe('attachContextMenuRedistributor', () => {
     cleanup();
   });
 
-  it('50ms 超时后：菜单仍关闭 → 调用 onReopenIfClosed', () => {
+  it('50ms 超时后：菜单仍关闭 → 调用 onReopenIfClosed；已重开 → 不调用', () => {
+    // 场景 1：菜单仍关闭 → 调用 onReopenIfClosed
     let open = true;
     const onReopenIfClosed = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => open,
-      onClose: () => {
-        open = false;
-      },
-      onMenuKeyBump: () => {},
-      onReopenIfClosed,
-    });
+    let cleanup = attachContextMenuRedistributor(
+      makeCallbacks({
+        isOpen: () => open,
+        onClose: () => {
+          open = false;
+        },
+        onReopenIfClosed,
+      }),
+    );
 
     fireContextmenu();
 
@@ -684,19 +524,19 @@ describe('attachContextMenuRedistributor', () => {
     expect(onReopenIfClosed).toHaveBeenCalledTimes(1);
 
     cleanup();
-  });
 
-  it('50ms 超时后：菜单已被重派发打开 → 不调用 onReopenIfClosed', () => {
-    let open = true;
-    const onReopenIfClosed = vi.fn();
-    const cleanup = attachContextMenuRedistributor({
-      isOpen: () => open,
-      onClose: () => {
-        open = false;
-      },
-      onMenuKeyBump: () => {},
-      onReopenIfClosed,
-    });
+    // 场景 2：菜单已被重派发打开 → 不调用 onReopenIfClosed
+    open = true;
+    const onReopenIfClosed2 = vi.fn();
+    cleanup = attachContextMenuRedistributor(
+      makeCallbacks({
+        isOpen: () => open,
+        onClose: () => {
+          open = false;
+        },
+        onReopenIfClosed: onReopenIfClosed2,
+      }),
+    );
 
     fireContextmenu();
 
@@ -705,18 +545,15 @@ describe('attachContextMenuRedistributor', () => {
     open = true;
 
     vi.advanceTimersByTime(50);
-    expect(onReopenIfClosed).not.toHaveBeenCalled();
+    expect(onReopenIfClosed2).not.toHaveBeenCalled();
 
     cleanup();
   });
 });
 
 describe('detectDoubleClick', () => {
-  it('prev 为 null 时返回 false（无历史）', () => {
+  it('prev 为 null 或 id 不同时返回 false', () => {
     expect(detectDoubleClick(null, { id: 'comp-1', time: 1000 })).toBe(false);
-  });
-
-  it('不同 id 时返回 false', () => {
     expect(detectDoubleClick({ id: 'comp-1', time: 1000 }, { id: 'comp-2', time: 1200 })).toBe(
       false,
     );
@@ -728,24 +565,18 @@ describe('detectDoubleClick', () => {
     );
   });
 
-  it('同 id 时间间隔等于阈值时返回 true（边界）', () => {
+  it('同 id 时间间隔不超过阈值时返回 true（含等于阈值的边界）', () => {
     expect(detectDoubleClick({ id: 'comp-1', time: 1000 }, { id: 'comp-1', time: 1400 }, 400)).toBe(
       true,
     );
-  });
-
-  it('同 id 时间间隔小于阈值时返回 true', () => {
     expect(detectDoubleClick({ id: 'comp-1', time: 1000 }, { id: 'comp-1', time: 1200 }, 400)).toBe(
       true,
     );
   });
 
-  it('使用默认阈值 400ms', () => {
+  it('默认阈值 400ms，支持自定义阈值', () => {
     expect(detectDoubleClick({ id: 'comp-1', time: 0 }, { id: 'comp-1', time: 350 })).toBe(true);
     expect(detectDoubleClick({ id: 'comp-1', time: 0 }, { id: 'comp-1', time: 450 })).toBe(false);
-  });
-
-  it('自定义阈值生效', () => {
     expect(detectDoubleClick({ id: 'comp-1', time: 0 }, { id: 'comp-1', time: 600 }, 1000)).toBe(
       true,
     );
@@ -821,32 +652,28 @@ describe('zoomAtPoint', () => {
     expect(result.offset.y).toBe(0);
   });
 
-  it('newScale <= 0 时保持原值（边界容错）', () => {
-    const result = zoomAtPoint({
+  it('newScale <= 0（factor 为负或 0）时保持原值（边界容错）', () => {
+    const negative = zoomAtPoint({
       currentScale: 1,
       currentOffset: { x: 10, y: 20 },
       cursorX: 50,
       cursorY: 50,
       factor: -1, // 会导致 newScale = -1
     });
+    expect(negative.scale).toBe(1);
+    expect(negative.offset.x).toBe(10);
+    expect(negative.offset.y).toBe(20);
 
-    expect(result.scale).toBe(1);
-    expect(result.offset.x).toBe(10);
-    expect(result.offset.y).toBe(20);
-  });
-
-  it('factor=0 时保持原值（边界容错）', () => {
-    const result = zoomAtPoint({
+    const zero = zoomAtPoint({
       currentScale: 2,
       currentOffset: { x: 10, y: 20 },
       cursorX: 50,
       cursorY: 50,
       factor: 0,
     });
-
-    expect(result.scale).toBe(2);
-    expect(result.offset.x).toBe(10);
-    expect(result.offset.y).toBe(20);
+    expect(zero.scale).toBe(2);
+    expect(zero.offset.x).toBe(10);
+    expect(zero.offset.y).toBe(20);
   });
 
   it('验证锚点不变性：缩放前后光标点对应的画布坐标相同', () => {
@@ -892,8 +719,9 @@ describe('handleSelectEnd', () => {
     return { id, parentId };
   }
 
-  it('框选（isDragStart=false）：返回 selected，清空 lastClick，保持 activeGroupId', () => {
-    const result = handleSelectEnd({
+  it('框选或 Ctrl 多选：返回 selected，清空 lastClick，保持 activeGroupId', () => {
+    // 框选（isDragStart=false）
+    const marquee = handleSelectEnd({
       selected: ['comp-1', 'comp-2'],
       inputEvent: createMouseEvent(),
       lastClick: { id: 'old', time: 0 },
@@ -903,14 +731,13 @@ describe('handleSelectEnd', () => {
       currentTime: 1000,
     });
 
-    expect(result.selection).toEqual(['comp-1', 'comp-2']);
-    expect(result.newActiveGroupId).toBe('group-1');
-    expect(result.newLastClick).toBeNull();
-    expect(result.isDoubleClick).toBe(false);
-  });
+    expect(marquee.selection).toEqual(['comp-1', 'comp-2']);
+    expect(marquee.newActiveGroupId).toBe('group-1');
+    expect(marquee.newLastClick).toBeNull();
+    expect(marquee.isDoubleClick).toBe(false);
 
-  it('Ctrl 多选（hasModifier=true）：返回 selected，清空 lastClick', () => {
-    const result = handleSelectEnd({
+    // Ctrl 多选（hasModifier=true）
+    const ctrl = handleSelectEnd({
       selected: ['comp-1', 'comp-2'],
       inputEvent: createMouseEvent({ ctrl: true }),
       lastClick: { id: 'old', time: 0 },
@@ -920,9 +747,9 @@ describe('handleSelectEnd', () => {
       currentTime: 1000,
     });
 
-    expect(result.selection).toEqual(['comp-1', 'comp-2']);
-    expect(result.newLastClick).toBeNull();
-    expect(result.isDoubleClick).toBe(false);
+    expect(ctrl.selection).toEqual(['comp-1', 'comp-2']);
+    expect(ctrl.newLastClick).toBeNull();
+    expect(ctrl.isDoubleClick).toBe(false);
   });
 
   it('单击顶层组件（首次点击）：返回 selected，更新 lastClick，无 activeGroupId 变化', () => {
@@ -1046,8 +873,9 @@ describe('handleSelectEnd', () => {
     expect(result.isDoubleClick).toBe(false);
   });
 
-  it('同组件间隔超阈值不触发双击（走单击逻辑）', () => {
-    const result = handleSelectEnd({
+  it('同组件超阈值或不同组件不触发双击（走单击逻辑）', () => {
+    // 同组件间隔超阈值
+    const timeout = handleSelectEnd({
       selected: ['comp-1'],
       inputEvent: createMouseEvent(),
       lastClick: { id: 'comp-1', time: 500 }, // 600ms 前，超过 400ms 阈值
@@ -1057,12 +885,11 @@ describe('handleSelectEnd', () => {
       currentTime: 1100,
     });
 
-    expect(result.isDoubleClick).toBe(false);
-    expect(result.newLastClick).toEqual({ id: 'comp-1', time: 1100 });
-  });
+    expect(timeout.isDoubleClick).toBe(false);
+    expect(timeout.newLastClick).toEqual({ id: 'comp-1', time: 1100 });
 
-  it('不同组件不触发双击（走单击逻辑）', () => {
-    const result = handleSelectEnd({
+    // 不同组件
+    const different = handleSelectEnd({
       selected: ['comp-2'],
       inputEvent: createMouseEvent(),
       lastClick: { id: 'comp-1', time: 800 }, // 200ms 前，但不同 id
@@ -1072,7 +899,7 @@ describe('handleSelectEnd', () => {
       currentTime: 1000,
     });
 
-    expect(result.isDoubleClick).toBe(false);
-    expect(result.newLastClick).toEqual({ id: 'comp-2', time: 1000 });
+    expect(different.isDoubleClick).toBe(false);
+    expect(different.newLastClick).toEqual({ id: 'comp-2', time: 1000 });
   });
 });
