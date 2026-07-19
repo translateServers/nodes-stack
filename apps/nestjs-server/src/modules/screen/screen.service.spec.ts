@@ -553,7 +553,7 @@ describe('ScreenService', () => {
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledTimes(1);
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledWith({
         where: { id: 'test-id', updatedAt: new Date(baselineUpdatedAt) },
-        data: expect.objectContaining({ status: 'published' }),
+        data: expect.objectContaining({ status: 'published' }) as object,
       });
       // 发布只改状态，不接收可编辑内容
       expect(mockPrismaService.screenProject.update).not.toHaveBeenCalled();
@@ -586,7 +586,7 @@ describe('ScreenService', () => {
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledTimes(1);
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledWith({
         where: { id: 'test-id', updatedAt: new Date(dto.expectedUpdatedAt) },
-        data: expect.objectContaining({ status: 'published' }),
+        data: expect.objectContaining({ status: 'published' }) as object,
       });
       // 未触发无条件 update 覆盖写入，过期基线不改变状态
       expect(mockPrismaService.screenProject.update).not.toHaveBeenCalled();
@@ -615,7 +615,7 @@ describe('ScreenService', () => {
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledTimes(1);
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledWith({
         where: { id: 'non-existent', updatedAt: new Date(dto.expectedUpdatedAt) },
-        data: expect.objectContaining({ status: 'published' }),
+        data: expect.objectContaining({ status: 'published' }) as object,
       });
       expect(mockPrismaService.screenProject.findUnique).toHaveBeenCalledWith({
         where: { id: 'non-existent' },
@@ -646,7 +646,7 @@ describe('ScreenService', () => {
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledTimes(1);
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledWith({
         where: { id: 'test-id', updatedAt: new Date(dto.expectedUpdatedAt) },
-        data: expect.objectContaining({ status: 'published' }),
+        data: expect.objectContaining({ status: 'published' }) as object,
       });
       // 所有其他会改变数据库内容的方法均未被调用，数据库内容保持不变
       expect(mockPrismaService.screenProject.update).not.toHaveBeenCalled();
@@ -672,7 +672,7 @@ describe('ScreenService', () => {
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledTimes(1);
       expect(mockPrismaService.screenProject.updateMany).toHaveBeenCalledWith({
         where: { id: 'non-existent', updatedAt: new Date(dto.expectedUpdatedAt) },
-        data: expect.objectContaining({ status: 'published' }),
+        data: expect.objectContaining({ status: 'published' }) as object,
       });
       // 所有其他会改变数据库内容的方法均未被调用
       expect(mockPrismaService.screenProject.update).not.toHaveBeenCalled();
