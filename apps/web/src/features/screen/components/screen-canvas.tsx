@@ -1202,6 +1202,11 @@ export function ScreenCanvas({
             }));
           }}
           onDragEnd={(e) => {
+            // 任务 13.8：手势结束必须无条件恢复交互状态机。
+            // 纯点击（零位移）时 Gesto isDrag 为 false，若早退会漏发 pointer-up，
+            // 状态机卡在 dragging，后续 Selecto onDragStart 仲裁拒绝一切交互
+            //（反复选中/取消数次后出现一次零位移点击即无法选中组件）。
+            dispatchInteraction('pointer-up');
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<DragDatas>;
             const id = datas.id;
@@ -1224,8 +1229,6 @@ export function ScreenCanvas({
             }
             setDimension((d) => ({ ...d, visible: false }));
             clearAlignmentLines();
-            // 任务 3.3：镜像拖拽结束到交互状态机（恢复正常结束 → idle）
-            dispatchInteraction('pointer-up');
           }}
           onResizeStart={(e) => {
             // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
@@ -1295,6 +1298,8 @@ export function ScreenCanvas({
             }));
           }}
           onResizeEnd={(e) => {
+            // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+            dispatchInteraction('pointer-up');
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<ResizeDatas>;
             const id = datas.id;
@@ -1314,8 +1319,6 @@ export function ScreenCanvas({
               },
             });
             setDimension((d) => ({ ...d, visible: false, mode: undefined }));
-            // 任务 3.4：镜像缩放结束到交互状态机
-            dispatchInteraction('pointer-up');
           }}
           onRotateStart={(e) => {
             // 任务 12.1：旋转由状态机仲裁，拒绝非法重入
@@ -1351,6 +1354,8 @@ export function ScreenCanvas({
             setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
           }}
           onRotateEnd={(e) => {
+            // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+            dispatchInteraction('pointer-up');
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<RotateDatas>;
             const id = datas.id;
@@ -1364,8 +1369,6 @@ export function ScreenCanvas({
               position: { ...comp.position, rotation: Math.round(rotation) },
             });
             setDimension((d) => ({ ...d, visible: false }));
-            // 任务 3.4：镜像旋转结束到交互状态机
-            dispatchInteraction('pointer-up');
           }}
           // --- Group target events ---
           onDragGroupStart={(e) => {
@@ -1398,6 +1401,8 @@ export function ScreenCanvas({
             }
           }}
           onDragGroupEnd={(e) => {
+            // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+            dispatchInteraction('pointer-up');
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<GroupDragDatas>;
             const ids = datas.ids;
@@ -1421,8 +1426,6 @@ export function ScreenCanvas({
               })
               .filter((u): u is NonNullable<typeof u> => u != null);
             updateComponentsBatch(updates);
-            // 任务 3.3：镜像组拖拽结束到交互状态机
-            dispatchInteraction('pointer-up');
           }}
           onResizeGroupStart={(e) => {
             // 任务 12.1：组缩放由状态机仲裁，拒绝非法重入
@@ -1450,6 +1453,8 @@ export function ScreenCanvas({
             }
           }}
           onResizeGroupEnd={(e) => {
+            // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+            dispatchInteraction('pointer-up');
             if (!e.isDrag) return;
             const updates = e.events
               .map((ev) => {
@@ -1472,8 +1477,6 @@ export function ScreenCanvas({
               })
               .filter((u): u is NonNullable<typeof u> => u != null);
             updateComponentsBatch(updates);
-            // 任务 3.4：镜像组缩放结束到交互状态机
-            dispatchInteraction('pointer-up');
           }}
           onChangeTargets={() => {}}
         />

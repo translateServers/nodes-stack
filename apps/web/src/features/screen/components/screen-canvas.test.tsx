@@ -32,6 +32,15 @@ interface CapturedMoveableProps {
   onDragGroupStart?: (e: unknown) => boolean | void;
   onResizeGroupStart?: (e: unknown) => boolean | void;
   /**
+   * 任务 13.8：捕获 Moveable *End 回调，用于验证零位移手势（isDrag=false）
+   * 结束时仍派发 pointer-up 恢复交互状态机。
+   */
+  onDragEnd?: (e: unknown) => void;
+  onResizeEnd?: (e: unknown) => void;
+  onRotateEnd?: (e: unknown) => void;
+  onDragGroupEnd?: (e: unknown) => void;
+  onResizeGroupEnd?: (e: unknown) => void;
+  /**
    * 任务 13.7：捕获 Moveable 实例引用，用于测试 dragStart 外部触发。
    *
    * 生产代码中 onSelectEnd 末尾通过 setTimeout(() => moveableRef.current?.dragStart(e), 0)
@@ -117,6 +126,12 @@ vi.mock('react-moveable', () => ({
       onRotateStart: props.onRotateStart,
       onDragGroupStart: props.onDragGroupStart,
       onResizeGroupStart: props.onResizeGroupStart,
+      // 任务 13.8：捕获 *End 回调
+      onDragEnd: props.onDragEnd,
+      onResizeEnd: props.onResizeEnd,
+      onRotateEnd: props.onRotateEnd,
+      onDragGroupEnd: props.onDragGroupEnd,
+      onResizeGroupEnd: props.onResizeGroupEnd,
       // 任务 13.7：dragStart 作为 spy，不调用 onDragStart（避免 target 依赖）
       dragStart: moveableDragStartSpy,
     };
@@ -2816,5 +2831,196 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
     vi.runAllTimers();
 
     expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * 任务 13.8 回归测试：Moveable *End 处理器在零位移手势（isDrag=false）下
+ * 必须无条件派发 pointer-up 恢复交互状态机。
+ *
+ * 修复 bug：反复"选中组件 → 取消选中"数次后无法选中组件。
+ * 根因：纯点击零位移时 Gesto isDrag=false，*End 处理器 `if (!e.isDrag) return;`
+ * 早退导致 pointer-up 漏发，交互状态机卡在 dragging/resizing/rotating，
+ * 后续 Selecto onDragStart 仲裁（仅允许 idle/hovering）拒绝一切交互。
+ * 真实点击大多带 1-2px 抖动（isDrag=true，正常恢复），快速反复点击时偶尔
+ * 出现零位移点击即触发，与用户"多做几次相同的操作就出问题"的描述一致。
+ *
+ * 测试策略：通过 capturedMoveable 捕获 *End 回调，模拟 onXStart → onXEnd
+ * （isDrag=false）完整手势，验证 dispatchInteraction 收到 pointer-up。
+ */
+describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
+  let store: ReturnType<typeof setupStore>;
+
+  beforeEach(() => {
+    mockUseStore.mockReset();
+    store = setupStore();
+    vi.useFakeTimers();
+    moveableDragStartSpy.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** 渲染 select 工具画布（canDrag/canResize/canRotate 均为 true） */
+  function renderSelectCanvas(): { dispatchInteraction: ReturnType<typeof vi.fn> } {
+    const tool = getToolById('select')!;
+    const dispatchInteraction = vi.fn();
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const session: Pick<
+      EditorSessionApi,
+      | 'activeTool'
+      | 'activeCapabilities'
+      | 'dispatchInteraction'
+      | 'interactionState'
+      | 'textEditing'
+      | 'beginTextEditing'
+      | 'endTextEditing'
+      | 'isEditingText'
+      | 'setActiveColor'
+    > = {
+      activeTool: 'select',
+      activeCapabilities: tool.capabilities,
+      dispatchInteraction,
+      interactionState: 'idle',
+      textEditing: null,
+      beginTextEditing: vi.fn(),
+      endTextEditing: vi.fn(),
+      isEditingText: false,
+      setActiveColor: vi.fn(),
+    };
+    render(<ScreenCanvas editorSession={session} />);
+    expect(capturedMoveable).not.toBeNull();
+    return { dispatchInteraction };
+  }
+
+  /** 构造带 data-component-id 的目标元素 */
+  function makeComponentTarget(componentId = 'c1'): HTMLElement {
+    const target = document.createElement('div');
+    target.setAttribute('data-component-id', componentId);
+    return target;
+  }
+
+  /** 统计 dispatchInteraction 中指定事件的调用次数 */
+  function countDispatch(dispatchInteraction: ReturnType<typeof vi.fn>, event: string): number {
+    return dispatchInteraction.mock.calls.filter(([e]) => e === event).length;
+  }
+
+  it('onDragEnd：零位移点击（isDrag=false）派发 pointer-up，不提交位置', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const startEvent = { target: makeComponentTarget(), datas: {}, inputEvent: { altKey: false } };
+    capturedMoveable!.onDragStart!(startEvent);
+    expect(dispatchInteraction).toHaveBeenCalledWith('start-drag');
+
+    capturedMoveable!.onDragEnd!({ ...startEvent, isDrag: false });
+
+    // 修复核心：零位移也必须派发 pointer-up，否则状态机卡在 dragging
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).not.toHaveBeenCalled();
+    expect(store.duplicateSelectedToPosition).not.toHaveBeenCalled();
+  });
+
+  it('onDragEnd：实际拖拽（isDrag=true）提交位置并派发 pointer-up', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const startEvent = { target: makeComponentTarget(), datas: {}, inputEvent: { altKey: false } };
+    capturedMoveable!.onDragStart!(startEvent);
+
+    capturedMoveable!.onDragEnd!({
+      ...startEvent,
+      isDrag: true,
+      lastEvent: { left: 130, top: 160, isDrag: true },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).toHaveBeenCalledWith('c1', {
+      position: { x: 130, y: 160, width: 200, height: 150 },
+    });
+  });
+
+  it('onResizeEnd：零位移（isDrag=false）派发 pointer-up，不提交尺寸', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const startEvent = { target: makeComponentTarget(), datas: {}, inputEvent: { altKey: false } };
+    capturedMoveable!.onResizeStart!(startEvent);
+    expect(dispatchInteraction).toHaveBeenCalledWith('start-resize');
+
+    capturedMoveable!.onResizeEnd!({ ...startEvent, isDrag: false });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).not.toHaveBeenCalled();
+  });
+
+  it('onRotateEnd：零位移（isDrag=false）派发 pointer-up，不提交旋转', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const startEvent = { target: makeComponentTarget(), datas: {}, inputEvent: { altKey: false } };
+    capturedMoveable!.onRotateStart!(startEvent);
+    expect(dispatchInteraction).toHaveBeenCalledWith('start-rotate');
+
+    capturedMoveable!.onRotateEnd!({ ...startEvent, isDrag: false });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).not.toHaveBeenCalled();
+  });
+
+  it('onDragGroupEnd：零位移（isDrag=false）派发 pointer-up，不批量提交', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const startEvent = { targets: [makeComponentTarget()], datas: {} };
+    capturedMoveable!.onDragGroupStart!(startEvent);
+    expect(dispatchInteraction).toHaveBeenCalledWith('start-drag');
+
+    capturedMoveable!.onDragGroupEnd!({ ...startEvent, isDrag: false });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponentsBatch).not.toHaveBeenCalled();
+  });
+
+  it('onResizeGroupEnd：零位移（isDrag=false）派发 pointer-up，不批量提交', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const startEvent = { targets: [makeComponentTarget()], datas: {} };
+    capturedMoveable!.onResizeGroupStart!(startEvent);
+    expect(dispatchInteraction).toHaveBeenCalledWith('start-resize');
+
+    capturedMoveable!.onResizeGroupEnd!({ ...startEvent, isDrag: false, events: [] });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponentsBatch).not.toHaveBeenCalled();
+  });
+
+  it('回归：反复"选中 → 取消选中"循环中零位移手势均恢复状态机', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const cycles = 6;
+
+    for (let i = 0; i < cycles; i++) {
+      // 选中：点击组件（Selecto selectEnd isDragStart=true）→ pointer-up（框选镜像）
+      capturedSelecto!.onSelectEnd!({
+        selected: [makeComponentTarget()],
+        inputEvent: new MouseEvent('mousedown', { bubbles: true }),
+        isDragStart: true,
+      });
+      // setTimeout dragStart 被 spy 拦截；直接模拟 Moveable 手势：零位移点击选中组件
+      const startEvent = {
+        target: makeComponentTarget(),
+        datas: {},
+        inputEvent: { altKey: false },
+      };
+      capturedMoveable!.onDragStart!(startEvent);
+      capturedMoveable!.onDragEnd!({ ...startEvent, isDrag: false });
+
+      // 取消选中：点击空白（selected=[]，isDragStart=false）→ pointer-up
+      capturedSelecto!.onSelectEnd!({
+        selected: [],
+        inputEvent: new MouseEvent('mousedown', { bubbles: true }),
+        isDragStart: false,
+      });
+
+      // 推进假时间：越过双击阈值（400ms）并 flush onSelectEnd 调度的 setTimeout
+      vi.advanceTimersByTime(1000);
+    }
+
+    // 每轮 3 次 pointer-up：selectEnd(选中) + dragEnd(零位移) + selectEnd(取消)。
+    // 修复前零位移 dragEnd 早退漏发，每轮少 1 次，状态机最终卡死在 dragging。
+    expect(countDispatch(dispatchInteraction, 'pointer-up')).toBe(cycles * 3);
+    // 每轮 1 次 start-drag（零位移点击选中组件触发的 Moveable 手势）
+    expect(countDispatch(dispatchInteraction, 'start-drag')).toBe(cycles);
   });
 });
