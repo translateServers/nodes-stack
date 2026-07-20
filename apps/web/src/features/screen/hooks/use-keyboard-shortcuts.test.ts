@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import type { Options } from 'react-hotkeys-hook';
 import { buildHotkeysOptions, useKeyboardShortcuts } from './use-keyboard-shortcuts';
-import { TOOL_REGISTRY, getToolById, type EditorTool } from './tool-registry';
+import { TOOL_REGISTRY, type EditorTool } from './tool-registry';
 import {
   SHORTCUTS_REGISTRY,
   getShortcutById,

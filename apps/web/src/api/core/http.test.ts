@@ -100,8 +100,8 @@ function makeResponse(data: unknown, configExtra: Record<string, unknown> = {}):
 
 // ── 在模块加载时捕获 axios 实例与拦截器（vi.mock 已 hoist，import './http' 已执行）──────
 expect(mocks.createdInstances.length).toBeGreaterThanOrEqual(2);
-const httpInstance = mocks.createdInstances[0]!;
-const refreshInstance = mocks.createdInstances[1]!;
+const httpInstance = mocks.createdInstances[0];
+const refreshInstance = mocks.createdInstances[1];
 
 const requestInterceptor = httpInstance.interceptors.request.use.mock.calls[0][0] as (
   config: InternalAxiosRequestConfig,
@@ -111,7 +111,7 @@ const responseSuccess = httpInstance.interceptors.response.use.mock.calls[0][0] 
 ) => unknown;
 const responseError = httpInstance.interceptors.response.use.mock.calls[0][1] as (
   error: AxiosError,
-) => Promise<unknown> | unknown;
+) => unknown;
 
 // ── 测试套件 ──────────────────────────────────────────────
 describe('api/core/http', () => {
@@ -139,6 +139,7 @@ describe('api/core/http', () => {
       const config = makeConfig();
       const result = requestInterceptor(config);
 
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(result.headers.set).toHaveBeenCalledWith('Authorization', 'Bearer token-123');
     });
 
@@ -153,6 +154,7 @@ describe('api/core/http', () => {
       const config = makeConfig();
       const result = requestInterceptor(config);
 
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(result.headers.set).not.toHaveBeenCalledWith('Authorization', expect.anything());
     });
   });
@@ -198,7 +200,7 @@ describe('api/core/http', () => {
       );
       try {
         responseSuccess(response);
-        fail('应抛出 BusinessError');
+        expect.unreachable('应抛出 BusinessError');
       } catch (err) {
         expect(err).toBeInstanceOf(BusinessError);
         expect((err as BusinessError).code).toBe(BizCode.INTERNAL_ERROR);
@@ -283,7 +285,7 @@ describe('api/core/http', () => {
           message: 'ok',
         },
       });
-      httpInstance.mockResolvedValue({ id: 'retried' });
+      (httpInstance as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'retried' });
 
       const error = {
         response: {
@@ -396,7 +398,7 @@ describe('api/core/http', () => {
 
       try {
         await responseError(error);
-        fail('应抛出异常');
+        expect.unreachable('应抛出异常');
       } catch (err) {
         expect(err).toBeInstanceOf(BusinessError);
         // getBizMessage(INTERNAL_ERROR) 返回 '服务器内部错误'

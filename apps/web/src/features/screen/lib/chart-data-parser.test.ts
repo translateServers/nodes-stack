@@ -322,6 +322,7 @@ describe('parseChartData', () => {
     expect(result).toEqual({
       status: 'error',
       reason: 'path-not-found',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       message: expect.stringContaining('data.missing'),
     });
   });
@@ -331,6 +332,7 @@ describe('parseChartData', () => {
     expect(result).toEqual({
       status: 'error',
       reason: 'not-an-array',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       message: expect.any(String),
     });
   });
@@ -344,6 +346,7 @@ describe('parseChartData', () => {
     expect(result).toEqual({
       status: 'error',
       reason: 'missing-dimension-field',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       message: expect.any(String),
     });
   });

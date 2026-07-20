@@ -16,10 +16,17 @@
  */
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 import { BarChartConfigSections, inferFieldsFromSample } from './bar-chart-config-sections';
 import { useScreenEditorStore } from '../stores/editor-store';
+
+function asInput(el: HTMLElement): HTMLInputElement {
+  return el as HTMLInputElement;
+}
+function asTextarea(el: HTMLElement): HTMLTextAreaElement {
+  return el as HTMLTextAreaElement;
+}
 
 // Radix Select 弹层依赖 floating-ui autoUpdate（ResizeObserver）与 scrollIntoView，
 // jsdom 未实现，提供空实现桩
@@ -99,8 +106,8 @@ describe('inferFieldsFromSample', () => {
 describe('4.2 静态数据编辑与校验反馈', () => {
   it('遗留组件预填 props.data 生效数据', () => {
     renderSections(makeBarChart({ props: { title: '销售', data: LEGACY_DATA } }));
-    const editor = screen.getByTestId('static-data-editor') as HTMLTextAreaElement;
-    expect(editor.value).toBe(JSON.stringify(LEGACY_DATA, null, 2));
+    const editor = screen.getByTestId('static-data-editor');
+    expect(asTextarea(editor).value).toBe(JSON.stringify(LEGACY_DATA, null, 2));
   });
 
   it('已配置数据层时预填 dataSource.staticData（数据层优先）', () => {
@@ -110,8 +117,8 @@ describe('4.2 静态数据编辑与校验反馈', () => {
         dataSource: { type: 'static', staticData: CUSTOM_DATA },
       }),
     );
-    const editor = screen.getByTestId('static-data-editor') as HTMLTextAreaElement;
-    expect(editor.value).toBe(JSON.stringify(CUSTOM_DATA, null, 2));
+    const editor = screen.getByTestId('static-data-editor');
+    expect(asTextarea(editor).value).toBe(JSON.stringify(CUSTOM_DATA, null, 2));
   });
 
   it('合法提交：一次更新写入数据层并迁移清除 props.data', () => {
@@ -185,13 +192,13 @@ describe('4.2 静态数据编辑与校验反馈', () => {
       makeBarChart({ props: { title: '销售', data: LEGACY_DATA } }),
     );
 
-    const editor = screen.getByTestId('static-data-editor') as HTMLTextAreaElement;
-    const original = editor.value;
+    const editor = screen.getByTestId('static-data-editor');
+    const original = asTextarea(editor).value;
     fireEvent.change(editor, { target: { value: '[{"name":"x","value":1}]' } });
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
 
     expect(onUpdate).not.toHaveBeenCalled();
-    expect(editor.value).toBe(original);
+    expect(asTextarea(editor).value).toBe(original);
   });
 });
 
@@ -404,20 +411,16 @@ describe('5.2 API 数据源配置表单', () => {
     renderSections(makeBarChart({ dataSource: { type: 'api', apiConfig: API_CONFIG } }));
 
     expect(screen.getByRole('radio', { name: 'API' }).getAttribute('aria-checked')).toBe('true');
-    expect((screen.getByRole('textbox', { name: '请求地址' }) as HTMLInputElement).value).toBe(
-      API_CONFIG.url,
-    );
-    const paramNames = screen.getAllByRole('textbox', { name: '参数名' }) as HTMLInputElement[];
-    expect(paramNames.map((input) => input.value)).toEqual(['type', 'year']);
-    const paramValues = screen.getAllByRole('textbox', { name: '参数值' }) as HTMLInputElement[];
-    expect(paramValues.map((input) => input.value)).toEqual(['sales', '2026']);
-    const headerNames = screen.getAllByRole('textbox', { name: '请求头名' }) as HTMLInputElement[];
-    expect(headerNames.map((input) => input.value)).toEqual(['X-Api-Key']);
-    const headerValues = screen.getAllByRole('textbox', { name: '请求头值' }) as HTMLInputElement[];
-    expect(headerValues.map((input) => input.value)).toEqual(['secret-key']);
-    expect((screen.getByRole('spinbutton', { name: '刷新间隔' }) as HTMLInputElement).value).toBe(
-      '30',
-    );
+    expect(asInput(screen.getByRole('textbox', { name: '请求地址' })).value).toBe(API_CONFIG.url);
+    const paramNames = screen.getAllByRole('textbox', { name: '参数名' });
+    expect(paramNames.map((input) => asInput(input).value)).toEqual(['type', 'year']);
+    const paramValues = screen.getAllByRole('textbox', { name: '参数值' });
+    expect(paramValues.map((input) => asInput(input).value)).toEqual(['sales', '2026']);
+    const headerNames = screen.getAllByRole('textbox', { name: '请求头名' });
+    expect(headerNames.map((input) => asInput(input).value)).toEqual(['X-Api-Key']);
+    const headerValues = screen.getAllByRole('textbox', { name: '请求头值' });
+    expect(headerValues.map((input) => asInput(input).value)).toEqual(['secret-key']);
+    expect(asInput(screen.getByRole('spinbutton', { name: '刷新间隔' })).value).toBe('30');
   });
 
   it('合法提交：一次更新写入数据层（遗留 props.data 迁移为静态数据保留，只写数据层）', () => {
@@ -556,12 +559,12 @@ describe('5.2 API 数据源配置表单', () => {
       makeBarChart({ dataSource: { type: 'api', apiConfig: API_CONFIG } }),
     );
 
-    const urlInput = screen.getByRole('textbox', { name: '请求地址' }) as HTMLInputElement;
+    const urlInput = screen.getByRole('textbox', { name: '请求地址' });
     fireEvent.change(urlInput, { target: { value: 'https://example.com/api/other' } });
     fireEvent.click(screen.getByRole('button', { name: '取消' }));
 
     expect(onUpdate).not.toHaveBeenCalled();
-    expect(urlInput.value).toBe(API_CONFIG.url);
+    expect(asInput(urlInput).value).toBe(API_CONFIG.url);
   });
 
   it('API 组件切换到静态并应用：类型翻转写入（保留 apiConfig 与静态数据）', () => {
@@ -573,8 +576,8 @@ describe('5.2 API 数据源配置表单', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: '静态数据' }));
     // 静态表单预填保留的 staticData
-    const editor = screen.getByTestId('static-data-editor') as HTMLTextAreaElement;
-    expect(editor.value).toBe(JSON.stringify(CUSTOM_DATA, null, 2));
+    const editor = screen.getByTestId('static-data-editor');
+    expect(asTextarea(editor).value).toBe(JSON.stringify(CUSTOM_DATA, null, 2));
 
     fireEvent.click(screen.getByRole('button', { name: '应用' }));
 
@@ -760,7 +763,7 @@ describe('5.3 请求测试与响应预览', () => {
     fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
 
     const preview = await screen.findByTestId('request-test-preview');
-    expect(preview.textContent!.length).toBeLessThanOrEqual(502);
+    expect(preview.textContent.length).toBeLessThanOrEqual(502);
     expect(preview.textContent).toContain('…');
   });
 
@@ -873,8 +876,8 @@ describe('5.4 API 数据路径与字段映射配置', () => {
       }),
     );
 
-    const dataPathInput = screen.getByRole('textbox', { name: '数据路径' }) as HTMLInputElement;
-    expect(dataPathInput.value).toBe('data.list');
+    const dataPathInput = screen.getByRole('textbox', { name: '数据路径' });
+    expect(asInput(dataPathInput).value).toBe('data.list');
   });
 
   it('应用时数据路径写入数据层配置', () => {

@@ -104,10 +104,12 @@ describe('FileService', () => {
       expect(mockedFs.mkdir).toHaveBeenCalledWith('uploads', { recursive: true });
       expect(mockedFs.writeFile).toHaveBeenCalledTimes(1);
       // 文件名应保留扩展名
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const writtenPath = mockedFs.writeFile.mock.calls[0][0] as string;
       expect(writtenPath).toMatch(/\.png$/);
       expect(mockPrismaService.file.create).toHaveBeenCalledWith(
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           data: expect.objectContaining({
             rowId: 'row-1',
             fileName: 'photo.png',
@@ -134,6 +136,7 @@ describe('FileService', () => {
 
       await service.upload(file, 'row-1');
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const writtenPath = mockedFs.writeFile.mock.calls[0][0] as string;
       // 不应以 . 开头加扩展名结尾
       const baseName = String(writtenPath).split('/').pop();
@@ -152,7 +155,9 @@ describe('FileService', () => {
       await service.upload(file, 'row-1');
       await service.upload(file, 'row-1');
 
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const path1 = mockedFs.writeFile.mock.calls[0][0] as string;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       const path2 = mockedFs.writeFile.mock.calls[1][0] as string;
       expect(path1).not.toBe(path2);
     });

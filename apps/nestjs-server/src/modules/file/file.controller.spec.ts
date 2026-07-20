@@ -75,6 +75,7 @@ describe('FileController', () => {
       await controller.download('file-1', res);
 
       expect(mockFileService.findOne).toHaveBeenCalledWith('file-1');
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       expect(res.download).toHaveBeenCalledWith('uploads/a.png', 'a.png');
     });
   });

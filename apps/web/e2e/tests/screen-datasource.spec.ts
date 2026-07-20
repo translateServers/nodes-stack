@@ -297,6 +297,95 @@ test.describe('四层独立修改 E2E（任务 10.4）', () => {
       expect(editorValue).toContain('10');
     }
   });
+
+  test('修改数据层后视觉层配置不变', async ({ adminPage }) => {
+    const project = await createScreenProject({ name: `e2e-layers-rev-${ts}` });
+    projectId = project.id;
+
+    const staticData = [{ name: 'X', value: 5 }];
+    const barChart = createBarChartComponent({
+      props: { title: '原始标题' },
+      dataSource: { type: 'static', staticData },
+    });
+
+    const updated = await updateScreenProject(project.id, {
+      components: [barChart],
+      expectedUpdatedAt: project.updatedAt,
+    });
+    await updateScreenProject(project.id, { expectedUpdatedAt: updated.updatedAt });
+
+    await adminPage.goto(`/screen/${project.id}`);
+    await adminPage.waitForLoadState('networkidle');
+
+    // 选中 bar-chart
+    await adminPage.locator('svg[viewBox="0 0 400 300"]').click();
+    await adminPage.waitForTimeout(500);
+
+    // 修改数据层：编辑静态数据
+    const staticEditor = adminPage.getByTestId('static-data-editor');
+    if (await staticEditor.isVisible()) {
+      await staticEditor.fill(JSON.stringify([{ name: 'Y', value: 99 }]));
+      await adminPage.getByRole('button', { name: '应用' }).click();
+      await adminPage.waitForTimeout(300);
+    }
+
+    // 验证视觉层配置不变：标题仍为原始值
+    const titleInput = adminPage.getByLabel('标题');
+    if (await titleInput.isVisible()) {
+      const titleValue = await titleInput.inputValue();
+      expect(titleValue).toBe('原始标题');
+    }
+  });
+
+  test('各层修改可独立撤销', async ({ adminPage }) => {
+    const project = await createScreenProject({ name: `e2e-layers-undo-${ts}` });
+    projectId = project.id;
+
+    const staticData = [{ name: 'Z', value: 42 }];
+    const barChart = createBarChartComponent({
+      props: { title: '撤销测试' },
+      dataSource: { type: 'static', staticData },
+    });
+
+    const updated = await updateScreenProject(project.id, {
+      components: [barChart],
+      expectedUpdatedAt: project.updatedAt,
+    });
+    await updateScreenProject(project.id, { expectedUpdatedAt: updated.updatedAt });
+
+    await adminPage.goto(`/screen/${project.id}`);
+    await adminPage.waitForLoadState('networkidle');
+
+    // 选中 bar-chart
+    await adminPage.locator('svg[viewBox="0 0 400 300"]').click();
+    await adminPage.waitForTimeout(500);
+
+    // 修改视觉层：标题
+    const titleInput = adminPage.getByLabel('标题');
+    if (await titleInput.isVisible()) {
+      await titleInput.fill('改后标题');
+      await titleInput.blur();
+      await adminPage.waitForTimeout(300);
+    }
+
+    // 撤销视觉层修改
+    await adminPage.keyboard.press('Control+z');
+    await adminPage.waitForTimeout(300);
+
+    // 验证视觉层恢复
+    if (await titleInput.isVisible()) {
+      const titleValue = await titleInput.inputValue();
+      expect(titleValue).toBe('撤销测试');
+    }
+
+    // 验证数据层未受撤销影响：静态数据仍为原值
+    const staticEditor = adminPage.getByTestId('static-data-editor');
+    if (await staticEditor.isVisible()) {
+      const editorValue = await staticEditor.inputValue();
+      expect(editorValue).toContain('"Z"');
+      expect(editorValue).toContain('42');
+    }
+  });
 });
 
 test.describe('画布配置历史 E2E（任务 10.5）', () => {

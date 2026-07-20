@@ -2,7 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { TransformInterceptor } from './transform.interceptor';
 import type { ExecutionContext, CallHandler } from '@nestjs/common';
-import { type Observable, of } from 'rxjs';
+import { of } from 'rxjs';
 import { BizCode, BizMessage } from '../enums/biz-code.enum';
 
 const mockReflector = {

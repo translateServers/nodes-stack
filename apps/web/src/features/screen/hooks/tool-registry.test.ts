@@ -7,7 +7,7 @@ import {
   type EditorTool,
   type ToolCapabilities,
 } from './tool-registry';
-import { SHORTCUTS_REGISTRY, getShortcutById } from './shortcuts-registry';
+import { getShortcutById } from './shortcuts-registry';
 
 describe('tool-registry', () => {
   describe('工具 ID 唯一性', () => {

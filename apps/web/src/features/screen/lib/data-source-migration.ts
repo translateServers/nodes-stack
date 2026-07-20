@@ -27,6 +27,7 @@ export function buildDataSourceMigration(
     return { dataSource, props: component.props };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: _legacyData, ...restProps } = component.props;
   return { dataSource, props: restProps };
 }
