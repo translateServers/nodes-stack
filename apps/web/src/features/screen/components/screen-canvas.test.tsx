@@ -156,6 +156,7 @@ vi.mock('react-moveable', () => ({
           updateRect: () => {},
           updateTarget: () => {},
           dragEnd: () => {},
+          isMoveableElement: () => false,
         }) as unknown as never,
       [],
     );
@@ -1242,32 +1243,28 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
     return { dispatchInteraction, rerender, session };
   }
 
-  it('基线：select 工具下 onSelectEnd 点击组件，setTimeout 触发后调用 dragStart', () => {
+  it('基线：select 工具下 onSelectEnd 点击组件，同步调用 dragStart（无 setTimeout 抖动）', () => {
     renderSelectCanvas('idle');
 
     // 触发 onSelectEnd（点击 c1 组件，首次点击非双击）
     expect(capturedSelecto).not.toBeNull();
     capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
 
-    // setTimeout 还未触发，dragStart 不应被调用
-    expect(moveableDragStartSpy).not.toHaveBeenCalled();
-
-    // 触发 setTimeout(0)
-    vi.runAllTimers();
-
-    // guard 通过：dragStart 被调用
+    // 抖动优化：dragStart 在 onSelectEnd 中同步调用（flushSync + 立即 dragStart），
+    // 无需等待 setTimeout，控制框与拖拽在同一帧启动
     expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
     expect(moveableDragStartSpy).toHaveBeenCalledWith(expect.any(MouseEvent));
+
+    // 不应遗留任何 setTimeout
+    vi.runAllTimers();
+    expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('修复：onSelectEnd 后切换到非 select 工具（hand/rect），setTimeout 触发时不调用 dragStart', () => {
+  it('修复：onSelectEnd 时 activeTool 已切到非 select 工具（hand/rect），不调用 dragStart', () => {
     for (const tool of ['hand', 'rect'] as const) {
       const { rerender, session } = renderSelectCanvas('idle');
 
-      // 触发 onSelectEnd（schedule setTimeout）
-      capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
-
-      // 在 setTimeout 触发前切换工具
+      // 在 onSelectEnd 触发前切换工具（模拟用户快速切换）
       rerender(
         <ScreenCanvas
           editorSession={{
@@ -1278,7 +1275,8 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
         />,
       );
 
-      vi.runAllTimers();
+      // 触发 onSelectEnd：guard 检测 activeToolRef.current !== 'select'，跳过 dragStart
+      capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
 
       // guard 拦截：activeToolRef.current !== 'select'，不调用 dragStart
       expect(moveableDragStartSpy, `切换到 ${tool}`).not.toHaveBeenCalled();
@@ -1287,17 +1285,15 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
     }
   });
 
-  it('修复：onSelectEnd 后进入其他交互态（dragging/panning/creating），setTimeout 触发时不调用 dragStart', () => {
+  it('修复：onSelectEnd 时 interactionState 已进入非允许态（dragging/panning/creating），不调用 dragStart', () => {
     const blockedStates: InteractionState[] = ['dragging', 'panning', 'creating'];
     for (const state of blockedStates) {
       const { rerender, session } = renderSelectCanvas('idle');
 
-      capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
-
-      // 在 setTimeout 触发前，interactionState 变为非允许态
+      // 在 onSelectEnd 触发前，interactionState 变为非允许态
       rerender(<ScreenCanvas editorSession={{ ...session, interactionState: state }} />);
 
-      vi.runAllTimers();
+      capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
 
       // guard 拦截：interactionStateRef.current 不在允许列表
       expect(moveableDragStartSpy, `状态 ${state}`).not.toHaveBeenCalled();
@@ -1306,29 +1302,32 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
     }
   });
 
-  it('边界：onSelectEnd 后进入允许态（hovering/marquee-selecting），setTimeout 触发时仍调用 dragStart', () => {
+  it('边界：onSelectEnd 时进入允许态（hovering/marquee-selecting），仍同步调用 dragStart', () => {
     const allowedStates: InteractionState[] = ['hovering', 'marquee-selecting'];
     for (const state of allowedStates) {
       const { rerender, session } = renderSelectCanvas('idle');
 
-      capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
-
+      // 先切换到允许态
       rerender(<ScreenCanvas editorSession={{ ...session, interactionState: state }} />);
 
-      vi.runAllTimers();
+      capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
 
-      // 允许列表内，guard 应通过
+      // 允许列表内，guard 应通过，同步调用 dragStart
       expect(moveableDragStartSpy, `状态 ${state}`).toHaveBeenCalledTimes(1);
       cleanup();
       moveableDragStartSpy.mockClear();
     }
   });
 
-  it('修复后状态可恢复：切换到 hand 后再切回 select，下次 onSelectEnd 仍能正常调用 dragStart', () => {
+  it('修复后状态可恢复：切到 hand 后再切回 select，下次 onSelectEnd 仍能同步调用 dragStart', () => {
     const { rerender, session } = renderSelectCanvas('idle');
 
-    // 第一次 onSelectEnd，切换到 hand，setTimeout 不触发 dragStart
+    // 第一次 onSelectEnd：此时是 select，dragStart 应被调用
     capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
+    expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
+    moveableDragStartSpy.mockClear();
+
+    // 切换到 hand 工具
     rerender(
       <ScreenCanvas
         editorSession={{
@@ -1338,7 +1337,9 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
         }}
       />,
     );
-    vi.runAllTimers();
+
+    // hand 工具下触发 onSelectEnd：guard 拦截，不调用 dragStart
+    capturedSelecto!.onSelectEnd!(makeClickSelectEndEvent('c1'));
     expect(moveableDragStartSpy).not.toHaveBeenCalled();
 
     // 切回 select 工具
@@ -1359,9 +1360,169 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
       inputEvent: new MouseEvent('mousedown', { bubbles: true }),
       isDragStart: true,
     });
-    vi.runAllTimers();
 
     expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * onDragStart 未选中组件立即选中并启动拖拽（消除抽帧优化）。
+ *
+ * 优化前：pointerdown → Selecto onDragStart → 移动阈值 → onSelectEnd →
+ *   flushSync(选中) → dragStart。用户已移动一段距离才开始拖拽，视觉上
+ *   有"组件原地不动 → 突然开始移动"的抽帧/瞬移感。
+ *
+ * 优化后：Selecto onDragStart 命中未选中组件时，立即 flushSync 选中 +
+ *   dragStart 启动 Moveable 拖拽 + e.stop() 阻止 Selecto。选中与拖拽
+ *   启动提前到 onDragStart 阶段，消除等待 onSelectEnd 的延迟。
+ */
+describe('onDragStart 未选中组件立即选中并启动拖拽', () => {
+  let store: ReturnType<typeof setupStore>;
+
+  beforeEach(() => {
+    mockUseStore.mockReset();
+    store = setupStore({ selectedComponentIds: [] });
+    moveableDragStartSpy.mockClear();
+  });
+
+  function makeComponentTarget(id = 'c1'): HTMLElement {
+    const el = document.createElement('div');
+    el.setAttribute('data-component-id', id);
+    return el;
+  }
+
+  it('命中未选中组件：立即调用 selectComponents 并启动 dragStart', () => {
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const dispatchInteraction = vi.fn();
+    const session = makeSession('select', 'idle', dispatchInteraction);
+    render(<ScreenCanvas editorSession={session} />);
+
+    moveableDragStartSpy.mockClear();
+
+    // 构造 onDragStart 事件：target 是未选中的 c1 组件
+    const target = makeComponentTarget('c1');
+    let stopped = false;
+    capturedSelecto!.onDragStart!({
+      target,
+      datas: {},
+      stop: () => {
+        stopped = true;
+      },
+      inputEvent: { target },
+    });
+
+    // 未选中组件 → 立即选中
+    expect(store.selectComponents).toHaveBeenCalledWith(['c1']);
+    // 立即调用 dragStart（不等 onSelectEnd）
+    expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
+    // 阻止 Selecto 继续（Moveable 已接管）
+    expect(stopped).toBe(true);
+  });
+
+  it('命中已选中组件：仅阻止 Selecto，不重复选中和 dragStart', () => {
+    mockUseStore.mockReset();
+    store = setupStore({ selectedComponentIds: ['c1'] });
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const session = makeSession('select', 'idle');
+    render(<ScreenCanvas editorSession={session} />);
+
+    moveableDragStartSpy.mockClear();
+
+    const target = makeComponentTarget('c1');
+    let stopped = false;
+    capturedSelecto!.onDragStart!({
+      target,
+      datas: {},
+      stop: () => {
+        stopped = true;
+      },
+      inputEvent: { target },
+    });
+
+    // 已选中：不重复调用 selectComponents
+    expect(store.selectComponents).not.toHaveBeenCalled();
+    // 已选中：不调用 dragStart（Moveable 自己的 onDragStart 会处理）
+    expect(moveableDragStartSpy).not.toHaveBeenCalled();
+    // 阻止 Selecto
+    expect(stopped).toBe(true);
+  });
+
+  it('非 select 工具：命中组件不启动拖拽，阻止 Selecto', () => {
+    mockUseStore.mockReset();
+    store = setupStore({ selectedComponentIds: [] });
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const session = makeSession('rect', 'idle');
+    render(<ScreenCanvas editorSession={session} />);
+
+    moveableDragStartSpy.mockClear();
+
+    const target = makeComponentTarget('c1');
+    let stopped = false;
+    capturedSelecto!.onDragStart!({
+      target,
+      datas: {},
+      stop: () => {
+        stopped = true;
+      },
+      inputEvent: { target },
+    });
+
+    // 非选择工具：canSelect=false，onDragStart 开头就 e.stop()+return
+    expect(moveableDragStartSpy).not.toHaveBeenCalled();
+    expect(stopped).toBe(true);
+  });
+
+  it('交互态非允许态：命中组件不启动拖拽', () => {
+    mockUseStore.mockReset();
+    store = setupStore({ selectedComponentIds: [] });
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const session = makeSession('select', 'dragging');
+    render(<ScreenCanvas editorSession={session} />);
+
+    moveableDragStartSpy.mockClear();
+
+    const target = makeComponentTarget('c1');
+    let stopped = false;
+    capturedSelecto!.onDragStart!({
+      target,
+      datas: {},
+      stop: () => {
+        stopped = true;
+      },
+      inputEvent: { target },
+    });
+
+    // dragging 态：onDragStart 开头就 e.stop()，不会进入 target 检测
+    expect(moveableDragStartSpy).not.toHaveBeenCalled();
+    expect(stopped).toBe(true);
+  });
+
+  it('空白处（无 target）：不触发选中和拖拽', () => {
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const session = makeSession('select', 'idle');
+    render(<ScreenCanvas editorSession={session} />);
+
+    moveableDragStartSpy.mockClear();
+
+    let stopped = false;
+    capturedSelecto!.onDragStart!({
+      target: null,
+      datas: {},
+      stop: () => {
+        stopped = true;
+      },
+      inputEvent: null,
+    });
+
+    // 空白处：不选中，不调用 dragStart，不 stop
+    expect(store.selectComponents).not.toHaveBeenCalled();
+    expect(moveableDragStartSpy).not.toHaveBeenCalled();
+    expect(stopped).toBe(false);
   });
 });
 

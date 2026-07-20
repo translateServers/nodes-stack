@@ -1,4 +1,14 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
+import { flushSync } from 'react-dom';
 import { create } from 'zustand';
 import Moveable from 'react-moveable';
 import Selecto from 'react-selecto';
@@ -378,20 +388,31 @@ export function ScreenCanvas({
    * Moveable 的 target DOM 元素数组。
    *
    * 使用 useState + useLayoutEffect 而非 useMemo：新组件被选中并挂载时
-   * （如 Alt+拖拽复制、粘贴、新建），ref 回调在 commit 阶段执行但不会触发
-   * 重渲染，useMemo 在 render 阶段已计算完毕拿不到新 DOM。useLayoutEffect
-   * 在所有 ref 回调执行后同步运行，此时通过 querySelector 能拿到新挂载的 DOM。
-   * 避免使用 componentRefs（ref 注册时序不可靠），直接 DOM 查询更稳健。
+   * （如 Alt+拖拽复制、粘贴、新建），ref 回调在 commit 阶段执行但 useMemo 在
+   * render 阶段已计算完毕拿不到新 DOM。useLayoutEffect 在所有 ref 回调执行后
+   * 同步运行，此时通过 componentRefs 或 querySelector 能拿到新挂载的 DOM。
+   *
+   * 性能优化：setTargets 返回 prev（引用相同）时 React 会 bail out 不重渲染，
+   * 所以"相同选中"场景不会触发额外渲染。仅在 target 真正变化时才重渲染。
    */
   const [targets, setTargets] = useState<HTMLElement[]>([]);
   useLayoutEffect(() => {
-    if (!contentRef.current || selectedComponentIds.length === 0) {
+    if (selectedComponentIds.length === 0) {
       setTargets((prev) => (prev.length === 0 ? prev : []));
       return;
     }
     const newTargets = selectedComponentIds
-      .map((id) => contentRef.current!.querySelector<HTMLElement>(`[data-component-id="${id}"]`))
+      .map((id) => {
+        // 优先用 componentRefs（已注册的组件，O(1)）
+        const refEl = componentRefs.current.get(id);
+        if (refEl) return refEl;
+        // fallback：querySelector（新挂载的组件，ref 可能还没注册但 DOM 已存在）
+        return (
+          contentRef.current?.querySelector<HTMLElement>(`[data-component-id="${id}"]`) ?? null
+        );
+      })
       .filter((el): el is HTMLElement => el != null);
+    // 引用相同时 bail out，避免无谓渲染
     setTargets((prev) => {
       if (prev.length === newTargets.length && prev.every((el, i) => el === newTargets[i])) {
         return prev;
@@ -1604,10 +1625,33 @@ export function ScreenCanvas({
             const target = rawTarget instanceof HTMLElement ? rawTarget : null;
             if (target && moveableRef.current.isMoveableElement(target)) {
               e.stop();
+              return;
             }
             if (target) {
               const targetId = getComponentIdFromTarget(target);
-              if (targetId && selectedComponentIds.includes(targetId)) {
+              if (targetId) {
+                // 未选中组件：立即选中 + 同步启动 Moveable 拖拽，
+                // 消除等 onSelectEnd 才启动拖拽导致的抽帧/瞬移感。
+                // 已选中组件：直接阻止 Selecto，让 Moveable 接管（原有逻辑）。
+                if (!selectedComponentIds.includes(targetId)) {
+                  const rawEvt: unknown = e.inputEvent;
+                  const mouseEvt =
+                    rawEvt instanceof MouseEvent
+                      ? rawEvt
+                      : new MouseEvent('mousedown', { bubbles: true });
+                  const curState = interactionStateRef.current;
+                  if (
+                    activeToolRef.current === 'select' &&
+                    (curState === 'idle' ||
+                      curState === 'hovering' ||
+                      curState === 'marquee-selecting')
+                  ) {
+                    flushSync(() => {
+                      selectComponents([targetId]);
+                    });
+                    moveableRef.current.dragStart(mouseEvt);
+                  }
+                }
                 e.stop();
               }
             }
@@ -1644,7 +1688,6 @@ export function ScreenCanvas({
           if (result.newActiveGroupId !== activeGroupId) {
             setActiveGroupId(result.newActiveGroupId);
           }
-          selectComponents(result.selection);
 
           // 任务 5.3：双击文本组件进入编辑，不触发分组进入
           // 仅在选择工具下生效（其他工具的创建行为由各自处理器负责）
@@ -1669,6 +1712,10 @@ export function ScreenCanvas({
               }
               // 任务 3.5：镜像框选结束到交互状态机
               dispatchInteraction('pointer-up');
+              // 双击文本：仍需同步选中，便于退出编辑后控制框已就位
+              flushSync(() => {
+                selectComponents(result.selection);
+              });
               return;
             }
           }
@@ -1676,26 +1723,46 @@ export function ScreenCanvas({
           if (!result.isDoubleClick && e.isDragStart) {
             // Moveable dragStart 期望 MouseEvent；TouchEvent 不支持，跳过以避免运行时错误
             if (inputEvent instanceof MouseEvent) {
-              setTimeout(() => {
-                // 任务 13.7：异步触发 dragStart 前用 ref 读取最新状态做 guard。
-                //
-                // onSelectEnd 在 pointerup 时派发 pointer-up（→ idle）后立即调度此
-                // setTimeout。若用户在 setTimeout 触发前切换工具或进入其他交互态：
-                // - activeTool !== 'select'：Moveable draggable prop 已为 false，
-                //   外部调用 dragStart 会让 Moveable 内部进入异常 dragging 态，
-                //   后续 onDragEnd 永不触发，选择工具能力永久失效
-                // - interactionState 非 idle/hovering/marquee-selecting：与 onDragStart
-                //   仲裁条件不一致，调用会绕过状态机触发非法转换
-                // 两种情况下都应放弃 dragStart，由用户下次点击重新触发。
-                if (activeToolRef.current !== 'select') return;
-                const state = interactionStateRef.current;
-                if (state !== 'idle' && state !== 'hovering' && state !== 'marquee-selecting') {
-                  return;
-                }
-                moveableRef.current?.dragStart(inputEvent);
-              }, 0);
+              // 任务 13.7：同步触发 dragStart 前用 ref 读取最新状态做 guard。
+              //
+              // 抖动优化：原实现用 setTimeout(dragStart, 0) 等待 React 完成
+              // selectComponents 导致的重渲染，但 setTimeout 让控制框先 paint、
+              // 之后才开始拖拽，造成"先选中再拖拽"的两步视觉。
+              // 改用 flushSync 同步完成 selectComponents + 渲染，然后立即 dragStart，
+              // 让"选中 + 开始拖拽"在同一帧完成。
+              if (activeToolRef.current !== 'select') {
+                // 工具切换：仍需同步选中，但跳过 dragStart
+                flushSync(() => {
+                  selectComponents(result.selection);
+                });
+                dispatchInteraction('pointer-up');
+                return;
+              }
+              const state = interactionStateRef.current;
+              if (state !== 'idle' && state !== 'hovering' && state !== 'marquee-selecting') {
+                // 非允许状态：仅同步选中，跳过 dragStart
+                flushSync(() => {
+                  selectComponents(result.selection);
+                });
+                dispatchInteraction('pointer-up');
+                return;
+              }
+              // flushSync 同步完成 selectComponents，Moveable target 立即更新
+              flushSync(() => {
+                selectComponents(result.selection);
+              });
+              // 立即同步 dragStart（无需 setTimeout，Moveable target 已就绪）
+              moveableRef.current?.dragStart(inputEvent);
+              // 任务 3.5：镜像框选结束到交互状态机
+              // dragStart 已同步触发 onDragStart（其中 dispatchInteraction('start-drag')）
+              // 此处 pointer-up 在状态机内部按顺序处理：marquee-selecting → idle → dragging
+              dispatchInteraction('pointer-up');
+              return;
             }
           }
+
+          // 非拖拽启动场景（如纯点击选中、框选）：异步更新即可
+          selectComponents(result.selection);
           // 任务 3.5：镜像框选结束到交互状态机（marquee-selecting → idle）
           dispatchInteraction('pointer-up');
         }}
