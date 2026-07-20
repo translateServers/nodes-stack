@@ -257,6 +257,7 @@
 - [x] **10.6 回归与质量门执行**
   - 结果：前端 screen 定向测试、后端 screen 定向测试、全部 screen Playwright E2E、typecheck、lint、Biome 全部执行并通过；阶段 0/1 基线不回退。
   - 验证：记录每条命令的日期、退出码、文件数、用例数、通过/失败/跳过数量；不得只运行新增用例代替全量回归。
+  - 执行记录（2026-07-20）：`pnpm typecheck` 退出码 0；`pnpm --filter @nebula/web exec vitest run src/features/screen` 为 39 个文件、904 项通过；`pnpm --filter @nebula/nestjs-server exec jest --testPathPatterns=screen` 为 2 个套件、48 项通过；`pnpm --filter @nebula/shared test` 为 11 个文件、184 项通过；`pnpm exec playwright test --config=e2e/playwright.config.ts tests/screen- --workers=1` 为 39 项通过；`pnpm lint` 与 `pnpm biome:check` 均退出码 0。
   - 依赖：9.3、10.1、10.2、10.3、10.4、10.5。
 
 - [x] **10.7 完成阶段 2 checklist 与总规划回写**

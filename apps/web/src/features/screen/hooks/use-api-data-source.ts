@@ -5,11 +5,11 @@
  * - GET 请求：拼接查询参数、携带请求头
  * - 超时控制：超过 API_REQUEST_TIMEOUT_MS 未响应则中止并报 timeout 错误
  * - 中止控制：apiConfig 变更或组件卸载时中止进行中请求，旧响应不覆盖新状态
- * - 结构化错误：network（网络/CORS）、http（非 2xx，带状态码）、timeout、parse、unsupported-method
+ * - 结构化错误：network（网络/CORS）、http（非 2xx，带状态码）、timeout、parse
  * - 定时刷新（7.x）：refreshInterval > 0 时按间隔重新请求；每次新请求中止旧请求（竞态防护）
  *
  * 边界：
- * - 阶段 2 仅实现 GET；其他方法返回 unsupported-method 错误且不发请求
+ * - 共享 Schema 仅允许 GET，本 Hook 不处理其他请求方法
  * - 产出的 success.data 供 useChartData 的 apiRawData 消费，本 Hook 不做数据解析
  */
 
@@ -24,8 +24,7 @@ export type ApiRequestErrorReason =
   | 'network' // 网络错误或跨域被拒绝（fetch TypeError）
   | 'http' // 非 2xx 响应
   | 'timeout' // 超时中止
-  | 'parse' // 响应 JSON 解析失败
-  | 'unsupported-method'; // 阶段 2 未实现的请求方法
+  | 'parse'; // 响应 JSON 解析失败
 
 export interface ApiRequestError {
   readonly reason: ApiRequestErrorReason;
@@ -103,18 +102,6 @@ export function useApiDataSource(
   useEffect(() => {
     if (apiConfig === undefined) {
       setState({ status: 'idle' });
-      return;
-    }
-
-    // 阶段 2 仅支持 GET；其他方法返回结构化"不支持"状态，不发请求
-    if (apiConfig.method !== 'GET') {
-      setState({
-        status: 'error',
-        error: {
-          reason: 'unsupported-method',
-          message: `当前仅支持 GET 请求，${apiConfig.method} 方法暂不支持`,
-        },
-      });
       return;
     }
 

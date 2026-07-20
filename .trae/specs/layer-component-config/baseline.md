@@ -159,6 +159,22 @@
 
 重跑恢复的 1 条：`screen-interactions.spec.ts:991` 图层拖拽排序（并行时序 flaky，重跑通过）。
 
+## 阶段 2 最终闭环验证（2026-07-20）
+
+| 验证项 | 命令 | 结果 |
+| --- | --- | --- |
+| 全量类型检查 | `pnpm typecheck` | 退出码 0，4 个任务通过 |
+| 前端 screen 单元与集成测试 | `pnpm --filter @nebula/web exec vitest run src/features/screen` | 39 个文件、904 项测试全部通过 |
+| 后端 screen 测试 | `pnpm --filter @nebula/nestjs-server exec jest --testPathPatterns=screen` | 2 个套件、48 项测试全部通过 |
+| shared 全量测试 | `pnpm --filter @nebula/shared test` | 11 个文件、184 项测试全部通过 |
+| screen Playwright E2E | `pnpm exec playwright test --config=e2e/playwright.config.ts tests/screen- --workers=1`（cwd `apps/web`） | 39 项全部通过，退出码 0 |
+| ESLint | `pnpm lint` | 退出码 0 |
+| Biome | `pnpm biome:check` | Checked 432 files，退出码 0 |
+
+本次 Playwright 全量回归包含双客户端保存冲突 UI、阶段 1 工具行为、交互状态机仲裁、
+关键组合交互、阶段 2 静态/API 数据源、四层独立修改与撤销、画布历史及公开预览。
+原基线中 4 条失败在单 worker 的阶段约定下均已通过，不再构成阶段 2 阻塞。
+
 ## 0.3 数据源 E2E 定位与 API Mock 契约
 
 > 沿用阶段 1 `baseline-before.md` §13 的定位风格：优先角色（role）、可访问名称（name）、

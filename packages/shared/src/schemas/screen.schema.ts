@@ -64,7 +64,7 @@ export type ComponentStatus = z.infer<typeof ComponentStatusSchema>;
 
 export const ApiDataSourceConfigSchema = z.object({
   url: z.string().url().describe('请求 URL'),
-  method: z.enum(['GET', 'POST']).describe('请求方法'),
+  method: z.literal('GET').describe('请求方法'),
   headers: z.record(z.string(), z.string()).optional().describe('请求头'),
   params: z.record(z.string(), z.unknown()).optional().describe('请求参数'),
   refreshInterval: z.number().int().min(0).optional().describe('自动刷新间隔（秒）'),
@@ -81,10 +81,7 @@ export const FieldMappingSchema = z.object({
 });
 export type FieldMapping = z.infer<typeof FieldMappingSchema>;
 
-export const DataSourceConfigSchema = z.object({
-  type: DataSourceTypeSchema.describe('数据源类型'),
-  staticData: z.unknown().optional().describe('静态数据'),
-  apiConfig: ApiDataSourceConfigSchema.optional().describe('API 数据源配置'),
+const DataSourceCommonSchema = z.object({
   dataPath: z
     .string()
     .optional()
@@ -93,6 +90,19 @@ export const DataSourceConfigSchema = z.object({
     '字段映射，未配置时按 name→维度、value→数值默认推断',
   ),
 });
+
+export const DataSourceConfigSchema = z.discriminatedUnion('type', [
+  DataSourceCommonSchema.extend({
+    type: z.literal('static'),
+    staticData: z.unknown().describe('静态数据'),
+    apiConfig: ApiDataSourceConfigSchema.optional().describe('切换类型时保留的 API 配置'),
+  }),
+  DataSourceCommonSchema.extend({
+    type: z.literal('api'),
+    staticData: z.unknown().optional().describe('切换类型时保留的静态数据'),
+    apiConfig: ApiDataSourceConfigSchema.describe('API 数据源配置'),
+  }),
+]);
 export type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
 
 // ===== 逻辑层 =====
@@ -140,20 +150,34 @@ export function isSensitiveHeaderKey(key: string): boolean {
   return SENSITIVE_HEADER_KEYS.has(key.toLowerCase());
 }
 
-export const ScreenComponentSchema = z.object({
-  id: z.string().describe('组件实例唯一标识'),
-  type: z.string().min(1).describe('组件类型 key'),
-  name: z.string().min(1).describe('组件显示名称'),
-  position: ComponentPositionSchema.describe('位置与尺寸'),
-  style: ComponentStyleSchema.describe('基础样式'),
-  props: z.record(z.string(), z.unknown()).describe('组件专属配置'),
-  dataSource: DataSourceConfigSchema.optional().describe('数据层：数据源、数据路径与字段映射'),
-  logic: LogicConfigSchema.optional().describe('逻辑层：排序与条数限制'),
-  interaction: InteractionConfigSchema.optional().describe('交互层：悬停提示等交互行为'),
-  status: ComponentStatusSchema.describe('组件状态'),
-  zIndex: z.number().int().describe('层级'),
-  parentId: z.string().nullable().optional().describe('父组件 ID'),
-});
+export const ScreenComponentSchema = z
+  .object({
+    id: z.string().describe('组件实例唯一标识'),
+    type: z.string().min(1).describe('组件类型 key'),
+    name: z.string().min(1).describe('组件显示名称'),
+    position: ComponentPositionSchema.describe('位置与尺寸'),
+    style: ComponentStyleSchema.describe('基础样式'),
+    props: z.record(z.string(), z.unknown()).describe('组件专属配置'),
+    dataSource: DataSourceConfigSchema.optional().describe('数据层：数据源、数据路径与字段映射'),
+    logic: LogicConfigSchema.optional().describe('逻辑层：排序与条数限制'),
+    interaction: InteractionConfigSchema.optional().describe('交互层：悬停提示等交互行为'),
+    status: ComponentStatusSchema.describe('组件状态'),
+    zIndex: z.number().int().describe('层级'),
+    parentId: z.string().nullable().optional().describe('父组件 ID'),
+  })
+  .superRefine((component, context) => {
+    if (component.type !== 'bar-chart') return;
+
+    const result = BarChartVisualPropsSchema.safeParse(component.props);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        context.addIssue({
+          ...issue,
+          path: ['props', ...issue.path],
+        });
+      }
+    }
+  });
 export type ScreenComponent = z.infer<typeof ScreenComponentSchema>;
 
 export const ComponentDefaultSizeSchema = z.object({

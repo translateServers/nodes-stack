@@ -5,7 +5,6 @@
  * - GET 成功：拼接查询参数、携带请求头
  * - 失败：网络错误（network）、非 2xx（http 带状态码）、超时（timeout）、JSON 解析失败（parse）
  * - 中止：apiConfig 变更或卸载时中止进行中请求，旧响应不覆盖新状态
- * - 非 GET 方法返回 unsupported-method 且不发请求
  * - 无浮动 Promise（ESLint no-floating-promises 静态保证 + 全异步路径断言）
  */
 
@@ -172,20 +171,6 @@ describe('useApiDataSource', () => {
     }
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(init.signal?.aborted).toBe(true);
-  });
-
-  it('非 GET 方法返回 unsupported-method 错误且不发请求', () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    const config = makeGetConfig({ method: 'POST' });
-    const { result } = renderHook(() => useApiDataSource(config));
-
-    expect(result.current.status).toBe('error');
-    if (result.current.status === 'error') {
-      expect(result.current.error.reason).toBe('unsupported-method');
-    }
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('apiConfig 变更时中止进行中请求，旧响应不覆盖新状态', async () => {

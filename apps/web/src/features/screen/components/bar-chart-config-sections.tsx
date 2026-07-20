@@ -444,6 +444,7 @@ function RequestTestPanel({
 }) {
   const [state, setState] = useState<TestRequestState>({ status: 'idle' });
   const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   const handleTest = () => {
     const url = getUrl();
@@ -463,10 +464,16 @@ function RequestTestPanel({
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
+    let timedOut = false;
 
     setState({ status: 'loading' });
 
-    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, API_REQUEST_TIMEOUT_MS);
 
     const run = async (): Promise<void> => {
       try {
@@ -477,10 +484,12 @@ function RequestTestPanel({
         });
 
         if (!response.ok) {
-          setState({
-            status: 'error',
-            message: `请求失败（HTTP ${response.status}）`,
-          });
+          if (requestId === requestIdRef.current) {
+            setState({
+              status: 'error',
+              message: `请求失败（HTTP ${response.status}）`,
+            });
+          }
           return;
         }
 
@@ -488,11 +497,13 @@ function RequestTestPanel({
         try {
           data = (await response.json()) as unknown;
         } catch {
-          setState({ status: 'error', message: '响应不是合法 JSON，无法预览' });
+          if (requestId === requestIdRef.current) {
+            setState({ status: 'error', message: '响应不是合法 JSON，无法预览' });
+          }
           return;
         }
 
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && requestId === requestIdRef.current) {
           setState({
             status: 'success',
             httpStatus: response.status,
@@ -501,8 +512,11 @@ function RequestTestPanel({
           onSampleReceived?.(data);
         }
       } catch {
+        if (requestId !== requestIdRef.current) return;
         if (controller.signal.aborted) {
-          setState({ status: 'error', message: '请求超时，请检查网络或接口可用性' });
+          if (timedOut) {
+            setState({ status: 'error', message: '请求超时，请检查网络或接口可用性' });
+          }
           return;
         }
         setState({ status: 'error', message: '网络请求失败（可能是网络异常或跨域限制）' });
@@ -645,10 +659,11 @@ function ApiConfigForm({
 
     // 遗留组件（无数据层配置）首次提交时，遗留 props.data 保留为数据层静态数据，
     // 切换到 API 类型不丢失原数据（切回静态时仍可生效）
-    const baseDataSource: DataSourceConfig = component.dataSource ?? {
-      type: 'static',
-      ...('data' in component.props ? { staticData: component.props.data } : {}),
-    };
+    const baseDataSource: DataSourceConfig =
+      component.dataSource ??
+      ('data' in component.props
+        ? { type: 'static', staticData: component.props.data }
+        : { type: 'static', staticData: [] });
     const dataPath = dataPathDraft.trim() || undefined;
     const nextDataSource: DataSourceConfig = {
       ...baseDataSource,

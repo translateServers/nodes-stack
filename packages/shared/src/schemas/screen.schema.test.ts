@@ -139,6 +139,32 @@ describe('DataSourceConfigSchema', () => {
     expect(() => DataSourceConfigSchema.parse({ type: 'websocket' })).toThrow();
   });
 
+  it('should reject POST API configuration because only GET is supported', () => {
+    expect(() =>
+      DataSourceConfigSchema.parse({
+        type: 'api',
+        apiConfig: { url: 'https://example.com/api', method: 'POST' },
+      }),
+    ).toThrow();
+  });
+
+  it('should reject API data source without apiConfig', () => {
+    expect(() => DataSourceConfigSchema.parse({ type: 'api' })).toThrow();
+  });
+
+  it('should reject static data source without staticData', () => {
+    expect(() => DataSourceConfigSchema.parse({ type: 'static' })).toThrow();
+  });
+
+  it('should preserve inactive source configuration for type switching', () => {
+    const data = {
+      type: 'api' as const,
+      staticData: [{ name: 'A', value: 1 }],
+      apiConfig: { url: 'https://example.com/api', method: 'GET' as const },
+    };
+    expect(DataSourceConfigSchema.parse(data)).toEqual(data);
+  });
+
   it('should reject invalid fieldMapping', () => {
     expect(() =>
       DataSourceConfigSchema.parse({
@@ -274,6 +300,23 @@ describe('ScreenComponentSchema — 向后兼容', () => {
       interaction: { tooltipOnHover: 'yes' },
     };
     expect(() => ScreenComponentSchema.parse(data)).toThrow();
+  });
+
+  it('should reject invalid bar-chart visual props', () => {
+    const data = {
+      ...baseComponent,
+      props: { title: 123 },
+    };
+    expect(() => ScreenComponentSchema.parse(data)).toThrow();
+  });
+
+  it('should keep generic props validation for other component types', () => {
+    const data = {
+      ...baseComponent,
+      type: 'text',
+      props: { title: 123 },
+    };
+    expect(ScreenComponentSchema.parse(data).props).toEqual({ title: 123 });
   });
 });
 

@@ -32,7 +32,7 @@
   - 下一步：为阶段 1 创建独立 Spec，按“状态定义→单场景接入→删除旧状态”渐进迁移。
   - 完成日期：2026-07-18。
   - 验收依据：`close-single-user-interactions` 阶段 1 checklist 全部勾选；tasks.md 任务 0.0–13.5 均标记 `[x]` 并附执行记录；`pnpm typecheck` 退出码 0；`pnpm --filter @nebula/web exec eslint .` 退出码 0（修复 32 个 Phase 1 新增错误）；`pnpm biome:check` 退出码 0；前端 screen 单测 31 文件 909 用例全部通过；screen Playwright E2E 29 用例全部通过（`--workers=1`，2.0m）；阶段 0 可靠性基线未回退（@nebula/nestjs-server 5 项 lint 错误为阶段 0 预存问题，未引入新错误）。
-- [ ] **阶段 2：非破坏性数据与交互分层**
+- [x] **阶段 2：非破坏性数据与交互分层**
   - 目标：建立数据、逻辑、视觉、交互四层契约，并交付静态/API 数据源最小闭环。
   - 用户价值：业务员可改视觉配置而不破坏数据配置，开发者可调整数据而不重做视觉配置。
   - 范围：共享 Schema、字段映射、数据解析器、数据源配置 UI、加载/错误/空状态、画布配置历史。
@@ -40,7 +40,8 @@
   - 进入条件：阶段 1 完成，编辑器交互状态稳定。
   - 退出条件：至少一个图表完整使用静态和 API 数据源渲染，四层配置可独立修改和校验。
   - 下一步：为阶段 2 创建独立 Spec，先静态数据，再 GET API，再考虑 POST 和定时刷新。
-  - 阶段 2 Spec 状态：`layer-component-config`（spec.md / tasks.md / checklist.md）已创建并获批（2026-07-19），实施中。`layer-component-config/tasks.md` 全部实施任务（0.x–10.x）已标记 `[x]`，包含四层 Schema 契约、数据解析器、数据源驱动渲染（含 props.data 迁移与公开预览接入）、静态/API 数据源配置 UI、三态、定时刷新、画布配置进入历史栈、敏感请求头保护与端到端 E2E。但 `layer-component-config/checklist.md` 证据链尚未闭合：质量门中 `pnpm typecheck`、`pnpm lint`、全部 screen Playwright E2E 未勾选；阶段 0/1 回归中双客户端保存冲突 UI、阶段 1 工具行为与交互状态机仲裁、阶段 1 关键组合交互 E2E 未勾选；Playwright E2E 中"修改数据层后视觉层配置不变""各层修改可独立撤销"两项未勾选。按 `layer-component-config/tasks.md` 执行原则"任务状态仅在实现、自动化验证和必要浏览器证据真实完成后从 [ ] 改为 [x]"及 10.7"总规划中仅在退出条件全部满足后标记阶段 2 完成"，总规划暂不标记阶段 2 完成，待补齐上述质量门与回归证据后再回写。
+  - 完成日期：2026-07-20。
+  - 验收依据：`layer-component-config` 的 spec、tasks 与 checklist 已全部闭环；四层共享 Schema、静态/API 数据源、三态、定时刷新、画布历史和敏感请求头保护均已接入生产链路。`pnpm typecheck`、`pnpm lint`、`pnpm biome:check` 均退出码 0；前端 screen 39 个测试文件 904 项、后端 screen 2 个套件 48 项、shared 11 个文件 184 项全部通过；screen Playwright E2E 39 项在 `--workers=1` 下全部通过，覆盖双客户端冲突、阶段 1 工具与交互状态机、关键组合交互和阶段 2 全链路。
 - [ ] **阶段 3：服务端修订版与恢复**
   - 目标：建立服务端修订版（revision）、修订版差异和安全恢复。
   - 用户价值：修改可追溯、可比较、可恢复，不依赖单个浏览器的本地项目快照。

@@ -261,18 +261,6 @@ describe('BarChartComponent（API 数据源画布渲染，任务 5.5）', () => 
     expect(container.textContent).toContain('100');
   });
 
-  it('非 GET 方法返回结构化"不支持"错误且不发请求', () => {
-    const { container } = renderBarChart({
-      dataSource: {
-        type: 'api',
-        apiConfig: { url: 'https://example.com/api/chart', method: 'POST' },
-      },
-    });
-
-    expect(container.textContent).toContain('仅支持 GET');
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   it('API 请求失败展示错误信息', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
 
