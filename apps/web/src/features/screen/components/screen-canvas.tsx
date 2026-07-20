@@ -133,31 +133,13 @@ const initialDimension: DimensionInfo = {
  * 将拖拽过程中的尺寸/位置提示信息从画布主组件中剥离，
  * 避免 onDrag 高频回调触发整个画布重渲染导致拖拽抖动。
  */
-const useDimensionStore = create<{
+export const useDimensionStore = create<{
   dimension: DimensionInfo;
   setDimension: (updater: (d: DimensionInfo) => DimensionInfo) => void;
 }>((set) => ({
   dimension: initialDimension,
   setDimension: (updater) => set((state) => ({ dimension: updater(state.dimension) })),
 }));
-
-/** 尺寸/位置提示浮层，仅订阅 dimension store，不随画布重渲染 */
-const DimensionTooltip = memo(function DimensionTooltip() {
-  const dimension = useDimensionStore((s) => s.dimension);
-  if (!dimension.visible) return null;
-  return (
-    <div
-      className="pointer-events-none fixed z-[9999] rounded bg-black/80 px-2 py-1 font-mono text-xs text-white"
-      style={{ left: 10, bottom: 10 }}
-    >
-      X:{dimension.x}px Y:{dimension.y}px
-      {dimension.w > 0 && ` W:${dimension.w}px`}
-      {dimension.h > 0 && ` H:${dimension.h}px`}
-      {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
-      {dimension.mode && ` [${dimension.mode}]`}
-    </div>
-  );
-});
 
 interface ActiveGroupOutlineProps {
   groupId: string | null;
@@ -1605,8 +1587,6 @@ export function ScreenCanvas({
           dispatchInteraction('pointer-up');
         }}
       />
-
-      <DimensionTooltip />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
+import { useDimensionStore } from './screen-canvas';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -81,6 +82,8 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
   const toggleSnap = useScreenEditorStore((s) => s.toggleSnap);
   const toggleGuidesVisibility = useScreenEditorStore((s) => s.toggleGuidesVisibility);
 
+  const dimension = useDimensionStore((s) => s.dimension);
+
   const activeTool = editorSession.activeTool;
   const toolDef = getToolById(activeTool);
   // activeTool 受 ToolStateMachine 约束，必然能在注册表中找到；防御性回退到选择工具
@@ -119,11 +122,21 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
         </span>
       </div>
 
-      {/* 中间：画布尺寸 */}
-      <div className="flex items-center gap-2">
-        <span>
-          {canvasWidth} × {canvasHeight}
-        </span>
+      {/* 中间：拖拽时显示实时尺寸，空闲时显示画布尺寸 */}
+      <div className="flex items-center gap-2 font-mono">
+        {dimension.visible ? (
+          <span className="text-primary">
+            X:{dimension.x} Y:{dimension.y}
+            {dimension.w > 0 && ` W:${dimension.w}`}
+            {dimension.h > 0 && ` H:${dimension.h}`}
+            {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
+            {dimension.mode && ` [${dimension.mode}]`}
+          </span>
+        ) : (
+          <span>
+            {canvasWidth} × {canvasHeight}
+          </span>
+        )}
       </div>
 
       {/* 右侧：开关 + 缩放 */}
