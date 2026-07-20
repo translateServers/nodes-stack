@@ -708,4 +708,108 @@ describe('ScreenService', () => {
       await expect(service.removeProject('non-existent')).rejects.toThrow(BusinessException);
     });
   });
+
+  describe('findPublishedProjectById 敏感请求头脱敏（任务 9.1）', () => {
+    function makeProjectWithApiHeaders(headers: Record<string, string>): ScreenProjectEntity {
+      const components = [
+        {
+          id: 'chart-1',
+          type: 'bar-chart',
+          name: '图表',
+          position: { x: 0, y: 0, width: 400, height: 300 },
+          style: {},
+          props: { title: '测试' },
+          status: { locked: false, hidden: false },
+          zIndex: 0,
+          dataSource: {
+            type: 'api',
+            apiConfig: {
+              url: 'https://example.com/api/chart',
+              method: 'GET',
+              headers,
+            },
+          },
+        },
+      ];
+      return makeScreenProject({
+        status: 'published',
+        components: JSON.stringify(components),
+      });
+    }
+
+    it('敏感请求头值被替换为 [REDACTED]', async () => {
+      mockPrismaService.screenProject.findFirst.mockResolvedValue(
+        makeProjectWithApiHeaders({
+          Authorization: 'Bearer secret-token',
+          'X-Custom': 'visible-value',
+        }),
+      );
+
+      const result = await service.findPublishedProjectById('project-id');
+      const headers = result.components[0].dataSource?.apiConfig?.headers;
+      expect(headers?.Authorization).toBe('[REDACTED]');
+      expect(headers?.['X-Custom']).toBe('visible-value');
+    });
+
+    it('大小写不敏感识别敏感键名', async () => {
+      mockPrismaService.screenProject.findFirst.mockResolvedValue(
+        makeProjectWithApiHeaders({
+          COOKIE: 'session=abc123',
+          'x-api-key': 'key-123',
+          'X-AUTH-TOKEN': 'token-456',
+        }),
+      );
+
+      const result = await service.findPublishedProjectById('project-id');
+      const headers = result.components[0].dataSource?.apiConfig?.headers;
+      expect(headers?.COOKIE).toBe('[REDACTED]');
+      expect(headers?.['x-api-key']).toBe('[REDACTED]');
+      expect(headers?.['X-AUTH-TOKEN']).toBe('[REDACTED]');
+    });
+
+    it('非敏感请求头不受影响', async () => {
+      mockPrismaService.screenProject.findFirst.mockResolvedValue(
+        makeProjectWithApiHeaders({
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        }),
+      );
+
+      const result = await service.findPublishedProjectById('project-id');
+      const headers = result.components[0].dataSource?.apiConfig?.headers;
+      expect(headers?.['Content-Type']).toBe('application/json');
+      expect(headers?.Accept).toBe('application/json');
+    });
+
+    it('无数据源组件不受影响', async () => {
+      const components = [
+        {
+          id: 'text-1',
+          type: 'text',
+          name: '文本',
+          position: { x: 0, y: 0, width: 200, height: 50 },
+          style: {},
+          props: { content: 'hello' },
+          status: { locked: false, hidden: false },
+          zIndex: 0,
+        },
+      ];
+      mockPrismaService.screenProject.findFirst.mockResolvedValue(
+        makeScreenProject({ status: 'published', components: JSON.stringify(components) }),
+      );
+
+      const result = await service.findPublishedProjectById('project-id');
+      expect(result.components[0]).toEqual(expect.objectContaining({ id: 'text-1' }));
+    });
+
+    it('受保护详情接口返回完整请求头配置（不脱敏）', async () => {
+      mockPrismaService.screenProject.findUnique.mockResolvedValue(
+        makeProjectWithApiHeaders({ Authorization: 'Bearer secret-token' }),
+      );
+
+      const result = await service.findProjectById('project-id');
+      const headers = result.components[0].dataSource?.apiConfig?.headers;
+      expect(headers?.Authorization).toBe('Bearer secret-token');
+    });
+  });
 });

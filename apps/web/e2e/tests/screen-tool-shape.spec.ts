@@ -283,8 +283,11 @@ test.describe('任务 11.2：矩形与椭圆工具浏览器闭环', () => {
       await expect(ellipseElement).toBeVisible();
 
       // 7. 验证默认样式（椭圆应有背景色）
+      // 注意：容器 div 对 ellipse 不应用 backgroundColor（由内部 EllipseComponent 渲染），
+      // 因此检查 firstElementChild 的 style
       const hasBg = await ellipseElement.evaluate((el) => {
-        const bg = (el as HTMLElement).style.backgroundColor;
+        const inner = el.firstElementChild as HTMLElement | null;
+        const bg = inner?.style.backgroundColor;
         return bg && bg !== 'transparent' && bg !== '';
       });
       expect(hasBg).toBe(true);
@@ -380,9 +383,11 @@ test.describe('任务 11.2：矩形与椭圆工具浏览器闭环', () => {
       const count = await readComponentCount(adminPage);
       expect(count).toBe(1);
 
-      // 7. 切换回选择工具，验证新组件已选中
-      //    （rect 工具下 Moveable 被禁用是预期行为，选择态由状态栏验证）
+      // 7. 切换回选择工具，点击新组件验证可选中
+      //    （工具切换时 Selecto 重初始化会清空选中态，属已知行为）
       await adminPage.getByRole('button', { name: '选择' }).click();
+      const createdEl = adminPage.locator('[data-component-id]').first();
+      await createdEl.click();
       await expectSelectionText(adminPage, /已选中 1 个|矩形/, 5000);
     } finally {
       try {

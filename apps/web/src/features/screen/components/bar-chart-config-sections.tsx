@@ -37,6 +37,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { buildDataSourceMigration } from '../lib/data-source-migration';
 import { extractDataByPath } from '../lib/chart-data-parser';
+import { buildUrlWithParams, API_REQUEST_TIMEOUT_MS } from '../hooks/use-api-data-source';
 import { StyleFields, TextInput, textareaClass } from './panel-fields';
 
 interface SectionProps {
@@ -224,8 +225,13 @@ function KeyValueEditor({
 /** Radix Select 不接受空字符串值，用哨兵值表示"默认推断" */
 const DEFAULT_MAPPING_OPTION = '__default__';
 
-function FieldMappingControls({ component, onUpdate }: SectionProps) {
-  const effectiveData = getEffectiveStaticData(component);
+function FieldMappingControls({
+  component,
+  onUpdate,
+  apiSample,
+}: SectionProps & { apiSample?: unknown }) {
+  const isApiType = component.dataSource?.type === 'api';
+  const effectiveData = isApiType ? (apiSample ?? null) : getEffectiveStaticData(component);
   const dataPath = component.dataSource?.dataPath;
   const fields = useMemo(
     () => inferFieldsFromSample(effectiveData, dataPath),
@@ -404,6 +410,147 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
   );
 }
 
+// ===== 数据层：请求测试与响应预览（任务 5.3） =====
+
+/** 响应预览最大展示字符数 */
+const RESPONSE_PREVIEW_MAX_LENGTH = 500;
+
+type TestRequestState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; httpStatus: number; preview: string }
+  | { status: 'error'; message: string };
+
+function truncatePreview(data: unknown): string {
+  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  if (text.length <= RESPONSE_PREVIEW_MAX_LENGTH) return text;
+  return `${text.slice(0, RESPONSE_PREVIEW_MAX_LENGTH)}…`;
+}
+
+/**
+ * 请求测试面板：使用当前草稿值发起一次性 GET 请求，展示响应状态码与截断预览。
+ * 不写入组件配置、不产生本地编辑历史。
+ */
+function RequestTestPanel({
+  getUrl,
+  getParams,
+  getHeaders,
+  onSampleReceived,
+}: {
+  getUrl: () => string;
+  getParams: () => Record<string, string> | undefined;
+  getHeaders: () => Record<string, string> | undefined;
+  onSampleReceived?: (data: unknown) => void;
+}) {
+  const [state, setState] = useState<TestRequestState>({ status: 'idle' });
+  const abortRef = useRef<AbortController | null>(null);
+
+  const handleTest = () => {
+    const url = getUrl();
+    if (url === '') {
+      setState({ status: 'error', message: '请先填写请求地址' });
+      return;
+    }
+
+    let fullUrl: string;
+    try {
+      fullUrl = buildUrlWithParams(url, getParams());
+    } catch {
+      setState({ status: 'error', message: '请求地址格式不正确' });
+      return;
+    }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setState({ status: 'loading' });
+
+    const timeoutId = setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+    const run = async (): Promise<void> => {
+      try {
+        const response = await fetch(fullUrl, {
+          method: 'GET',
+          headers: getHeaders(),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          setState({
+            status: 'error',
+            message: `请求失败（HTTP ${response.status}）`,
+          });
+          return;
+        }
+
+        let data: unknown;
+        try {
+          data = (await response.json()) as unknown;
+        } catch {
+          setState({ status: 'error', message: '响应不是合法 JSON，无法预览' });
+          return;
+        }
+
+        if (!controller.signal.aborted) {
+          setState({
+            status: 'success',
+            httpStatus: response.status,
+            preview: truncatePreview(data),
+          });
+          onSampleReceived?.(data);
+        }
+      } catch {
+        if (controller.signal.aborted) {
+          setState({ status: 'error', message: '请求超时，请检查网络或接口可用性' });
+          return;
+        }
+        setState({ status: 'error', message: '网络请求失败（可能是网络异常或跨域限制）' });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    void run();
+  };
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  return (
+    <div className="space-y-1" data-testid="request-test-panel">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleTest}
+        disabled={state.status === 'loading'}
+        aria-label="测试请求"
+      >
+        {state.status === 'loading' ? '请求中…' : '测试请求'}
+      </Button>
+      {state.status === 'success' && (
+        <div data-testid="request-test-result" className="space-y-1">
+          <p className="text-xs text-green-500">状态码：{state.httpStatus}</p>
+          <pre
+            data-testid="request-test-preview"
+            className="max-h-32 overflow-auto rounded border border-border bg-muted/50 p-2 text-xs"
+          >
+            {state.preview}
+          </pre>
+        </div>
+      )}
+      {state.status === 'error' && (
+        <p role="alert" data-testid="request-test-error" className="text-xs text-red-400">
+          {state.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ===== 数据层：API 配置表单（任务 5.2） =====
 
 /** 规范化 API 配置用于变更检测：固定键顺序、忽略空集合 */
@@ -425,7 +572,12 @@ function serializeApiConfig(config: ApiDataSourceConfig | undefined): string {
   return config === undefined ? '' : JSON.stringify(normalizeApiConfig(config));
 }
 
-function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) {
+function ApiConfigForm({
+  component,
+  onUpdate,
+  onSettled,
+  onSampleReceived,
+}: DataSourceFormProps & { onSampleReceived?: (data: unknown) => void }) {
   // 外部配置变化（撤销 / 切换组件）由父级 key 重建本组件，草稿从当前配置重新初始化
   const existingApiConfig = component.dataSource?.apiConfig;
 
@@ -441,6 +593,7 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
       ? ''
       : String(existingApiConfig.refreshInterval),
   );
+  const [dataPathDraft, setDataPathDraft] = useState(() => component.dataSource?.dataPath ?? '');
   const [error, setError] = useState<string | null>(null);
   // 初始草稿快照：供取消恢复与无变化检测（表单语义：草稿相对挂载时未编辑即无变化，
   // 与既有配置中参数值原始类型无关——非字符串值经编辑行往返不改变 URL 拼接结果）
@@ -449,6 +602,7 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
     params: paramRows,
     headers: headerRows,
     interval: intervalDraft,
+    dataPath: dataPathDraft,
   });
   const initialSnapshotRef = useRef(
     JSON.stringify({
@@ -456,6 +610,7 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
       headers: rowsToRecord(headerRows) ?? null,
       params: rowsToRecord(paramRows) ?? null,
       interval: intervalDraft.trim(),
+      dataPath: dataPathDraft.trim(),
     }),
   );
 
@@ -494,7 +649,13 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
       type: 'static',
       ...('data' in component.props ? { staticData: component.props.data } : {}),
     };
-    const nextDataSource: DataSourceConfig = { ...baseDataSource, type: 'api', apiConfig };
+    const dataPath = dataPathDraft.trim() || undefined;
+    const nextDataSource: DataSourceConfig = {
+      ...baseDataSource,
+      type: 'api',
+      apiConfig,
+      dataPath,
+    };
 
     const schemaResult = DataSourceConfigSchema.safeParse(nextDataSource);
     if (!schemaResult.success) {
@@ -518,6 +679,7 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
         headers: headers ?? null,
         params: params ?? null,
         interval: intervalInput,
+        dataPath: dataPath ?? '',
       }) === initialSnapshotRef.current;
     if (!unchanged) {
       // 首次提交遗留组件时一次性迁移 props.data（合并为一次更新 = 一条历史）
@@ -531,6 +693,7 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
     setParamRows(initialDraftRef.current.params);
     setHeaderRows(initialDraftRef.current.headers);
     setIntervalDraft(initialDraftRef.current.interval);
+    setDataPathDraft(initialDraftRef.current.dataPath);
     setError(null);
     onSettled();
   };
@@ -587,6 +750,22 @@ function ApiConfigForm({ component, onUpdate, onSettled }: DataSourceFormProps) 
         />
         <span className="text-xs text-muted-foreground">秒</span>
       </div>
+      <RequestTestPanel
+        getUrl={() => urlDraft.trim()}
+        getParams={() => rowsToRecord(paramRows)}
+        getHeaders={() => rowsToRecord(headerRows)}
+        onSampleReceived={onSampleReceived}
+      />
+      <div className="space-y-1">
+        <span className="text-xs text-muted-foreground">数据路径</span>
+        <Input
+          aria-label="数据路径"
+          className="h-7 px-2 py-1 text-sm"
+          placeholder="如 data.list（留空取根级数组）"
+          value={dataPathDraft}
+          onChange={(e) => setDataPathDraft(e.target.value)}
+        />
+      </div>
       {error !== null && (
         <p role="alert" data-testid="datasource-error" className="text-xs text-red-400">
           {error}
@@ -610,6 +789,8 @@ function DataSourceSection({ component, onUpdate }: SectionProps) {
   // 切换类型本身不写入组件，不产生历史
   const [draftType, setDraftType] = useState<'static' | 'api' | null>(null);
   const shownType = draftType ?? effectiveType;
+  // API 请求测试响应样本（任务 5.4：供字段映射推断可选字段）
+  const [apiSample, setApiSample] = useState<unknown>(null);
 
   const handleTypeChange = (value: string) => {
     const next = value === 'api' ? 'api' : 'static';
@@ -650,9 +831,10 @@ function DataSourceSection({ component, onUpdate }: SectionProps) {
           component={component}
           onUpdate={onUpdate}
           onSettled={() => setDraftType(null)}
+          onSampleReceived={setApiSample}
         />
       )}
-      <FieldMappingControls component={component} onUpdate={onUpdate} />
+      <FieldMappingControls component={component} onUpdate={onUpdate} apiSample={apiSample} />
     </section>
   );
 }

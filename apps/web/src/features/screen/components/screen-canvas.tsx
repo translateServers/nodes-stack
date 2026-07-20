@@ -9,7 +9,12 @@ import { resolveComponentContainerStyle } from '../registry/component-container-
 import { ComponentRenderer } from '../registry/renderer';
 import { createComponentInstance } from '../registry';
 import { handleSelectEnd, type ClickRecord } from '../lib/canvas-event-router';
-import { findAlignmentLines, snapPosition, type AlignmentRect } from '../lib/smart-guides';
+import {
+  findAlignmentLines,
+  snapPosition,
+  type AlignmentLine,
+  type AlignmentRect,
+} from '../lib/smart-guides';
 import { DEFAULT_TEXT_CONTENT } from '../lib/text-editing-contract';
 import { computeShapeCreation } from '../lib/shape-creation-geometry';
 import { pickImageFile, type ImageFileResult } from '../lib/image-file-adapter';
@@ -263,13 +268,17 @@ export function ScreenCanvas({
   }, [activeTool, interactionState]);
 
   /**
-   * L1 性能优化：拖拽/缩放/旋转过程中的高频副作用
-   * （Smart Guides 对齐线计算、尺寸提示更新、DOM style 写入）通过 rAF 节流，
-   * 同帧内多次事件仅执行最后一次，降低主线程压力与 store 更新频率。
+   * L1 性能优化：拖拽/缩放/旋转过程中的高频副作用分两类处理：
+   * - DOM style 写入（left/top/width/height/transform）与吸附计算：同步执行。
+   *   Moveable 在事件返回后同步 flushSync(updateRect + forceUpdate) 读取目标 DOM
+   *   （见 getAbleGesto.ts），若 style 延迟到下一帧写入，控制框按旧位置渲染、
+   *   组件下一帧才移动，两者错开一帧造成视觉抖动。
+   * - React store 更新（Smart Guides 对齐线浮层、尺寸提示）：rAF 节流，
+   *   同帧内多次事件仅执行最后一次，降低重渲染频率与主线程压力。
    *
    * 使用契约（与 raf-throttle.ts 文档一致）：
-   * - onDragEnd：cancel()（最终值取自 e.lastEvent，无需落地挂起帧）
-   * - onResizeEnd / onRotateEnd：flush()（最终值从 DOM style 读取，需先落地最后一帧）
+   * - 手势结束（onDragEnd / onResizeEnd / onRotateEnd）：cancel() 丢弃挂起的
+   *   store 更新（End 处理器会同步写入最终 visible:false，挂起任务若执行会覆盖）
    * - 组拖拽/组缩放不做节流：过程中无 store 更新，仅 style 写入，开销极低
    */
   const gestureRafThrottlerRef = useRef<RafThrottler | null>(null);
@@ -920,22 +929,28 @@ export function ScreenCanvas({
   }, [smartGuidesEnabled, visibleComponents, selectedIdSet]);
 
   /**
-   * 在拖拽过程中计算并更新 Smart Guides 对齐线，并返回吸附后的坐标。
-   * 仅当 smartGuidesEnabled 为 true 且有参考组件时计算。
-   * 返回的 snappedLeft / snappedTop 为吸附后坐标（若无可吸附线则等于输入值）。
+   * Smart Guides 吸附计算（纯计算，无副作用）。
+   *
+   * 拖拽过程中同步执行：吸附结果决定 DOM style 写入值，必须与 Moveable 的
+   * updateRect 同步读取保持同一时序。对齐线数据返回给调用方，
+   * 由调用方在 rAF 帧中写入 store（浮层重渲染可延迟一帧，不影响组件位置）。
+   *
+   * 返回 null 表示功能禁用或无参考组件，调用方直接使用原始坐标并清理对齐线。
    */
-  const updateAlignmentLines = useCallback(
+  const computeSnappedPosition = useCallback(
     (
       movedX: number,
       movedY: number,
       movedW: number,
       movedH: number,
-    ): { snappedLeft: number; snappedTop: number } => {
+    ): {
+      snappedLeft: number;
+      snappedTop: number;
+      lines: AlignmentLine[];
+      snappedRect: AlignmentRect;
+    } | null => {
       if (!smartGuidesEnabled || smartGuidesReferenceRects.length === 0) {
-        if (useAlignmentLinesStore.getState().lines.length > 0) {
-          clearAlignmentLines();
-        }
-        return { snappedLeft: movedX, snappedTop: movedY };
+        return null;
       }
       const movedRect: AlignmentRect = {
         x: movedX,
@@ -946,7 +961,7 @@ export function ScreenCanvas({
       const lines = findAlignmentLines(movedRect, smartGuidesReferenceRects);
       // 吸附：对距离 < 3px 的对齐线应用吸附
       const snapped = snapPosition(movedX, movedY, movedW, movedH, lines);
-      // 更新 overlay 中显示的 movedRect 为吸附后位置，保持辅助线与实际位置同步
+      // overlay 中显示的 movedRect 为吸附后位置，保持辅助线与实际位置同步
       const snappedRect: AlignmentRect = {
         x: snapped.left,
         y: snapped.top,
@@ -955,10 +970,14 @@ export function ScreenCanvas({
       };
       // 重新计算吸附后的对齐线（使 distance=0 的吸附线高亮显示）
       const snappedLines = findAlignmentLines(snappedRect, smartGuidesReferenceRects);
-      setAlignmentLines(snappedLines, snappedRect);
-      return { snappedLeft: snapped.left, snappedTop: snapped.top };
+      return {
+        snappedLeft: snapped.left,
+        snappedTop: snapped.top,
+        lines: snappedLines,
+        snappedRect,
+      };
     },
-    [smartGuidesEnabled, smartGuidesReferenceRects, setAlignmentLines, clearAlignmentLines],
+    [smartGuidesEnabled, smartGuidesReferenceRects],
   );
 
   if (!project || !canvas) return null;
@@ -1121,21 +1140,28 @@ export function ScreenCanvas({
           }}
           onDrag={(e) => {
             const datas = e.datas as unknown as DragDatas;
-            // L1：同步提取事件值，副作用合并到下一帧执行（同帧多次事件仅生效最后一次）
             const target = e.target as HTMLElement;
-            const left = e.left;
-            const top = e.top;
             const w = datas.origW || 0;
             const h = datas.origH || 0;
+            // 吸附计算 + DOM style 写入同步执行：Moveable 在 onDrag 返回后同步
+            // updateRect() 读取 DOM 位置，延迟写入会让控制框与组件错开一帧（抖动）
+            const snap = computeSnappedPosition(e.left, e.top, w, h);
+            const finalLeft = snap?.snappedLeft ?? e.left;
+            const finalTop = snap?.snappedTop ?? e.top;
+            target.style.left = `${finalLeft}px`;
+            target.style.top = `${finalTop}px`;
+            // rAF 节流仅保留 React store 更新（对齐线浮层 / 尺寸提示），
+            // 同帧多次事件仅生效最后一次
             gestureRafThrottlerRef.current?.schedule(() => {
-              // Smart Guides：计算对齐线 + 吸附（距离 < 3px 自动吸附）
-              const { snappedLeft, snappedTop } = updateAlignmentLines(left, top, w, h);
-              target.style.left = `${snappedLeft}px`;
-              target.style.top = `${snappedTop}px`;
+              if (snap) {
+                setAlignmentLines(snap.lines, snap.snappedRect);
+              } else if (useAlignmentLinesStore.getState().lines.length > 0) {
+                clearAlignmentLines();
+              }
               setDimension((d) => ({
                 ...d,
-                x: Math.round(snappedLeft),
-                y: Math.round(snappedTop),
+                x: Math.round(finalLeft),
+                y: Math.round(finalTop),
                 visible: true,
               }));
             });
@@ -1198,50 +1224,47 @@ export function ScreenCanvas({
           }}
           onResize={(e) => {
             const datas = e.datas as unknown as ResizeDatas;
-            // L1：同步提取事件值，副作用合并到下一帧执行（同帧多次事件仅生效最后一次）
             const target = e.target as HTMLElement;
-            const eventWidth = e.width;
-            const eventHeight = e.height;
-            const direction = e.direction;
-            const dragLeft = e.drag ? e.drag.left : null;
-            const dragTop = e.drag ? e.drag.top : null;
             const { origW, origH, origX, origY, keepRatio, isAltCenter } = datas;
-            gestureRafThrottlerRef.current?.schedule(() => {
-              let w = eventWidth;
-              let h = eventHeight;
-              if (keepRatio && origW && origH) {
-                const ratio = origW / origH;
-                const [dx, dy] = direction;
-                if (dx !== 0 && dy !== 0) {
-                  const newH = w / ratio;
-                  const newW = h * ratio;
-                  if (Math.abs(w - origW) > Math.abs(h - origH)) {
-                    h = newH;
-                  } else {
-                    w = newW;
-                  }
-                } else if (dx !== 0) {
-                  h = w / ratio;
-                } else if (dy !== 0) {
-                  w = h * ratio;
+            // 尺寸计算 + DOM style 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
+            let w = e.width;
+            let h = e.height;
+            if (keepRatio && origW && origH) {
+              const ratio = origW / origH;
+              const [dx, dy] = e.direction;
+              if (dx !== 0 && dy !== 0) {
+                const newH = w / ratio;
+                const newW = h * ratio;
+                if (Math.abs(w - origW) > Math.abs(h - origH)) {
+                  h = newH;
+                } else {
+                  w = newW;
                 }
+              } else if (dx !== 0) {
+                h = w / ratio;
+              } else if (dy !== 0) {
+                w = h * ratio;
               }
-              target.style.width = `${w}px`;
-              target.style.height = `${h}px`;
-              if (isAltCenter) {
-                // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
-                const newX = origX + (origW - w) / 2;
-                const newY = origY + (origH - h) / 2;
-                target.style.left = `${newX}px`;
-                target.style.top = `${newY}px`;
-              } else if (dragLeft !== null && dragTop !== null) {
-                target.style.left = `${dragLeft}px`;
-                target.style.top = `${dragTop}px`;
-              }
+            }
+            target.style.width = `${w}px`;
+            target.style.height = `${h}px`;
+            if (isAltCenter) {
+              // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
+              target.style.left = `${origX + (origW - w) / 2}px`;
+              target.style.top = `${origY + (origH - h) / 2}px`;
+            } else if (e.drag) {
+              target.style.left = `${e.drag.left}px`;
+              target.style.top = `${e.drag.top}px`;
+            }
+            // 同步写入后可直接读回当前位置
+            const displayX = Math.round(Number.parseInt(target.style.left || '0'));
+            const displayY = Math.round(Number.parseInt(target.style.top || '0'));
+            // rAF 节流仅保留 React store 更新（尺寸提示）
+            gestureRafThrottlerRef.current?.schedule(() => {
               setDimension((d) => ({
                 ...d,
-                x: Math.round(Number.parseInt(target.style.left || '0')),
-                y: Math.round(Number.parseInt(target.style.top || '0')),
+                x: displayX,
+                y: displayY,
                 w: Math.round(w),
                 h: Math.round(h),
                 visible: true,
@@ -1251,8 +1274,9 @@ export function ScreenCanvas({
           onResizeEnd={(e) => {
             // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
             dispatchInteraction('pointer-up');
-            // L1：先落地最后一帧（本处理器从 DOM style 读取最终值），再提交
-            gestureRafThrottlerRef.current?.flush();
+            // L1：DOM style 已同步写入，本处理器可直接读取最终值；
+            // 挂起任务仅含 store 更新，丢弃防止覆盖下方的 visible:false
+            gestureRafThrottlerRef.current?.cancel();
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<ResizeDatas>;
             const id = datas.id;
@@ -1290,33 +1314,34 @@ export function ScreenCanvas({
           }}
           onRotate={(e) => {
             const datas = e.datas as unknown as RotateDatas;
-            // L1：同步提取事件值，副作用合并到下一帧执行（同帧多次事件仅生效最后一次）
             const target = e.target as HTMLElement;
-            const eventRotation = e.rotation;
             const { snapRotate } = datas;
+            // 旋转角计算 + transform 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
+            let rotation = e.rotation;
+            if (snapRotate) {
+              rotation = Math.round(rotation / 15) * 15;
+            }
+            const currentTransform = target.style.transform || '';
+            const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
+            if (rotateMatch) {
+              target.style.transform = currentTransform.replace(
+                rotateMatch[0],
+                `rotate(${rotation}deg)`,
+              );
+            } else {
+              target.style.transform = `${currentTransform} rotate(${rotation}deg)`.trim();
+            }
+            // rAF 节流仅保留 React store 更新（尺寸提示）
             gestureRafThrottlerRef.current?.schedule(() => {
-              let rotation = eventRotation;
-              if (snapRotate) {
-                rotation = Math.round(rotation / 15) * 15;
-              }
-              const currentTransform = target.style.transform || '';
-              const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
-              if (rotateMatch) {
-                target.style.transform = currentTransform.replace(
-                  rotateMatch[0],
-                  `rotate(${rotation}deg)`,
-                );
-              } else {
-                target.style.transform = `${currentTransform} rotate(${rotation}deg)`.trim();
-              }
               setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
             });
           }}
           onRotateEnd={(e) => {
             // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
             dispatchInteraction('pointer-up');
-            // L1：先落地最后一帧（本处理器从 DOM style.transform 读取最终值），再提交
-            gestureRafThrottlerRef.current?.flush();
+            // L1：DOM style 已同步写入，本处理器可直接读取最终值；
+            // 挂起任务仅含 store 更新，丢弃防止覆盖下方的 visible:false
+            gestureRafThrottlerRef.current?.cancel();
             if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<RotateDatas>;
             const id = datas.id;

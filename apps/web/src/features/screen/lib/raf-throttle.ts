@@ -1,19 +1,22 @@
 /**
  * rAF 节流器：将高频回调合并到下一动画帧执行。
  *
- * 用于拖拽/缩放/旋转过程中的高频副作用（Smart Guides 对齐线计算、
- * 尺寸提示 store 更新、DOM style 写入）：
+ * 用于拖拽/缩放/旋转过程中的高频 React store 更新
+ * （Smart Guides 对齐线浮层、尺寸提示）：
  * - 同一帧内的多次调用仅保留最后一次任务（闭包捕获最新事件值）
  * - 每帧最多执行一次，避免高频 store 更新造成重复渲染与主线程压力
  *
+ * 注意（拖拽抖动教训）：DOM style 写入（left/top/width/height/transform）
+ * 不要放进调度任务。react-moveable 在 onDrag/onResize/onRotate 返回后
+ * 同步 flushSync 执行 updateRect() 读取目标 DOM 位置，style 延迟写入
+ * 会导致控制框按旧位置渲染、组件下一帧才移动，两者错开一帧造成视觉抖动。
+ *
  * 使用契约（重要）：
- * - 手势结束（onDragEnd / onResizeEnd 等）时必须先调用 flush() 或 cancel()，
- *   防止挂起任务在手势结束后才执行，覆盖最终状态
- *   （如尺寸提示已隐藏又被重新显示、End 处理器读到过期的 DOM style）
- * - flush()：立即同步执行挂起任务 —— 适用于 End 处理器需要从 DOM 读取
- *   最终 style 的场景（onResizeEnd / onRotateEnd）
- * - cancel()：丢弃挂起任务 —— 适用于 End 处理器从事件对象（lastEvent）
- *   获取最终值的场景（onDragEnd），或组件卸载时清理
+ * - 手势结束（onDragEnd / onResizeEnd / onRotateEnd）时调用 cancel() 丢弃
+ *   挂起任务：End 处理器会同步写入最终状态（如隐藏尺寸提示），
+ *   挂起任务若在结束后执行会覆盖最终状态
+ * - cancel()：丢弃挂起任务 —— 手势结束与组件卸载时清理
+ * - flush()：立即同步执行挂起任务 —— 预留给需要落地挂起 store 更新的场景
  */
 export interface RafThrottler {
   /** 调度任务到下一帧执行；同帧内重复调用仅保留最新任务 */

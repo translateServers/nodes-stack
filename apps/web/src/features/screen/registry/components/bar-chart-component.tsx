@@ -2,18 +2,19 @@ import { useMemo } from 'react';
 import type { DataSourceConfig } from '@nebula/shared';
 import type { RendererComponentProps } from '../renderer';
 import { useChartData } from '../../hooks/use-chart-data';
+import { useApiDataSource } from '../../hooks/use-api-data-source';
 
 /**
- * bar-chart renderer（阶段 2 任务 3.2/3.3 改造）
+ * bar-chart renderer（阶段 2 任务 3.2/3.3/5.5 改造）
  *
  * 数据来自数据层解析结果（useChartData）：
  * - 有数据层配置时，数据层为唯一生效数据源，遗留 props.data 不再生效
  * - 无数据层配置时，回退读取遗留 props.data（任务 3.3 兼容语义；
  *   首次通过数据层 UI 提交后 props.data 被一次性迁移清除）
+ * - API 数据源：经 useApiDataSource 发起 GET 请求，响应数据传入 useChartData 解析（5.5）
  * 标题与颜色仍取视觉层 props/style，渲染行为不回退。
  * 交互层 interaction.tooltipOnHover 开启时，悬停柱条经 SVG <title> 展示名称与数值
  * （任务 4.5，默认关闭，关闭时视觉与既有行为一致）。
- * 错误态为 6.x 统一三态契约前的简化占位。
  */
 export function BarChartComponent({
   props,
@@ -29,8 +30,31 @@ export function BarChartComponent({
     return { type: 'static', staticData: props.data };
   }, [dataSource, props]);
 
-  const parseResult = useChartData(effectiveDataSource, logic);
+  // 任务 5.5：API 数据源请求（仅 type='api' 时传入 apiConfig，否则 undefined 保持 idle）
+  const apiConfig = effectiveDataSource?.type === 'api' ? effectiveDataSource.apiConfig : undefined;
+  const apiState = useApiDataSource(apiConfig);
+
+  const apiRawData = apiState.status === 'success' ? apiState.data : undefined;
+  const parseResult = useChartData(effectiveDataSource, logic, apiRawData);
   const title = (props.title as string) ?? '';
+
+  // API 请求进行中：加载态（6.x 统一三态契约前的简化展示）
+  if (apiState.status === 'loading') {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+        加载中…
+      </div>
+    );
+  }
+
+  // API 请求失败：错误态
+  if (apiState.status === 'error') {
+    return (
+      <div className="flex h-full w-full items-center justify-center px-2 text-center text-sm text-red-400">
+        {apiState.error.message}
+      </div>
+    );
+  }
 
   if (parseResult.status === 'error') {
     return (

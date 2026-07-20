@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { isSensitiveHeaderKey } from '@nebula/shared';
 import { PrismaService } from '@/prisma/prisma.service';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
@@ -71,7 +72,30 @@ export class ScreenService {
     if (!project) {
       throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
     }
-    return this.toProjectResponse(project);
+    const response = this.toProjectResponse(project);
+    return this.sanitizeSensitiveHeaders(response);
+  }
+
+  /** 公开预览脱敏：移除组件 API 数据源配置中敏感请求头的明文值（任务 9.1） */
+  private sanitizeSensitiveHeaders(response: ScreenProjectResponse): ScreenProjectResponse {
+    const sanitizedComponents = response.components.map((component) => {
+      const headers = component.dataSource?.apiConfig?.headers;
+      if (headers === undefined) return component;
+      const hasSensitive = Object.keys(headers).some((key) => isSensitiveHeaderKey(key));
+      if (!hasSensitive) return component;
+      const sanitizedHeaders: Record<string, string> = {};
+      for (const [key, value] of Object.entries(headers)) {
+        sanitizedHeaders[key] = isSensitiveHeaderKey(key) ? '[REDACTED]' : value;
+      }
+      return {
+        ...component,
+        dataSource: {
+          ...component.dataSource!,
+          apiConfig: { ...component.dataSource!.apiConfig!, headers: sanitizedHeaders },
+        },
+      };
+    });
+    return { ...response, components: sanitizedComponents };
   }
 
   async updateProject(id: string, dto: UpdateScreenProjectDto): Promise<ScreenProjectResponse> {

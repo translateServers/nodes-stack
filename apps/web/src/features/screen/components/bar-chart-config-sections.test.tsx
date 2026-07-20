@@ -710,3 +710,308 @@ describe('集成（真实 store）：静态数据提交入历史与迁移', () =
     expect(unchanged.props).toEqual({ title: '销售', data: LEGACY_DATA });
   });
 });
+
+describe('5.3 请求测试与响应预览', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+  });
+
+  function renderApiForm(component?: ScreenComponent) {
+    const comp =
+      component ??
+      makeBarChart({
+        dataSource: {
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api/chart', method: 'GET' },
+        },
+      });
+    return renderSections(comp);
+  }
+
+  it('成功请求展示状态码与截断响应预览', async () => {
+    const responseData = [{ name: '一月', value: 30 }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(responseData),
+    });
+
+    renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+
+    const result = await screen.findByTestId('request-test-result');
+    expect(result.textContent).toContain('200');
+    const preview = screen.getByTestId('request-test-preview');
+    expect(preview.textContent).toContain('一月');
+  });
+
+  it('响应过长时截断展示', async () => {
+    const longData = Array.from({ length: 100 }, (_, i) => ({ name: `项目${i}`, value: i }));
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(longData),
+    });
+
+    renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+
+    const preview = await screen.findByTestId('request-test-preview');
+    expect(preview.textContent!.length).toBeLessThanOrEqual(502);
+    expect(preview.textContent).toContain('…');
+  });
+
+  it('非 2xx 响应展示可读错误（含状态码）', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+
+    const error = await screen.findByTestId('request-test-error');
+    expect(error.textContent).toContain('404');
+  });
+
+  it('网络失败展示可读错误', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+
+    const error = await screen.findByTestId('request-test-error');
+    expect(error.textContent).toContain('网络请求失败');
+  });
+
+  it('响应非合法 JSON 展示解析错误', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected token')),
+    });
+
+    renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+
+    const error = await screen.findByTestId('request-test-error');
+    expect(error.textContent).toContain('不是合法 JSON');
+  });
+
+  it('空请求地址时展示提示且不发起请求', () => {
+    renderApiForm(makeBarChart());
+    fireEvent.click(screen.getByRole('radio', { name: 'API' }));
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+
+    expect(screen.getByTestId('request-test-error').textContent).toContain('请先填写请求地址');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('请求测试不写入组件配置、不产生本地编辑历史', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ data: [] }),
+    });
+
+    const { onUpdate } = renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+    await screen.findByTestId('request-test-result');
+
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it('请求测试使用当前草稿值（含查询参数和请求头）', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
+    });
+
+    renderApiForm();
+    fireEvent.click(screen.getByRole('button', { name: '添加参数' }));
+    fireEvent.change(screen.getAllByRole('textbox', { name: '参数名' })[0], {
+      target: { value: 'type' },
+    });
+    fireEvent.change(screen.getAllByRole('textbox', { name: '参数值' })[0], {
+      target: { value: 'sales' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '添加请求头' }));
+    fireEvent.change(screen.getAllByRole('textbox', { name: '请求头名' })[0], {
+      target: { value: 'Authorization' },
+    });
+    fireEvent.change(screen.getAllByRole('textbox', { name: '请求头值' })[0], {
+      target: { value: 'Bearer token' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+    await screen.findByTestId('request-test-result');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('type=sales');
+    expect(options.headers).toEqual({ Authorization: 'Bearer token' });
+  });
+});
+
+describe('5.4 API 数据路径与字段映射配置', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+  });
+
+  it('API 表单展示数据路径输入框并预填既有配置', () => {
+    renderSections(
+      makeBarChart({
+        dataSource: {
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api', method: 'GET' },
+          dataPath: 'data.list',
+        },
+      }),
+    );
+
+    const dataPathInput = screen.getByRole('textbox', { name: '数据路径' }) as HTMLInputElement;
+    expect(dataPathInput.value).toBe('data.list');
+  });
+
+  it('应用时数据路径写入数据层配置', () => {
+    const { onUpdate } = renderSections(
+      makeBarChart({
+        dataSource: {
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api', method: 'GET' },
+        },
+      }),
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: '数据路径' }), {
+      target: { value: 'result.items' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '应用' }));
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const updates = onUpdate.mock.calls[0][0] as Partial<ScreenComponent>;
+    expect(updates.dataSource?.dataPath).toBe('result.items');
+  });
+
+  it('数据路径为空时不写入 dataPath 字段', () => {
+    const { onUpdate } = renderSections(
+      makeBarChart({
+        dataSource: {
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api', method: 'GET' },
+          dataPath: 'old.path',
+        },
+      }),
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: '数据路径' }), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '应用' }));
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const updates = onUpdate.mock.calls[0][0] as Partial<ScreenComponent>;
+    expect(updates.dataSource?.dataPath).toBeUndefined();
+  });
+
+  it('请求测试成功后字段映射下拉从响应样本推断可选字段', async () => {
+    const responseData = [
+      { city: '北京', sales: 100, region: '华北' },
+      { city: '上海', sales: 200, region: '华东' },
+    ];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(responseData),
+    });
+
+    renderSections(
+      makeBarChart({
+        dataSource: {
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api', method: 'GET' },
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+    await screen.findByTestId('request-test-result');
+
+    // 维度下拉应包含字符串字段
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '维度字段' }), { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: 'city' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'region' })).toBeDefined();
+    expect(screen.queryByRole('option', { name: 'sales' })).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    // 数值下拉应包含数值字段
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '数值字段' }), { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: 'sales' })).toBeDefined();
+    expect(screen.queryByRole('option', { name: 'city' })).toBeNull();
+  });
+
+  it('嵌套路径响应样本：配置数据路径后字段推断使用路径提取后的数组', async () => {
+    const responseData = { data: { list: [{ label: 'A', count: 10 }] } };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(responseData),
+    });
+
+    renderSections(
+      makeBarChart({
+        dataSource: {
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api', method: 'GET' },
+          dataPath: 'data.list',
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+    await screen.findByTestId('request-test-result');
+
+    // 字段推断应基于 data.list 路径提取后的数组
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '维度字段' }), { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: 'label' })).toBeDefined();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    fireEvent.keyDown(screen.getByRole('combobox', { name: '数值字段' }), { key: 'ArrowDown' });
+    expect(await screen.findByRole('option', { name: 'count' })).toBeDefined();
+  });
+
+  it('字段映射修改只写数据层，不影响其他层', async () => {
+    const responseData = [{ city: '北京', sales: 100 }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(responseData),
+    });
+
+    const component = makeBarChart({
+      dataSource: {
+        type: 'api',
+        apiConfig: { url: 'https://example.com/api', method: 'GET' },
+      },
+      logic: { limit: 5 },
+      interaction: { tooltipOnHover: true },
+    });
+    const { onUpdate } = renderSections(component);
+
+    fireEvent.click(screen.getByRole('button', { name: '测试请求' }));
+    await screen.findByTestId('request-test-result');
+
+    await selectOption('维度字段', 'city');
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    const updates = onUpdate.mock.calls[0][0] as Partial<ScreenComponent>;
+    expect(updates.dataSource?.fieldMapping).toEqual({ dimension: 'city', value: 'sales' });
+    expect(updates).not.toHaveProperty('logic');
+    expect(updates).not.toHaveProperty('interaction');
+    expect(updates).not.toHaveProperty('style');
+  });
+});

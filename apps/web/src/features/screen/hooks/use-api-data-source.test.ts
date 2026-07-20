@@ -10,7 +10,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ApiDataSourceConfig } from '@nebula/shared';
 import { useApiDataSource } from './use-api-data-source';
 
@@ -258,5 +258,170 @@ describe('useApiDataSource', () => {
 
     rerender({ config: undefined });
     expect(result.current).toEqual({ status: 'idle' });
+  });
+});
+
+describe('useApiDataSource 定时刷新与竞态防护（任务 7.1-7.2）', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('refreshInterval > 0 时按间隔重新请求', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse([{ name: 'A', value: 1 }]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig({ refreshInterval: 5 });
+    const { result } = renderHook(() => useApiDataSource(config));
+
+    // 首次立即请求
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('success');
+
+    // 5 秒后第二次请求
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // 再 5 秒后第三次请求
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('refreshInterval 为 0 时不启动定时刷新', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse([{ name: 'A', value: 1 }]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig({ refreshInterval: 0 });
+    const { result } = renderHook(() => useApiDataSource(config));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('success');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshInterval 未配置时不启动定时刷新', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse([{ name: 'A', value: 1 }]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig();
+    const { result } = renderHook(() => useApiDataSource(config));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('success');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('配置变更时重建计时器（旧间隔不再生效）', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse([{ name: 'A', value: 1 }]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result, rerender } = renderHook(
+      ({ config }: { config: ApiDataSourceConfig }) => useApiDataSource(config),
+      { initialProps: { config: makeGetConfig({ refreshInterval: 3 }) } },
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('success');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // 切换到 10 秒间隔
+    rerender({ config: makeGetConfig({ refreshInterval: 10, url: 'https://example.com/api/v2' }) });
+    // 配置变更触发新请求
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // 旧 3 秒间隔不再生效
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // 新 10 秒间隔生效
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(7000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('组件卸载时取消计时器与进行中请求', async () => {
+    vi.useFakeTimers();
+    const fetchMock = mockPendingFetch();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig({ refreshInterval: 5 });
+    const { unmount } = renderHook(() => useApiDataSource(config));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+
+    unmount();
+
+    // 进行中请求被中止
+    expect(firstInit.signal?.aborted).toBe(true);
+
+    // 卸载后计时器不再触发新请求
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('定时刷新时旧响应晚到不覆盖新数据（竞态防护）', async () => {
+    vi.useFakeTimers();
+    const secondPayload = [{ name: 'NEW', value: 2 }];
+
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce((_input: RequestInfo | URL, init?: RequestInit) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+        });
+      })
+      .mockImplementation(() => Promise.resolve(mockJsonResponse(secondPayload)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig({ refreshInterval: 5 });
+    const { result } = renderHook(() => useApiDataSource(config));
+
+    expect(result.current.status).toBe('loading');
+
+    // 间隔触发第二次请求，中止第一次
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(firstInit.signal?.aborted).toBe(true);
+
+    // 第二次请求成功，数据为 NEW
+    expect(result.current).toEqual({ status: 'success', data: secondPayload });
   });
 });
