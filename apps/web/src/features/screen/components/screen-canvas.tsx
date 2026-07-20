@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import Moveable from 'react-moveable';
 import Selecto from 'react-selecto';
@@ -51,6 +51,7 @@ interface DragDatas {
   origW: number;
   origH: number;
   isAltCopy: boolean;
+  altCopyClone: HTMLElement | null;
 }
 
 interface ResizeDatas {
@@ -70,6 +71,8 @@ interface RotateDatas {
 
 interface GroupDragDatas {
   ids: string[];
+  isAltCopy: boolean;
+  altCopyClones: HTMLElement[];
 }
 
 /** OnDragEnd / OnResizeEnd 中 `e.lastEvent` 的最小形状（left/top/width/height/isDrag） */
@@ -296,6 +299,7 @@ export function ScreenCanvas({
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+
   const showBorderGuides = useScreenEditorStore((s) => s.showBorderGuides);
   const selectComponents = useScreenEditorStore((s) => s.selectComponents);
   const clearSelection = useScreenEditorStore((s) => s.clearSelection);
@@ -371,23 +375,36 @@ export function ScreenCanvas({
   const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
 
   /**
-   * Memo 化 targets 数组。
-   * 依赖包含 project?.components：新增组件并立即选中时，selectedComponentIds 可能
-   * 先于 ref 注册变化，加入 components 依赖可在组件挂载后再次重算 targets。
+   * Moveable 的 target DOM 元素数组。
+   *
+   * 使用 useState + useLayoutEffect 而非 useMemo：新组件被选中并挂载时
+   * （如 Alt+拖拽复制、粘贴、新建），ref 回调在 commit 阶段执行但不会触发
+   * 重渲染，useMemo 在 render 阶段已计算完毕拿不到新 DOM。useLayoutEffect
+   * 在所有 ref 回调执行后同步运行，此时通过 querySelector 能拿到新挂载的 DOM。
+   * 避免使用 componentRefs（ref 注册时序不可靠），直接 DOM 查询更稳健。
    */
-  const targets = useMemo(
-    () =>
-      selectedComponentIds
-        .map((id) => componentRefs.current.get(id))
-        .filter((el): el is HTMLElement => el != null),
-    [selectedComponentIds, project?.components],
-  );
+  const [targets, setTargets] = useState<HTMLElement[]>([]);
+  useLayoutEffect(() => {
+    if (!contentRef.current || selectedComponentIds.length === 0) {
+      setTargets((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    const newTargets = selectedComponentIds
+      .map((id) => contentRef.current!.querySelector<HTMLElement>(`[data-component-id="${id}"]`))
+      .filter((el): el is HTMLElement => el != null);
+    setTargets((prev) => {
+      if (prev.length === newTargets.length && prev.every((el, i) => el === newTargets[i])) {
+        return prev;
+      }
+      return newTargets;
+    });
+  }, [selectedComponentIds, project?.components]);
 
   useEffect(() => {
     if (moveableRef.current) {
       moveableRef.current.updateRect();
     }
-  }, [selectedComponentIds, project?.components]);
+  }, [targets]);
 
   /**
    * 任务 5.2：文字工具点击画布创建文本组件。
@@ -1126,9 +1143,23 @@ export function ScreenCanvas({
             datas.startY = comp?.position.y ?? 0;
             datas.origW = comp?.position.width ?? 0;
             datas.origH = comp?.position.height ?? 0;
-            // Alt+拖拽复制（适配表 #12）：按下 Alt 启动拖拽时标记，
-            // onDragEnd 时复制选中组件到拖拽位置，原件保持原位
             datas.isAltCopy = readAltKey(e.inputEvent);
+            datas.altCopyClone = null;
+            // Alt+拖拽复制（PS 风格）：按下 Alt 启动拖拽时立即克隆目标 DOM，
+            // 拖拽过程中移动克隆体（原件不动），松手时在克隆位置创建真实副本。
+            if (datas.isAltCopy && contentRef.current) {
+              const clone = e.target.cloneNode(true) as HTMLElement;
+              clone.style.position = 'absolute';
+              clone.style.left = `${datas.startX}px`;
+              clone.style.top = `${datas.startY}px`;
+              clone.style.width = `${datas.origW}px`;
+              clone.style.height = `${datas.origH}px`;
+              clone.style.pointerEvents = 'none';
+              clone.style.userSelect = 'none';
+              clone.setAttribute('data-alt-copy-clone', 'true');
+              contentRef.current.appendChild(clone);
+              datas.altCopyClone = clone;
+            }
             // 同步 W/H 到 dimension store，使拖拽过程中也显示尺寸
             setDimension((d) => ({
               ...d,
@@ -1148,8 +1179,14 @@ export function ScreenCanvas({
             const snap = computeSnappedPosition(e.left, e.top, w, h);
             const finalLeft = snap?.snappedLeft ?? e.left;
             const finalTop = snap?.snappedTop ?? e.top;
-            target.style.left = `${finalLeft}px`;
-            target.style.top = `${finalTop}px`;
+            // Alt+拖拽复制（PS 风格）：移动克隆体，原件不动
+            if (datas.isAltCopy && datas.altCopyClone) {
+              datas.altCopyClone.style.left = `${finalLeft}px`;
+              datas.altCopyClone.style.top = `${finalTop}px`;
+            } else {
+              target.style.left = `${finalLeft}px`;
+              target.style.top = `${finalTop}px`;
+            }
             // rAF 节流仅保留 React store 更新（对齐线浮层 / 尺寸提示），
             // 同帧多次事件仅生效最后一次
             gestureRafThrottlerRef.current?.schedule(() => {
@@ -1174,13 +1211,18 @@ export function ScreenCanvas({
             dispatchInteraction('pointer-up');
             // L1：丢弃挂起帧（最终值取自 e.lastEvent），防止延迟任务覆盖 visible:false
             gestureRafThrottlerRef.current?.cancel();
-            if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<DragDatas>;
+            // Alt+拖拽复制：零位移或异常结束时也要清理克隆体
+            if (datas.isAltCopy && datas.altCopyClone) {
+              datas.altCopyClone.remove();
+              datas.altCopyClone = null;
+            }
+            if (!e.isDrag) return;
             const id = datas.id;
             if (!id) return;
             const last = e.lastEvent as unknown as MoveableLastEvent | undefined;
             if (!last) return;
-            // Alt+拖拽复制：拖拽结束时复制选中组件到光标位置，原件保持原位
+            // Alt+拖拽复制（PS 风格）：拖拽结束时在克隆体最终位置创建真实副本
             if (datas.isAltCopy) {
               duplicateSelectedToPosition(Math.round(last.left), Math.round(last.top));
             } else {
@@ -1378,48 +1420,94 @@ export function ScreenCanvas({
             }
             const datas = e.datas as unknown as GroupDragDatas;
             datas.ids = ids;
+            datas.isAltCopy = readAltKey(e.inputEvent);
+            datas.altCopyClones = [];
+            // Alt+组拖拽复制（PS 风格）：立即克隆所有选中组件 DOM，
+            // 拖拽过程中移动克隆体（原件不动），松手时创建真实副本。
+            if (datas.isAltCopy && contentRef.current) {
+              for (const t of e.targets) {
+                const clone = t.cloneNode(true) as HTMLElement;
+                clone.style.position = 'absolute';
+                clone.style.left = t.style.left;
+                clone.style.top = t.style.top;
+                clone.style.width = t.style.width;
+                clone.style.height = t.style.height;
+                clone.style.pointerEvents = 'none';
+                clone.style.userSelect = 'none';
+                clone.setAttribute('data-alt-copy-clone', 'true');
+                contentRef.current.appendChild(clone);
+                datas.altCopyClones.push(clone);
+              }
+            }
             // 任务 3.3：镜像组拖拽开始到交互状态机
             dispatchInteraction('start-drag');
           }}
           onDragGroup={(e) => {
-            for (const ev of e.events) {
-              ev.target.style.left = `${ev.left}px`;
-              ev.target.style.top = `${ev.top}px`;
+            const datas = e.datas as unknown as GroupDragDatas;
+            // Alt+组拖拽复制（PS 风格）：移动克隆体，原件不动
+            if (datas.isAltCopy && datas.altCopyClones.length > 0) {
+              for (let i = 0; i < e.events.length && i < datas.altCopyClones.length; i++) {
+                const ev = e.events[i];
+                const clone = datas.altCopyClones[i];
+                clone.style.left = `${ev.left}px`;
+                clone.style.top = `${ev.top}px`;
+              }
+            } else {
+              for (const ev of e.events) {
+                ev.target.style.left = `${ev.left}px`;
+                ev.target.style.top = `${ev.top}px`;
+              }
             }
           }}
           onDragGroupEnd={(e) => {
             // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
             dispatchInteraction('pointer-up');
-            if (!e.isDrag) return;
             const datas = e.datas as unknown as Partial<GroupDragDatas>;
+            // Alt+组拖拽复制：零位移或异常结束时也要清理克隆体
+            if (datas.isAltCopy && datas.altCopyClones && datas.altCopyClones.length > 0) {
+              for (const clone of datas.altCopyClones) {
+                clone.remove();
+              }
+              datas.altCopyClones = [];
+            }
+            if (!e.isDrag) return;
             const ids = datas.ids;
             if (!ids || ids.length === 0) return;
-            const updates = e.events
-              .map((ev) => {
-                const id = getComponentIdFromTarget(ev.target);
-                if (!id) return null;
-                const comp = components.find((c: ScreenComponent) => c.id === id);
-                if (!comp) return null;
-                return {
-                  id,
-                  changes: {
-                    position: {
-                      ...comp.position,
-                      x: Math.round(Number.parseInt(ev.target.style.left)),
-                      y: Math.round(Number.parseInt(ev.target.style.top)),
+            // Alt+组拖拽复制（PS 风格）：在克隆体最终位置创建真实副本
+            if (datas.isAltCopy) {
+              const lefts = e.events.map((ev) => Number.parseInt(ev.target.style.left));
+              const tops = e.events.map((ev) => Number.parseInt(ev.target.style.top));
+              const minLeft = Math.min(...lefts);
+              const minTop = Math.min(...tops);
+              duplicateSelectedToPosition(Math.round(minLeft), Math.round(minTop));
+            } else {
+              const updates = e.events
+                .map((ev) => {
+                  const id = getComponentIdFromTarget(ev.target);
+                  if (!id) return null;
+                  const comp = components.find((c: ScreenComponent) => c.id === id);
+                  if (!comp) return null;
+                  return {
+                    id,
+                    changes: {
+                      position: {
+                        ...comp.position,
+                        x: Math.round(Number.parseInt(ev.target.style.left)),
+                        y: Math.round(Number.parseInt(ev.target.style.top)),
+                      },
                     },
-                  },
-                };
-              })
-              .filter((u): u is NonNullable<typeof u> => u != null);
-            // 防御性检查：若部分组件更新失败（如拖拽期间被删除），记录警告并仅更新有效组件
-            if (updates.length !== ids.length) {
-              console.warn(
-                `[ScreenCanvas] 组拖拽结束：期望更新 ${ids.length} 个组件，实际有效 ${updates.length} 个`,
-              );
-            }
-            if (updates.length > 0) {
-              updateComponentsBatch(updates);
+                  };
+                })
+                .filter((u): u is NonNullable<typeof u> => u != null);
+              // 防御性检查：若部分组件更新失败（如拖拽期间被删除），记录警告并仅更新有效组件
+              if (updates.length !== ids.length) {
+                console.warn(
+                  `[ScreenCanvas] 组拖拽结束：期望更新 ${ids.length} 个组件，实际有效 ${updates.length} 个`,
+                );
+              }
+              if (updates.length > 0) {
+                updateComponentsBatch(updates);
+              }
             }
           }}
           onResizeGroupStart={(e) => {

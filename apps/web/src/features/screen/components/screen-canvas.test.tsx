@@ -33,9 +33,11 @@ interface CapturedMoveableProps {
   rotatable: boolean;
   target: unknown;
   onDragStart?: (e: unknown) => boolean | void;
+  onDrag?: (e: unknown) => void;
   onResizeStart?: (e: unknown) => boolean | void;
   onRotateStart?: (e: unknown) => boolean | void;
   onDragGroupStart?: (e: unknown) => boolean | void;
+  onDragGroup?: (e: unknown) => void;
   onResizeGroupStart?: (e: unknown) => boolean | void;
   /**
    * 任务 13.8：捕获 Moveable *End 回调，用于验证零位移手势（isDrag=false）
@@ -128,9 +130,11 @@ vi.mock('react-moveable', () => ({
       rotatable: props.rotatable,
       target: props.target,
       onDragStart: props.onDragStart,
+      onDrag: props.onDrag,
       onResizeStart: props.onResizeStart,
       onRotateStart: props.onRotateStart,
       onDragGroupStart: props.onDragGroupStart,
+      onDragGroup: props.onDragGroup,
       onResizeGroupStart: props.onResizeGroupStart,
       // 任务 13.8：捕获 *End 回调
       onDragEnd: props.onDragEnd,
@@ -1514,6 +1518,143 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     expect(store.updateComponent).toHaveBeenCalledWith('c1', {
       position: { x: 130, y: 160, width: 200, height: 150 },
     });
+  });
+
+  it('Alt+拖拽复制（PS 风格）：onDragStart 立即创建克隆体，原件全程不动', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    target.style.left = '100px';
+    target.style.top = '100px';
+    const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
+
+    capturedMoveable!.onDragStart!(startEvent);
+
+    // PS 风格：onDragStart 时立即创建克隆体
+    const datas = startEvent.datas as { altCopyClone: HTMLElement | null; isAltCopy: boolean };
+    expect(datas.isAltCopy).toBe(true);
+    expect(datas.altCopyClone).not.toBeNull();
+    // 克隆体初始位置与原件一致
+    expect(datas.altCopyClone!.style.left).toBe('100px');
+    expect(datas.altCopyClone!.style.top).toBe('100px');
+    // 原件 DOM 不动
+    expect(target.style.left).toBe('100px');
+    expect(target.style.top).toBe('100px');
+    expect(dispatchInteraction).toHaveBeenCalledWith('start-drag');
+  });
+
+  it('Alt+拖拽复制（PS 风格）：onDrag 移动克隆体，原件不动', () => {
+    renderSelectCanvas();
+    const target = makeComponentTarget();
+    target.style.left = '100px';
+    target.style.top = '100px';
+    const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
+    capturedMoveable!.onDragStart!(startEvent);
+    const datas = startEvent.datas as { altCopyClone: HTMLElement };
+
+    capturedMoveable!.onDrag!({
+      ...startEvent,
+      left: 150,
+      top: 180,
+      target,
+    });
+
+    // PS 风格：克隆体跟随鼠标移动
+    expect(datas.altCopyClone.style.left).toBe('150px');
+    expect(datas.altCopyClone.style.top).toBe('180px');
+    // 原件全程不动
+    expect(target.style.left).toBe('100px');
+    expect(target.style.top).toBe('100px');
+  });
+
+  it('Alt+拖拽复制（PS 风格）：onDragEnd 创建真实副本并清理克隆体', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    target.style.left = '100px';
+    target.style.top = '100px';
+    const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
+    capturedMoveable!.onDragStart!(startEvent);
+    const datas = startEvent.datas as { altCopyClone: HTMLElement };
+
+    capturedMoveable!.onDragEnd!({
+      ...startEvent,
+      isDrag: true,
+      lastEvent: { left: 150, top: 180, isDrag: true },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    // 创建真实副本到最终位置
+    expect(store.duplicateSelectedToPosition).toHaveBeenCalledWith(150, 180);
+    // 原件 state 不变
+    expect(store.updateComponent).not.toHaveBeenCalled();
+    // 原件 DOM 仍在原位
+    expect(target.style.left).toBe('100px');
+    expect(target.style.top).toBe('100px');
+    // 克隆体已移除
+    expect(document.querySelector('[data-alt-copy-clone]')).toBeNull();
+  });
+
+  it('Alt+拖拽复制（PS 风格）：零位移点击不创建副本但清理克隆体', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    target.style.left = '100px';
+    target.style.top = '100px';
+    const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
+    capturedMoveable!.onDragStart!(startEvent);
+
+    capturedMoveable!.onDragEnd!({
+      ...startEvent,
+      isDrag: false,
+      lastEvent: { left: 100, top: 100, isDrag: false },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    // 零位移不创建真实副本
+    expect(store.duplicateSelectedToPosition).not.toHaveBeenCalled();
+    expect(store.updateComponent).not.toHaveBeenCalled();
+    // 克隆体已清理
+    expect(document.querySelector('[data-alt-copy-clone]')).toBeNull();
+  });
+
+  it('新组件被选中并挂载时 Moveable target 更新（修复 control 框不跟随副本）', () => {
+    // 场景：Alt+复制 / 粘贴 / 新建后，新组件被选中但 ref 在 commit 阶段才注册，
+    // useMemo 在 render 阶段已计算完毕拿不到新 DOM，Moveable target 为空。
+    // 改用 useState + useLayoutEffect：在所有 ref 回调执行后同步通过 querySelector
+    // 查找新挂载的 DOM，setTargets 触发重渲染让 Moveable 拿到正确 target。
+    capturedMoveable = null;
+    capturedSelecto = null;
+    const session = makeSession('select', 'idle');
+    const { rerender } = render(<ScreenCanvas editorSession={session} />);
+
+    // 初始：c1 被选中，Moveable target 包含 c1 的 DOM
+    expect(capturedMoveable!.target).toHaveLength(1);
+
+    // 模拟复制/粘贴：向 store 添加新组件 c2，选中切换到 c2
+    const c2: ScreenComponent = {
+      id: 'c2',
+      type: 'shape',
+      name: '矩形 2',
+      position: { x: 200, y: 200, width: 200, height: 150 },
+      style: {},
+      props: {},
+      status: { locked: false, hidden: false },
+      zIndex: 1,
+    };
+    const currentProject = store.project as {
+      components: ScreenComponent[];
+      canvas: unknown;
+    };
+    store.project = { ...currentProject, components: [...currentProject.components, c2] };
+    store.selectedComponentIds = ['c2'];
+
+    // rerender：React 渲染 c2 的 CanvasComponentWrapper，commit 阶段 ref 注册后
+    // useLayoutEffect 同步执行 querySelector 拿到 c2 的 DOM 并 setTargets
+    rerender(<ScreenCanvas editorSession={session} />);
+
+    // 修复前：targets 为空数组（useMemo 在 render 阶段拿不到新 DOM），控制框不显示
+    // 修复后：useLayoutEffect 在 commit 后通过 DOM 查询拿到 c2 的 DOM
+    expect(capturedMoveable!.target).toHaveLength(1);
+    const targetEl = (capturedMoveable!.target as HTMLElement[])[0];
+    expect(targetEl.getAttribute('data-component-id')).toBe('c2');
   });
 
   it('回归：反复"选中 → 取消选中"循环中零位移手势均恢复状态机', () => {
