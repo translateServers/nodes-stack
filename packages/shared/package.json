@@ -63,10 +63,10 @@
   ],
   "scripts": {
     "build": "tsdown",
+    "clean": "rm -rf dist node_modules",
     "dev": "tsdown --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist node_modules"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "zod": "^4.4.3"
@@ -74,7 +74,6 @@
   "devDependencies": {
     "@nebula/typescript-config": "workspace:*",
     "tsdown": "^0.22.0",
-    "tsx": "^4.19.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   }
