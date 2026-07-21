@@ -4,6 +4,8 @@ model ScreenProject {
   description String?
   canvas      String   @default("{}")
   components  String   @default("[]")
+  /// 事件蓝图 JSON 字符串（可选；未编辑蓝图的旧项目为 null）
+  blueprint   String?
   status      String   @default("draft")
   thumbnail   String?
   createdAt   DateTime @default(now())

@@ -12,9 +12,11 @@
  * 该组件为 canvas 渲染组件（非编辑器 shell），不使用 shadcn/ui，
  * 避免与用户可配置样式冲突。
  */
+import type { ComponentStyle } from '@nebula/shared';
+
 interface ImageComponentProps {
   props: Record<string, unknown>;
-  style: Record<string, unknown>;
+  style: ComponentStyle;
 }
 
 export function ImageComponent({ props, style }: ImageComponentProps) {
@@ -35,12 +37,12 @@ export function ImageComponent({ props, style }: ImageComponentProps) {
       alt={alt}
       className="h-full w-full"
       style={{
-        objectFit: (style.objectFit as 'fill' | 'contain' | 'cover' | undefined) ?? 'cover',
-        opacity: (style.opacity as number | undefined) ?? 1,
-        borderWidth: (style.borderWidth as number | undefined) ?? 0,
-        borderStyle: (style.borderStyle as 'solid' | 'dashed' | 'dotted' | undefined) ?? 'solid',
-        borderColor: (style.borderColor as string | undefined) ?? '#000000',
-        borderRadius: (style.borderRadius as number | undefined) ?? 0,
+        objectFit: style.objectFit ?? 'cover',
+        opacity: style.opacity ?? 1,
+        borderWidth: style.borderWidth ?? 0,
+        borderStyle: style.borderStyle ?? 'solid',
+        borderColor: style.borderColor ?? '#000000',
+        borderRadius: style.borderRadius ?? 0,
       }}
       // 防止图片拖拽行为干扰画布交互
       draggable={false}

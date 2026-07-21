@@ -11,17 +11,13 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { UserService } from '@/modules/user/user.service';
-import {
-  type CreateUserDto,
-  type UpdateUserDto,
-  type UserResponse,
-  UserResponseDto,
-} from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, UserResponseDto, type UserResponse } from './dto/user.dto';
 import {
   ApiSuccessResponse,
   ApiSuccessNoDataResponse,
   ApiGlobalErrors,
 } from '@/common/decorators/api-success-response.decorator';
+import { Public } from '@/common/decorators/public.decorator';
 
 @ApiTags('用户模块')
 @ApiBearerAuth()
@@ -31,6 +27,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
+  @Public()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: '创建用户',

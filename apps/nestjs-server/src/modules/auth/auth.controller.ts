@@ -7,10 +7,10 @@ import { UserService } from '@/modules/user/user.service';
 import { CaptchaService } from '@/modules/auth/captcha.service';
 import {
   CaptchaResponseDto,
-  type LoginDto,
+  LoginDto,
   ProfileResponseDto,
-  type RefreshTokenDto,
-  type RegisterDto,
+  RefreshTokenDto,
+  RegisterDto,
   TokenResponseDto,
 } from '@/modules/auth/dto/auth.dto';
 import { Public } from '@/common/decorators/public.decorator';

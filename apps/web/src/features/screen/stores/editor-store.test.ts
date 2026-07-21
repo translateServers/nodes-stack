@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CanvasConfig, ScreenComponent, ScreenProject } from '@nebula/shared';
+import type { CanvasConfig, EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
 
 import { useScreenEditorStore, withHistory } from './editor-store';
 import type { ScreenEditorState } from './editor-store';
@@ -652,6 +652,331 @@ describe('画布配置进入历史栈（阶段 2 链路 B）', () => {
       useScreenEditorStore.getState().updateCanvas({ width: 1280 });
       expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
       expect(useScreenEditorStore.getState().history.future).toHaveLength(0);
+    });
+  });
+});
+
+describe('历史快照扩展为三要素（任务 5.1）', () => {
+  /** 创建一个最小可用的 ScreenProject mock */
+  function makeProject(id = 'proj-1', blueprint?: EventBlueprint): ScreenProject {
+    return {
+      id,
+      name: `project-${id}`,
+      description: null,
+      canvas: makeMockCanvas(),
+      components: [],
+      blueprint,
+      status: 'draft',
+      thumbnail: null,
+      createdAt: '2024-01-01 00:00:00',
+      updatedAt: '2024-01-01 00:00:00',
+    } as unknown as ScreenProject;
+  }
+
+  /** 创建一个最小可用的 ScreenComponent mock */
+  function makeComponent(id = 'comp-1'): ScreenComponent {
+    return {
+      id,
+      type: 'rect',
+      name: `comp-${id}`,
+      position: { x: 0, y: 0, width: 100, height: 100 },
+      style: {},
+      zIndex: 0,
+      status: { locked: false, hidden: false },
+    } as unknown as ScreenComponent;
+  }
+
+  /** 创建最小可用的 EventBlueprint mock */
+  function makeBlueprint(
+    version = 1,
+    nodes: unknown[] = [],
+    edges: unknown[] = [],
+  ): EventBlueprint {
+    return {
+      version,
+      nodes,
+      edges,
+    } as unknown as EventBlueprint;
+  }
+
+  beforeEach(() => {
+    // 重置 store 数据字段，保留 actions；隔离每个用例的状态
+    useScreenEditorStore.setState({
+      project: null,
+      selectedComponentIds: [],
+      history: { past: [], future: [] },
+      isDirty: false,
+    });
+  });
+
+  describe('历史快照携带 blueprint 三要素', () => {
+    it('pushHistory 推入的快照包含 components/canvas/blueprint 三要素', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+
+      // withHistory 路径：触发 pushHistory 推入当前快照
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      const past = useScreenEditorStore.getState().history.past;
+      expect(past).toHaveLength(1);
+      // 三要素都存在：components（修改前的空数组）、canvas、blueprint
+      expect(past[0]).toEqual({
+        components: [],
+        canvas: makeMockCanvas(),
+        blueprint: { version: 1, nodes: [{ id: 'n1' }], edges: [] },
+      });
+    });
+
+    it('project.blueprint=undefined 时快照不带 blueprint 字段（保持向后兼容）', () => {
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', undefined));
+
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      const past = useScreenEditorStore.getState().history.past;
+      expect(past).toHaveLength(1);
+      // blueprint 字段不存在（undefined 在展开条件中不写入）
+      expect(past[0].blueprint).toBeUndefined();
+    });
+  });
+
+  describe('undo/redo 同步恢复三要素', () => {
+    it('undo 同时恢复 components、canvas 与 blueprint', () => {
+      // 初始无 blueprint
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', undefined));
+
+      // 添加组件 → pushHistory 推入 (空组件 + 无 blueprint)
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      // 修改蓝图（模拟添加节点）→ withHistory 推入 (1 组件 + 无 blueprint)
+      const blueprint2 = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
+      withHistory(
+        ((partial: unknown) => {
+          useScreenEditorStore.setState(partial as Partial<ScreenEditorState>);
+        }) as never,
+        'updateBlueprint',
+        () => ({
+          project: {
+            ...useScreenEditorStore.getState().project!,
+            blueprint: blueprint2,
+          },
+        }),
+      );
+
+      // 此时状态：1 组件 + blueprint2
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(1);
+      expect(useScreenEditorStore.getState().project?.blueprint).toEqual(blueprint2);
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(2);
+
+      // undo 蓝图修改：blueprint 回退到 undefined（pushHistory 时的状态）
+      useScreenEditorStore.getState().undo();
+      const state1 = useScreenEditorStore.getState();
+      expect(state1.project?.blueprint).toBeUndefined();
+      // components 应该恢复到 pushHistory 时的状态（1 组件，未变化的）
+      expect(state1.project?.components).toHaveLength(1);
+
+      // 再次 undo：恢复到空组件状态
+      useScreenEditorStore.getState().undo();
+      const state2 = useScreenEditorStore.getState();
+      expect(state2.project?.components).toHaveLength(0);
+      expect(state2.project?.blueprint).toBeUndefined();
+    });
+
+    it('redo 同时恢复 components、canvas 与 blueprint', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+
+      // 添加组件 → pushHistory 推入 (空组件 + blueprint)
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      // 修改画布 → pushHistory 推入 (1 组件 + blueprint)
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+
+      // 两次 undo：回到初始状态
+      useScreenEditorStore.getState().undo();
+      useScreenEditorStore.getState().undo();
+      expect(useScreenEditorStore.getState().project?.components).toHaveLength(0);
+      expect(useScreenEditorStore.getState().project?.blueprint).toEqual(blueprint);
+      expect(useScreenEditorStore.getState().project?.canvas.width).toBe(1920);
+
+      // 第一次 redo：恢复 1 组件 + 初始画布 + blueprint
+      useScreenEditorStore.getState().redo();
+      const state1 = useScreenEditorStore.getState();
+      expect(state1.project?.components).toHaveLength(1);
+      expect(state1.project?.blueprint).toEqual(blueprint);
+      expect(state1.project?.canvas.width).toBe(1920);
+
+      // 第二次 redo：恢复 1 组件 + 1280 画布 + blueprint
+      useScreenEditorStore.getState().redo();
+      const state2 = useScreenEditorStore.getState();
+      expect(state2.project?.components).toHaveLength(1);
+      expect(state2.project?.blueprint).toEqual(blueprint);
+      expect(state2.project?.canvas.width).toBe(1280);
+    });
+
+    it('undo 组件操作不会误回退 blueprint（蓝图与组件共享同一时间线）', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+
+      // 添加组件 → pushHistory 推入 (空组件 + blueprint)
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      // 再次修改画布 → pushHistory 推入 (1 组件 + 画布 + blueprint)
+      useScreenEditorStore.getState().updateCanvas({ backgroundColor: '#ffffff' });
+
+      // undo 画布修改：components 保持 1 个，blueprint 保持 1 节点
+      useScreenEditorStore.getState().undo();
+      const state1 = useScreenEditorStore.getState();
+      expect(state1.project?.components).toHaveLength(1);
+      expect(state1.project?.canvas.backgroundColor).toBe('#000000');
+      expect(state1.project?.blueprint).toEqual(blueprint);
+    });
+
+    it('undo 蓝图修改不会误回退 components 或 canvas', () => {
+      const blueprint1 = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint1));
+
+      // 1. 添加组件 → pushHistory 推入 (空组件 + 初始画布 + blueprint1)
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      // 2. 修改画布 → pushHistory 推入 (1 组件 + 初始画布 + blueprint1)
+      useScreenEditorStore.getState().updateCanvas({ width: 1280 });
+      // 3. 修改蓝图（模拟） → pushHistory 推入 (1 组件 + 1280 画布 + blueprint1)
+      //    然后应用新蓝图 blueprint2
+      const blueprint2 = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
+      // 通过 withHistory 制造一个含蓝图修改的历史条目
+      withHistory(
+        ((partial: unknown) => {
+          useScreenEditorStore.setState(partial as Partial<ScreenEditorState>);
+        }) as never,
+        'updateBlueprint',
+        () => ({
+          project: {
+            ...useScreenEditorStore.getState().project!,
+            blueprint: blueprint2,
+          },
+        }),
+      );
+
+      // undo 蓝图修改：blueprint 回退到 blueprint1，但 components 与 canvas 保持
+      useScreenEditorStore.getState().undo();
+      const state = useScreenEditorStore.getState();
+      expect(state.project?.blueprint).toEqual(blueprint1);
+      expect(state.project?.components).toHaveLength(1);
+      expect(state.project?.canvas.width).toBe(1280);
+    });
+  });
+
+  describe('旧快照兼容（无 blueprint 字段）', () => {
+    it('旧快照（无 blueprint 字段）undo 后 project.blueprint 为 undefined', () => {
+      // 模拟旧版本的历史栈：HistoryEntry 没有 blueprint 字段
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', undefined));
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      // 手动构造一个旧格式快照（无 blueprint 字段）注入到 past
+      const oldSnapshot = {
+        components: [],
+        canvas: makeMockCanvas(),
+        // 没有 blueprint 字段
+      };
+      useScreenEditorStore.setState({
+        history: {
+          past: [oldSnapshot],
+          future: [],
+        },
+      });
+
+      // undo 后应该恢复到旧快照状态：blueprint 为 undefined
+      useScreenEditorStore.getState().undo();
+      const state = useScreenEditorStore.getState();
+      expect(state.project?.blueprint).toBeUndefined();
+      expect(state.project?.components).toHaveLength(0);
+    });
+
+    it('旧快照（无 blueprint 字段）注入 future 后 redo 也能正确恢复', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      // 替换 future 为旧格式快照（无 blueprint）
+      const oldSnapshot = {
+        components: [makeComponent('comp-old')],
+        canvas: makeMockCanvas({ width: 800 }),
+        // 没有 blueprint 字段
+      };
+      useScreenEditorStore.setState({
+        history: {
+          past: [],
+          future: [oldSnapshot],
+        },
+      });
+
+      // redo 后应该恢复到旧快照状态：blueprint 为 undefined
+      useScreenEditorStore.getState().redo();
+      const state = useScreenEditorStore.getState();
+      expect(state.project?.blueprint).toBeUndefined();
+      expect(state.project?.components).toHaveLength(1);
+      expect(state.project?.components[0]?.id).toBe('comp-old');
+      expect(state.project?.canvas.width).toBe(800);
+    });
+  });
+
+  describe('容量限制与 loadProject 清空语义不变', () => {
+    it('HISTORY_LIMIT 对 blueprint 同样生效（旧快照被丢弃）', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+
+      // 制造 51 次修改，使最早的快照被丢弃
+      for (let i = 0; i < 51; i++) {
+        useScreenEditorStore.getState().addComponent(makeComponent(`comp-${i}`));
+      }
+
+      const state = useScreenEditorStore.getState();
+      // 历史栈长度限制为 50
+      expect(state.history.past).toHaveLength(50);
+      // 每个快照都应包含 blueprint 三要素
+      for (const entry of state.history.past) {
+        expect(entry.blueprint).toEqual(blueprint);
+      }
+    });
+
+    it('loadProject 清空历史（含 blueprint 的历史也被清空）', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
+
+      // loadProject 清空历史
+      useScreenEditorStore.getState().loadProject(makeProject('proj-2', blueprint));
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      expect(useScreenEditorStore.getState().history.future).toHaveLength(0);
+    });
+  });
+
+  describe('blueprint 在 future 快照中的同步语义', () => {
+    it('undo 后 future 中保存的快照包含 blueprint', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      useScreenEditorStore.getState().undo();
+
+      const future = useScreenEditorStore.getState().history.future;
+      expect(future).toHaveLength(1);
+      // future 中保存的快照应包含 blueprint
+      expect(future[0].blueprint).toEqual(blueprint);
+      expect(future[0].components).toHaveLength(1);
+    });
+
+    it('redo 时 future 快照的 blueprint 正确恢复', () => {
+      const blueprint = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
+      useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
+
+      // undo → future 含 blueprint
+      useScreenEditorStore.getState().undo();
+      // redo → 从 future 恢复 blueprint
+      useScreenEditorStore.getState().redo();
+
+      const state = useScreenEditorStore.getState();
+      expect(state.project?.blueprint).toEqual(blueprint);
+      expect(state.project?.components).toHaveLength(1);
     });
   });
 });

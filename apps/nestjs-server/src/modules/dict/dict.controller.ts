@@ -12,13 +12,13 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DictService } from '@/modules/dict/dict.service';
 import {
-  type CreateDictTypeDto,
-  type UpdateDictTypeDto,
+  CreateDictTypeDto,
+  CreateDictValueDto,
   DictTypeResponseDto,
-  type DictTypeResponse,
-  type CreateDictValueDto,
-  type UpdateDictValueDto,
   DictValueResponseDto,
+  UpdateDictTypeDto,
+  UpdateDictValueDto,
+  type DictTypeResponse,
   type DictValueResponse,
 } from '@/modules/dict/dto/dict.dto';
 import {

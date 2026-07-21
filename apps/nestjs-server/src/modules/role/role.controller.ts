@@ -12,10 +12,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RoleService } from '@/modules/role/role.service';
 import {
-  type CreateRoleDto,
-  type UpdateRoleDto,
-  type AssignMenusDto,
+  AssignMenusDto,
+  CreateRoleDto,
   RoleResponseDto,
+  UpdateRoleDto,
   type RoleResponse,
 } from '@/modules/role/dto/role.dto';
 import {

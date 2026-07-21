@@ -7,9 +7,11 @@
  * 该组件为 canvas 渲染组件（非编辑器 shell），不使用 shadcn/ui，
  * 避免与用户可配置样式冲突。
  */
+import type { ComponentStyle } from '@nebula/shared';
+
 interface EllipseComponentProps {
   props: Record<string, unknown>;
-  style: Record<string, unknown>;
+  style: ComponentStyle;
 }
 
 export function EllipseComponent({ style }: EllipseComponentProps) {
@@ -17,13 +19,13 @@ export function EllipseComponent({ style }: EllipseComponentProps) {
     <div
       className="h-full w-full"
       style={{
-        backgroundColor: (style.backgroundColor as string) ?? 'transparent',
-        borderWidth: (style.borderWidth as number | undefined) ?? 0,
-        borderStyle: (style.borderStyle as 'solid' | 'dashed' | 'dotted' | undefined) ?? 'solid',
-        borderColor: (style.borderColor as string | undefined) ?? '#000000',
+        backgroundColor: style.backgroundColor ?? 'transparent',
+        borderWidth: style.borderWidth ?? 0,
+        borderStyle: style.borderStyle ?? 'solid',
+        borderColor: style.borderColor ?? '#000000',
         // 椭圆：始终 50% 圆角，忽略用户配置的 borderRadius
         borderRadius: '50%',
-        opacity: (style.opacity as number | undefined) ?? 1,
+        opacity: style.opacity ?? 1,
       }}
     />
   );

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { DateTimeStringSchema } from './datetime.schema.js';
+import { EventBlueprintSchema } from './blueprint.schema.js';
 
 // ===== 枚举 =====
 
@@ -53,6 +54,7 @@ export const ComponentStyleSchema = z.object({
   color: z.string().optional().describe('字体颜色'),
   textAlign: z.enum(['left', 'center', 'right']).optional().describe('文字对齐'),
   overflow: z.enum(['visible', 'hidden', 'auto']).optional().describe('内容溢出处理'),
+  objectFit: z.enum(['fill', 'contain', 'cover']).optional().describe('图片填充模式'),
 });
 export type ComponentStyle = z.infer<typeof ComponentStyleSchema>;
 
@@ -206,6 +208,9 @@ export const ScreenProjectSchema = z.object({
   description: z.string().nullable().optional().describe('项目描述'),
   canvas: CanvasConfigSchema.describe('画布配置'),
   components: z.array(ScreenComponentSchema).describe('组件实例列表'),
+  blueprint: EventBlueprintSchema.optional().describe(
+    '交互层：项目级事件蓝图（跨组件触发与动作编排），与组件级 interaction 字段互不替代',
+  ),
   status: ScreenProjectStatusSchema.describe('项目状态'),
   thumbnail: z.string().nullable().optional().describe('缩略图'),
   createdAt: DateTimeStringSchema.describe('创建时间'),
@@ -227,6 +232,9 @@ export const UpdateScreenProjectSchema = z.object({
   description: z.string().optional().describe('项目描述'),
   canvas: CanvasConfigSchema.optional().describe('画布配置'),
   components: z.array(ScreenComponentSchema).optional().describe('组件实例列表'),
+  blueprint: EventBlueprintSchema.optional().describe(
+    '事件蓝图（可选；缺省表示不修改，不会为未编辑蓝图的项目凭空写入）',
+  ),
   thumbnail: z.string().optional().describe('缩略图'),
   expectedUpdatedAt: DateTimeStringSchema.describe(
     '本次更新基于的保存基线，值来自客户端最后确认的服务端 updatedAt',

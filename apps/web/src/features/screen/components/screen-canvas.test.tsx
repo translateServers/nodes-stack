@@ -1734,7 +1734,6 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     target.style.top = '100px';
     const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
     capturedMoveable!.onDragStart!(startEvent);
-    const datas = startEvent.datas as { altCopyClone: HTMLElement };
 
     capturedMoveable!.onDragEnd!({
       ...startEvent,

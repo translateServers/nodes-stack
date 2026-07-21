@@ -10,7 +10,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { DataSourceConfig, InteractionConfig, LogicConfig } from '@nebula/shared';
+import type {
+  ComponentStyle,
+  DataSourceConfig,
+  InteractionConfig,
+  LogicConfig,
+} from '@nebula/shared';
 import { BarChartComponent } from './bar-chart-component';
 
 const SAMPLE_DATA = [
@@ -21,7 +26,7 @@ const SAMPLE_DATA = [
 
 function renderBarChart(overrides: {
   props?: Record<string, unknown>;
-  style?: Record<string, unknown>;
+  style?: ComponentStyle;
   dataSource?: DataSourceConfig;
   logic?: LogicConfig;
   interaction?: InteractionConfig;

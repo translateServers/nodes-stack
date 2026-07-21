@@ -1,14 +1,18 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { ScreenProject, ScreenComponent, CanvasConfig } from '@nebula/shared';
+import type { ScreenProject, ScreenComponent, CanvasConfig, EventBlueprint } from '@nebula/shared';
 
 /**
- * 历史栈条目：组件数组 + 画布配置的双重快照。
- * 撤销/重做时同步恢复两者，画布配置（宽高/背景/缩放模式）与组件编辑共享同一时间线。
+ * 历史栈条目：组件数组 + 画布配置 + 事件蓝图的三重快照（任务 5.1）。
+ * 撤销/重做时同步恢复三者，画布配置、组件编辑与蓝图编辑共享同一时间线。
+ *
+ * `blueprint` 为可选字段：旧快照（任务 5.1 前的历史栈）无此字段，
+ * undo/redo 时按 undefined 处理，向后兼容。
  */
 interface HistoryEntry {
   components: ScreenComponent[];
   canvas: CanvasConfig;
+  blueprint?: EventBlueprint;
 }
 
 interface HistoryState {
@@ -218,11 +222,17 @@ function pushHistory(set: ScreenEditorSet): void {
     return {
       history: {
         // 浅拷贝即可：store 内所有 update 操作均为 immutable（用展开符产生新对象/新数组），
-        // 不会原地修改 component / canvas 对象，因此旧引用始终保留历史快照语义。
+        // 不会原地修改 component / canvas / blueprint 对象，因此旧引用始终保留历史快照语义。
         // 改用浅拷贝避免大组件树深拷贝（structuredClone）带来的性能开销。
+        // blueprint 为可选字段：仅当当前 project.blueprint 存在时写入快照，
+        // 旧快照（任务 5.1 前）没有此字段，undo/redo 时按 undefined 处理。
         past: [
           ...state.history.past,
-          { components: [...state.project.components], canvas: { ...state.project.canvas } },
+          {
+            components: [...state.project.components],
+            canvas: { ...state.project.canvas },
+            ...(state.project.blueprint ? { blueprint: { ...state.project.blueprint } } : {}),
+          },
         ].slice(-HISTORY_LIMIT),
         future: [],
       },
@@ -703,6 +713,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                 ...state.project,
                 components: previous.components,
                 canvas: previous.canvas,
+                // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
+                blueprint: previous.blueprint ? { ...previous.blueprint } : undefined,
               },
               selectedComponentIds: [],
               history: {
@@ -712,6 +724,9 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                   {
                     components: [...state.project.components],
                     canvas: { ...state.project.canvas },
+                    ...(state.project.blueprint
+                      ? { blueprint: { ...state.project.blueprint } }
+                      : {}),
                   },
                   ...state.history.future,
                 ],
@@ -736,6 +751,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                 ...state.project,
                 components: next.components,
                 canvas: next.canvas,
+                // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
+                blueprint: next.blueprint ? { ...next.blueprint } : undefined,
               },
               selectedComponentIds: [],
               history: {
@@ -744,6 +761,9 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                   {
                     components: [...state.project.components],
                     canvas: { ...state.project.canvas },
+                    ...(state.project.blueprint
+                      ? { blueprint: { ...state.project.blueprint } }
+                      : {}),
                   },
                 ],
                 future: state.history.future.slice(1),

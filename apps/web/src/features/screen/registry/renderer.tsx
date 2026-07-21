@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import type {
+  ComponentStyle,
   DataSourceConfig,
   InteractionConfig,
   LogicConfig,
@@ -13,6 +14,13 @@ import { ImageComponent } from './components/image-component';
 
 interface ComponentRendererProps {
   component: ScreenComponent;
+  /**
+   * 外部传入的 API 数据源响应覆盖（任务 3.4 接入蓝图运行时）：
+   * - undefined：编辑器场景，组件使用 useApiDataSource 自身 state
+   * - 已定义值：预览场景，组件优先使用此值作为 apiRawData（refreshDataSource 动作完成后写入）
+   * 仅图表类组件消费此 prop，其他组件忽略。
+   */
+  apiRawDataOverride?: unknown;
 }
 
 /**
@@ -23,10 +31,15 @@ interface ComponentRendererProps {
  */
 export interface RendererComponentProps {
   props: Record<string, unknown>;
-  style: Record<string, unknown>;
+  style: ComponentStyle;
   dataSource?: DataSourceConfig;
   logic?: LogicConfig;
   interaction?: InteractionConfig;
+  /**
+   * 外部传入的 API 数据源响应覆盖（任务 3.4）：
+   * 仅 BarChartComponent 等图表类组件消费，作为 useApiDataSource state.data 的替代。
+   */
+  apiRawDataOverride?: unknown;
 }
 
 const RENDERERS: Record<string, React.ComponentType<RendererComponentProps>> = {
@@ -46,6 +59,7 @@ const RENDERERS: Record<string, React.ComponentType<RendererComponentProps>> = {
  */
 export const ComponentRenderer = memo(function ComponentRenderer({
   component,
+  apiRawDataOverride,
 }: ComponentRendererProps) {
   const Renderer = RENDERERS[component.type];
   if (!Renderer) {
@@ -62,6 +76,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({
       dataSource={component.dataSource}
       logic={component.logic}
       interaction={component.interaction}
+      apiRawDataOverride={apiRawDataOverride}
     />
   );
 });

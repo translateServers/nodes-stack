@@ -12,10 +12,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ScreenService } from '@/modules/screen/screen.service';
 import {
-  type CreateScreenProjectDto,
-  type UpdateScreenProjectDto,
-  type PublishScreenProjectDto,
+  CreateScreenProjectDto,
+  PublishScreenProjectDto,
   ScreenProjectResponseDto,
+  UpdateScreenProjectDto,
   type ScreenProjectResponse,
 } from '@/modules/screen/dto/screen.dto';
 import {

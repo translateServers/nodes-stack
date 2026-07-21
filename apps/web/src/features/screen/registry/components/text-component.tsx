@@ -1,6 +1,8 @@
+import type { ComponentStyle } from '@nebula/shared';
+
 interface TextComponentProps {
   props: Record<string, unknown>;
-  style: Record<string, unknown>;
+  style: ComponentStyle;
 }
 
 export function TextComponent({ props, style }: TextComponentProps) {
@@ -10,9 +12,9 @@ export function TextComponent({ props, style }: TextComponentProps) {
     <div
       className="flex h-full w-full items-center justify-center"
       style={{
-        fontSize: style.fontSize as number | undefined,
-        color: style.color as string | undefined,
-        textAlign: (style.textAlign as 'left' | 'center' | 'right' | undefined) ?? 'center',
+        fontSize: style.fontSize,
+        color: style.color,
+        textAlign: style.textAlign ?? 'center',
         overflow: 'hidden',
         wordBreak: 'break-word',
       }}

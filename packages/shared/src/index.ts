@@ -8,6 +8,7 @@ export * as RoleSchemas from './schemas/role.schema.js';
 export * as DictSchemas from './schemas/dict.schema.js';
 export * as FileSchemas from './schemas/file.schema.js';
 export * as ScreenSchemas from './schemas/screen.schema.js';
+export * as BlueprintSchemas from './schemas/blueprint.schema.js';
 export * as DateTimeSchemas from './schemas/datetime.schema.js';
 export * as PaginatedSchemas from './schemas/paginated.schema.js';
 export * from './schemas/index.js';

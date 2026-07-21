@@ -11,6 +11,23 @@ import type {
 } from '@/modules/screen/dto/screen.dto';
 import { ScreenProjectResponseSchema } from '@/modules/screen/dto/screen.dto';
 
+/**
+ * 持久化实体类型：与 Prisma ScreenProject 模型对应。
+ * blueprint 字段为可选字符串（JSON 文本），未编辑蓝图的旧项目为 null。
+ */
+interface ScreenProjectEntity {
+  id: string;
+  name: string;
+  description: string | null;
+  canvas: string;
+  components: string;
+  blueprint: string | null;
+  status: string;
+  thumbnail: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 @Injectable()
 export class ScreenService {
   constructor(private prisma: PrismaService) {}
@@ -120,6 +137,7 @@ export class ScreenService {
         ...(dto.description !== undefined ? { description: dto.description ?? null } : {}),
         ...(dto.canvas !== undefined ? { canvas: JSON.stringify(dto.canvas) } : {}),
         ...(dto.components !== undefined ? { components: JSON.stringify(dto.components) } : {}),
+        ...(dto.blueprint !== undefined ? { blueprint: JSON.stringify(dto.blueprint) } : {}),
         ...(dto.thumbnail !== undefined ? { thumbnail: dto.thumbnail ?? null } : {}),
         status: 'draft',
         updatedAt: this.truncateToSeconds(new Date()),
@@ -185,26 +203,20 @@ export class ScreenService {
     });
   }
 
-  private toProjectResponse(entity: {
-    id: string;
-    name: string;
-    description: string | null;
-    canvas: string;
-    components: string;
-    status: string;
-    thumbnail: string | null;
-    createdAt: Date;
-    updatedAt: Date;
-  }): ScreenProjectResponse {
+  private toProjectResponse(entity: ScreenProjectEntity): ScreenProjectResponse {
     // JSON.parse 返回 any,先收窄为 unknown 交给 ScreenProjectResponseSchema 运行时验证
     const canvas: unknown = JSON.parse(entity.canvas);
     const components: unknown = JSON.parse(entity.components);
+    // blueprint 为可选字段：未编辑蓝图的旧项目存储为 null，
+    // 解析为 undefined 保持与 ScreenProjectSchema 的 optional 语义一致（不凭空写入）
+    const blueprint: unknown = entity.blueprint === null ? undefined : JSON.parse(entity.blueprint);
     return ScreenProjectResponseSchema.parse({
       id: entity.id,
       name: entity.name,
       description: entity.description,
       canvas,
       components,
+      ...(blueprint !== undefined ? { blueprint } : {}),
       status: entity.status,
       thumbnail: entity.thumbnail,
       createdAt: entity.createdAt,
