@@ -1,0 +1,71 @@
+# ============================================================
+# Docker 构建上下文忽略规则 (monorepo 根目录)
+# 优化构建上下文大小,加速 docker build
+# ============================================================
+
+# --- 依赖与构建产物 ---
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.turbo/
+**/.tanstack/
+**/tsconfig.tsbuildinfo
+
+# --- 测试产物 ---
+**/*.spec.ts
+**/*.test.ts
+**/*.test.tsx
+**/e2e/
+**/playwright-report/
+**/test-results/
+**/test-artifacts/
+apps/nestjs-server/test/
+apps/nestjs-server/test-e2e.db
+
+# --- 环境与密钥 ---
+.env
+.env.*
+!.env.example
+!.env.docker.example
+**/.env.local
+
+# --- 版本控制 ---
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# --- IDE / 编辑器 ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# --- 文档(容器内不需要) ---
+**/*.md
+README.md
+AGENTS.md
+LICENSE
+
+# --- Trae / AI 工具配置 ---
+.trae/
+.agents/
+
+# --- 截图与日志 ---
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.log
+apps/nestjs-server/screenshot-*.png
+apps/nestjs-server/logs/
+
+# --- 容器自身文件(Dockerfile 除外,避免递归)
+docker-compose.yml
+.dockerignore
+
+# --- 临时文件
+*.tmp
+*.bak
+.cache/

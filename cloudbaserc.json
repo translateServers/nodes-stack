@@ -1,0 +1,55 @@
+{
+  "$schema": "https://framework-1258016615.tcloudbaseapp.com/schema/latest.json",
+  "version": "1.0.0",
+  "envId": "{{ENV_ID}}",
+  "framework": {
+    "name": "nebula",
+    "plugins": {
+      "server": {
+        "use": "@cloudbase/cloudrun-plugin",
+        "inputs": {
+          "serviceName": "nebula-server",
+          "serviceType": "container",
+          "buildDir": "./",
+          "dockerfilePath": "apps/nestjs-server/Dockerfile",
+          "containerPort": 3000,
+          "openAccessTypes": ["PUBLIC"],
+          "cpu": 1,
+          "mem": 2,
+          "minNum": 1,
+          "maxNum": 5,
+          "envVariables": {
+            "NODE_ENV": "production",
+            "DATABASE_PROVIDER": "postgresql",
+            "DATABASE_URL": "{{DATABASE_URL}}",
+            "REDIS_HOST": "{{REDIS_HOST}}",
+            "REDIS_PORT": "{{REDIS_PORT}}",
+            "JWT_SECRET": "{{JWT_SECRET}}",
+            "JWT_REFRESH_SECRET": "{{JWT_REFRESH_SECRET}}",
+            "CORS_ORIGIN": "{{CORS_ORIGIN}}",
+            "ENABLE_SWAGGER": "false",
+            "FILE_UPLOAD_DIR": "/tmp/uploads"
+          }
+        }
+      },
+      "web": {
+        "use": "@cloudbase/cloudrun-plugin",
+        "inputs": {
+          "serviceName": "nebula-web",
+          "serviceType": "container",
+          "buildDir": "./",
+          "dockerfilePath": "apps/web/Dockerfile",
+          "containerPort": 80,
+          "openAccessTypes": ["PUBLIC"],
+          "cpu": 0.5,
+          "mem": 1,
+          "minNum": 1,
+          "maxNum": 3,
+          "envVariables": {
+            "BACKEND_URL": "{{BACKEND_URL}}"
+          }
+        }
+      }
+    }
+  }
+}

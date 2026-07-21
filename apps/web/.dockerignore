@@ -1,11 +1,12 @@
-# 此 .dockerignore 仅供以 apps/nestjs-server/ 为上下文时使用
+# 此 .dockerignore 仅供以 apps/web/ 为上下文时使用
 # 容器化构建推荐从 monorepo 根目录构建,使用根目录的 .dockerignore
 node_modules
 dist
 coverage
 .git
 .env
+.env.test
 *.md
 .trae
-test-e2e.db
-screenshot-*.png
+e2e/playwright-report
+e2e/test-results

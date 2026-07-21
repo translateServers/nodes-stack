@@ -1,0 +1,155 @@
+# Nebula Monorepo 容器化部署编排
+#
+# 使用方式:
+#   1. 复制 .env.docker.example 为 .env,并按需修改敏感字段
+#   2. 执行 docker compose up -d --build
+#   3. 访问 http://localhost:${WEB_PORT:-8080}
+#
+# 服务编排:
+#   migrate -> server -> web
+#      ↑        ↑
+#      └─ db / redis (基础设施)
+#
+# 端口说明:
+#   - web:    前端入口 (默认 8080)
+#   - server: 后端 API (默认 3000)
+#   - db:     PostgreSQL (默认 5432,生产建议移除端口暴露)
+#   - redis:  Redis (默认 6379,生产建议移除端口暴露)
+
+name: nebula
+
+services:
+  # ---------- 数据库迁移 (一次性任务) ----------
+  # 使用 build stage(含完整 prisma CLI),执行 schema 同步后退出
+  # 项目当前未维护 prisma migrations 历史,使用 db push 同步 schema
+  # 生产环境后续应切换到 `prisma migrate deploy` 工作流
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/nestjs-server/Dockerfile
+      target: build
+    container_name: nebula-migrate
+    restart: "no"
+    environment:
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nestdb}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cd /app
+        echo "[migrate] 同步数据库 schema..."
+        pnpm --filter @nebula/nestjs-server exec prisma db push --accept-data-loss --skip-generate
+        echo "[migrate] schema 同步完成"
+    networks:
+      - nebula-net
+
+  # ---------- 前端 (Vite 静态构建 + nginx) ----------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: nebula-web:latest
+    container_name: nebula-web
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    environment:
+      # 后端地址,nginx 反向代理目标
+      # docker-compose 场景: 用服务名 server
+      # CloudRun 场景: 部署时注入后端公网/内网地址
+      - BACKEND_URL=http://server:3000
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - nebula-net
+
+  # ---------- 后端 (NestJS) ----------
+  server:
+    build:
+      context: .
+      dockerfile: apps/nestjs-server/Dockerfile
+    image: nebula-server:latest
+    container_name: nebula-server
+    restart: unless-stopped
+    ports:
+      - '${SERVER_PORT:-3000}:3000'
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-nestdb}?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_KEY_PREFIX=${REDIS_KEY_PREFIX:-nebula:}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_ACCESS_TTL=${JWT_ACCESS_TTL:-15m}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      - JWT_REFRESH_TTL=${JWT_REFRESH_TTL:-7d}
+      - API_PREFIX=${API_PREFIX:-api}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - ENABLE_SWAGGER=${ENABLE_SWAGGER:-false}
+      - FILE_UPLOAD_DIR=/tmp/uploads
+      - FILE_MAX_SIZE=${FILE_MAX_SIZE:-10485760}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nebula-net
+
+  # ---------- 数据库 (PostgreSQL 17) ----------
+  db:
+    image: postgres:17-alpine
+    container_name: nebula-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-nestdb}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nestdb}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - nebula-net
+
+  # ---------- 缓存 (Redis 7) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: nebula-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - nebula-net
+
+networks:
+  nebula-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
