@@ -15,7 +15,8 @@
       "!**/test-results",
       "!**/*.tsbuildinfo",
       "!pnpm-lock.yaml",
-      "!apps/web/src/routeTree.gen.ts"
+      "!apps/web/src/routeTree.gen.ts",
+      "!**/.trae"
     ]
   },
   "formatter": {
