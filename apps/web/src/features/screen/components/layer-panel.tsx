@@ -310,7 +310,7 @@ export function LayerPanel() {
       <div
         data-testid={depth > 0 ? 'layer-row' : undefined}
         data-component-id={depth > 0 ? comp.id : undefined}
-        className={`flex cursor-pointer items-center gap-2 border-b border-border/60 py-2 pr-3 text-sm transition-colors ${
+        className={`group flex cursor-pointer items-center gap-2 border-b border-border/60 py-1.5 pr-3 text-sm transition-colors ${
           isSelected ? 'bg-primary/10' : 'hover:bg-accent'
         }`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
@@ -330,71 +330,79 @@ export function LayerPanel() {
             组内
           </span>
         )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={comp.status.hidden ? '显示' : '隐藏'}
-              onClick={(e) => {
-                e.stopPropagation();
-                setHidden([comp.id], !comp.status.hidden);
-              }}
-            >
-              {comp.status.hidden ? <EyeOff /> : <Eye />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{comp.status.hidden ? '显示' : '隐藏'}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={comp.status.locked ? '解锁' : '锁定'}
-              onClick={(e) => {
-                e.stopPropagation();
-                setLocked([comp.id], !comp.status.locked);
-              }}
-            >
-              {comp.status.locked ? <Lock /> : <Unlock />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{comp.status.locked ? '解锁' : '锁定'}</TooltipContent>
-        </Tooltip>
-        <div className="flex gap-0.5">
+        <div
+          className={`flex items-center gap-0.5 transition-opacity ${
+            comp.status.hidden || comp.status.locked
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label="置顶"
+                aria-label={comp.status.hidden ? '显示' : '隐藏'}
                 onClick={(e) => {
                   e.stopPropagation();
-                  reorderToTop(comp.id);
+                  setHidden([comp.id], !comp.status.hidden);
                 }}
               >
-                <ChevronsUp />
+                {comp.status.hidden ? <EyeOff /> : <Eye />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>置顶</TooltipContent>
+            <TooltipContent>{comp.status.hidden ? '显示' : '隐藏'}</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label="置底"
+                aria-label={comp.status.locked ? '解锁' : '锁定'}
                 onClick={(e) => {
                   e.stopPropagation();
-                  reorderToBottom(comp.id);
+                  setLocked([comp.id], !comp.status.locked);
                 }}
               >
-                <ChevronsDown />
+                {comp.status.locked ? <Lock /> : <Unlock />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>置底</TooltipContent>
+            <TooltipContent>{comp.status.locked ? '解锁' : '锁定'}</TooltipContent>
           </Tooltip>
+          <div className="flex gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="置顶"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reorderToTop(comp.id);
+                  }}
+                >
+                  <ChevronsUp />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>置顶</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="置底"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    reorderToBottom(comp.id);
+                  }}
+                >
+                  <ChevronsDown />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>置底</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
       </div>
     );

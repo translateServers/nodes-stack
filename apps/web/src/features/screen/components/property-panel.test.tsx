@@ -443,10 +443,9 @@ describe('PropertyPanel', () => {
       expect(within(logic).getByRole('combobox', { name: '排序方向' })).toBeDefined();
       expect(within(logic).getByRole('spinbutton', { name: '条数限制' })).toBeDefined();
 
-      // 视觉层：标题与既有样式编辑归入视觉分组
+      // 视觉层：标题与既有样式编辑归入视觉分组（"样式"子标题已移除，标题由 PanelSection 统一提供）
       const visual = screen.getByTestId('visual-section');
       expect(within(visual).getByText('标题')).toBeDefined();
-      expect(within(visual).getByText('样式')).toBeDefined();
       expect(within(visual).getByText('背景')).toBeDefined();
 
       // 交互层：悬停提示开关

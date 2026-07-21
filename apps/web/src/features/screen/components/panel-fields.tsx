@@ -21,7 +21,7 @@ export function TextInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
+      <label className="w-14 shrink-0 text-xs text-muted-foreground">{label}</label>
       <Input
         type="text"
         className="h-7 px-2 py-1 text-sm"
@@ -43,7 +43,7 @@ export function ColorInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <label className="w-12 shrink-0 text-xs text-muted-foreground">{label}</label>
+      <label className="w-14 shrink-0 text-xs text-muted-foreground">{label}</label>
       <input
         type="color"
         className="h-7 w-7 shrink-0 cursor-pointer rounded border border-input bg-card"
@@ -68,9 +68,9 @@ export function StyleFields({
   onUpdate: (updates: Partial<ScreenComponent>) => void;
 }) {
   const { style } = component;
+  // 标题由调用处的 PanelSection 提供，此处仅渲染字段
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-foreground">样式</div>
       <ColorInput
         label="背景"
         value={style.backgroundColor ?? '#ffffff'}

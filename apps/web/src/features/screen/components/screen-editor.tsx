@@ -1,25 +1,23 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { ArrowLeft, Save, Layers, Package } from 'lucide-react';
 import type { TextEditExitKind } from '../lib/text-editing-contract';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { ScreenCanvas } from '../components/screen-canvas';
 import { TextEditorOverlay } from '../components/text-editor-overlay';
-import { ComponentLibrary, useCanvasDrop } from '../components/component-library';
-import { PropertyPanel } from '../components/property-panel';
-import { LayerPanel } from '../components/layer-panel';
+import { useCanvasDrop } from '../components/component-library';
+import { EditorLeftPanel } from '../components/editor-left-panel';
+import { EditorRightPanel } from '../components/editor-right-panel';
+import { EditorToolbar } from '../components/editor-toolbar';
 import { CanvasContextMenu } from '../components/canvas-context-menu';
 import { CanvasRulers, type RulersHandle } from '../components/canvas-rulers';
 import { CanvasGuides } from '../components/canvas-guides';
 import { CanvasStatusBar } from './canvas-status-bar';
-import { ToolSelector } from './tool-selector';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { useToolStateMachine } from '../hooks/use-tool-state-machine';
 import { useInteractionStateMachine } from '../hooks/use-interaction-state-machine';
 import { useEditorSession } from '../hooks/use-editor-session';
 import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
-import { ProjectMenubar } from './project-menubar';
 import { CanvasSettingsDialog } from './canvas-settings-dialog';
 import { ImportDialog } from './import-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
@@ -27,8 +25,6 @@ import { EventBlueprintSheet } from './event-blueprint-sheet';
 import { CodeEditorSheet } from './code-editor-sheet';
 import { SaveConflictDialog } from './save-conflict-dialog';
 import { isSaveConflictError } from '../lib/is-save-conflict-error';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -57,7 +53,8 @@ export function ScreenEditor() {
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const rulersRef = useRef<RulersHandle>(null);
-  const [activeTab, setActiveTab] = useState<'library' | 'layers'>('library');
+  // 最近一次保存成功时间（工具栏保存状态徽标展示用）
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
@@ -232,6 +229,7 @@ export function ScreenEditor() {
           // 保存成功后用服务端响应（含新 updatedAt 与 draft 状态）回写 Store，
           // 作为下次保存/发布基线；保存失败时不调用，保持本地内容
           loadProject(response);
+          setLastSavedAt(new Date());
         },
         onError: (error) => {
           // 保存冲突：打开冲突对话框，不调用 loadProject，保持本地 Store/历史/基线不变
@@ -363,91 +361,34 @@ export function ScreenEditor() {
       <div className="flex h-screen flex-col bg-background text-foreground">
         {/* Toolbar（standard + withMenu 显示，fullscreen 隐藏，Tab 切换时强制隐藏） */}
         {showToolbar && (
-          <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
-            <Button variant="ghost" size="sm" onClick={() => void navigate({ to: '/screen' })}>
-              <ArrowLeft />
-              返回
-            </Button>
-            <div className="text-sm font-medium text-foreground">
-              {storeProject?.name ?? '加载中...'}
-            </div>
-
-            <Separator orientation="vertical" className="mx-2 h-5" />
-
-            <ToolSelector editorSession={editorSession} />
-
-            <Separator orientation="vertical" className="mx-2 h-5" />
-
-            <ProjectMenubar
-              onSave={handleSave}
-              onPublish={handlePublish}
-              onPreview={handlePreview}
-              onShowImport={() => setShowImport(true)}
-              onExport={handleExport}
-              onShowSnapshotManager={() => setShowSnapshotManager(true)}
-              onShowCanvasSettings={() => setShowCanvasSettings(true)}
-              onShowEventBlueprint={() => setShowEventBlueprint(true)}
-              onShowCodeEditor={() => setShowCodeEditor(true)}
-              onShowShortcutsHelp={() => setShowHelp(true)}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
-              onFitToScreen={handleFitToScreen}
-              isSaving={updateMutation.isPending}
-              isPublishing={publishMutation.isPending}
-            />
-
-            <div className="flex-1" />
-
-            <Button onClick={handleSave} disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? <Spinner className="size-4" /> : <Save />}
-              保存
-            </Button>
-            <Button
-              onClick={handlePublish}
-              disabled={publishMutation.isPending}
-              className="bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-            >
-              发布
-            </Button>
-          </div>
+          <EditorToolbar
+            onBack={() => void navigate({ to: '/screen' })}
+            onSave={handleSave}
+            onPublish={handlePublish}
+            onPreview={handlePreview}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onFitToScreen={handleFitToScreen}
+            isSaving={updateMutation.isPending}
+            isPublishing={publishMutation.isPending}
+            lastSavedAt={lastSavedAt}
+            editorSession={editorSession}
+            menubarProps={{
+              onShowImport: () => setShowImport(true),
+              onExport: handleExport,
+              onShowSnapshotManager: () => setShowSnapshotManager(true),
+              onShowCanvasSettings: () => setShowCanvasSettings(true),
+              onShowEventBlueprint: () => setShowEventBlueprint(true),
+              onShowCodeEditor: () => setShowCodeEditor(true),
+              onShowShortcutsHelp: () => setShowHelp(true),
+            }}
+          />
         )}
 
         {/* Editor layout */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left sidebar with tabs（仅 standard 模式显示） */}
-          {showPanels && (
-            <div className="flex h-full w-60 flex-col border-r border-border bg-card">
-              <div className="flex border-b border-border">
-                <button
-                  type="button"
-                  className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
-                    activeTab === 'library'
-                      ? 'border-b-2 border-primary text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setActiveTab('library')}
-                >
-                  <Package className="h-3.5 w-3.5" />
-                  组件库
-                </button>
-                <button
-                  type="button"
-                  className={`flex flex-1 items-center justify-center gap-1 py-2 text-xs font-medium transition-colors ${
-                    activeTab === 'layers'
-                      ? 'border-b-2 border-primary text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  onClick={() => setActiveTab('layers')}
-                >
-                  <Layers className="h-3.5 w-3.5" />
-                  图层
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {activeTab === 'library' ? <ComponentLibrary /> : <LayerPanel />}
-              </div>
-            </div>
-          )}
+          {/* Left sidebar（组件库/图层，仅 standard 模式显示，宽度可调、可折叠） */}
+          {showPanels && <EditorLeftPanel />}
 
           {/* Canvas area with rulers and context menu（始终显示） */}
           <CanvasContextMenu
@@ -458,7 +399,15 @@ export function ScreenEditor() {
             dispatchInteraction={editorSession.dispatchInteraction}
             interactionState={editorSession.interactionState}
           >
-            <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
+            {/* 画布工作区：点阵底纹衬托画布边界（语义 token，light/dark 自适应） */}
+            <div
+              ref={canvasContainerRef}
+              className="relative flex-1 overflow-hidden bg-muted/40"
+              style={{
+                backgroundImage: 'radial-gradient(circle, var(--border) 1px, transparent 1px)',
+                backgroundSize: '24px 24px',
+              }}
+            >
               <CanvasRulers
                 ref={rulersRef}
                 scale={canvasScale}
@@ -497,8 +446,8 @@ export function ScreenEditor() {
             </div>
           </CanvasContextMenu>
 
-          {/* Property panel（仅 standard 模式显示） */}
-          {showPanels && <PropertyPanel />}
+          {/* Property panel（仅 standard 模式显示，宽度可调、可折叠） */}
+          {showPanels && <EditorRightPanel />}
         </div>
 
         {/* Status bar（仅 standard 模式显示） */}

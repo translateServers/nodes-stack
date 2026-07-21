@@ -92,10 +92,14 @@ interface ScreenEditorData {
 
 interface ScreenEditorActions {
   loadProject: (project: ScreenProject) => void;
+  /** 重命名项目（不入历史栈，仅置脏；名称随下次保存持久化） */
+  renameProject: (name: string) => void;
   selectComponent: (id: string | null) => void;
   selectComponents: (ids: string[]) => void;
   clearSelection: () => void;
   addComponent: (component: ScreenComponent) => void;
+  /** 重命名组件（入历史栈；trim 后为空或与原名相同则忽略） */
+  renameComponent: (id: string, name: string) => void;
   updateComponent: (id: string, updates: Partial<ScreenComponent>) => void;
   updateComponentsBatch: (
     updates: Array<{ id: string; changes: Partial<ScreenComponent> }>,
@@ -285,6 +289,21 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         );
       },
 
+      renameProject: (name) => {
+        const trimmed = name.trim();
+        set(
+          (state) => {
+            if (!state.project || !trimmed || trimmed === state.project.name) return {};
+            return {
+              project: { ...state.project, name: trimmed },
+              isDirty: true,
+            };
+          },
+          false,
+          'renameProject',
+        );
+      },
+
       selectComponent: (id) => {
         set({ selectedComponentIds: id ? [id] : [] }, false, 'selectComponent');
       },
@@ -304,6 +323,24 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             project: {
               ...state.project,
               components: [...state.project.components, component],
+            },
+          };
+        });
+      },
+
+      renameComponent: (id, name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        withHistory(set, 'renameComponent', (state) => {
+          if (!state.project) return {};
+          const target = state.project.components.find((c) => c.id === id);
+          if (!target || target.name === trimmed) return {};
+          return {
+            project: {
+              ...state.project,
+              components: state.project.components.map((c: ScreenComponent) =>
+                c.id === id ? { ...c, name: trimmed } : c,
+              ),
             },
           };
         });

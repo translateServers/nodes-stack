@@ -51,6 +51,7 @@ pnpm biome:fix        # Biome 安全自动修复（格式化用这个）
 - 路径别名：`@/` → `src/`
 - TanStack Router 使用文件系统路由，路由树自动生成（`routeTree.gen.ts`，已加入 Biome 忽略配置）
 - UI 组件优先使用 shadcn/ui + Radix UI + Tailwind CSS 工具类
+- 大屏设计器（`src/features/screen/`）编辑器外壳复用 `components/ui-primitives/` 的 `PanelSection`/`ToolbarButton`/`PanelResizeHandle`/`useResizablePanel` 保持视觉一致；左右面板宽度可调（localStorage 持久化）、可折叠
 
 ## 测试
 

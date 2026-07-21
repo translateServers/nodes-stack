@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { NumberInput } from './number-input';
 import { ColorInput, StyleFields, numberInputClass, textareaClass } from './panel-fields';
 import { BarChartConfigSections } from './bar-chart-config-sections';
+import { PanelSection } from './ui-primitives';
 
 function PositionFields({
   component,
@@ -31,50 +32,48 @@ function PositionFields({
   onUpdate: (updates: Partial<ScreenComponent>) => void;
 }) {
   const { position } = component;
+  // 分区标题由调用处的 PanelSection 提供，此处仅保留字段 grid
   return (
-    <div className="space-y-2">
-      <div className="text-xs font-medium text-foreground">位置与尺寸</div>
-      <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 gap-2">
+      <NumberInput
+        label="X"
+        value={position.x}
+        onChange={(v) => onUpdate({ position: { ...position, x: v } })}
+        className={numberInputClass}
+        syncKey={`${component.id}:position.x`}
+      />
+      <NumberInput
+        label="Y"
+        value={position.y}
+        onChange={(v) => onUpdate({ position: { ...position, y: v } })}
+        className={numberInputClass}
+        syncKey={`${component.id}:position.y`}
+      />
+      <NumberInput
+        label="宽"
+        value={position.width}
+        min={1}
+        onChange={(v) => onUpdate({ position: { ...position, width: v } })}
+        className={numberInputClass}
+        syncKey={`${component.id}:position.width`}
+      />
+      <NumberInput
+        label="高"
+        value={position.height}
+        min={1}
+        onChange={(v) => onUpdate({ position: { ...position, height: v } })}
+        className={numberInputClass}
+        syncKey={`${component.id}:position.height`}
+      />
+      {position.rotation != null && position.rotation !== 0 && (
         <NumberInput
-          label="X"
-          value={position.x}
-          onChange={(v) => onUpdate({ position: { ...position, x: v } })}
+          label="旋转"
+          value={position.rotation}
+          onChange={(v) => onUpdate({ position: { ...position, rotation: v } })}
           className={numberInputClass}
-          syncKey={`${component.id}:position.x`}
+          syncKey={`${component.id}:position.rotation`}
         />
-        <NumberInput
-          label="Y"
-          value={position.y}
-          onChange={(v) => onUpdate({ position: { ...position, y: v } })}
-          className={numberInputClass}
-          syncKey={`${component.id}:position.y`}
-        />
-        <NumberInput
-          label="宽"
-          value={position.width}
-          min={1}
-          onChange={(v) => onUpdate({ position: { ...position, width: v } })}
-          className={numberInputClass}
-          syncKey={`${component.id}:position.width`}
-        />
-        <NumberInput
-          label="高"
-          value={position.height}
-          min={1}
-          onChange={(v) => onUpdate({ position: { ...position, height: v } })}
-          className={numberInputClass}
-          syncKey={`${component.id}:position.height`}
-        />
-        {position.rotation != null && position.rotation !== 0 && (
-          <NumberInput
-            label="旋转"
-            value={position.rotation}
-            onChange={(v) => onUpdate({ position: { ...position, rotation: v } })}
-            className={numberInputClass}
-            syncKey={`${component.id}:position.rotation`}
-          />
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -87,9 +86,9 @@ function TextPropsFields({
   onUpdate: (updates: Partial<ScreenComponent>) => void;
 }) {
   const { props, style } = component;
+  // 分区标题由调用处的 PanelSection 提供，此处仅渲染字段
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-foreground">文本属性</div>
       <div className="flex items-center gap-2">
         <label className="w-12 shrink-0 text-xs text-muted-foreground">内容</label>
         <textarea
@@ -125,7 +124,6 @@ function CanvasSettingsFields({
 }) {
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium text-foreground">画布设置</div>
       <NumberInput
         label="宽度"
         value={canvas.width}
@@ -179,11 +177,10 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
 
   return (
     <TooltipProvider>
-      <div className="space-y-4">
-        <div className="text-sm text-muted-foreground">已选中 {selectedIds.length} 个组件</div>
+      <div>
+        <div className="p-3 text-sm text-muted-foreground">已选中 {selectedIds.length} 个组件</div>
 
-        <div className="space-y-2">
-          <div className="text-xs font-medium text-foreground">对齐</div>
+        <PanelSection title="对齐">
           <div className="grid grid-cols-6 gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -264,9 +261,9 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
               <TooltipContent>底对齐</TooltipContent>
             </Tooltip>
           </div>
-        </div>
+        </PanelSection>
 
-        <div className="border-t border-border pt-3">
+        <div className="p-3">
           <Button variant="destructive" className="w-full" onClick={removeSelectedComponents}>
             删除选中 ({selectedIds.length})
           </Button>
@@ -309,18 +306,20 @@ export function PropertyPanel() {
   const isMultiSelect = selectedComponentIds.length > 1;
 
   return (
-    <div className="flex h-full w-72 flex-col border-l border-border bg-card text-foreground">
-      <div className="border-b border-border px-4 py-3 font-medium">
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-card text-foreground">
+      <div className="flex h-10 items-center border-b border-border px-3 text-sm font-medium">
         {selectedComponent
           ? selectedComponent.name
           : isMultiSelect
             ? `多选 (${selectedComponentIds.length})`
             : '属性'}
       </div>
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto">
         {selectedComponent ? (
           <>
-            <PositionFields component={selectedComponent} onUpdate={handleComponentUpdate} />
+            <PanelSection title="位置与尺寸" collapsible>
+              <PositionFields component={selectedComponent} onUpdate={handleComponentUpdate} />
+            </PanelSection>
             {selectedComponent.type === 'bar-chart' ? (
               // bar-chart 按"数据、逻辑、视觉、交互"四层分组（阶段 2 任务 4.1）；
               // key 确保切换组件时重建分组内本地编辑状态
@@ -331,13 +330,20 @@ export function PropertyPanel() {
               />
             ) : (
               <>
-                <StyleFields component={selectedComponent} onUpdate={handleComponentUpdate} />
+                <PanelSection title="样式" collapsible>
+                  <StyleFields component={selectedComponent} onUpdate={handleComponentUpdate} />
+                </PanelSection>
                 {selectedComponent.type === 'text' && (
-                  <TextPropsFields component={selectedComponent} onUpdate={handleComponentUpdate} />
+                  <PanelSection title="文本属性" collapsible>
+                    <TextPropsFields
+                      component={selectedComponent}
+                      onUpdate={handleComponentUpdate}
+                    />
+                  </PanelSection>
                 )}
               </>
             )}
-            <div className="border-t border-border pt-3">
+            <div className="p-3">
               <Button
                 variant="destructive"
                 className="w-full"
@@ -350,9 +356,16 @@ export function PropertyPanel() {
         ) : isMultiSelect ? (
           <MultiSelectPanel selectedIds={selectedComponentIds} />
         ) : (
-          <section data-testid="canvas-settings-section">
-            <CanvasSettingsFields canvas={canvas} onUpdate={updateCanvas} />
-          </section>
+          <>
+            {/* 空选中态提示：引导用户点击画布组件 */}
+            <div className="flex flex-col items-center gap-1 py-6 text-center">
+              <p className="text-xs text-muted-foreground">未选中组件</p>
+              <p className="text-xs text-muted-foreground">点击画布组件以编辑属性</p>
+            </div>
+            <PanelSection title="画布设置" testId="canvas-settings-section">
+              <CanvasSettingsFields canvas={canvas} onUpdate={updateCanvas} />
+            </PanelSection>
+          </>
         )}
       </div>
     </div>

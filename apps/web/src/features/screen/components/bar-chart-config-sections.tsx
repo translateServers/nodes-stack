@@ -39,14 +39,12 @@ import { buildDataSourceMigration } from '../lib/data-source-migration';
 import { extractDataByPath } from '../lib/chart-data-parser';
 import { buildUrlWithParams, API_REQUEST_TIMEOUT_MS } from '../hooks/use-api-data-source';
 import { StyleFields, TextInput, textareaClass } from './panel-fields';
+import { PanelSection } from './ui-primitives';
 
 interface SectionProps {
   component: ScreenComponent;
   onUpdate: (updates: Partial<ScreenComponent>) => void;
 }
-
-/** 分组标题样式（四层分组统一视觉锚点） */
-const sectionTitleClass = 'text-xs font-semibold text-foreground';
 
 // ===== 数据层：生效数据读取 =====
 
@@ -813,8 +811,7 @@ function DataSourceSection({ component, onUpdate }: SectionProps) {
   };
 
   return (
-    <section data-testid="datasource-section" className="space-y-2 border-t border-border pt-3">
-      <div className={sectionTitleClass}>数据</div>
+    <PanelSection title="数据" collapsible testId="datasource-section" contentClassName="space-y-2">
       <RadioGroup
         className="flex gap-4"
         value={shownType}
@@ -850,7 +847,7 @@ function DataSourceSection({ component, onUpdate }: SectionProps) {
         />
       )}
       <FieldMappingControls component={component} onUpdate={onUpdate} apiSample={apiSample} />
-    </section>
+    </PanelSection>
   );
 }
 
@@ -979,8 +976,7 @@ function LogicSection({ component, onUpdate }: SectionProps) {
   };
 
   return (
-    <section data-testid="logic-section" className="space-y-2 border-t border-border pt-3">
-      <div className={sectionTitleClass}>逻辑</div>
+    <PanelSection title="逻辑" collapsible testId="logic-section" contentClassName="space-y-2">
       <div className="flex items-center gap-2">
         <span className="w-12 shrink-0 text-xs text-muted-foreground">排序</span>
         <Select value={logic?.sortField ?? NO_SORT_OPTION} onValueChange={handleSortFieldChange}>
@@ -1015,7 +1011,7 @@ function LogicSection({ component, onUpdate }: SectionProps) {
         onCommit={handleLimitCommit}
         syncKey={`${component.id}:logic.limit`}
       />
-    </section>
+    </PanelSection>
   );
 }
 
@@ -1032,8 +1028,12 @@ function InteractionSection({ component, onUpdate }: SectionProps) {
   };
 
   return (
-    <section data-testid="interaction-section" className="space-y-2 border-t border-border pt-3">
-      <div className={sectionTitleClass}>交互</div>
+    <PanelSection
+      title="交互"
+      collapsible
+      testId="interaction-section"
+      contentClassName="space-y-2"
+    >
       <div className="flex items-center gap-2">
         <Switch
           size="sm"
@@ -1043,7 +1043,7 @@ function InteractionSection({ component, onUpdate }: SectionProps) {
         />
         <span className="text-xs text-muted-foreground">悬停提示</span>
       </div>
-    </section>
+    </PanelSection>
   );
 }
 
@@ -1054,15 +1054,15 @@ export function BarChartConfigSections({ component, onUpdate }: SectionProps) {
     <>
       <DataSourceSection component={component} onUpdate={onUpdate} />
       <LogicSection component={component} onUpdate={onUpdate} />
-      <section data-testid="visual-section" className="space-y-2 border-t border-border pt-3">
-        <div className={sectionTitleClass}>视觉</div>
+      <PanelSection title="视觉" collapsible testId="visual-section" contentClassName="space-y-2">
         <TextInput
           label="标题"
           value={(component.props.title as string) ?? ''}
           onChange={(v) => onUpdate({ props: { ...component.props, title: v } })}
         />
+        {/* StyleFields 不自带标题（标题由 PanelSection 统一提供），此处无重复标题 */}
         <StyleFields component={component} onUpdate={onUpdate} />
-      </section>
+      </PanelSection>
       <InteractionSection component={component} onUpdate={onUpdate} />
     </>
   );
