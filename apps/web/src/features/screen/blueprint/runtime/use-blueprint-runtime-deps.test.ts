@@ -87,9 +87,9 @@ describe('useBlueprintRuntimeDeps - refreshDataSource 取消协议（任务 3.4�
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toBe('https://example.com/api/chart');
-    expect((init as RequestInit).method).toBe('GET');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    expect(url).toBe('https://example.com/api/chart');
+    expect(init?.method).toBe('GET');
     expect(onRefreshComplete).toHaveBeenCalledTimes(1);
     expect(onRefreshComplete).toHaveBeenCalledWith('comp-1', payload);
   });
@@ -271,7 +271,7 @@ describe('useBlueprintRuntimeDeps - refreshDataSource 取消协议（任务 3.4�
       ok: true,
       status: 200,
       json: () => Promise.reject(new SyntaxError('Unexpected token')),
-    } as Response);
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     const onRefreshComplete = vi.fn();
@@ -310,10 +310,10 @@ describe('useBlueprintRuntimeDeps - refreshDataSource 取消协议（任务 3.4�
       await result.current.deps.refreshDataSource('comp-1');
     });
 
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(String(url)).toContain('type=sales');
-    expect(String(url)).toContain('year=2026');
-    const headers = (init as RequestInit).headers as Record<string, string>;
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    expect(url).toContain('type=sales');
+    expect(url).toContain('year=2026');
+    const headers = init?.headers as Record<string, string>;
     expect(headers['X-Api-Key']).toBe('secret-key');
     expect(headers['X-Redacted']).toBeUndefined();
   });
@@ -456,11 +456,11 @@ describe('useBlueprintRuntimeDeps - deps 引用稳定性', () => {
     const handler2 = vi.fn();
     const { result, rerender } = renderHook(
       ({ handler }) => useBlueprintRuntimeDeps(components, handler),
-      { initialProps: { handler: handler1 as typeof handler1 } },
+      { initialProps: { handler: handler1 } },
     );
 
     const firstDeps = result.current.deps;
-    rerender({ handler: handler2 as typeof handler2 });
+    rerender({ handler: handler2 });
     expect(result.current.deps).toBe(firstDeps);
   });
 });

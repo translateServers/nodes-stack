@@ -234,7 +234,7 @@ describe('SearchPanel 键盘交互', () => {
   });
 
   it('Enter 调用 onInsert 传入当前高亮项', () => {
-    const onInsert = vi.fn();
+    const onInsert = vi.fn<(option: NodeOption) => void>();
     render(
       <SearchPanel
         position={{ x: 100, y: 100 }}
@@ -253,7 +253,7 @@ describe('SearchPanel 键盘交互', () => {
   });
 
   it('ArrowDown + Enter 选择第二项并插入', () => {
-    const onInsert = vi.fn();
+    const onInsert = vi.fn<(option: NodeOption) => void>();
     render(
       <SearchPanel
         position={{ x: 100, y: 100 }}
@@ -296,7 +296,7 @@ describe('SearchPanel 键盘交互', () => {
   });
 
   it('过滤后空列表 Enter 不调用 onInsert', () => {
-    const onInsert = vi.fn();
+    const onInsert = vi.fn<(option: NodeOption) => void>();
     render(
       <SearchPanel
         position={{ x: 100, y: 100 }}
@@ -352,7 +352,7 @@ describe('SearchPanel 键盘交互', () => {
 
 describe('SearchPanel 自动连线（connect 模式）', () => {
   it('connect 模式选择节点后通过 onInsert 回调传出（由调用方完成连线）', () => {
-    const onInsert = vi.fn();
+    const onInsert = vi.fn<(option: NodeOption) => void>();
     const pending: PendingConnection = {
       sourceNodeId: 't1',
       sourceHandle: 'out',
@@ -368,7 +368,7 @@ describe('SearchPanel 自动连线（connect 模式）', () => {
     );
 
     const items = screen.getAllByTestId('search-panel-item');
-    fireEvent.click(items[2] as Element); // action.setVisibility
+    fireEvent.click(items[2]); // action.setVisibility
 
     expect(onInsert).toHaveBeenCalledTimes(1);
     const arg: NodeOption = onInsert.mock.calls[0][0];

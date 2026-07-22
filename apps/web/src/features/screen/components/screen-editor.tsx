@@ -21,7 +21,7 @@ import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
 import { CanvasSettingsDialog } from './canvas-settings-dialog';
 import { ImportDialog } from './import-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
-import { EventBlueprintSheet } from './event-blueprint-sheet';
+import { BlueprintSheet } from '../blueprint/sheet';
 import { CodeEditorSheet } from './code-editor-sheet';
 import { SaveConflictDialog } from './save-conflict-dialog';
 import { isSaveConflictError } from '../lib/is-save-conflict-error';
@@ -461,7 +461,7 @@ export function ScreenEditor() {
         onOpenChange={setShowSnapshotManager}
         projectId={storeProject?.id}
       />
-      <EventBlueprintSheet open={showEventBlueprint} onOpenChange={setShowEventBlueprint} />
+      <BlueprintSheet open={showEventBlueprint} onOpenChange={setShowEventBlueprint} />
       <CodeEditorSheet open={showCodeEditor} onOpenChange={setShowCodeEditor} />
       <SaveConflictDialog
         open={showConflictDialog}

@@ -8,7 +8,7 @@
  * - 编辑器画布不执行蓝图：本 Hook 不在编辑器调用
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
 import type { EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
@@ -43,7 +43,7 @@ function makeComponent(id: string, overrides?: Partial<ScreenComponent>): Screen
     zIndex: 0,
     status: { locked: false, hidden: false },
     ...overrides,
-  } as unknown as ScreenComponent;
+  };
 }
 
 function makeApiComponent(id: string, url = 'https://example.com/api/chart'): ScreenComponent {
@@ -138,7 +138,7 @@ describe('useBlueprintPreviewRuntime - 触发执行（任务 3.5）', () => {
     });
 
     // 触发 componentClick 事件
-    await act(async () => {
+    act(() => {
       result.current.onComponentClick('comp-a');
     });
 
@@ -159,7 +159,7 @@ describe('useBlueprintPreviewRuntime - 触发执行（任务 3.5）', () => {
     const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
 
     // 点击不存在的组件
-    await act(async () => {
+    act(() => {
       result.current.onComponentClick('non-existent');
     });
 
@@ -187,7 +187,7 @@ describe('useBlueprintPreviewRuntime - 触发执行（任务 3.5）', () => {
       useBlueprintPreviewRuntime(blueprint, [component, triggerComponent]),
     );
 
-    await act(async () => {
+    act(() => {
       result.current.onComponentClick('comp-trigger');
     });
 
@@ -207,12 +207,12 @@ describe('useBlueprintPreviewRuntime - 编辑器画布无蓝图副作用（任�
     expect(result.current.compiledRules).toEqual([]);
   });
 
-  it('isEnabled=false 时 onComponentClick 不触发任何动作', async () => {
+  it('isEnabled=false 时 onComponentClick 不触发任何动作', () => {
     const { result } = renderHook(() =>
       useBlueprintPreviewRuntime(undefined, [makeComponent('comp-a')]),
     );
 
-    await act(async () => {
+    act(() => {
       result.current.onComponentClick('comp-a');
     });
 
@@ -240,7 +240,7 @@ describe('useBlueprintPreviewRuntime - 编辑器画布无蓝图副作用（任�
 });
 
 describe('useBlueprintPreviewRuntime - 卸载清理（任务 3.5）', () => {
-  it('组件卸载时中止进行中的 refreshDataSource 请求', async () => {
+  it('组件卸载时中止进行中的 refreshDataSource 请求', () => {
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
       return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => {
@@ -533,7 +533,7 @@ describe('useBlueprintPreviewRuntime - 与 ScreenProject 集成', () => {
     expect(result.current.compiledRules).toHaveLength(1);
 
     // 触发点击
-    await act(async () => {
+    act(() => {
       result.current.onComponentClick('comp-a');
     });
 
