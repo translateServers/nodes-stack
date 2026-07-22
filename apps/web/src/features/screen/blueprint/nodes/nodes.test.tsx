@@ -14,7 +14,6 @@
  * - lucide-react 图标保留真实实现，通过 className 验证图标选择
  */
 
-import type { JSX } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { NodeProps } from '@xyflow/react';
@@ -70,7 +69,7 @@ function makeTriggerProps(
     isConnectable: true,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
-  } as NodeProps<TriggerNode>;
+  };
 }
 
 function makeActionProps(
@@ -91,7 +90,7 @@ function makeActionProps(
     isConnectable: true,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
-  } as NodeProps<ActionNode>;
+  };
 }
 
 function makeCommentProps(
@@ -112,7 +111,7 @@ function makeCommentProps(
     isConnectable: true,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
-  } as NodeProps<CommentNode>;
+  };
 }
 
 // ===== 构造器 =====

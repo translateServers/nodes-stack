@@ -11,7 +11,7 @@
  *   避免 ReactFlowProvider/StoreContext 依赖
  */
 
-import type { CSSProperties, JSX, ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import type { EdgeProps } from '@xyflow/react';
@@ -81,7 +81,7 @@ function makeEdgeProps(overrides?: Partial<EdgeProps<ExecEdgeType>>): EdgeProps<
     deletable: true,
     data: {},
     ...overrides,
-  } as EdgeProps<ExecEdgeType>;
+  };
 }
 
 // ===== ExecEdge 渲染 =====

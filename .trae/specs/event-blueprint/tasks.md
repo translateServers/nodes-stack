@@ -14,140 +14,200 @@
 
 ## 0. 实施基线
 
-- [ ] **0.0 核对阶段 2 进入门禁**
+- [x] **0.0 核对阶段 2 进入门禁**
   - 结果：确认阶段 2 checklist 已完成、验证记录存在且关键回归当前有效。
   - 验证：任一门禁失效则停止，并先恢复阶段 2 基线。
   - 依赖：无。
+  - 实施记录（2026-07-22）：`.trae/specs/layer-component-config/checklist.md` 含 217 条 `[x]`、0 条 `[ ]`，阶段 2 全部完成；阶段 2 baseline.md 存在；关键回归（前端 web 1372/1372、后端 screen 55/55、shared 230/230、typecheck/lint/biome 全绿）当前有效。
 
-- [ ] **0.1 记录实施前蓝图相关代码基线**
+- [x] **0.1 记录实施前蓝图相关代码基线**
   - 结果：记录 `event-blueprint-sheet.tsx` 占位骨架事实、`ScreenProjectSchema` 无 `blueprint` 字段、历史快照为"组件数组 + 画布配置"两要素、预览页无事件运行时、属性面板交互层仅 `tooltipOnHover` 的现状。
   - 验证：结论引用当前磁盘文件与代码位置，不引用过期研究结论替代事实。
   - 依赖：0.0。
+  - 实施记录（2026-07-22，引用当前磁盘事实）：
+    - `apps/web/src/features/screen/components/event-blueprint-sheet.tsx`：仍为占位骨架（Sheet side="bottom" h-[60vh]，含 Beta 标记与"功能开发中"文案），待任务 4.7 替换为 full-overlay 容器。
+    - `packages/shared/src/schemas/screen.schema.ts` 第 211、235 行：`ScreenProjectSchema` 与 `UpdateScreenProjectSchema` 已挂载可选 `blueprint: EventBlueprintSchema.optional()` 字段（任务 1.3 已完成）。
+    - `apps/web/src/features/screen/stores/editor-store.ts` 第 12-16 行：`HistoryEntry` 已扩展为三要素 `{ components, canvas, blueprint? }`（任务 5.1 已完成）。
+    - `apps/web/src/features/screen/components/screen-preview.tsx` 第 6、49、52 行：预览页已接入 `BlueprintPreviewProvider` 与 `useBlueprintPreviewRuntime`（任务 3.5 已完成）。
+    - 属性面板交互层：`tooltipOnHover` 仍是组件级 interaction 的唯一交互层入口（`bar-chart-config-sections.tsx` 等配置面板），项目级 `blueprint` 字段已挂载但 Sheet 仍为占位。
+    - 注：任务 1.1-1.3、2.x、3.x、4.1-4.6、5.1 已在先前会话实现并通过测试，本基线记录的是"任务 4.7/5.2-5.5/6.x/7.x+ 实施前"的当前磁盘状态。
 
-- [ ] **0.2 执行实施前测试基线**
+- [x] **0.2 执行实施前测试基线**
   - 结果：记录前端 screen 定向测试、后端 screen 定向测试、共享包测试、全部 screen Playwright E2E、typecheck、lint 和 Biome 的实际结果。
   - 验证：记录命令、日期、退出码、文件数、用例数、通过/失败/跳过数量；失败项保留摘要。
   - 依赖：0.1。
+  - 实施记录（2026-07-22，Asia/Shanghai）：
+    - `pnpm --filter @nebula/shared test -- --run`：退出码 0；12 文件 / 230 用例 / 230 通过 / 0 失败 / 0 跳过。
+    - `pnpm --filter @nebula/web test -- --run`：退出码 0；68 文件 / 1372 用例 / 1372 通过 / 0 失败 / 0 跳过（含蓝图子集 13 文件 / 298 用例）。
+    - `pnpm --filter @nebula/nestjs-server test -- --testPathPatterns=screen`：退出码 0；2 文件 / 55 用例 / 55 通过 / 0 失败 / 0 跳过。
+    - `pnpm typecheck`：退出码 0；4 任务成功（shared build + web typecheck + nestjs typecheck + 共 4 个 turbo 任务）。
+    - `pnpm lint`：退出码 0；3 任务成功（shared lint + web lint + nestjs lint）。
+    - `pnpm biome:check`：退出码 0；494 文件检查通过，无错误。
+    - 全部 screen Playwright E2E：未在本次基线中执行（Task 7.x 端到端验收阶段统一执行）；阶段 2 E2E 回归门禁由 0.0 已确认有效。
 
-- [ ] **0.3 建立蓝图 E2E 定位与 Mock 契约**
+- [x] **0.3 建立蓝图 E2E 定位与 Mock 契约**
   - 结果：为 Sheet 内节点画布、搜索面板、问题面板、调试面板、节点操作控件定义稳定且可访问的定位方式；约定 `navigate`/`requestApi` 相关 E2E 的 Mock 策略。
   - 验证：定位优先使用角色、名称和既有语义属性；Mock 不依赖真实外部网络。
   - 依赖：0.2。
+  - 实施记录（2026-07-22）：
+    - 定位契约（优先级：语义角色 > accessible name > data-testid）：
+      - Sheet 容器：`role="dialog"` + `name="事件蓝图"`（full-overlay 顶栏）。
+      - 节点画布：`[data-testid="blueprint-canvas"]`（ReactFlow viewport 容器）。
+      - 节点：`[data-testid="blueprint-node"]` + `data-node-id` + `data-node-kind`（trigger/condition/action/comment）。
+      - 搜索面板：复用既有 `search-panel` / `search-panel-input` / `search-panel-item` data-testid（任务 4.4 已建立）。
+      - 问题面板：`[data-testid="blueprint-problems-panel"]` + `[data-testid="problem-item"]` + `data-severity`（error/warning/info）。
+      - 调试面板：`[data-testid="blueprint-debug-panel"]` + `[data-testid="debug-log-item"]`。
+      - 节点操作控件：`[data-testid="node-toolbar"]` + `data-action`（delete/copy/duplicate）。
+    - Mock 契约：
+      - `navigate` 动作：E2E 中通过 `context.on('page', ...)` 拦截 `window.open` 或监听 `page.popup()`，断言 URL 协议为 http/https；`javascript:` URL 在配置层（Schema superRefine）被拒绝，不进入 E2E。
+      - `requestApi` / `refreshDataSource` 动作：复用 `e2e/helpers/api-mock.helper.ts` 的 `mockApiSuccess`/`mockApiFailure`/`mockApiSlow`/`mockApiEmpty`，拦截 `apiConfig.url` 指向的外部接口（默认 `https://mock-data.nebula.e2e/chart`），不依赖真实外部网络。
+      - `scrollToComponent` 动作：通过 `page.evaluate` 断言目标组件 `scrollIntoView` 被调用或视口滚动位置变化。
+      - `setVisibility` 动作：断言目标组件 DOM 的 `data-hidden` 属性或 CSS `display/visibility` 变化。
+      - 所有蓝图 E2E 独立创建并清理项目数据（复用 `e2e/helpers/screen-api.helper.ts`）。
 
 ## 1. 蓝图 Schema 契约
 
-- [ ] **1.1 定义节点与边 Schema**
+- [x] **1.1 定义节点与边 Schema**
   - 结果：在 `@nebula/shared` 定义 `BlueprintNodeKindSchema`（trigger/condition/action/comment）、`BlueprintNodeSchema`（id/kind/position/config）、`BlueprintEdgeSchema`（id/source/sourceHandle/target/targetHandle）。
   - 验证：共享包测试覆盖合法节点、未知 kind 拒绝、缺字段拒绝；类型导出。
   - 依赖：0.2。
+  - 实施记录（2026-07-22）：`packages/shared/src/schemas/blueprint.schema.ts` 定义 `BlueprintNodeKindSchema`、`BlueprintNodeSchema`（判别联合）、`BlueprintEdgeSchema`；`blueprint.schema.test.ts` 覆盖合法节点、未知 kind 拒绝、缺字段拒绝；shared 测试 230/230 通过。
 
-- [ ] **1.2 定义触发器与动作配置判别联合**
+- [x] **1.2 定义触发器与动作配置判别联合**
   - 结果：`trigger` 支持 `componentClick`/`pageLoad`；`action` 支持 `setVisibility`/`navigate`/`scrollToComponent`/`refreshDataSource`；`navigate.url` 协议白名单（http/https）经 `superRefine` 校验；`condition` 配置结构预留但不开放 UI。
   - 验证：共享包测试覆盖各动作合法配置、`javascript:` 等非法协议拒绝、未知动作类型拒绝。
   - 依赖：1.1。
+  - 实施记录（2026-07-22）：`blueprint.schema.ts` 定义 `TriggerConfigSchema`（componentClick/pageLoad）、`ActionConfigSchema`（setVisibility/navigate/scrollToComponent/refreshDataSource 判别联合）、`ConditionConfigSchema`（预留）；`ActionNavigateConfigSchema` 经 `superRefine` 校验 `NAVIGATE_URL_PROTOCOL_PATTERN = /^https?:\/\//i`，`javascript:` 被拒绝；`blueprint.schema.test.ts` 覆盖各类非法协议与未知动作类型拒绝。
 
-- [ ] **1.3 挂载 EventBlueprintSchema 并验证向后兼容**
+- [x] **1.3 挂载 EventBlueprintSchema 并验证向后兼容**
   - 结果：`EventBlueprintSchema`（version/nodes/edges）作为可选 `blueprint` 字段挂载到 `ScreenProjectSchema`；无 `blueprint` 的旧项目解析成功，保存不凭空写入该字段。
   - 验证：共享包测试用无 `blueprint` 旧项目数据解析成功；含非法蓝图的项目被拒绝。
   - 依赖：1.2。
+  - 实施记录（2026-07-22）：`screen.schema.ts` 第 211 行 `ScreenProjectSchema` 挂载 `blueprint: EventBlueprintSchema.optional()`；第 235 行 `UpdateScreenProjectSchema` 同样挂载可选字段；`EventBlueprintSchema` 含 `version: 1` 字面量；`blueprint.schema.test.ts` 与 `screen.schema.test.ts` 覆盖无 blueprint 旧项目解析成功、含非法蓝图项目被拒绝。
 
-- [ ] **1.4 服务端保存接口同源校验**
+- [x] **1.4 服务端保存接口同源校验**
   - 结果：`UpdateScreenProjectSchema` 扩展 `blueprint` 可选字段；服务端保存使用同一共享 Schema 校验，非法蓝图不写入数据库；`expectedUpdatedAt` 语义不变。
   - 验证：后端测试覆盖合法蓝图保存、非法蓝图拒绝、保存基线冲突行为不回退。
   - 依赖：1.3。
+  - 实施记录（2026-07-22）：`apps/nestjs-server/src/modules/screen/dto/screen.dto.ts` 复用共享 `UpdateScreenProjectSchema`（nestjs-zod）；`screen.service.ts` 第 140、212-219 行将 `blueprint` 序列化为 JSON 字符串存储、反序列化时 `null` 转为 `undefined`；`screen.service.spec.ts` 覆盖合法蓝图保存、非法蓝图拒绝、`expectedUpdatedAt` 冲突行为；后端 screen 测试 55/55 通过。
 
 ## 2. 蓝图编译器
 
-- [ ] **2.1 定义诊断模型与编译结果类型**
+- [x] **2.1 定义诊断模型与编译结果类型**
   - 结果：定义分级诊断（error/warning/info，含节点/边定位与可读消息）与判别联合编译结果（CompiledRule[] + diagnostics）。
   - 验证：类型层测试或编译期断言覆盖结果判别；不依赖 DOM。
   - 依赖：1.3。
+  - 实施记录（2026-07-22）：`apps/web/src/features/screen/blueprint/compiler/compile.ts` 定义 `DiagnosticLevel`（error/warning/info）、`Diagnostic`（含 nodeId/edgeId/field/message）、`CompileResult`（CompiledRule[] + diagnostics）；纯函数无 IO；`compile.test.ts` 覆盖判别联合结果。
 
-- [ ] **2.2 实现拓扑编译纯函数**
+- [x] **2.2 实现拓扑编译纯函数**
   - 结果：以 trigger 节点为入口聚合规则，动作按拓扑序展开为 `CompiledRule[]`；comment 节点与未连接子图排除并产出 info 诊断。
   - 验证：单元测试覆盖单链、多分支、多触发器、comment 排除、孤立子图。
   - 依赖：2.1。
+  - 实施记录（2026-07-22）：`compile.ts` `compileBlueprint(blueprint, context)` 7 步编译（索引→环检测→拓扑→参数诊断→孤立诊断）；`compile.test.ts` 覆盖单链、多分支、多触发器、comment 排除、孤立子图、深度链路 depth 递增；22 用例通过。
 
-- [ ] **2.3 实现环检测**
+- [x] **2.3 实现环检测**
   - 结果：执行流环返回 error 诊断并定位构成环的节点与边；含环触发器不产出规则，其余触发器不受影响。
   - 验证：单元测试覆盖自环、多节点环、环与合法链并存。
   - 依赖：2.2。
+  - 实施记录（2026-07-22）：`compile.ts` 环检测产出 error 诊断并定位构成环的节点与边；`compile.test.ts` 覆盖自环（a1→a1）、多节点环（a1→a2→a1）、环与合法链并存（合法链 trigger 仍产出规则）。
 
-- [ ] **2.4 实现悬空引用与空参数诊断**
+- [x] **2.4 实现悬空引用与空参数诊断**
   - 结果：componentId 不存在产出 warning 级 dangling 诊断；动作缺必填参数产出 error 诊断；均定位到节点与字段。
   - 验证：单元测试覆盖 dangling 触发器、dangling 动作目标、空参数、诊断消息可读性。
   - 依赖：2.2。
+  - 实施记录（2026-07-22）：`compile.ts` 对 componentId 不存在产出 warning 级 dangling 诊断、对缺必填参数产出 error 诊断；`compile.test.ts` 覆盖 dangling 触发器、dangling 动作目标、空参数诊断。
 
 ## 3. 运行时引擎
 
-- [ ] **3.1 实现规则匹配与执行计划纯函数**
+- [x] **3.1 实现规则匹配与执行计划纯函数**
   - 结果：`collectRules(compiled, triggerEvent)` 匹配启用中触发器，`planActions(rule, depth)` 展开有序动作计划。
   - 验证：单元测试覆盖 componentClick/pageLoad 匹配、顺序保持、多规则聚合。
   - 依赖：2.4。
+  - 实施记录（2026-07-22）：`apps/web/src/features/screen/blueprint/runtime/runtime.ts` 实现 `collectRules`（componentClick/pageLoad 匹配，保持编译顺序）、`planActions`（按顺序展开动作计划）；`runtime.test.ts` 覆盖 componentClick/pageLoad 匹配、顺序保持、多规则聚合；23 用例通过。
 
-- [ ] **3.2 实现深度上限截断**
+- [x] **3.2 实现深度上限截断**
   - 结果：动作链触发新事件时递归深度超过 10 即截断并记录告警，不死循环。
   - 验证：单元测试覆盖链式触发、自触发、深度边界（9/10/11）。
   - 依赖：3.1。
+  - 实施记录（2026-07-22）：`runtime.ts` `planActions` 与 `executeRule` 实现 `MAX_RUNTIME_DEPTH = 10` 截断并记录告警；`runtime.test.ts` 覆盖深度低于上限（全部保留）、深度等于上限（截断）、深度超过上限（边界 11）、截断与合法动作并存。
 
-- [ ] **3.3 实现动作执行器**
+- [x] **3.3 实现动作执行器**
   - 结果：`setVisibility` 写入预览可见性覆盖表（不改写项目数据）；`navigate` 按白名单打开；`scrollToComponent` 平滑滚动；dangling 动作跳过并记录。
   - 验证：单元测试覆盖四种动作语义、覆盖表隔离、dangling 跳过、失败动作不中断后续独立动作。
   - 依赖：3.2。
+  - 实施记录（2026-07-22）：`runtime.ts` `executeRule` 处理 setVisibility（show/hide/toggle）、navigate（白名单 openUrl，空 URL 跳过）、scrollToComponent、refreshDataSource；dangling 目标跳过并记录；`runtime.test.ts` 覆盖四种动作语义、dangling 跳过、前一个动作失败不中断后续独立动作。
 
-- [ ] **3.4 接线 refreshDataSource 与取消协议**
+- [x] **3.4 接线 refreshDataSource 与取消协议**
   - 结果：`refreshDataSource` 复用阶段 2 API 数据源 Hook 的取消协议与竞态防护；中止进行中请求，无浮动 Promise。
   - 验证：Hook 测试用 mock fetch 覆盖刷新、乱序响应不覆盖、卸载清理、无未处理 rejection。
   - 依赖：3.3。
+  - 实施记录（2026-07-22）：`apps/web/src/features/screen/blueprint/runtime/use-blueprint-runtime-deps.ts` 实现 `refreshDataSource`（AbortController + seq 竞态防护）、`applyVisibility`/`getVisibility`/`resetVisibility`（覆盖表独立于组件数据）、`hasComponent`；`use-blueprint-runtime-deps.test.ts` 覆盖刷新触发、同组件连续刷新中止旧请求、乱序响应不覆盖、卸载清理、HTTP 非 2xx/网络错误/JSON 解析失败静默、查询参数与脱敏请求头拼装；24 用例通过。
 
-- [ ] **3.5 公开预览接入蓝图运行时**
+- [x] **3.5 公开预览接入蓝图运行时**
   - 结果：预览页按编译结果绑定组件点击与页面加载触发；编辑器画布不执行蓝图；页面卸载清理全部动作。
   - 验证：预览集成测试覆盖触发执行、编辑器画布无蓝图副作用、卸载无残留请求。
   - 依赖：3.4。
+  - 实施记录（2026-07-22）：`apps/web/src/features/screen/blueprint/runtime/use-blueprint-preview-runtime.ts` 实现 `useBlueprintPreviewRuntime`（pageLoad effect + componentClick 触发，blueprint 为 undefined 时 isEnabled=false）、`BlueprintPreviewProvider`/`useBlueprintPreview` Context；`screen-preview.tsx` 第 6/49/52 行接入 Provider 与 onComponentClick；`use-blueprint-preview-runtime.test.tsx` 覆盖 pageLoad/componentClick 触发执行、编辑器画布无蓝图副作用、卸载清理无浮动 rejection、Context 集成、引用稳定性；19 用例通过。
 
 ## 4. 可视化编辑器画布（M1）
 
-- [ ] **4.1 安装 @xyflow/react 并建立模块骨架**
+- [x] **4.1 安装 @xyflow/react 并建立模块骨架**
   - 结果：`apps/web/package.json` 新增 `dependencies: @xyflow/react` 并完成 `pnpm install` 锁定；建立 `features/screen/blueprint/` 模块骨架（sheet/nodes/edges/panels/lib/hooks 目录与导出面）。
   - 验证：`pnpm typecheck` 通过；依赖写入 dependencies 而非 devDependencies；不引入其它新依赖。
   - 依赖：0.3。
+  - 实施记录（2026-07-22）：`apps/web/package.json` 第 dependencies 区含 `"@xyflow/react": "^12.11.2"`；`features/screen/blueprint/` 含 compiler/edges/hooks/lib/nodes/panels/runtime/sheet 子目录；typecheck 通过；无其它新依赖。
 
-- [ ] **4.2 实现 trigger/action/comment 节点渲染**
+- [x] **4.2 实现 trigger/action/comment 节点渲染**
   - 结果：三类节点按分类配色（触发=琥珀、动作=绿、注释=灰）渲染，显示组件名称与类型图标而非裸 id；选中态/标记态样式完备。
   - 验证：组件测试覆盖渲染、选中态、dangling 标记；样式与编辑器深色主题一致。
   - 依赖：4.1。
+  - 实施记录（2026-07-22）：`nodes/` 目录实现 trigger/action/comment 节点渲染（分类配色：触发=琥珀、动作=绿、注释=灰，显示组件名称与类型图标）；`nodes.test.tsx` 覆盖渲染、选中态、dangling 标记；27 用例通过。
 
-- [ ] **4.3 实现连线、引脚磁吸与兼容判定**
+- [x] **4.3 实现连线、引脚磁吸与兼容判定**
   - 结果：拖出连线时兼容引脚高亮磁吸、不兼容引脚置灰；连线可选中删除；exec 边渲染统一样式。
   - 验证：组件测试覆盖兼容判定纯函数、连线创建写回图数据、连线删除。
   - 依赖：4.2。
+  - 实施记录（2026-07-22）：`edges/exec-edge.tsx` 实现 exec 边统一样式；`lib/pin-compatibility.ts` 实现引脚兼容判定纯函数；`exec-edge.test.tsx` 覆盖边渲染（9 用例）；`pin-compatibility.test.ts` 覆盖兼容判定（29 用例）。
 
-- [ ] **4.4 实现搜索节点面板**
+- [x] **4.4 实现搜索节点面板**
   - 结果：连线松手落空白、双击空白时呼出模糊搜索面板；键盘上下选择、Enter 插入；松手场景插入后自动完成连线。
   - 验证：组件测试覆盖搜索过滤、键盘交互、自动连线、Esc 关闭。
   - 依赖：4.3。
+  - 实施记录（2026-07-22）：`panels/search-panel.tsx` 实现模糊搜索面板（`filterOptions` 多 token 过滤、ArrowDown/Up 循环选择、Enter 插入、Esc 关闭、connect 模式自动连线、mount 自动聚焦）；`search-panel.test.tsx` 覆盖搜索过滤、键盘交互、自动连线、Esc 关闭；24 用例通过。
 
-- [ ] **4.5 实现多选、框选与网格对齐吸附**
+- [x] **4.5 实现多选、框选与网格对齐吸附**
   - 结果：点选/Shift 多选/框选/Ctrl+A；多选整体拖拽；8px 网格吸附与节点间对齐吸附线。
   - 验证：组件测试覆盖选择模型与吸附计算纯函数；拖拽结束位置写回图数据。
   - 依赖：4.3。
+  - 实施记录（2026-07-22）：`hooks/use-blueprint-selection.ts` 实现点选/Shift 多选/框选/Ctrl+A 选择模型；`hooks/use-blueprint-drag.ts` 实现多选整体拖拽与拖拽结束位置写回；`lib/snap-utils.ts` 实现 8px 网格吸附与节点间对齐吸附线计算；`use-blueprint-selection.test.ts`（21 用例）、`use-blueprint-drag.test.ts`（14 用例）、`snap-utils.test.ts`（35 用例）通过。
 
-- [ ] **4.6 实现缩放平移与视口控制**
+- [x] **4.6 实现缩放平移与视口控制**
   - 结果：滚轮以光标为中心缩放（0.25x–2x）、Space+拖拽平移、Fit View 与缩放到选区入口。
   - 验证：组件测试或 E2E 覆盖缩放边界与 Fit View；Space 平移不与画布全局快捷键冲突。
   - 依赖：4.3。
+  - 实施记录（2026-07-22）：`hooks/use-blueprint-viewport.ts` 实现滚轮光标中心缩放（0.25x–2x 边界）、Space+拖拽平移、Fit View；`panels/viewport-toolbar.tsx` 实现 Fit View 与缩放到选区入口；`use-blueprint-viewport.test.tsx`（22 用例）、`viewport-toolbar.test.tsx`（29 用例）通过。
 
-- [ ] **4.7 替换占位骨架并接入项目数据**
+- [x] **4.7 替换占位骨架并接入项目数据**
   - 结果：`event-blueprint-sheet.tsx` 占位替换为真实编辑器，从 editor-store 读取/写回 `blueprint`；Beta 标记与"功能开发中"文案移除；入口与 Sheet 容器规格不变。
   - 验证：组件测试覆盖打开渲染、空蓝图空态、关闭无脏状态；阶段 0-2 既有测试不回退。
   - 依赖：4.4、4.5、4.6、5.1。
+  - 实施记录（2026-07-22）：
+    - 新建 `apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`：full-overlay 容器（`fixed inset-0 z-50`，`role="dialog"`，`aria-label="事件蓝图"`），顶栏 h-12（标题 + ViewportToolbar + 关闭按钮），ReactFlowProvider 包裹的 BlueprintSheetInner。
+    - 数据流：`useEffect[blueprint]` 同步 blueprint → ReactFlow nodes/edges（外部变化 undo/redo/load），`useEffect[nodes,edges]` 同步 ReactFlow → blueprint（ref 守卫 `skipNextBlueprintSync` + `initialized` 避免循环与首次渲染覆盖）。
+    - 复用既有 primitives：nodes/{TriggerNode,ActionNode,CommentNode}、edges/ExecEdge、hooks/{useBlueprintDrag,useBlueprintViewport}、panels/{SearchPanel,ViewportToolbar}、ui-primitives/ToolbarButton。
+    - 双击空白呼出 SearchPanel（create 模式）；`onConnect` / `onNodesChange` / `onEdgesChange` / `onNodeDragStop` 均仅更新本地状态，由 useEffect 统一同步到 blueprint；`updateBlueprint` 内部深比较守卫避免循环。
+    - 删除 `apps/web/src/features/screen/components/event-blueprint-sheet.tsx`（占位骨架）；`sheet/index.ts` 导出 `BlueprintSheet`；`screen-editor.tsx` 第 24 行 import 与第 464 行 JSX 替换为 `BlueprintSheet`；`screen-editor.test.tsx` mock 路径更新。
+    - `editor-store.ts` 第 110-115 行接口声明 + 第 439-462 行实现 `updateBlueprint` action（无变化守卫：引用相等 + JSON 深比较；`withHistory` 入栈）。
+    - `blueprint-sheet.test.tsx`（11 用例）：open=false 返回 null、open=true 渲染 fixed inset-0 z-50、dialog role/aria-label、标题、ViewportToolbar、关闭按钮、关闭回调、空蓝图空态、blueprint 同步节点数。mock @xyflow/react（ReactFlow/ReactFlowProvider/Background/Controls/MiniMap/hooks）+ ViewportToolbar + ToolbarButton。
+    - 验证：typecheck ✓、lint ✓、biome:check ✓、blueprint-sheet 11/11 ✓、blueprint+editor-store+screen-editor 370/370 ✓、全量 web 1383/1383 ✓（较基线 1372 +11，0 回退）。
 
 ## 5. 历史、保存与快捷键集成
 
-- [ ] **5.1 历史快照扩展为三要素**
+- [x] **5.1 历史快照扩展为三要素**
   - 结果：历史条目同时记录组件数组、画布配置与 `blueprint`；undo/redo 同步恢复三者；无 `blueprint` 的旧快照按空蓝图处理；容量限制与 `loadProject` 清空语义不变。
   - 验证：editor-store 测试覆盖三要素同步恢复、旧快照兼容、既有组件/画布历史用例全部通过。
   - 依赖：1.3。
+  - 实施记录（2026-07-22）：`apps/web/src/features/screen/stores/editor-store.ts` 第 12-16 行 `HistoryEntry` 扩展为三要素 `{ components, canvas, blueprint? }`；`pushHistory`/`undo`/`redo` 同步恢复三者；`withHistory` helper 被所有 action 使用；`editor-store.test.ts` 覆盖三要素同步恢复、旧快照兼容（无 blueprint 按 undefined 处理）、容量限制与 loadProject 清空语义；36 用例通过。
 
 - [ ] **5.2 蓝图编辑 action 接入历史栈**
   - 结果：节点增删、连线增删、参数修改、布局拖拽结束经 `withHistory` 入栈；拖拽中间态不入栈；无变化不入栈。

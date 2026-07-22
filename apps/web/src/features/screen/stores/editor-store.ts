@@ -107,6 +107,12 @@ interface ScreenEditorActions {
   removeComponent: (id: string) => void;
   removeSelectedComponents: () => void;
   updateCanvas: (updates: Partial<CanvasConfig>) => void;
+  /**
+   * 更新事件蓝图（任务 4.7/5.2）：写入 project.blueprint 并入历史栈。
+   * - 传入 undefined 表示清除蓝图
+   * - 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
+   */
+  updateBlueprint: (blueprint: EventBlueprint | undefined) => void;
   setCanvasScale: (scale: number) => void;
   setCanvasOffset: (offset: { x: number; y: number }) => void;
   setCanvasScaleAndOffset: (scale: number, offset: { x: number; y: number }) => void;
@@ -425,6 +431,31 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             project: {
               ...state.project,
               canvas: { ...state.project.canvas, ...updates },
+            },
+          };
+        });
+      },
+
+      updateBlueprint: (blueprint) => {
+        const { project } = get();
+        if (!project) return;
+        // 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
+        // undefined === undefined 或同引用即无变化
+        if (project.blueprint === blueprint) return;
+        // 深比较：内容相同也不入栈（避免空提交）
+        if (
+          project.blueprint &&
+          blueprint &&
+          JSON.stringify(project.blueprint) === JSON.stringify(blueprint)
+        ) {
+          return;
+        }
+        withHistory(set, 'updateBlueprint', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              blueprint,
             },
           };
         });

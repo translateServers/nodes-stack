@@ -9,6 +9,7 @@ import type {
   UpdateScreenProjectDto,
   PublishScreenProjectDto,
 } from '@/modules/screen/dto/screen.dto';
+import type { EventBlueprint } from '@nebula/shared';
 
 interface ScreenProjectEntity {
   id: string;
@@ -818,7 +819,7 @@ describe('ScreenService', () => {
   // ===== 事件蓝图任务 1.4：服务端同源校验与持久化 =====
 
   describe('updateProject — blueprint 字段持久化（任务 1.4）', () => {
-    const validBlueprint = {
+    const validBlueprint: EventBlueprint = {
       version: 1,
       nodes: [
         {

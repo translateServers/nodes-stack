@@ -106,8 +106,8 @@ vi.mock('./snapshot-manager-dialog', () => ({
   SnapshotManagerDialog: () => null,
 }));
 
-vi.mock('./event-blueprint-sheet', () => ({
-  EventBlueprintSheet: () => null,
+vi.mock('../blueprint/sheet', () => ({
+  BlueprintSheet: () => null,
 }));
 
 vi.mock('./code-editor-sheet', () => ({

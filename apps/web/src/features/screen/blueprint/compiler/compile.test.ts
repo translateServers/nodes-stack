@@ -12,7 +12,7 @@ function makeTrigger(
   config: TriggerConfig = { type: 'componentClick', componentId: 'c1' },
   position = { x: 0, y: 0 },
 ): BlueprintNode {
-  return { id, kind: 'trigger', position, config } as BlueprintNode;
+  return { id, kind: 'trigger', position, config };
 }
 
 function makeAction(id: string, config: Record<string, unknown> = {}): BlueprintNode {
@@ -26,7 +26,7 @@ function makeAction(id: string, config: Record<string, unknown> = {}): Blueprint
       visible: 'toggle',
       ...config,
     },
-  } as BlueprintNode;
+  };
 }
 
 function makeComment(id: string): BlueprintNode {
@@ -35,7 +35,7 @@ function makeComment(id: string): BlueprintNode {
     kind: 'comment',
     position: { x: 400, y: 0 },
     config: { text: '备注' },
-  } as BlueprintNode;
+  };
 }
 
 function makeEdge(

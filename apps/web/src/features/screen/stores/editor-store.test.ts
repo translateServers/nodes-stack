@@ -750,9 +750,9 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
       // 修改蓝图（模拟添加节点）→ withHistory 推入 (1 组件 + 无 blueprint)
       const blueprint2 = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
       withHistory(
-        ((partial: unknown) => {
+        (partial: unknown) => {
           useScreenEditorStore.setState(partial as Partial<ScreenEditorState>);
-        }) as never,
+        },
         'updateBlueprint',
         () => ({
           project: {
@@ -842,9 +842,9 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
       const blueprint2 = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
       // 通过 withHistory 制造一个含蓝图修改的历史条目
       withHistory(
-        ((partial: unknown) => {
+        (partial: unknown) => {
           useScreenEditorStore.setState(partial as Partial<ScreenEditorState>);
-        }) as never,
+        },
         'updateBlueprint',
         () => ({
           project: {

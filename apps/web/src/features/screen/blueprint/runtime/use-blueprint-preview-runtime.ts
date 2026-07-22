@@ -84,11 +84,9 @@ export function useBlueprintPreviewRuntime(
     void run().catch((err: unknown) => {
       // 静默处理：执行器内部已有 try/catch，此处仅防御
       const message = err instanceof Error ? err.message : String(err);
-      // eslint-disable-next-line no-console
       console.warn(`[blueprint-preview] pageLoad execution failed: ${message}`);
     });
     // 注意：仅 mount 时触发，rules/deps 变化不重新触发（避免重复执行）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEnabled]);
 
   // 组件点击事件处理器
@@ -105,7 +103,6 @@ export function useBlueprintPreviewRuntime(
       // 浮动 Promise 由内部 catch 吞掉
       void run().catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
-        // eslint-disable-next-line no-console
         console.warn(`[blueprint-preview] componentClick execution failed: ${message}`);
       });
     },
