@@ -14,6 +14,11 @@
  * - blueprint → ReactFlow nodes/edges：blueprint 引用变化（undo/redo/load）时重建本地状态
  * - ReactFlow nodes/edges → blueprint：本地状态变化时通过 updateBlueprint 写回（含 ref 守卫避免循环）
  *
+ * 历史语义（任务 5.2）：
+ * - 节点增删、连线增删、参数修改等离散编辑经 updateBlueprint 入历史栈（单条历史）
+ * - 节点拖拽经 begin/endBlueprintGesture 手势合并：拖拽中间态不自动写回，
+ *   拖拽结束吸附后提交一次，一次拖拽只产生一条历史记录（undo 回到拖拽前）
+ *
  * 注意：编辑器画布不执行蓝图（预览专用），本组件仅做可视化编排。
  */
 
@@ -36,6 +41,7 @@ import {
   type NodeTypes,
   type OnConnect,
   type OnEdgesChange,
+  type OnNodeDrag,
   type OnNodesChange,
 } from '@xyflow/react';
 import { X } from 'lucide-react';
@@ -330,6 +336,8 @@ interface SearchPanelState {
 function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.Element {
   const project = useScreenEditorStore((s) => s.project);
   const updateBlueprint = useScreenEditorStore((s) => s.updateBlueprint);
+  const beginBlueprintGesture = useScreenEditorStore((s) => s.beginBlueprintGesture);
+  const endBlueprintGesture = useScreenEditorStore((s) => s.endBlueprintGesture);
 
   const blueprint = project?.blueprint;
   const components = project?.components ?? [];
@@ -347,6 +355,18 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
   const skipNextBlueprintSync = useRef(false);
   // 标记是否已初始化（避免首次渲染时用空 nodes/edges 覆盖已有 blueprint）
   const initialized = useRef(false);
+  // 拖拽手势进行中标记：期间 nodes/edges→blueprint 的自动写回被抑制，
+  // 拖拽结束时由 handleNodeDragStop 统一提交一次（任务 5.2：中间态不入栈）
+  const dragActive = useRef(false);
+  // 最新 nodes/edges 的 ref 快照，供拖拽结束时同步读取（setNodes 异步，不能依赖闭包中的 state）
+  const nodesRef = useRef<Node[]>([]);
+  const edgesRef = useRef<Edge[]>([]);
+
+  // 保持 ref 与最新 state 同步（拖拽结束提交时读取的是最终位置）
+  useEffect(() => {
+    nodesRef.current = nodes;
+    edgesRef.current = edges;
+  }, [nodes, edges]);
 
   // blueprint → ReactFlow 同步（外部变化：undo/redo/load）
   useEffect(() => {
@@ -370,6 +390,8 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
       skipNextBlueprintSync.current = false;
       return;
     }
+    // 拖拽手势进行中不自动写回：中间态由 handleNodeDragStop 统一提交（任务 5.2）
+    if (dragActive.current) return;
     if (!project) return;
     const newBlueprint: EventBlueprint = {
       version: 1,
@@ -378,6 +400,7 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
     };
     updateBlueprint(newBlueprint);
     // nodes/edges 变化时同步；updateBlueprint 内部有深比较守卫避免循环
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges]);
 
   // ReactFlow 变更处理：仅更新本地状态（→ 由 useEffect 同步到 blueprint）
@@ -403,13 +426,43 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
     setEdges((eds) => addEdge(newEdge, eds));
   }, []);
 
-  // 拖拽吸附：仅更新本地 nodes（→ 由 useEffect 同步到 blueprint）
-  const { onNodeDragStop } = useBlueprintDrag({
+  // 拖拽吸附：仅更新本地 nodes（拖拽结束由 handleNodeDragStop 统一提交 blueprint）
+  // onNodesChange 回调同步更新 nodesRef，保证拖拽结束时能读到吸附后的最终位置
+  const { onNodeDragStop: snapNodeDragStop } = useBlueprintDrag({
     nodes,
     onNodesChange: (nextNodes) => {
+      nodesRef.current = nextNodes;
       setNodes(nextNodes);
     },
   });
+
+  // 拖拽开始：开启蓝图编辑手势（任务 5.2），期间 updateBlueprint 合并为一次提交
+  const handleNodeDragStart: OnNodeDrag = useCallback(() => {
+    dragActive.current = true;
+    beginBlueprintGesture();
+  }, [beginBlueprintGesture]);
+
+  // 拖拽结束：吸附后提交最终位置一次，并结束手势补一条历史（undo 回到拖拽前）
+  const handleNodeDragStop: OnNodeDrag = useCallback(
+    (event, node, draggedNodes) => {
+      // 应用网格/对齐吸附（内部经 onNodesChange 更新 nodesRef 与 setNodes）
+      snapNodeDragStop(event, node, draggedNodes);
+      const finalNodes = nodesRef.current;
+      if (project) {
+        const finalBlueprint: EventBlueprint = {
+          version: 1,
+          nodes: finalNodes.map(rfNodeToBlueprintNode),
+          edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
+        };
+        // 手势进行中 →  transient 更新（不入历史栈）
+        updateBlueprint(finalBlueprint);
+      }
+      // 结束手势：有净变化则补一条历史（快照为拖拽前），无变化则不产生空历史
+      endBlueprintGesture();
+      dragActive.current = false;
+    },
+    [snapNodeDragStop, project, updateBlueprint, endBlueprintGesture],
+  );
 
   // 视口控制
   const viewport = useBlueprintViewport();
@@ -525,7 +578,8 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeDragStop={onNodeDragStop}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
           {...viewport.config}
           zoomOnDoubleClick={false}
           className="bg-background"

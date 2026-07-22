@@ -209,10 +209,16 @@
   - 依赖：1.3。
   - 实施记录（2026-07-22）：`apps/web/src/features/screen/stores/editor-store.ts` 第 12-16 行 `HistoryEntry` 扩展为三要素 `{ components, canvas, blueprint? }`；`pushHistory`/`undo`/`redo` 同步恢复三者；`withHistory` helper 被所有 action 使用；`editor-store.test.ts` 覆盖三要素同步恢复、旧快照兼容（无 blueprint 按 undefined 处理）、容量限制与 loadProject 清空语义；36 用例通过。
 
-- [ ] **5.2 蓝图编辑 action 接入历史栈**
+- [x] **5.2 蓝图编辑 action 接入历史栈**
   - 结果：节点增删、连线增删、参数修改、布局拖拽结束经 `withHistory` 入栈；拖拽中间态不入栈；无变化不入栈。
   - 验证：editor-store 测试覆盖各编辑路径单条历史、连续拖拽合并、空提交跳过。
   - 依赖：5.1。
+  - 实施记录（2026-07-22）：
+    - `apps/web/src/features/screen/stores/editor-store.ts`：新增 `blueprintGesture { active, baseline }` 状态与 `beginBlueprintGesture`/`endBlueprintGesture` action；`updateBlueprint` 在手势期间只更新数据与脏标记不入栈，结束手势时有净变化补一条历史（快照 blueprint 取手势起点，undo 回到拖拽前；无净变化不产生空历史）；`loadProject` 重置手势态。
+    - `apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`：`onNodeDragStart` 开启手势、`onNodeDragStop` 吸附后提交最终位置一次并结束手势；nodes/edges→blueprint 写回 effect 在拖拽手势期间被抑制（中间态不入栈）；离散编辑（节点增删/连线增删/参数修改）仍经 `updateBlueprint` 单条入栈。
+    - 顺带修复 `blueprint-sheet.test.tsx` `makeProject` 缺 `status/createdAt/updatedAt` 的直接 `as ScreenProject` 类型错误（master 既有，typecheck 因此失败；改为 `as unknown as ScreenProject`）。
+    - `editor-store.test.ts` 新增 describe「蓝图编辑手势接入历史栈（任务 5.2）」10 用例：各编辑路径单条历史、连续拖拽合并单条历史（undo/redo 恢复）、空提交跳过、手势状态管理（begin 幂等/手势后恢复入栈/loadProject 重置）。
+    - 验证：editor-store 46/46、blueprint-sheet 11/11、全量 web 1536/1536 通过；typecheck ✓；biome check ✓。
 
 - [ ] **5.3 保存与发布链路集成**
   - 结果：`blueprint` 随项目保存与发布；发布时存在 error 级诊断给出确认提示与摘要；草稿蓝图不通过公开预览暴露。

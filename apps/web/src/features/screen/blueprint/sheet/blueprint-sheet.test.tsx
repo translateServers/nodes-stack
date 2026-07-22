@@ -164,7 +164,7 @@ function makeProject(blueprint?: EventBlueprint): ScreenProject {
       scaleMode: 'fit',
     },
     ...(blueprint ? { blueprint } : {}),
-  } as ScreenProject;
+  } as unknown as ScreenProject;
 }
 
 function resetStore(): void {

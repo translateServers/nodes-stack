@@ -88,6 +88,15 @@ interface ScreenEditorData {
    * - 仅布尔标志，不做内容 diff，不进入历史栈
    */
   isDirty: boolean;
+  /**
+   * 蓝图编辑手势状态（任务 5.2）：标识一次连续编辑手势（如节点拖拽）。
+   * - `active=true` 期间 `updateBlueprint` 只更新数据与脏标记，不入历史栈，
+   *   避免拖拽过程每帧产生一条历史（"历史语义不膨胀"）。
+   * - `baseline` 记录手势开始时的 blueprint，作为手势结束补入历史栈的快照，
+   *   使 undo 能回到手势前的状态。
+   * 不进入历史栈本身，仅作运行时标记。
+   */
+  blueprintGesture: { active: boolean; baseline: EventBlueprint | undefined };
 }
 
 interface ScreenEditorActions {
@@ -111,8 +120,21 @@ interface ScreenEditorActions {
    * 更新事件蓝图（任务 4.7/5.2）：写入 project.blueprint 并入历史栈。
    * - 传入 undefined 表示清除蓝图
    * - 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
+   * - 手势进行中（beginBlueprintGesture 后）只更新数据与脏标记，不入历史栈
    */
   updateBlueprint: (blueprint: EventBlueprint | undefined) => void;
+  /**
+   * 开始一次蓝图连续编辑手势（任务 5.2），如节点拖拽。
+   * 手势期间的 `updateBlueprint` 调用合并为一次提交，避免每帧入栈。
+   * 重复调用幂等（手势已激活时不重置 baseline）。
+   */
+  beginBlueprintGesture: () => void;
+  /**
+   * 结束蓝图编辑手势（任务 5.2）。
+   * 若手势期间蓝图有净变化，则补入一条历史（快照为手势起点，undo 回到手势前）；
+   * 无净变化则不产生空历史记录。未处于手势中时调用为空操作。
+   */
+  endBlueprintGesture: () => void;
   setCanvasScale: (scale: number) => void;
   setCanvasOffset: (offset: { x: number; y: number }) => void;
   setCanvasScaleAndOffset: (scale: number, offset: { x: number; y: number }) => void;
@@ -211,6 +233,7 @@ const initialData: ScreenEditorData = {
   uiVisible: true,
   screenMode: 'standard',
   isDirty: false,
+  blueprintGesture: { active: false, baseline: undefined },
 };
 
 /**
@@ -289,6 +312,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             selectedComponentIds: [],
             history: { past: [], future: [] },
             isDirty: false,
+            // 加载新项目时重置蓝图手势，避免跨项目残留手势态
+            blueprintGesture: { active: false, baseline: undefined },
           },
           false,
           'loadProject',
@@ -437,7 +462,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       },
 
       updateBlueprint: (blueprint) => {
-        const { project } = get();
+        const { project, blueprintGesture } = get();
         if (!project) return;
         // 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
         // undefined === undefined 或同引用即无变化
@@ -450,6 +475,22 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         ) {
           return;
         }
+        // 手势进行中（任务 5.2）：只更新数据与脏标记，不入历史栈。
+        // 拖拽等连续编辑会高频调用 updateBlueprint，合并到手势结束时统一入栈。
+        if (blueprintGesture.active) {
+          set(
+            (state) => {
+              if (!state.project) return {};
+              return {
+                project: { ...state.project, blueprint },
+                isDirty: true,
+              };
+            },
+            false,
+            'updateBlueprintGesture',
+          );
+          return;
+        }
         withHistory(set, 'updateBlueprint', (state) => {
           if (!state.project) return {};
           return {
@@ -459,6 +500,60 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             },
           };
         });
+      },
+
+      beginBlueprintGesture: () => {
+        const { project, blueprintGesture } = get();
+        // 无项目或手势已激活时幂等返回（不重置 baseline，保证嵌套/重复调用安全）
+        if (!project || blueprintGesture.active) return;
+        set(
+          { blueprintGesture: { active: true, baseline: project.blueprint } },
+          false,
+          'beginBlueprintGesture',
+        );
+      },
+
+      endBlueprintGesture: () => {
+        const { project, blueprintGesture } = get();
+        if (!blueprintGesture.active) return;
+        const baseline = blueprintGesture.baseline;
+        const current = project?.blueprint;
+        // 先退出手势态，再决定是否补历史（避免补历史期间被误判为手势中）
+        set(
+          { blueprintGesture: { active: false, baseline: undefined } },
+          false,
+          'endBlueprintGesture',
+        );
+        if (!project) return;
+        // 手势期间无净变化则不补历史（与"无变化不入栈"语义一致）
+        const unchanged =
+          baseline === current ||
+          (baseline !== undefined &&
+            current !== undefined &&
+            JSON.stringify(baseline) === JSON.stringify(current));
+        if (unchanged) return;
+        // 补入一条历史：快照的 blueprint 取手势起点 baseline，使 undo 回到手势前；
+        // 组件/画布取当前值（手势仅改动蓝图，二者在手势期间不变）。
+        set(
+          (state) => {
+            if (!state.project) return {};
+            return {
+              history: {
+                past: [
+                  ...state.history.past,
+                  {
+                    components: [...state.project.components],
+                    canvas: { ...state.project.canvas },
+                    ...(baseline ? { blueprint: { ...baseline } } : {}),
+                  },
+                ].slice(-HISTORY_LIMIT),
+                future: [],
+              },
+            };
+          },
+          false,
+          'endBlueprintGestureCommit',
+        );
       },
 
       setCanvasScale: (scale) => {
