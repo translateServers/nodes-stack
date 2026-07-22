@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   COMPONENT_DEFINITIONS,
-  getDefinitionByType,
   createComponentInstance,
-  getDefinitionsByCategory,
   CATEGORY_LABELS,
+  getDefinitionByType,
+  getDefinitionsByCategory,
+  searchComponentDefinitions,
 } from '../registry';
 
 describe('Component Registry', () => {
@@ -16,6 +17,22 @@ describe('Component Registry', () => {
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'rect')).toBeDefined();
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'ellipse')).toBeDefined();
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'image')).toBeDefined();
+    });
+
+    it('Phase 2 Slice C：所有定义带 keywords / description 元数据', () => {
+      for (const def of COMPONENT_DEFINITIONS) {
+        expect(def.keywords, `${def.type} 应有 keywords`).toBeDefined();
+        expect(def.keywords?.length).toBeGreaterThan(0);
+        expect(def.description, `${def.type} 应有 description`).toBeDefined();
+        expect(def.description?.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('Phase 2 Slice C：所有定义带 order 排序字段', () => {
+      for (const def of COMPONENT_DEFINITIONS) {
+        expect(def.order, `${def.type} 应有 order`).toBeDefined();
+        expect(typeof def.order).toBe('number');
+      }
     });
   });
 
@@ -187,6 +204,57 @@ describe('Component Registry', () => {
 
     it('should return empty array for category with no components', () => {
       expect(getDefinitionsByCategory('table')).toHaveLength(0);
+    });
+
+    it('Phase 2 Slice C：按 order 升序排序（rect order=1 在前，ellipse order=2 在后）', () => {
+      const decorations = getDefinitionsByCategory('decoration');
+      expect(decorations[0]?.type).toBe('rect');
+      expect(decorations[1]?.type).toBe('ellipse');
+    });
+  });
+
+  describe('Phase 2 Slice C · searchComponentDefinitions', () => {
+    it('空关键词返回全部定义', () => {
+      expect(searchComponentDefinitions('')).toHaveLength(COMPONENT_DEFINITIONS.length);
+      expect(searchComponentDefinitions('   ')).toHaveLength(COMPONENT_DEFINITIONS.length);
+    });
+
+    it('按 name 模糊匹配（大小写不敏感）', () => {
+      const result = searchComponentDefinitions('文');
+      expect(result.map((d) => d.type)).toContain('text');
+    });
+
+    it('按 type 模糊匹配', () => {
+      const result = searchComponentDefinitions('bar');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.type).toBe('bar-chart');
+    });
+
+    it('按 keywords 别名匹配（中文别名）', () => {
+      // 'chart' 关键词属于 bar-chart
+      const result = searchComponentDefinitions('图表');
+      expect(result.map((d) => d.type)).toContain('bar-chart');
+    });
+
+    it('按 keywords 别名匹配（英文别名）', () => {
+      const result = searchComponentDefinitions('rectangle');
+      expect(result.map((d) => d.type)).toContain('rect');
+    });
+
+    it('按 keywords 别名匹配（图片 logo 别名）', () => {
+      const result = searchComponentDefinitions('logo');
+      expect(result.map((d) => d.type)).toContain('image');
+    });
+
+    it('无匹配返回空数组', () => {
+      expect(searchComponentDefinitions('不存在的组件xxx')).toHaveLength(0);
+    });
+
+    it('多个组件同时匹配关键词时返回全部', () => {
+      // 'circle' 既在 ellipse.keywords 里，也无其他匹配，应只返回 ellipse
+      const result = searchComponentDefinitions('circle');
+      expect(result).toHaveLength(1);
+      expect(result[0]?.type).toBe('ellipse');
     });
   });
 

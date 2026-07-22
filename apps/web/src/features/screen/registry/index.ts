@@ -6,15 +6,20 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     name: '文本',
     category: 'text',
     icon: 'Type',
+    keywords: ['文本', '文字', 'text', 'title', '标题', '段落'],
+    description: '可编辑的文本段落，支持字号、字色、对齐等样式',
     defaultProps: { content: '请输入文本' },
     defaultSize: { width: 200, height: 60 },
     defaultStyle: { color: '#ffffff', fontSize: 14 },
+    order: 1,
   },
   {
     type: 'bar-chart',
     name: '柱状图',
     category: 'chart',
     icon: 'BarChart3',
+    keywords: ['柱状图', '图表', 'chart', 'bar', '数据图', '可视化', '统计图'],
+    description: '柱状图，支持静态数据 / API 数据源、字段映射与排序',
     defaultProps: {
       title: '柱状图',
       data: [
@@ -26,6 +31,7 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
       ],
     },
     defaultSize: { width: 400, height: 300 },
+    order: 1,
   },
   // 任务 6.2：矩形与椭圆组件定义
   {
@@ -33,6 +39,8 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     name: '矩形',
     category: 'decoration',
     icon: 'Square',
+    keywords: ['矩形', '方形', 'rect', 'rectangle', '框', '色块'],
+    description: '矩形装饰元素，支持背景色 / 边框 / 圆角',
     defaultProps: {},
     defaultSize: { width: 200, height: 120 },
     defaultStyle: {
@@ -41,12 +49,15 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
       borderColor: '#1e40af',
       borderRadius: 0,
     },
+    order: 1,
   },
   {
     type: 'ellipse',
     name: '椭圆',
     category: 'decoration',
     icon: 'Circle',
+    keywords: ['椭圆', '圆形', '圆', 'ellipse', 'circle', '球'],
+    description: '椭圆装饰元素，常用于头像/标记位',
     defaultProps: {},
     defaultSize: { width: 200, height: 200 },
     defaultStyle: {
@@ -54,6 +65,7 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
       borderWidth: 0,
       borderColor: '#047857',
     },
+    order: 2,
   },
   // 任务 7.2：图片组件定义
   {
@@ -61,9 +73,12 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     name: '图片',
     category: 'media',
     icon: 'Image',
+    keywords: ['图片', '图像', 'image', 'img', '照片', 'picture', 'logo'],
+    description: '图片组件，支持 src / alt 与圆角裁剪',
     defaultProps: { src: '', alt: '' },
     defaultSize: { width: 320, height: 240 },
     defaultStyle: {},
+    order: 1,
   },
 ];
 
@@ -119,7 +134,30 @@ export function createComponentInstance(
 }
 
 export function getDefinitionsByCategory(category: string): ComponentDefinition[] {
-  return COMPONENT_DEFINITIONS.filter((d) => d.category === category);
+  return COMPONENT_DEFINITIONS.filter((d) => d.category === category).sort((a, b) => {
+    const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+    const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+    return ao - bo;
+  });
+}
+
+/**
+ * 按 name / type / keywords 模糊匹配（大小写不敏感）。
+ *
+ * 用于组件库搜索：用户输入 'zhexian' / '趋势' 等别名时可命中。
+ * 空关键词返回全部定义。
+ */
+export function searchComponentDefinitions(keyword: string): ComponentDefinition[] {
+  const kw = keyword.trim().toLowerCase();
+  if (!kw) return COMPONENT_DEFINITIONS;
+  return COMPONENT_DEFINITIONS.filter((d) => {
+    if (d.name.toLowerCase().includes(kw)) return true;
+    if (d.type.toLowerCase().includes(kw)) return true;
+    if (d.keywords !== undefined && d.keywords.some((k) => k.toLowerCase().includes(kw))) {
+      return true;
+    }
+    return false;
+  });
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {

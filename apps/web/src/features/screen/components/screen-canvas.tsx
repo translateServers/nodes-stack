@@ -13,6 +13,7 @@ import { handleSelectEnd, type ClickRecord } from '../lib/canvas-event-router';
 import {
   findAlignmentLines,
   snapPosition,
+  SMART_GUIDES_SNAP_THRESHOLD,
   type AlignmentLine,
   type AlignmentRect,
 } from '../lib/smart-guides';
@@ -997,8 +998,12 @@ export function ScreenCanvas({
         width: movedW,
         height: movedH,
       };
-      // 重新计算吸附后的对齐线（使 distance=0 的吸附线高亮显示）
-      const snappedLines = findAlignmentLines(snappedRect, smartGuidesReferenceRects);
+      // 优化（掉帧修复）：之前此处二次调用 findAlignmentLines(snappedRect, ...)
+      // 仅为把吸附线的 distance 置 0 用于高亮，但每次 onDrag 都执行 O(N×18) 双倍
+      // 遍历。改为直接遍历第一次结果，对吸附线（distance < 阈值）置 0，避免重复计算。
+      const snappedLines = lines.map((line) =>
+        line.distance < SMART_GUIDES_SNAP_THRESHOLD ? { ...line, distance: 0 } : line,
+      );
       return {
         snappedLeft: snapped.left,
         snappedTop: snapped.top,
@@ -1189,6 +1194,11 @@ export function ScreenCanvas({
             // 吸附计算 + DOM style 写入同步执行：Moveable 在 onDrag 返回后同步
             // updateRect() 读取 DOM 位置，延迟写入会让控制框与组件错开一帧（抖动）
             const snap = computeSnappedPosition(e.left, e.top, w, h);
+            // 直接用浮点值写 DOM，与 Moveable 内部状态保持一致。
+            // 之前用 Math.round 会让 DOM（整数）与 Moveable 内部 e.left（浮点）不同步，
+            // 导致拖拽过程中控制框与 target 错开、松手时跳变。
+            // 现在让 DOM / Moveable 内部状态 / store 三者全程浮点一致，
+            // 最终位置精度由消费者按需 round，避免拖拽阶段任何 round 引入的跳变。
             const finalLeft = snap?.snappedLeft ?? e.left;
             const finalTop = snap?.snappedTop ?? e.top;
             // Alt+拖拽复制（PS 风格）：移动克隆体，原件不动
@@ -1209,8 +1219,8 @@ export function ScreenCanvas({
               }
               setDimension((d) => ({
                 ...d,
-                x: Math.round(finalLeft),
-                y: Math.round(finalTop),
+                x: finalLeft,
+                y: finalTop,
                 visible: true,
               }));
             });
@@ -1236,15 +1246,15 @@ export function ScreenCanvas({
             if (!last) return;
             // Alt+拖拽复制（PS 风格）：拖拽结束时在克隆体最终位置创建真实副本
             if (datas.isAltCopy) {
-              duplicateSelectedToPosition(Math.round(last.left), Math.round(last.top));
+              duplicateSelectedToPosition(last.left, last.top);
             } else {
               const comp = components.find((c: ScreenComponent) => c.id === id);
               if (!comp) return;
               updateComponent(id, {
                 position: {
                   ...comp.position,
-                  x: Math.round(last.left),
-                  y: Math.round(last.top),
+                  x: last.left,
+                  y: last.top,
                 },
               });
             }
@@ -1311,8 +1321,8 @@ export function ScreenCanvas({
               target.style.top = `${e.drag.top}px`;
             }
             // 同步写入后可直接读回当前位置
-            const displayX = Math.round(Number.parseInt(target.style.left || '0'));
-            const displayY = Math.round(Number.parseInt(target.style.top || '0'));
+            const displayX = Number.parseFloat(target.style.left || '0');
+            const displayY = Number.parseFloat(target.style.top || '0');
             // rAF 节流仅保留 React store 更新（尺寸提示）
             gestureRafThrottlerRef.current?.schedule(() => {
               setDimension((d) => ({
@@ -1343,10 +1353,10 @@ export function ScreenCanvas({
             updateComponent(id, {
               position: {
                 ...comp.position,
-                x: Math.round(Number.parseInt(e.target.style.left)),
-                y: Math.round(Number.parseInt(e.target.style.top)),
-                width: Math.round(Number.parseInt(e.target.style.width)),
-                height: Math.round(Number.parseInt(e.target.style.height)),
+                x: Number.parseFloat(e.target.style.left),
+                y: Number.parseFloat(e.target.style.top),
+                width: Number.parseFloat(e.target.style.width),
+                height: Number.parseFloat(e.target.style.height),
               },
             });
             setDimension((d) => ({ ...d, visible: false, mode: undefined }));
@@ -1457,6 +1467,8 @@ export function ScreenCanvas({
           onDragGroup={(e) => {
             const datas = e.datas as unknown as GroupDragDatas;
             // Alt+组拖拽复制（PS 风格）：移动克隆体，原件不动
+            // 直接用浮点值（原因同单组件 onDrag）：与 Moveable 内部状态一致，
+            // 避免拖拽中 DOM 与 Moveable 不同步、松手时跳变。
             if (datas.isAltCopy && datas.altCopyClones.length > 0) {
               for (let i = 0; i < e.events.length && i < datas.altCopyClones.length; i++) {
                 const ev = e.events[i];
@@ -1487,11 +1499,11 @@ export function ScreenCanvas({
             if (!ids || ids.length === 0) return;
             // Alt+组拖拽复制（PS 风格）：在克隆体最终位置创建真实副本
             if (datas.isAltCopy) {
-              const lefts = e.events.map((ev) => Number.parseInt(ev.target.style.left));
-              const tops = e.events.map((ev) => Number.parseInt(ev.target.style.top));
+              const lefts = e.events.map((ev) => Number.parseFloat(ev.target.style.left));
+              const tops = e.events.map((ev) => Number.parseFloat(ev.target.style.top));
               const minLeft = Math.min(...lefts);
               const minTop = Math.min(...tops);
-              duplicateSelectedToPosition(Math.round(minLeft), Math.round(minTop));
+              duplicateSelectedToPosition(minLeft, minTop);
             } else {
               const updates = e.events
                 .map((ev) => {
@@ -1504,8 +1516,8 @@ export function ScreenCanvas({
                     changes: {
                       position: {
                         ...comp.position,
-                        x: Math.round(Number.parseInt(ev.target.style.left)),
-                        y: Math.round(Number.parseInt(ev.target.style.top)),
+                        x: Number.parseFloat(ev.target.style.left),
+                        y: Number.parseFloat(ev.target.style.top),
                       },
                     },
                   };
@@ -1562,10 +1574,10 @@ export function ScreenCanvas({
                   changes: {
                     position: {
                       ...comp.position,
-                      x: Math.round(Number.parseInt(ev.target.style.left)),
-                      y: Math.round(Number.parseInt(ev.target.style.top)),
-                      width: Math.round(Number.parseInt(ev.target.style.width)),
-                      height: Math.round(Number.parseInt(ev.target.style.height)),
+                      x: Number.parseFloat(ev.target.style.left),
+                      y: Number.parseFloat(ev.target.style.top),
+                      width: Number.parseFloat(ev.target.style.width),
+                      height: Number.parseFloat(ev.target.style.height),
                     },
                   },
                 };

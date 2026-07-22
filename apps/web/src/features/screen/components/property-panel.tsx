@@ -20,100 +20,10 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 // 数值字段统一使用 PS 风格 NumberInput（↑↓ 微调 + draft 提交，避免每次按键入历史栈）
 import { NumberInput } from './number-input';
-import { ColorInput, StyleFields, numberInputClass, textareaClass } from './panel-fields';
-import { BarChartConfigSections } from './bar-chart-config-sections';
+import { ColorInput, numberInputClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
-
-function PositionFields({
-  component,
-  onUpdate,
-}: {
-  component: ScreenComponent;
-  onUpdate: (updates: Partial<ScreenComponent>) => void;
-}) {
-  const { position } = component;
-  // 分区标题由调用处的 PanelSection 提供，此处仅保留字段 grid
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      <NumberInput
-        label="X"
-        value={position.x}
-        onChange={(v) => onUpdate({ position: { ...position, x: v } })}
-        className={numberInputClass}
-        syncKey={`${component.id}:position.x`}
-      />
-      <NumberInput
-        label="Y"
-        value={position.y}
-        onChange={(v) => onUpdate({ position: { ...position, y: v } })}
-        className={numberInputClass}
-        syncKey={`${component.id}:position.y`}
-      />
-      <NumberInput
-        label="宽"
-        value={position.width}
-        min={1}
-        onChange={(v) => onUpdate({ position: { ...position, width: v } })}
-        className={numberInputClass}
-        syncKey={`${component.id}:position.width`}
-      />
-      <NumberInput
-        label="高"
-        value={position.height}
-        min={1}
-        onChange={(v) => onUpdate({ position: { ...position, height: v } })}
-        className={numberInputClass}
-        syncKey={`${component.id}:position.height`}
-      />
-      {position.rotation != null && position.rotation !== 0 && (
-        <NumberInput
-          label="旋转"
-          value={position.rotation}
-          onChange={(v) => onUpdate({ position: { ...position, rotation: v } })}
-          className={numberInputClass}
-          syncKey={`${component.id}:position.rotation`}
-        />
-      )}
-    </div>
-  );
-}
-
-function TextPropsFields({
-  component,
-  onUpdate,
-}: {
-  component: ScreenComponent;
-  onUpdate: (updates: Partial<ScreenComponent>) => void;
-}) {
-  const { props, style } = component;
-  // 分区标题由调用处的 PanelSection 提供，此处仅渲染字段
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <label className="w-12 shrink-0 text-xs text-muted-foreground">内容</label>
-        <textarea
-          className={textareaClass}
-          rows={3}
-          value={(props.content as string) ?? ''}
-          onChange={(e) => onUpdate({ props: { ...props, content: e.target.value } })}
-        />
-      </div>
-      <NumberInput
-        label="字号"
-        value={style.fontSize ?? 14}
-        min={1}
-        onChange={(v) => onUpdate({ style: { ...style, fontSize: v } })}
-        className={numberInputClass}
-        syncKey={`${component.id}:style.fontSize`}
-      />
-      <ColorInput
-        label="字色"
-        value={style.color ?? '#ffffff'}
-        onChange={(v) => onUpdate({ style: { ...style, color: v } })}
-      />
-    </div>
-  );
-}
+// Phase 2 Slice B：属性面板 Schema 化（注册表驱动 + 声明式字段 + customRender 逃生舱）
+import { getSchemaForComponentType, PropertySchemaRenderer } from '../property-schema';
 
 function CanvasSettingsFields({
   canvas,
@@ -301,6 +211,12 @@ export function PropertyPanel() {
     [singleSelectedId, updateComponent],
   );
 
+  // Phase 2 Slice B：按组件类型查找 Schema（注册表驱动，消除 type === 'bar-chart' 硬编码分支）
+  const schema = useMemo(
+    () => (selectedComponent ? getSchemaForComponentType(selectedComponent.type) : []),
+    [selectedComponent],
+  );
+
   if (!components || !canvas) return null;
 
   const isMultiSelect = selectedComponentIds.length > 1;
@@ -317,32 +233,12 @@ export function PropertyPanel() {
       <div className="flex-1 overflow-y-auto">
         {selectedComponent ? (
           <>
-            <PanelSection title="位置与尺寸" collapsible>
-              <PositionFields component={selectedComponent} onUpdate={handleComponentUpdate} />
-            </PanelSection>
-            {selectedComponent.type === 'bar-chart' ? (
-              // bar-chart 按"数据、逻辑、视觉、交互"四层分组（阶段 2 任务 4.1）；
-              // key 确保切换组件时重建分组内本地编辑状态
-              <BarChartConfigSections
-                key={selectedComponent.id}
-                component={selectedComponent}
-                onUpdate={handleComponentUpdate}
-              />
-            ) : (
-              <>
-                <PanelSection title="样式" collapsible>
-                  <StyleFields component={selectedComponent} onUpdate={handleComponentUpdate} />
-                </PanelSection>
-                {selectedComponent.type === 'text' && (
-                  <PanelSection title="文本属性" collapsible>
-                    <TextPropsFields
-                      component={selectedComponent}
-                      onUpdate={handleComponentUpdate}
-                    />
-                  </PanelSection>
-                )}
-              </>
-            )}
+            {/* Phase 2 Slice B：Schema 驱动渲染（声明式字段 + customRender 逃生舱） */}
+            <PropertySchemaRenderer
+              schema={schema}
+              component={selectedComponent}
+              onUpdate={handleComponentUpdate}
+            />
             <div className="p-3">
               <Button
                 variant="destructive"

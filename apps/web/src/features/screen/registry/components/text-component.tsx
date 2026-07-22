@@ -15,6 +15,9 @@ export function TextComponent({ props, style }: TextComponentProps) {
         fontSize: style.fontSize,
         color: style.color,
         textAlign: style.textAlign ?? 'center',
+        // Phase 2 Slice D：文本增强字段（字重 / 行高），由 Schema 声明式字段写入 style
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
         overflow: 'hidden',
         wordBreak: 'break-word',
       }}
