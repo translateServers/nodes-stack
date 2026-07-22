@@ -110,6 +110,10 @@ vi.mock('../blueprint/sheet', () => ({
   BlueprintSheet: () => null,
 }));
 
+vi.mock('../blueprint/compiler', () => ({
+  compileBlueprint: vi.fn(() => ({ rules: [], diagnostics: [] })),
+}));
+
 vi.mock('./code-editor-sheet', () => ({
   CodeEditorSheet: () => null,
 }));
@@ -118,12 +122,14 @@ import { useParams } from '@tanstack/react-router';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { ScreenEditor } from './screen-editor';
 import { useScreenEditorStore } from '../stores/editor-store';
+import { compileBlueprint, type Diagnostic } from '../blueprint/compiler';
 import { toast } from 'sonner';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
 const mockUseScreenProject = useScreenProject as unknown as ReturnType<typeof vi.fn>;
 const mockUseUpdateScreenProject = useUpdateScreenProject as unknown as ReturnType<typeof vi.fn>;
 const mockUsePublishScreenProject = usePublishScreenProject as unknown as ReturnType<typeof vi.fn>;
+const mockCompileBlueprint = compileBlueprint as unknown as ReturnType<typeof vi.fn>;
 
 const BASELINE_UPDATED_AT = '2025-06-01 10:30:45';
 
@@ -899,6 +905,155 @@ describe('ScreenEditor 重新加载失败处理（任务 9.7）', () => {
     // isDirty 恢复为 false
     expect(state.isDirty).toBe(false);
     // 对话框已关闭
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
+  let mockPublishMutate: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockUseParams.mockReset();
+    mockUseScreenProject.mockReset();
+    mockUseUpdateScreenProject.mockReset();
+    mockUsePublishScreenProject.mockReset();
+    mockCompileBlueprint.mockReset();
+    capturedCallbacks = {};
+
+    mockUseParams.mockReturnValue({ id: 'screen-1' });
+    mockUseUpdateScreenProject.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    mockPublishMutate = vi.fn((_params: unknown, callbacks?: MutateCallbacks) => {
+      capturedCallbacks = callbacks ?? {};
+    });
+    mockUsePublishScreenProject.mockReturnValue({ mutate: mockPublishMutate, isPending: false });
+  });
+
+  const validBlueprint = {
+    version: 1 as const,
+    nodes: [
+      {
+        id: 'trigger-1',
+        kind: 'trigger' as const,
+        position: { x: 0, y: 0 },
+        config: { type: 'pageLoad' as const },
+      },
+    ],
+    edges: [],
+  };
+
+  it('蓝图存在 error 级诊断时打开发布确认对话框', () => {
+    const project = makeProject({ blueprint: validBlueprint });
+    mockUseScreenProject.mockReturnValue({ data: project, isLoading: false });
+    useScreenEditorStore.getState().loadProject(project);
+
+    const errorDiag: Diagnostic = {
+      level: 'error',
+      code: 'cycle',
+      message: '执行流存在循环：trigger-1 → action-1 → trigger-1',
+      nodeId: 'trigger-1',
+    };
+    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
+
+    render(<ScreenEditor />);
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('发布'));
+
+    expect(mockCompileBlueprint).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText('蓝图存在错误')).toBeInTheDocument();
+    expect(screen.getByText(/1 个错误/)).toBeInTheDocument();
+    // publish mutation 未被调用（用户尚未确认）
+    expect(mockPublishMutate).not.toHaveBeenCalled();
+  });
+
+  it('无蓝图时跳过诊断检查直接发布', () => {
+    const project = makeProject({ blueprint: undefined });
+    mockUseScreenProject.mockReturnValue({ data: project, isLoading: false });
+    useScreenEditorStore.getState().loadProject(project);
+
+    render(<ScreenEditor />);
+    fireEvent.click(screen.getByText('发布'));
+
+    expect(mockCompileBlueprint).not.toHaveBeenCalled();
+    expect(mockPublishMutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('蓝图仅有 warning/info 诊断时跳过确认直接发布', () => {
+    const project = makeProject({ blueprint: validBlueprint });
+    mockUseScreenProject.mockReturnValue({ data: project, isLoading: false });
+    useScreenEditorStore.getState().loadProject(project);
+
+    const warningDiag: Diagnostic = {
+      level: 'warning',
+      code: 'dangling-component',
+      message: '悬空引用',
+      nodeId: 'action-1',
+    };
+    const infoDiag: Diagnostic = {
+      level: 'info',
+      code: 'orphan-subgraph',
+      message: '孤立子图',
+      nodeId: 'action-2',
+    };
+    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [warningDiag, infoDiag] });
+
+    render(<ScreenEditor />);
+    fireEvent.click(screen.getByText('发布'));
+
+    expect(mockCompileBlueprint).toHaveBeenCalledTimes(1);
+    expect(mockPublishMutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('点击"仍然发布"后执行发布 mutation', () => {
+    const project = makeProject({ blueprint: validBlueprint });
+    mockUseScreenProject.mockReturnValue({ data: project, isLoading: false });
+    useScreenEditorStore.getState().loadProject(project);
+
+    const errorDiag: Diagnostic = {
+      level: 'error',
+      code: 'empty-param',
+      message: '动作缺少必填参数',
+      nodeId: 'action-1',
+    };
+    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
+
+    render(<ScreenEditor />);
+    fireEvent.click(screen.getByText('发布'));
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(mockPublishMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('仍然发布'));
+
+    expect(mockPublishMutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('点击"取消"后关闭对话框且不发布', () => {
+    const project = makeProject({ blueprint: validBlueprint });
+    mockUseScreenProject.mockReturnValue({ data: project, isLoading: false });
+    useScreenEditorStore.getState().loadProject(project);
+
+    const errorDiag: Diagnostic = {
+      level: 'error',
+      code: 'cycle',
+      message: '循环引用',
+      nodeId: 'trigger-1',
+    };
+    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
+
+    render(<ScreenEditor />);
+    fireEvent.click(screen.getByText('发布'));
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('取消'));
+
+    expect(mockPublishMutate).not.toHaveBeenCalled();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });

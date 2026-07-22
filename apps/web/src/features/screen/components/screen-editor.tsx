@@ -22,8 +22,10 @@ import { CanvasSettingsDialog } from './canvas-settings-dialog';
 import { ImportDialog } from './import-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
 import { BlueprintSheet } from '../blueprint/sheet';
+import { compileBlueprint, type Diagnostic } from '../blueprint/compiler';
 import { CodeEditorSheet } from './code-editor-sheet';
 import { SaveConflictDialog } from './save-conflict-dialog';
+import { PublishConfirmDialog } from './publish-confirm-dialog';
 import { isSaveConflictError } from '../lib/is-save-conflict-error';
 import { Spinner } from '@/components/ui/spinner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -62,6 +64,8 @@ export function ScreenEditor() {
   const [showEventBlueprint, setShowEventBlueprint] = useState(false);
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
+  const [showPublishConfirm, setShowPublishConfirm] = useState(false);
+  const [publishDiagnostics, setPublishDiagnostics] = useState<Diagnostic[]>([]);
   const toolStateMachine = useToolStateMachine();
   const interactionStateMachine = useInteractionStateMachine();
   // 任务 2.2：编辑器只创建一套会话控制器，下发给画布、工具入口、状态栏和快捷键
@@ -221,6 +225,8 @@ export function ScreenEditor() {
           description: storeProject.description ?? undefined,
           canvas: storeProject.canvas,
           components: storeProject.components,
+          // 任务 5.3：blueprint 随项目保存；undefined 时后端不修改该列（不凭空写入）
+          blueprint: storeProject.blueprint,
           expectedUpdatedAt: storeProject.updatedAt,
         },
       },
@@ -260,13 +266,8 @@ export function ScreenEditor() {
     }
   }, [refetch, loadProject]);
 
-  const handlePublish = useCallback(() => {
+  const doPublish = useCallback(() => {
     if (!storeProject) return;
-    // 任务 8.3：存在本地脏状态时阻止直接发布，要求用户显式保存
-    if (useScreenEditorStore.getState().isDirty) {
-      toast.warning('请先保存修改后再发布');
-      return;
-    }
     publishMutation.mutate(
       {
         id: storeProject.id,
@@ -289,6 +290,34 @@ export function ScreenEditor() {
       },
     );
   }, [storeProject, publishMutation, loadProject]);
+
+  const handlePublish = useCallback(() => {
+    if (!storeProject) return;
+    // 任务 8.3：存在本地脏状态时阻止直接发布，要求用户显式保存
+    if (useScreenEditorStore.getState().isDirty) {
+      toast.warning('请先保存修改后再发布');
+      return;
+    }
+    // 任务 5.3：发布前编译蓝图，存在 error 级诊断时弹出确认对话框
+    const blueprint = storeProject.blueprint;
+    if (blueprint) {
+      const componentIds = new Set(storeProject.components.map((c) => c.id));
+      const { diagnostics } = compileBlueprint(blueprint, { componentIds });
+      const errors = diagnostics.filter((d) => d.level === 'error');
+      if (errors.length > 0) {
+        setPublishDiagnostics(errors);
+        setShowPublishConfirm(true);
+        return;
+      }
+    }
+    doPublish();
+  }, [storeProject, doPublish]);
+
+  const handlePublishConfirm = useCallback(() => {
+    setShowPublishConfirm(false);
+    setPublishDiagnostics([]);
+    doPublish();
+  }, [doPublish]);
 
   const handlePreview = useCallback(() => {
     window.open(`/screen-preview/${id}`, '_blank');
@@ -343,6 +372,7 @@ export function ScreenEditor() {
     onFitToScreen: handleFitToScreen,
     onShowHelp: () => setShowHelp(true),
     editorSession,
+    suspended: showEventBlueprint || showCodeEditor,
   });
 
   if (isLoading) {
@@ -467,6 +497,15 @@ export function ScreenEditor() {
         open={showConflictDialog}
         onReload={() => void handleReloadFromConflict()}
         onCancel={() => setShowConflictDialog(false)}
+      />
+      <PublishConfirmDialog
+        open={showPublishConfirm}
+        diagnostics={publishDiagnostics}
+        onConfirm={handlePublishConfirm}
+        onCancel={() => {
+          setShowPublishConfirm(false);
+          setPublishDiagnostics([]);
+        }}
       />
     </TooltipProvider>
   );

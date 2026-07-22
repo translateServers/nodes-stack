@@ -34,6 +34,7 @@ import {
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
+  useReactFlow,
   type Connection,
   type Edge,
   type EdgeTypes,
@@ -51,8 +52,17 @@ import { useScreenEditorStore } from '../../stores/editor-store';
 import { ActionNode, CommentNode, TriggerNode } from '../nodes';
 import { ExecEdge } from '../edges';
 import { ViewportToolbar } from '../panels/viewport-toolbar';
-import { useBlueprintViewport, useBlueprintDrag } from '../hooks';
+import {
+  useBlueprintViewport,
+  useBlueprintDrag,
+  useBlueprintShortcuts,
+  useBlueprintClipboard,
+  useBlueprintDiagnostics,
+  BlueprintDiagnosticMapProvider,
+  buildDiagnosticMap,
+} from '../hooks';
 import { SearchPanel, type NodeOption, type PendingConnection } from '../panels/search-panel';
+import { ProblemsPanel } from '../panels/problems-panel';
 import { ToolbarButton } from '../../components/ui-primitives';
 
 // ===== ReactFlow 类型映射 =====
@@ -358,6 +368,8 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
   // 拖拽手势进行中标记：期间 nodes/edges→blueprint 的自动写回被抑制，
   // 拖拽结束时由 handleNodeDragStop 统一提交一次（任务 5.2：中间态不入栈）
   const dragActive = useRef(false);
+  // 连线进行中标记：Esc 分层第二层检查（任务 5.4）
+  const isConnectingRef = useRef(false);
   // 最新 nodes/edges 的 ref 快照，供拖拽结束时同步读取（setNodes 异步，不能依赖闭包中的 state）
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
@@ -424,6 +436,15 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
       data: {},
     };
     setEdges((eds) => addEdge(newEdge, eds));
+  }, []);
+
+  // 任务 5.4：追踪连线拖拽状态，供 Esc 分层判断
+  const handleConnectStart = useCallback(() => {
+    isConnectingRef.current = true;
+  }, []);
+
+  const handleConnectEnd = useCallback(() => {
+    isConnectingRef.current = false;
   }, []);
 
   // 拖拽吸附：仅更新本地 nodes（拖拽结束由 handleNodeDragStop 统一提交 blueprint）
@@ -515,23 +536,72 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
     [searchPanelState, components],
   );
 
-  // Esc 关闭搜索面板（Task 5.4 会处理 Esc 分层）
+  // 任务 5.4：快捷键分层 —— Ctrl+Z/Shift+Z 走全局历史，Esc 分层
+  useBlueprintShortcuts({
+    onClose: () => onOpenChange(false),
+    searchPanelVisible: searchPanelState.visible,
+    onCloseSearchPanel: () => setSearchPanelState((s) => ({ ...s, visible: false })),
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    isConnectingRef,
+  });
+
+  // 任务 5.5：跨项目剪贴板 —— Ctrl+C/X/V/D
+  useBlueprintClipboard({ nodes, edges, setNodes, setEdges });
+
+  // 任务 6.1：实时诊断订阅
+  const componentIds = new Set(components.map((c) => c.id));
+  const { diagnostics, errorCount, warningCount, infoCount } = useBlueprintDiagnostics({
+    blueprint,
+    componentIds,
+  });
+  const diagnosticMap = buildDiagnosticMap(diagnostics);
+
+  // 任务 6.2：问题面板点击定位节点
+  const reactFlowInstance = useReactFlow();
+  const locateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleLocateNode = useCallback(
+    (nodeId: string) => {
+      const targetNode = nodes.find((n) => n.id === nodeId);
+      if (!targetNode) return;
+
+      // 居中到目标节点
+      reactFlowInstance.setCenter(targetNode.position.x, targetNode.position.y, {
+        zoom: 1,
+        duration: 300,
+      });
+
+      // 添加闪烁标记
+      setNodes((nds) =>
+        nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, locating: true } } : n)),
+      );
+
+      // 1s 后移除闪烁标记
+      if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
+      locateTimerRef.current = setTimeout(() => {
+        setNodes((nds) =>
+          nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, locating: false } } : n)),
+        );
+      }, 1000);
+    },
+    [nodes, reactFlowInstance, setNodes],
+  );
+
+  // 清理定位计时器
   useEffect(() => {
-    if (!searchPanelState.visible) return;
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setSearchPanelState((s) => ({ ...s, visible: false }));
-      }
+    return () => {
+      if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [searchPanelState.visible]);
+  }, []);
 
   // 空蓝图空态
   const isEmpty = nodes.length === 0;
 
   return (
-    <>
+    <BlueprintDiagnosticMapProvider value={diagnosticMap}>
       {/* 顶栏 */}
       <header
         className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4"
@@ -578,6 +648,8 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={handleConnectStart}
+          onConnectEnd={handleConnectEnd}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           {...viewport.config}
@@ -606,6 +678,15 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
           </div>
         ) : null}
       </div>
-    </>
+
+      {/* 问题面板（任务 6.2） */}
+      <ProblemsPanel
+        diagnostics={diagnostics}
+        errorCount={errorCount}
+        warningCount={warningCount}
+        infoCount={infoCount}
+        onLocateNode={handleLocateNode}
+      />
+    </BlueprintDiagnosticMapProvider>
   );
 }

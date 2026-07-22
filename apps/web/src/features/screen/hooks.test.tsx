@@ -196,6 +196,7 @@ describe('useUpdateScreenProject', () => {
           description: project.description ?? undefined,
           canvas: project.canvas,
           components: project.components,
+          blueprint: project.blueprint,
           expectedUpdatedAt: project.updatedAt,
         },
       };
@@ -259,6 +260,59 @@ describe('useUpdateScreenProject', () => {
       // 严格断言：expectedUpdatedAt 等于 Store 中的 updatedAt，而非本地时间或其他来源
       expect(requestBody?.expectedUpdatedAt).toBe(CUSTOM_BASELINE);
       expect(requestBody?.expectedUpdatedAt).toBe(store.getState().project?.updatedAt);
+    });
+
+    it('任务 5.3：保存载荷包含 blueprint 字段', async () => {
+      const store = useScreenEditorStore;
+      const blueprint = {
+        version: 1 as const,
+        nodes: [
+          {
+            id: 'trigger-1',
+            kind: 'trigger' as const,
+            position: { x: 0, y: 0 },
+            config: { type: 'pageLoad' as const },
+          },
+        ],
+        edges: [],
+      };
+      store.getState().loadProject(makeProject({ blueprint }));
+
+      mockedUpdateScreenProject.mockResolvedValue(makeProject({ blueprint }));
+
+      const { result } = renderHook(() => useUpdateScreenProject(), {
+        wrapper: createWrapper(queryClient),
+      });
+
+      await act(async () => {
+        const project = store.getState().project;
+        if (!project) throw new Error('project should be loaded');
+        await result.current.mutateAsync(buildSaveParams(project));
+      });
+
+      const requestBody = mockedUpdateScreenProject.mock.calls[0]?.[1];
+      expect(requestBody).toHaveProperty('blueprint');
+      expect(requestBody?.blueprint).toEqual(blueprint);
+    });
+
+    it('任务 5.3：无蓝图的项目保存时 blueprint 为 undefined', async () => {
+      const store = useScreenEditorStore;
+      store.getState().loadProject(makeProject({ blueprint: undefined }));
+
+      mockedUpdateScreenProject.mockResolvedValue(makeProject());
+
+      const { result } = renderHook(() => useUpdateScreenProject(), {
+        wrapper: createWrapper(queryClient),
+      });
+
+      await act(async () => {
+        const project = store.getState().project;
+        if (!project) throw new Error('project should be loaded');
+        await result.current.mutateAsync(buildSaveParams(project));
+      });
+
+      const requestBody = mockedUpdateScreenProject.mock.calls[0]?.[1];
+      expect(requestBody?.blueprint).toBeUndefined();
     });
 
     it('已发布项目保存成功后 Store 和详情缓存均回写为 draft', async () => {

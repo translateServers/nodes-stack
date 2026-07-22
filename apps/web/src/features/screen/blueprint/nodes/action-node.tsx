@@ -17,6 +17,7 @@ import type { JSX } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { Crosshair, Eye, Navigation, RefreshCw } from 'lucide-react';
 import { BaseNodeShell } from './base-node';
+import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
 import type { ActionNodeData } from './node-data-types';
 
 /** React Flow 动作节点类型实例 */
@@ -40,9 +41,23 @@ function getActionIcon(config: ActionNodeData['config']): { icon: JSX.Element; t
 }
 
 /** 动作节点 React Flow 组件 */
-export function ActionNode({ data, selected }: NodeProps<ActionNode>): JSX.Element {
+export function ActionNode({ id, data, selected }: NodeProps<ActionNode>): JSX.Element {
   const { config, label, dangling, inCycle } = data;
   const { icon, typeLabel } = getActionIcon(config);
+
+  // 任务 6.1：从诊断上下文获取该节点的诊断等级
+  const diagnosticMap = useBlueprintDiagnosticMap();
+  const nodeDiagnostics = diagnosticMap.get(id);
+  const diagnosticLevel = nodeDiagnostics
+    ? nodeDiagnostics.reduce<'error' | 'warning' | 'info' | null>((highest, d) => {
+        if (d.level === 'error') return 'error';
+        if (d.level === 'warning' && highest !== 'error') return 'warning';
+        if (d.level === 'info' && highest == null) return 'info';
+        return highest;
+      }, null)
+    : null;
+
+  const locating = (data as { locating?: boolean }).locating ?? false;
 
   return (
     <BaseNodeShell
@@ -53,6 +68,8 @@ export function ActionNode({ data, selected }: NodeProps<ActionNode>): JSX.Eleme
       selected={selected}
       dangling={dangling}
       inCycle={inCycle}
+      diagnosticLevel={diagnosticLevel}
+      locating={locating}
       showInputHandle={true}
       showOutputHandle={true}
     />

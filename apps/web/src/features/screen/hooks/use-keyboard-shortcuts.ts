@@ -47,6 +47,12 @@ interface KeyboardShortcutsOptions {
     | 'isEditingText'
     | 'dispatchInteraction'
   >;
+  /**
+   * 任务 5.4：全屏弹层打开时挂起所有全局快捷键。
+   * 为 true 时，全局与画布作用域快捷键均不触发，
+   * 由弹层自身的快捷键分层接管（Ctrl+Z/Undo、Esc 分层等）。
+   */
+  suspended?: boolean;
 }
 
 /** 用 ref 包裹外部回调，使 useHotkeys 的 callback 始终调用最新值 */
@@ -79,7 +85,7 @@ function getAllKeys(entry: ShortcutDefinition): string {
 }
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
-  const { editorSession } = options;
+  const { editorSession, suspended = false } = options;
   const { setTool, pushTemporaryTool, popTemporaryTool, isEditingText, dispatchInteraction } =
     editorSession;
 
@@ -90,9 +96,11 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   const showHelpRef = useLatestRef(options.onShowHelp);
 
   const getStore = useCallback(() => useScreenEditorStore.getState(), []);
-  // canvas 作用域：非文本编辑态时才触发画布相关快捷键
+  // 任务 5.4：全局作用域 —— 弹层打开时挂起所有快捷键
+  const globalEnabled = useCallback(() => !suspended, [suspended]);
+  // canvas 作用域：非文本编辑态且非弹层挂起时才触发画布相关快捷键
   // 任务 12.4：isEditingText 唯一来源是会话控制器（派生自交互状态机 'text-editing' 状态）
-  const canvasEnabled = useCallback(() => !isEditingText, [isEditingText]);
+  const canvasEnabled = useCallback(() => !isEditingText && !suspended, [isEditingText, suspended]);
 
   // ===== 文件 =====
   const saveEntry = getShortcutById('save')!;
@@ -101,7 +109,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       saveRef.current();
     },
-    buildHotkeysOptions(saveEntry, true),
+    buildHotkeysOptions(saveEntry, globalEnabled),
   );
 
   // ===== 视图 =====
@@ -111,7 +119,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       zoomInRef.current?.();
     },
-    buildHotkeysOptions(zoomInEntry, true),
+    buildHotkeysOptions(zoomInEntry, globalEnabled),
   );
   const zoomOutEntry = getShortcutById('zoomOut')!;
   useHotkeys(
@@ -119,7 +127,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       zoomOutRef.current?.();
     },
-    buildHotkeysOptions(zoomOutEntry, true),
+    buildHotkeysOptions(zoomOutEntry, globalEnabled),
   );
   const fitToScreenEntry = getShortcutById('fitToScreen')!;
   useHotkeys(
@@ -127,7 +135,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       fitToScreenRef.current?.();
     },
-    buildHotkeysOptions(fitToScreenEntry, true),
+    buildHotkeysOptions(fitToScreenEntry, globalEnabled),
   );
   const toggleGuidesEntry = getShortcutById('toggleGuides')!;
   useHotkeys(
@@ -135,7 +143,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       getStore().toggleGuidesVisibility();
     },
-    buildHotkeysOptions(toggleGuidesEntry, true),
+    buildHotkeysOptions(toggleGuidesEntry, globalEnabled),
   );
   const toggleBorderGuidesEntry = getShortcutById('toggleBorderGuides')!;
   useHotkeys(
@@ -598,7 +606,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
       popTemporaryTool('hand');
     },
     {
-      ...buildHotkeysOptions(toolHandTempEntry, true),
+      ...buildHotkeysOptions(toolHandTempEntry, globalEnabled),
       keydown: false,
       keyup: true,
     },
@@ -630,7 +638,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       showHelpRef.current?.();
     },
-    buildHotkeysOptions(showHelpEntry, true),
+    buildHotkeysOptions(showHelpEntry, globalEnabled),
   );
 
   // ===== 界面 =====

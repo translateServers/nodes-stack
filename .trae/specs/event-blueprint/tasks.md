@@ -220,32 +220,69 @@
     - `editor-store.test.ts` 新增 describe「蓝图编辑手势接入历史栈（任务 5.2）」10 用例：各编辑路径单条历史、连续拖拽合并单条历史（undo/redo 恢复）、空提交跳过、手势状态管理（begin 幂等/手势后恢复入栈/loadProject 重置）。
     - 验证：editor-store 46/46、blueprint-sheet 11/11、全量 web 1536/1536 通过；typecheck ✓；biome check ✓。
 
-- [ ] **5.3 保存与发布链路集成**
+- [x] **5.3 保存与发布链路集成**
   - 结果：`blueprint` 随项目保存与发布；发布时存在 error 级诊断给出确认提示与摘要；草稿蓝图不通过公开预览暴露。
   - 验证：前端集成测试覆盖保存载荷含蓝图、发布确认提示；后端测试覆盖公开预览隔离不回退。
   - 依赖：5.2、1.4、2.4。
+  - 实施记录（2026-07-22）：
+    - `apps/web/src/features/screen/components/screen-editor.tsx`：`handleSave` 保存载荷新增 `blueprint: storeProject.blueprint`（undefined 时后端不修改该列）；`handlePublish` 在脏检查通过后调用 `compileBlueprint` 编译蓝图，过滤 `level === 'error'` 诊断，存在错误时打开 `PublishConfirmDialog` 而非直接发布，用户确认后调用 `doPublish`（提取出的发布 mutation 逻辑），取消则关闭对话框。
+    - `apps/web/src/features/screen/components/publish-confirm-dialog.tsx`（新建）：AlertDialog 组件，展示 error 级诊断数量与消息列表，提供"仍然发布"与"取消"操作按钮。
+    - `apps/web/src/features/screen/hooks.test.tsx`：`buildSaveParams` 同步加入 `blueprint` 字段；新增 2 用例（保存载荷含 blueprint、无蓝图时 blueprint 为 undefined）。
+    - `apps/web/src/features/screen/components/screen-editor.test.tsx`：mock `../blueprint/compiler`；新增 describe「发布蓝图诊断确认（任务 5.3）」5 用例（error 诊断打开确认框、无蓝图跳过检查、仅 warning/info 跳过确认、确认后发布、取消不发布）。
+    - `apps/web/src/features/screen/components/publish-confirm-dialog.test.tsx`（新建）：5 用例（open=false 不渲染、open=true 渲染标题与数量、渲染所有诊断消息、仍然发布触发 onConfirm、取消触发 onCancel）。
+    - 后端：保存接口（task 1.4）已支持 `blueprint` 条件写入；公开预览（`findPublishedProjectById`）以 `status='published'` 过滤，草稿蓝图不暴露（`screen.service.spec.ts` 已有覆盖测试）。
+    - 验证：publish-confirm-dialog 5/5、screen-editor 23/23、hooks 18/18 通过。
 
-- [ ] **5.4 全屏弹层快捷键分层**
+- [x] **5.4 全屏弹层快捷键分层**
   - 结果：全屏弹层打开期间画布全局快捷键挂起；弹层内 Ctrl+Z/Ctrl+Shift+Z 走全局本地编辑历史；Esc 分层（取消连线 → 取消选择 → 关闭弹层）。
   - 验证：组件测试覆盖快捷键作用域切换与 Esc 分层顺序；画布快捷键在弹层关闭后恢复。
   - 依赖：4.7、5.2。
+  - 实施记录（2026-07-22）：
+    - `apps/web/src/features/screen/hooks/use-keyboard-shortcuts.ts`：`KeyboardShortcutsOptions` 新增 `suspended?: boolean`；创建 `globalEnabled` 回调（`!suspended`）替换所有全局快捷键的 `enabled: true`；`canvasEnabled` 增加 `!suspended` 条件。弹层打开时所有快捷键均不触发，关闭后自动恢复。
+    - `apps/web/src/features/screen/components/screen-editor.tsx`：`useKeyboardShortcuts` 调用新增 `suspended: showEventBlueprint || showCodeEditor`，任意全屏弹层打开时挂起画布快捷键。
+    - `apps/web/src/features/screen/blueprint/hooks/use-blueprint-shortcuts.ts`（新建）：capture 阶段 window keydown 监听。Ctrl+Z/Ctrl+Shift+Z 调用 editor-store undo/redo；Esc 四层分层（搜索面板关闭 → 连线进行中跳过让 ReactFlow 处理 → 取消节点/边选择 → 关闭弹层）。
+    - `apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`：新增 `isConnectingRef` 追踪连线拖拽状态；ReactFlow 挂载 `onConnectStart`/`onConnectEnd`；调用 `useBlueprintShortcuts` 替代旧的 SearchPanel-only Escape 监听。
+    - `apps/web/src/features/screen/blueprint/hooks/index.ts`：导出 `useBlueprintShortcuts`。
+    - `apps/web/src/features/screen/blueprint/hooks/use-blueprint-shortcuts.test.ts`（新建）：9 用例（Ctrl+Z undo、Ctrl+Shift+Z redo、Esc+搜索面板关闭、Esc+连线跳过、Esc+选中节点取消选择、Esc+选中边取消选择、Esc+无选中关闭弹层、Esc 分层顺序验证、卸载后清理）。
+    - 验证：use-blueprint-shortcuts 9/9、blueprint-sheet 11/11、screen-editor 23/23、全量 web 1557/1557 通过（较基线 1548 +9，0 回退）。
 
-- [ ] **5.5 跨项目剪贴板**
+- [x] **5.5 跨项目剪贴板**
   - 结果：Ctrl+C/X/V 与 Ctrl+D 可用；复制内容为 JSON 写入系统剪贴板；粘贴前经共享 Schema 校验并重新生成节点 id；非法内容可读提示。
   - 验证：组件测试覆盖复制序列化、粘贴重新生成 id、跨项目粘贴、非法内容拒绝。
   - 依赖：5.2。
+  - 实施记录（2026-07-22）：
+    - `apps/web/src/features/screen/blueprint/hooks/use-blueprint-clipboard.ts`（新建）：`useBlueprintClipboard` hook。Ctrl+C 序列化选中节点及其之间的边为 `BlueprintClipboardSchema` 格式写入系统剪贴板；Ctrl+X 复制后删除选中节点和相关边；Ctrl+V 从剪贴板读取 JSON，经 `BlueprintClipboardSchema.safeParse` 校验，失败时 toast 提示，成功后重新生成所有节点/边 ID 并更新边的 source/target 引用，位置偏移 20px，新节点设为选中；Ctrl+D 就地复制（不经系统剪贴板）。表单元素聚焦或原生文本选区时跳过。
+    - `apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`：调用 `useBlueprintClipboard({ nodes, edges, setNodes, setEdges })`。
+    - `apps/web/src/features/screen/blueprint/hooks/index.ts`：导出 `useBlueprintClipboard` 及其类型。
+    - `apps/web/src/features/screen/blueprint/hooks/use-blueprint-clipboard.test.ts`（新建）：13 用例（copy 序列化、copy 含边、copy 无选中跳过、paste ID 重生成、paste 边引用更新、paste 非法 JSON 提示、paste 非蓝图格式提示、跨项目粘贴无 ID 冲突、cut 复制后删除、duplicate 就地复制、Ctrl+C/V/D 键盘快捷键）。
+    - `packages/shared/src/schemas/blueprint.schema.ts`：`BlueprintClipboardSchema`（kind + nodes + edges）已在先前任务中预定义，本次直接使用。
+    - 验证：use-blueprint-clipboard 13/13、全量 blueprint 331/331、全量 web 1570/1570 通过（较基线 1557 +13，0 回退）。
 
 ## 6. 校验与问题面板（M1）
 
-- [ ] **6.1 实时诊断订阅**
+- [x] **6.1 实时诊断订阅**
   - 结果：图编辑后编译器诊断实时刷新（rAF 节流），问题节点在画布上标记。
   - 验证：组件测试覆盖编辑触发诊断刷新、标记随修复消失；高频编辑不造成明显卡顿。
   - 依赖：4.7、2.4。
+  - 实施记录（2026-07-22）：
+    - `apps/web/src/features/screen/blueprint/hooks/use-blueprint-diagnostics.ts`（新建）：`useBlueprintDiagnostics` hook。订阅 blueprint/componentIds 变化，经 `createRafThrottler` rAF 节流后调用 `compileBlueprint`，返回 `{ diagnostics, errorCount, warningCount, infoCount }`。
+    - `apps/web/src/features/screen/blueprint/hooks/blueprint-diagnostic-context.ts`（新建）：`BlueprintDiagnosticMapProvider` React Context + `useBlueprintDiagnosticMap` hook + `buildDiagnosticMap` 工具函数。将诊断映射（nodeId → Diagnostic[]）通过 Context 共享给节点组件，避免修改 ReactFlow nodes 数组触发蓝图同步。
+    - `apps/web/src/features/screen/blueprint/nodes/base-node.tsx`：新增 `diagnosticLevel` 和 `locating` props。边框优先级更新为：dangling > error > warning > cycle > selected > 默认。`locating` 为 true 时添加 `animate-pulse ring-2` 闪烁动画。
+    - `apps/web/src/features/screen/blueprint/nodes/{trigger,action,comment}-node.tsx`：各节点组件通过 `useBlueprintDiagnosticMap` 获取自身诊断等级，传递给 `BaseNodeShell`。
+    - `apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`：调用 `useBlueprintDiagnostics` 获取诊断；构建 `diagnosticMap`；用 `BlueprintDiagnosticMapProvider` 包裹 ReactFlow。
+    - `apps/web/src/features/screen/blueprint/hooks/index.ts`：导出 `useBlueprintDiagnostics`、`BlueprintDiagnosticMapProvider`、`useBlueprintDiagnosticMap`、`buildDiagnosticMap`。
+    - `apps/web/src/features/screen/blueprint/hooks/use-blueprint-diagnostics.test.ts`（新建）：5 用例（无蓝图空诊断、空蓝图空诊断、编辑触发刷新、修复后标记消失、rAF 节流合并、分级计数正确）。
+    - 验证：use-blueprint-diagnostics 5/5、全量 web 1581/1581 通过（较基线 1570 +11，0 回退）。
 
-- [ ] **6.2 问题面板与点击定位**
+- [x] **6.2 问题面板与点击定位**
   - 结果：底部问题面板按 error/warning/info 分级列出诊断；点击条目定位并闪烁聚焦对应节点。
   - 验证：组件测试覆盖分级渲染、点击定位、空诊断状态。
   - 依赖：6.1。
+  - 实施记录（2026-07-22）：
+    - `apps/web/src/features/screen/blueprint/panels/problems-panel.tsx`（新建）：`ProblemsPanel` 组件。按 error > warning > info 排序列出诊断条目；显示分级计数（N 错误 / N 警告 / N 信息）；空诊断时显示"无问题"；点击有条目 ID 的条目触发 `onLocateNode` 回调。
+    - `apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`：新增 `handleLocateNode` 回调——使用 `useReactFlow().setCenter` 居中到目标节点（300ms 动画），设置 `data.locating = true` 触发闪烁动画，1s 后自动清除。`ProblemsPanel` 挂载在画布区域下方。
+    - `apps/web/src/features/screen/blueprint/panels/problems-panel.test.tsx`（新建）：6 用例（空诊断状态、分级列出、error>warning>info 排序、点击定位、仅显示非零计数、显示节点 ID）。
+    - 验证：problems-panel 6/6、全量 web 1581/1581 通过。
 
 ## 7. M1 端到端验收
 

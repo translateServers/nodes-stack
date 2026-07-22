@@ -35,6 +35,17 @@ interface BaseNodeShellProps {
   dangling?: boolean;
   /** 是否在执行流环中 */
   inCycle?: boolean;
+  /**
+   * 任务 6.1：该节点最高级别的诊断等级。
+   * 用于在节点边框上显示问题标记（error 红色、warning 黄色）。
+   * 优先级：dangling > error > warning > cycle > selected > 默认。
+   */
+  diagnosticLevel?: 'error' | 'warning' | 'info' | null;
+  /**
+   * 任务 6.2：节点是否正在被定位（从问题面板点击跳转）。
+   * 为 true 时添加闪烁动画，1s 后自动清除。
+   */
+  locating?: boolean;
   /** 是否显示输入引脚（trigger 无输入，comment 无引脚） */
   showInputHandle: boolean;
   /** 是否显示输出引脚（comment 无引脚） */
@@ -80,27 +91,38 @@ export function BaseNodeShell({
   selected,
   dangling = false,
   inCycle = false,
+  diagnosticLevel = null,
+  locating = false,
   showInputHandle,
   showOutputHandle,
   children,
 }: BaseNodeShellProps): JSX.Element {
   const scheme = COLOR_SCHEMES[colorScheme];
 
-  // 边框样式：优先级 dangling > cycle > selected > 默认
+  // 边框样式：优先级 dangling > error > warning > cycle > selected > 默认
   const borderClass = dangling
     ? 'border-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.3)]'
-    : inCycle
-      ? 'border-dashed border-orange-500'
-      : selected
-        ? 'border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.3)]'
-        : scheme.border;
+    : diagnosticLevel === 'error'
+      ? 'border-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.3)]'
+      : diagnosticLevel === 'warning'
+        ? 'border-yellow-500 shadow-[0_0_0_2px_rgba(234,179,8,0.3)]'
+        : inCycle
+          ? 'border-dashed border-orange-500'
+          : selected
+            ? 'border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.3)]'
+            : scheme.border;
+
+  // 任务 6.2：定位闪烁动画
+  const locateClass = locating ? 'animate-pulse ring-2 ring-blue-400 ring-offset-2' : '';
 
   return (
     <div
-      className={`relative min-w-[180px] max-w-[280px] rounded-md border-2 ${scheme.bg} ${borderClass} px-3 py-2 transition-colors`}
+      className={`relative min-w-[180px] max-w-[280px] rounded-md border-2 ${scheme.bg} ${borderClass} ${locateClass} px-3 py-2 transition-colors`}
       data-blueprint-node-selected={selected}
       data-blueprint-node-dangling={dangling}
       data-blueprint-node-cycle={inCycle}
+      data-blueprint-node-diagnostic={diagnosticLevel ?? undefined}
+      data-locating={locating || undefined}
     >
       {showInputHandle && (
         <Handle
