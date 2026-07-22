@@ -55,6 +55,15 @@ export const ComponentStyleSchema = z.object({
   textAlign: z.enum(['left', 'center', 'right']).optional().describe('文字对齐'),
   overflow: z.enum(['visible', 'hidden', 'auto']).optional().describe('内容溢出处理'),
   objectFit: z.enum(['fill', 'contain', 'cover']).optional().describe('图片填充模式'),
+  // Phase 2 Slice D：文本增强（字重/行高）
+  fontWeight: z
+    .string()
+    .optional()
+    .describe('字体粗细（CSS font-weight 字符串，如 "normal"/"bold"/"700"）'),
+  lineHeight: z.number().positive().optional().describe('行高倍数（如 1.5 表示 1.5 倍行高）'),
+  // Phase 2 Slice D：变换（水平/垂直翻转）
+  flipX: z.boolean().optional().describe('水平翻转（CSS scaleX(-1)）'),
+  flipY: z.boolean().optional().describe('垂直翻转（CSS scaleY(-1)）'),
 });
 export type ComponentStyle = z.infer<typeof ComponentStyleSchema>;
 
@@ -188,15 +197,25 @@ export const ComponentDefaultSizeSchema = z.object({
 });
 export type ComponentDefaultSize = z.infer<typeof ComponentDefaultSizeSchema>;
 
+export const ComponentBadgeSchema = z.enum(['new', 'beta']);
+export type ComponentBadge = z.infer<typeof ComponentBadgeSchema>;
+
 export const ComponentDefinitionSchema = z.object({
   type: z.string().min(1).describe('组件类型 key（唯一）'),
   name: z.string().min(1).describe('组件显示名称'),
   category: ComponentCategorySchema.describe('组件分类'),
-  icon: z.string().optional().describe('图标标识'),
+  icon: z.string().optional().describe('图标标识（registry/icons.ts 中 ICON_MAP 的 key）'),
   thumbnail: z.string().optional().describe('缩略图 URL'),
   defaultProps: z.record(z.string(), z.unknown()).describe('组件默认 props'),
   defaultSize: ComponentDefaultSizeSchema.describe('组件默认尺寸'),
   defaultStyle: ComponentStyleSchema.partial().optional().describe('组件默认样式'),
+  keywords: z
+    .array(z.string())
+    .optional()
+    .describe('搜索别名（组件库搜索同时匹配 name/type/keywords）'),
+  description: z.string().optional().describe('hover tooltip 说明'),
+  badge: ComponentBadgeSchema.optional().describe('角标（new/beta）'),
+  order: z.number().int().optional().describe('分类内排序（升序，缺省按数组顺序）'),
 });
 export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 

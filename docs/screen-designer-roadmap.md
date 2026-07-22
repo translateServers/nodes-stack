@@ -38,9 +38,9 @@
 
 设计文档：`docs/screen-designer-panels-architecture.md`（方法论：注册表驱动 / Schema 驱动渲染 / 命令描述符 / 单向数据流不变）
 
-- [ ] Slice A 图层右键菜单 + `renameComponent` + 行内重命名 + 命令描述符模块（`lib/layer-commands.ts`）
-- [ ] Slice B 属性面板 Schema 架构：字段控件注册表 + Tabs（外观/数据/交互）+ Section 编排器 + 现有分区混合挂载（bar-chart 复杂表单走 custom 逃生舱）
-- [ ] Slice C 组件库：图标注册收敛（registry/icons.ts）+ keywords/description 元数据 + 最近使用
+- [x] Slice A 图层右键菜单 + `renameComponent` + 行内重命名 + 命令描述符模块（`lib/layer-commands.ts`）
+- [x] Slice B 属性面板 Schema 架构：字段控件注册表 + Tabs（外观/数据/交互）+ Section 编排器 + 现有分区混合挂载（bar-chart 复杂表单走 custom 逃生舱）
+- [x] Slice C 组件库：图标注册收敛（registry/icons.ts）+ keywords/description 元数据 + 最近使用
 - [ ] Slice D 属性类别扩充第一批：文本增强（字重/行高/对齐）+ 变换（翻转），验证 Schema 承载力
 - [ ] 验证：全量测试 + biome + tsc + Playwright 走查
 

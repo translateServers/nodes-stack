@@ -82,6 +82,62 @@ describe('resolveComponentContainerStyle', () => {
     });
   });
 
+  describe('Phase 2 Slice D · 翻转（flipX / flipY）', () => {
+    it('flipX=true 生成 scaleX(-1) transform', () => {
+      const component = createComponent({
+        style: { flipX: true },
+      });
+      const style = resolveComponentContainerStyle(component);
+
+      expect(style.transform).toBe('scaleX(-1)');
+    });
+
+    it('flipY=true 生成 scaleY(-1) transform', () => {
+      const component = createComponent({
+        style: { flipY: true },
+      });
+      const style = resolveComponentContainerStyle(component);
+
+      expect(style.transform).toBe('scaleY(-1)');
+    });
+
+    it('flipX + flipY 同时为 true 时 transform 包含 scaleX 与 scaleY', () => {
+      const component = createComponent({
+        style: { flipX: true, flipY: true },
+      });
+      const style = resolveComponentContainerStyle(component);
+
+      // CSS transform 链从右到左应用：rotate -> scaleX -> scaleY
+      expect(style.transform).toBe('scaleX(-1) scaleY(-1)');
+    });
+
+    it('旋转 + 翻转组合：rotate -> scaleX -> scaleY 顺序（视觉上先翻转再旋转）', () => {
+      const component = createComponent({
+        position: { x: 0, y: 0, width: 100, height: 100, rotation: 90 },
+        style: { flipX: true, flipY: true },
+      });
+      const style = resolveComponentContainerStyle(component);
+
+      expect(style.transform).toBe('rotate(90deg) scaleX(-1) scaleY(-1)');
+    });
+
+    it('flipX/flipY 显式为 false 时不生成 transform', () => {
+      const component = createComponent({
+        style: { flipX: false, flipY: false },
+      });
+      const style = resolveComponentContainerStyle(component);
+
+      expect(style.transform).toBeUndefined();
+    });
+
+    it('flipX/flipY 缺失时 transform 为 undefined', () => {
+      const component = createComponent();
+      const style = resolveComponentContainerStyle(component);
+
+      expect(style.transform).toBeUndefined();
+    });
+  });
+
   describe('边框', () => {
     it('完整边框字段透传到容器样式', () => {
       const component = createComponent({

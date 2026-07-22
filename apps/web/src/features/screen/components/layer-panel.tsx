@@ -1,15 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Type,
-  BarChart3,
   Eye,
   EyeOff,
   Lock,
   Unlock,
-  Image,
-  Frame,
-  Table,
-  Box,
   ChevronsUp,
   ChevronsDown,
   ChevronRight,
@@ -30,24 +24,24 @@ import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  Type,
-  BarChart3,
-  Image,
-  Frame,
-  Table,
-  Box,
-};
-
-const KNOWN_TYPE_TO_ICON: Record<string, string> = {
-  text: 'Type',
-  'bar-chart': 'BarChart3',
-};
-
-function getIconForType(type: string): React.ComponentType<{ className?: string }> {
-  return ICON_MAP[KNOWN_TYPE_TO_ICON[type]] ?? Box;
-}
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import { Input } from '@/components/ui/input';
+// Phase 2 Slice C：图标注册收敛（registry/icons.ts 单一映射源，两个面板同源引用）
+import { getIconForType } from '../registry/icons';
+import {
+  getVisibleLayerCommands,
+  isLayerCommandEnabled,
+  resolveLayerCommandIcon,
+  resolveLayerCommandLabel,
+  type LayerCommandContext,
+  type LayerCommandStore,
+} from '../lib/layer-commands';
 
 /**
  * 可拖拽图层行包装器（Task 3.23）。
@@ -141,6 +135,107 @@ function buildLayerTree(components: ScreenComponent[]): LayerNode[] {
   return nodes;
 }
 
+/**
+ * 图层行右键菜单内容（Phase 2 Slice A）。
+ *
+ * 基于命令描述符注册表 `LAYER_COMMANDS` 渲染：
+ * - `when=false` 的命令不显示
+ * - `enabled=false` 的命令置灰
+ * - `separatorBefore` 的命令前插入分隔线（首项除外）
+ * - `destructive` 命令套 destructive variant
+ *
+ * 调用方负责构造 LayerCommandContext（包含选区、目标、顶层序列与 store actions 子集）。
+ */
+function LayerRowMenu({ ctx, children }: { ctx: LayerCommandContext; children: React.ReactNode }) {
+  const visible = getVisibleLayerCommands(ctx);
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent className="w-48" data-testid="layer-context-menu">
+        {visible.map((cmd, idx) => {
+          const label = resolveLayerCommandLabel(cmd, ctx);
+          const Icon = resolveLayerCommandIcon(cmd, ctx);
+          const enabled = isLayerCommandEnabled(cmd, ctx);
+          return (
+            <Fragment key={cmd.id}>
+              {cmd.separatorBefore && idx > 0 && <ContextMenuSeparator />}
+              <ContextMenuItem
+                disabled={!enabled}
+                variant={cmd.destructive ? 'destructive' : 'default'}
+                onSelect={() => cmd.run(ctx)}
+                data-testid={`layer-command-${cmd.id}`}
+              >
+                {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+                <span className="flex-1 truncate whitespace-nowrap">{label}</span>
+              </ContextMenuItem>
+            </Fragment>
+          );
+        })}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+/**
+ * 行内重命名输入框（Phase 2 Slice A）。
+ *
+ * - 自动聚焦并全选当前名称
+ * - Enter 提交（trim 后非空且与原名不同才入历史栈）
+ * - Escape 取消，恢复原显示
+ * - blur 时提交，但 Escape 触发的 blur 不重复提交（用 ref 标记 cancel 态）
+ * - 阻止 pointerdown 冒泡，避免触发 dnd-kit 拖拽
+ */
+function InlineRenameInput({
+  component,
+  onCommit,
+  onCancel,
+}: {
+  component: ScreenComponent;
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const cancelledRef = useRef(false);
+
+  const commit = () => {
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      return;
+    }
+    const input = document.getElementById(
+      `layer-rename-input-${component.id}`,
+    ) as HTMLInputElement | null;
+    const value = input?.value ?? '';
+    onCommit(value);
+  };
+
+  return (
+    <Input
+      id={`layer-rename-input-${component.id}`}
+      type="text"
+      defaultValue={component.name}
+      autoFocus
+      onFocus={(e) => e.target.select()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          cancelledRef.current = true;
+          onCancel();
+        }
+      }}
+      onBlur={commit}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      className="h-6 flex-1 px-1 text-xs"
+      aria-label="重命名组件"
+      data-testid="layer-rename-input"
+    />
+  );
+}
+
 export function LayerPanel() {
   const project = useScreenEditorStore((s) => s.project);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
@@ -153,8 +248,15 @@ export function LayerPanel() {
   const reorderLayerToIndex = useScreenEditorStore((s) => s.reorderLayerToIndex);
   const groupSelected = useScreenEditorStore((s) => s.groupSelected);
   const ungroupSelected = useScreenEditorStore((s) => s.ungroupSelected);
+  const renameComponent = useScreenEditorStore((s) => s.renameComponent);
+  const copySelectedToClipboard = useScreenEditorStore((s) => s.copySelectedToClipboard);
+  const duplicateSelected = useScreenEditorStore((s) => s.duplicateSelected);
+  const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
   const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
   const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
+
+  // 行内重命名目标（Phase 2 Slice A）：null 表示不在重命名态
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   // dnd-kit 拖拽传感器：PointerSensor + 8px 激活距离，避免点击误触发拖拽
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -182,12 +284,57 @@ export function LayerPanel() {
         .map((n) => n.comp.id),
     [tree],
   );
+  // 顶层组件按 zIndex 降序（与 buildLayerTree 内部排序一致），供命令描述符计算"上移/下移一层"
+  const topLevelOrdered = useMemo<readonly ScreenComponent[]>(
+    () =>
+      project
+        ? [...project.components].filter((c) => !c.parentId).sort((a, b) => b.zIndex - a.zIndex)
+        : [],
+    [project],
+  );
+
+  // 命令描述符所需的 store actions 子集（保持引用稳定，避免菜单每次渲染重建）
+  const commandStore = useMemo<LayerCommandStore>(
+    () => ({
+      renameComponent,
+      copySelectedToClipboard,
+      duplicateSelected,
+      setLocked,
+      setHidden,
+      reorderToTop,
+      reorderToBottom,
+      reorderLayerToIndex,
+      groupSelected,
+      ungroupSelected,
+      removeSelectedComponents,
+    }),
+    [
+      renameComponent,
+      copySelectedToClipboard,
+      duplicateSelected,
+      setLocked,
+      setHidden,
+      reorderToTop,
+      reorderToBottom,
+      reorderLayerToIndex,
+      groupSelected,
+      ungroupSelected,
+      removeSelectedComponents,
+    ],
+  );
 
   const canGroup = selectedComponentIds.length >= 2;
   const canUngroup = (() => {
     if (!project || selectedComponentIds.length === 0) return false;
     return project.components.some((c) => c.parentId && selectedComponentIds.includes(c.id));
   })();
+
+  // 选中组件快照：供命令上下文使用
+  const selectedComponents = useMemo<readonly ScreenComponent[]>(() => {
+    if (!project) return [];
+    const idSet = selectedIdSet;
+    return project.components.filter((c) => idSet.has(c.id));
+  }, [project, selectedIdSet]);
 
   if (!project) return null;
 
@@ -251,6 +398,17 @@ export function LayerPanel() {
   };
 
   /**
+   * 右键组件行（Phase 2 Slice A）：实现"右键未选中行 → 先选中该行再弹菜单"的行业惯例。
+   * - 若目标组件不在当前选区：单选该组件（避免误对其他组件批量操作）
+   * - 若已在选区：保留选区不变（支持多选右键批量操作）
+   */
+  const handleComponentContextMenu = (comp: ScreenComponent) => {
+    if (!selectedIdSet.has(comp.id)) {
+      selectComponent(comp.id);
+    }
+  };
+
+  /**
    * 点击分组行：选中整个分组（所有子组件）。
    * 双击分组行：进入该分组（setActiveGroupId + 选中全部子组件）。
    */
@@ -284,6 +442,36 @@ export function LayerPanel() {
   };
 
   /**
+   * 右键分组行（Phase 2 Slice A）：先选中所有子组件再弹菜单。
+   * 与组件行同理：未选中状态下右键分组行 → 自动选中所有子组件。
+   */
+  const handleGroupContextMenu = (children: ScreenComponent[]) => {
+    const childIds = children.map((c) => c.id);
+    // 仅当当前选区不完整覆盖分组子组件时才覆盖选区
+    const allSelected = childIds.every((id) => selectedIdSet.has(id));
+    if (!allSelected) {
+      selectComponents(childIds);
+    }
+  };
+
+  /**
+   * 提交重命名：trim 后为空或与原名相同则忽略；store action 已含相同检查，
+   * 此处显式检查可避免空操作进入历史栈（与 store 实现一致，作为防御性兜底）。
+   */
+  const handleRenameCommit = (id: string, name: string) => {
+    setRenamingId(null);
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const target = project.components.find((c) => c.id === id);
+    if (!target || target.name === trimmed) return;
+    renameComponent(id, trimmed);
+  };
+
+  const handleRenameCancel = () => {
+    setRenamingId(null);
+  };
+
+  /**
    * dnd-kit 拖拽结束：根据 active/over 在顶层组件列表中的索引调用 reorderLayerToIndex。
    * over 为 null 表示未悬停在有效目标上，忽略。
    */
@@ -298,6 +486,37 @@ export function LayerPanel() {
     reorderLayerToIndex(activeId, toIdx);
   };
 
+  /** 构造单个组件行的 LayerCommandContext */
+  const buildComponentCtx = (comp: ScreenComponent): LayerCommandContext => {
+    // 调用方约定：onContextMenu 已保证选区包含 target；这里做防御性兜底
+    const ctxSelected = selectedComponents.some((c) => c.id === comp.id)
+      ? selectedComponents
+      : [comp];
+    return {
+      selectedComponents: ctxSelected,
+      targetComponent: comp,
+      topLevelOrdered,
+      requestRename: setRenamingId,
+      store: commandStore,
+    };
+  };
+
+  /** 构造分组行的 LayerCommandContext */
+  const buildGroupCtx = (groupId: string, children: ScreenComponent[]): LayerCommandContext => {
+    // 分组行 onContextMenu 已保证选区为子组件集合；此处做防御性兜底
+    const ctxSelected =
+      selectedComponents.length === children.length &&
+      children.every((c) => selectedIdSet.has(c.id))
+        ? selectedComponents
+        : children;
+    return {
+      selectedComponents: ctxSelected,
+      targetGroup: { groupId, children },
+      topLevelOrdered,
+      store: commandStore,
+    };
+  };
+
   /** 渲染单个组件行（不含 key，由外层 SortableLayerRow 或直接 div 提供） */
   const renderComponent = (comp: ScreenComponent, depth: number) => {
     const Icon = getIconForType(comp.type);
@@ -306,7 +525,8 @@ export function LayerPanel() {
     const inActiveGroup = comp.parentId !== null && comp.parentId === activeGroupId;
     // depth=0（顶层组件）由外层 SortableLayerRow 提供 data-testid="layer-row"，
     // depth>0（分组子组件）无外层包装，在此直接打 testid 供 E2E 定位
-    return (
+    const isRenaming = renamingId === comp.id;
+    const row = (
       <div
         data-testid={depth > 0 ? 'layer-row' : undefined}
         data-component-id={depth > 0 ? comp.id : undefined}
@@ -316,95 +536,114 @@ export function LayerPanel() {
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         onClick={(e) => handleComponentClick(e, comp)}
         onDoubleClick={() => handleComponentDoubleClick(comp)}
+        onContextMenu={() => handleComponentContextMenu(comp)}
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
-        <span
-          className={`flex-1 truncate ${
-            comp.status.hidden ? 'text-muted-foreground/40' : 'text-foreground'
-          }`}
-        >
-          {comp.name}
-        </span>
+        {isRenaming ? (
+          <InlineRenameInput
+            component={comp}
+            onCommit={(name) => handleRenameCommit(comp.id, name)}
+            onCancel={handleRenameCancel}
+          />
+        ) : (
+          <span
+            className={`flex-1 truncate ${
+              comp.status.hidden ? 'text-muted-foreground/40' : 'text-foreground'
+            }`}
+          >
+            {comp.name}
+          </span>
+        )}
         {inActiveGroup && (
           <span className="rounded bg-blue-500/10 px-1 text-[10px] font-medium text-blue-600 dark:text-blue-400">
             组内
           </span>
         )}
-        <div
-          className={`flex items-center gap-0.5 transition-opacity ${
-            comp.status.hidden || comp.status.locked
-              ? 'opacity-100'
-              : 'opacity-0 group-hover:opacity-100'
-          }`}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={comp.status.hidden ? '显示' : '隐藏'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setHidden([comp.id], !comp.status.hidden);
-                }}
-              >
-                {comp.status.hidden ? <EyeOff /> : <Eye />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{comp.status.hidden ? '显示' : '隐藏'}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={comp.status.locked ? '解锁' : '锁定'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setLocked([comp.id], !comp.status.locked);
-                }}
-              >
-                {comp.status.locked ? <Lock /> : <Unlock />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{comp.status.locked ? '解锁' : '锁定'}</TooltipContent>
-          </Tooltip>
-          <div className="flex gap-0.5">
+        {!isRenaming && (
+          <div
+            className={`flex items-center gap-0.5 transition-opacity ${
+              comp.status.hidden || comp.status.locked
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100'
+            }`}
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="置顶"
+                  aria-label={comp.status.hidden ? '显示' : '隐藏'}
                   onClick={(e) => {
                     e.stopPropagation();
-                    reorderToTop(comp.id);
+                    setHidden([comp.id], !comp.status.hidden);
                   }}
                 >
-                  <ChevronsUp />
+                  {comp.status.hidden ? <EyeOff /> : <Eye />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>置顶</TooltipContent>
+              <TooltipContent>{comp.status.hidden ? '显示' : '隐藏'}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="置底"
+                  aria-label={comp.status.locked ? '解锁' : '锁定'}
                   onClick={(e) => {
                     e.stopPropagation();
-                    reorderToBottom(comp.id);
+                    setLocked([comp.id], !comp.status.locked);
                   }}
                 >
-                  <ChevronsDown />
+                  {comp.status.locked ? <Lock /> : <Unlock />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>置底</TooltipContent>
+              <TooltipContent>{comp.status.locked ? '解锁' : '锁定'}</TooltipContent>
             </Tooltip>
+            <div className="flex gap-0.5">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="置顶"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      reorderToTop(comp.id);
+                    }}
+                  >
+                    <ChevronsUp />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>置顶</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="置底"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      reorderToBottom(comp.id);
+                    }}
+                  >
+                    <ChevronsDown />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>置底</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+    );
+
+    // Phase 2 Slice A：用 ContextMenu 包裹行，命令描述符驱动菜单内容
+    // key 由调用方（tree.map / renderGroup children.map / SortableLayerRow）通过外层提供
+    return (
+      <LayerRowMenu key={comp.id} ctx={buildComponentCtx(comp)}>
+        {row}
+      </LayerRowMenu>
     );
   };
 
@@ -419,9 +658,8 @@ export function LayerPanel() {
     // 当前分组是否处于"编辑中"状态（双击进入）
     const isActiveGroup = activeGroupId === groupId;
 
-    return [
+    const groupRow = (
       <div
-        key={groupId}
         className={`flex cursor-pointer items-center gap-1 border-b border-border/60 py-2 pr-3 text-sm font-medium transition-colors ${
           isActiveGroup
             ? 'border-l-2 border-l-blue-500 bg-blue-500/10'
@@ -434,6 +672,7 @@ export function LayerPanel() {
         style={{ paddingLeft: isActiveGroup ? `${10}px` : `${12}px` }}
         onClick={(e) => handleGroupClick(e, groupId, children)}
         onDoubleClick={() => handleGroupDoubleClick(groupId, children)}
+        onContextMenu={() => handleGroupContextMenu(children)}
       >
         <button
           type="button"
@@ -501,7 +740,14 @@ export function LayerPanel() {
           </TooltipTrigger>
           <TooltipContent>{allLocked ? '解锁全部' : '锁定全部'}</TooltipContent>
         </Tooltip>
-      </div>,
+      </div>
+    );
+
+    return [
+      // Phase 2 Slice A：分组行同样用 ContextMenu 包裹，命令描述符的 when=enbled 已适配分组场景
+      <LayerRowMenu key={groupId} ctx={buildGroupCtx(groupId, children)}>
+        {groupRow}
+      </LayerRowMenu>,
       // 子组件：仅在展开时渲染
       ...(!isCollapsed ? children.map((c) => renderComponent(c, 1)) : []),
     ];
