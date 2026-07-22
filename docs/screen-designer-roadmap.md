@@ -44,6 +44,9 @@
 - [ ] Slice D 属性类别扩充第一批：文本增强（字重/行高/对齐）+ 变换（翻转），验证 Schema 承载力
 - [ ] 验证：全量测试 + biome + tsc + Playwright 走查
 
+> 并行说明：事件蓝图（`.trae/specs/event-blueprint/`）作为独立 spec 已开工，与 Phase 2 基座夯实并行推进、互不阻塞。
+> 蓝图的编译器/运行时/可视化编辑器等具体任务以 spec 任务空间为准；Phase 4 在本文档仅作为档期占位，不代表蓝图全部范围。
+
 ## Phase 3 ⬜ 图表体系升级（ECharts）
 
 背景：当前仅手写 SVG 柱状图（viewBox 固定 400×300，无坐标轴/动画/图例），是工业级最大短板。
@@ -60,6 +63,10 @@
 约束：不改数据层 schema（FieldMapping/DataSource/LogicConfig 已稳定），不改后端。
 
 ## Phase 4 ⬜ 事件蓝图编辑器 UI 接线
+
+> 本节为档期占位，事件蓝图完整实施以 `.trae/specs/event-blueprint/` 任务空间为准（含 Schema 契约、编译器、运行时、可视化编辑器、历史与保存、模拟调试、高级触发等，远超"UI 接线"档期标签）。
+> 容器形态：采用全屏弹层（`full-overlay`，带顶栏），与 `docs/screen-designer-panels-architecture.md` §7.4 一致。
+> 与 Phase 2 关系：允许先行开工，不阻塞基座夯实；进入门禁见 `checklist.md`。
 
 背景：编译器/运行时/节点/边/面板组件已就绪（`blueprint/`，@xyflow/react），但入口是 52 行占位 Sheet。
 

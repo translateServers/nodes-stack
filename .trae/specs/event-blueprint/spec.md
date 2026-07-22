@@ -143,7 +143,7 @@
 
 ### Requirement: 可视化节点编辑器
 
-系统 SHALL 将事件蓝图 Sheet 建设为基于 React Flow 的节点编辑器，底部 Sheet 容器（`side="bottom"`、`h-[60vh]`）与项目菜单入口保持不变。
+系统 SHALL 将事件蓝图建设为基于 React Flow 的全屏节点编辑器，采用全屏弹层容器（`full-overlay`，带顶栏）承载，与 [docs/screen-designer-panels-architecture.md](../../../docs/screen-designer-panels-architecture.md) §7.4 容器形态指南一致；项目菜单入口保持不变。
 
 #### Scenario: 连线与引脚磁吸
 
@@ -169,10 +169,10 @@
 
 #### Scenario: 快捷键分层
 
-- **WHEN** 蓝图 Sheet 打开
-- **THEN** 画布全局快捷键被挂起，Sheet 内快捷键独立生效
-- **AND** Esc 分层执行：取消进行中的连线 → 取消选择 → 关闭 Sheet
-- **AND** Sheet 内撤销/重做与编辑器全局本地编辑历史同一栈
+- **WHEN** 蓝图全屏弹层打开
+- **THEN** 画布全局快捷键被挂起，弹层内快捷键独立生效
+- **AND** Esc 分层执行：取消进行中的连线 → 取消选择 → 关闭全屏弹层
+- **AND** 弹层内撤销/重做与编辑器全局本地编辑历史同一栈
 
 ### Requirement: 蓝图编辑进入本地编辑历史
 
