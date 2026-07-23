@@ -37,11 +37,12 @@
 
 ## 前端开发
 
-- 框架：React 19 + Vite 8 + Tailwind CSS v4 + Radix UI + shadcn/ui + React Router 7
+- 框架：React 19 + Vite 8 + Tailwind CSS v4 + Radix UI + shadcn/ui + TanStack Router
 - 样式优先使用 Tailwind CSS 工具类，复杂交互组件使用 Radix UI + shadcn/ui
 - 路径别名 `@/` 映射 `src/`，导入时使用别名路径
-- 新增页面必须在 `src/router/index.tsx` 中注册路由
-- 新增页面使用 `MainLayout` 布局，侧边栏菜单在 `MainLayout.tsx` 的 `menuItems` 中配置
+- 路由使用 TanStack Router 文件系统路由，新增页面在 `src/routes/` 下创建路由文件（如 `_app.<page>.tsx`），路由树自动生成（`routeTree.gen.ts`，已加入 Biome 忽略配置，禁止手动编辑）
+- 需要鉴权的页面使用 `_app` 布局路由（`src/routes/_app.tsx`），其组件为 `AppLayout`（`src/components/layout/app-layout.tsx`）
+- 侧边栏菜单在 `src/config/navigation.ts` 的 `menuGroups` 中配置，新增页面后需同步添加导航项
 
 ## Monorepo 规范
 
@@ -50,6 +51,38 @@
 - 共享 TS 配置放在 `packages/typescript-config`，通过 `@nebula/typescript-config` 引用
 - 共享 ESLint 配置放在 `packages/eslint-config`，通过 `@nebula/eslint-config` 引用
 - 新增依赖时注意区分 dependencies 和 devDependencies
+
+## 单元测试
+
+- 后端：Jest 30（`*.spec.ts`），覆盖率阈值 80%（branches/functions/lines/statements）
+- 前端：Vitest 4（`src/**/*.test.{ts,tsx}`），jsdom 环境
+- shared 包：Vitest 4（`src/**/*.test.ts`）
+- E2E：Playwright（`apps/web/e2e/`），运行：`pnpm --filter @nebula/web e2e`
+- 运行单个后端测试：`pnpm --filter @nebula/nestjs-server test -- --testPathPattern=<name>`
+- 运行单个前端测试：`pnpm --filter @nebula/web test -- --reporter=verbose <name>`
+
+### 何时应该写测试
+
+测试的目标是保护**业务约束和安全边界**，而非验证框架自身能力。以下场景必须编写测试：
+
+- `superRefine` / `refine` 自定义校验逻辑（如 bar-chart props 类型守卫、navigate URL 协议白名单）
+- `transform` 数据转换逻辑
+- `discriminatedUnion` 的判别与条件必填行为（如 static/api 数据源的互斥必填校验）
+- `partial().omit()` 等组合操作中涉及安全或数据完整性的场景（如 `UpdateUserSchema` 剥离 password、`UpdateDictValueSchema` 剥离 dictTypeId）
+- 自定义正则或自定义工具函数（如 `isSensitiveHeaderKey`、`isAllowedNavigateUrl`）
+- 后端 Service / Controller 的业务逻辑分支、边界条件、错误处理路径
+- 前端 hook 的状态流转、副作用触发条件、边界条件
+
+### 何时不需要写测试
+
+以下场景的测试本质上是在验证框架自身能力，不提供有效的回归保护，不应编写：
+
+- 纯字段映射的 Zod schema（`z.object({ field: z.string() })` 无自定义校验）
+- 仅使用 Zod 内置验证器的场景（`z.email()`、`.min()`、`.max()`、`.default()`、`.optional()`、`.nullable()`、`z.enum()`）
+- 仅验证必填字段缺失时被 Zod 拒绝
+- 仅验证 Zod 默认 strip 未知字段的行为
+
+一句话原则：**测你的业务约束，不要测框架能力。**
 
 ## 生成代码验证
 
