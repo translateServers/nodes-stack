@@ -52,3 +52,9 @@ test-results/
 .playwright-cli/*
 
 test-artifacts/*
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Test databases (local only)
+apps/nestjs-server/test-e2e.db
