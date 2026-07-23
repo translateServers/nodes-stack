@@ -27,7 +27,7 @@ describe('property-schema · field-controls 注册表', () => {
   describe('NumberField', () => {
     it('渲染 label 并显示 value', () => {
       const onChange = vi.fn();
-      const NumberField = FIELD_CONTROLS.number!;
+      const NumberField = FIELD_CONTROLS.number;
       render(
         <NumberField
           value={42}
@@ -43,7 +43,7 @@ describe('property-schema · field-controls 注册表', () => {
 
     it('blur 提交 draft 值', () => {
       const onChange = vi.fn();
-      const NumberField = FIELD_CONTROLS.number!;
+      const NumberField = FIELD_CONTROLS.number;
       render(
         <NumberField
           value={10}
@@ -52,7 +52,7 @@ describe('property-schema · field-controls 注册表', () => {
           syncKey="comp-a:position.width"
         />,
       );
-      const input = screen.getByDisplayValue('10') as HTMLInputElement;
+      const input = screen.getByDisplayValue('10');
       fireEvent.focus(input);
       fireEvent.change(input, { target: { value: '99' } });
       fireEvent.blur(input);
@@ -63,7 +63,7 @@ describe('property-schema · field-controls 注册表', () => {
   describe('ColorField', () => {
     it('渲染 label 和取色器', () => {
       const onChange = vi.fn();
-      const ColorField = FIELD_CONTROLS.color!;
+      const ColorField = FIELD_CONTROLS.color;
       const { container } = render(
         <ColorField value="#ff0000" onChange={onChange as (v: unknown) => void} label="背景" />,
       );
@@ -75,7 +75,7 @@ describe('property-schema · field-controls 注册表', () => {
 
     it('改变颜色触发 onChange', () => {
       const onChange = vi.fn();
-      const ColorField = FIELD_CONTROLS.color!;
+      const ColorField = FIELD_CONTROLS.color;
       const { container } = render(
         <ColorField value="#000000" onChange={onChange as (v: unknown) => void} label="背景" />,
       );
@@ -88,7 +88,7 @@ describe('property-schema · field-controls 注册表', () => {
   describe('TextField', () => {
     it('渲染 label 和文本输入', () => {
       const onChange = vi.fn();
-      const TextField = FIELD_CONTROLS.text!;
+      const TextField = FIELD_CONTROLS.text;
       render(<TextField value="标题" onChange={onChange as (v: unknown) => void} label="名称" />);
       expect(screen.getByText('名称')).toBeDefined();
       expect(screen.getByDisplayValue('标题')).toBeDefined();
@@ -96,9 +96,9 @@ describe('property-schema · field-controls 注册表', () => {
 
     it('输入触发 onChange', () => {
       const onChange = vi.fn();
-      const TextField = FIELD_CONTROLS.text!;
+      const TextField = FIELD_CONTROLS.text;
       render(<TextField value="" onChange={onChange as (v: unknown) => void} label="名称" />);
-      const input = screen.getByDisplayValue('') as HTMLInputElement;
+      const input = screen.getByDisplayValue('');
       fireEvent.change(input, { target: { value: '新标题' } });
       expect(onChange).toHaveBeenCalledWith('新标题');
     });
@@ -107,7 +107,7 @@ describe('property-schema · field-controls 注册表', () => {
   describe('TextAreaField', () => {
     it('渲染 label 和 textarea', () => {
       const onChange = vi.fn();
-      const TextAreaField = FIELD_CONTROLS.textarea!;
+      const TextAreaField = FIELD_CONTROLS.textarea;
       render(
         <TextAreaField value="正文内容" onChange={onChange as (v: unknown) => void} label="内容" />,
       );
@@ -117,7 +117,7 @@ describe('property-schema · field-controls 注册表', () => {
 
     it('textarea 标签为多行', () => {
       const onChange = vi.fn();
-      const TextAreaField = FIELD_CONTROLS.textarea!;
+      const TextAreaField = FIELD_CONTROLS.textarea;
       const { container } = render(
         <TextAreaField value="" onChange={onChange as (v: unknown) => void} label="内容" />,
       );
@@ -130,7 +130,7 @@ describe('property-schema · field-controls 注册表', () => {
   describe('SelectField', () => {
     it('渲染 label 和下拉选项', () => {
       const onChange = vi.fn();
-      const SelectField = FIELD_CONTROLS.select!;
+      const SelectField = FIELD_CONTROLS.select;
       render(
         <SelectField
           value="fit"
@@ -151,7 +151,7 @@ describe('property-schema · field-controls 注册表', () => {
   describe('SwitchField', () => {
     it('渲染 label 和开关', () => {
       const onChange = vi.fn();
-      const SwitchField = FIELD_CONTROLS.switch!;
+      const SwitchField = FIELD_CONTROLS.switch;
       render(
         <SwitchField value={false} onChange={onChange as (v: unknown) => void} label="悬停提示" />,
       );
@@ -160,7 +160,7 @@ describe('property-schema · field-controls 注册表', () => {
 
     it('点击触发 onChange（false → true）', () => {
       const onChange = vi.fn();
-      const SwitchField = FIELD_CONTROLS.switch!;
+      const SwitchField = FIELD_CONTROLS.switch;
       const { container } = render(
         <SwitchField value={false} onChange={onChange as (v: unknown) => void} label="开关" />,
       );

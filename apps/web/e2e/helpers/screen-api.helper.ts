@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { ScreenComponent, ScreenProject } from '@nebula/shared';
+import type { EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
 import { type AuthTokens } from './api-client';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000/api/v1';
@@ -91,6 +91,7 @@ export interface UpdateScreenProjectParams {
     scaleMode?: 'fit' | 'full' | 'width' | 'height' | 'none';
   };
   components?: ScreenComponent[];
+  blueprint?: EventBlueprint;
   thumbnail?: string;
   expectedUpdatedAt: string;
 }
@@ -101,6 +102,28 @@ export async function updateScreenProject(
 ): Promise<ScreenProject> {
   const tokens = loadTokens('admin');
   return request<ScreenProject>('PATCH', `/screen/${id}`, params, tokens);
+}
+
+/**
+ * 直接调用 PATCH /screen/:id 并返回原始 Response（不抛错）。
+ *
+ * 用于断言 Schema 校验失败的场景（如 javascript: URL 拒绝）：
+ * - 不会因 !response.ok 抛错，调用方可直接读取 status 与 body
+ * - 用于事件蓝图 URL 白名单 E2E（任务 7.2）
+ */
+export async function updateScreenProjectRaw(
+  id: string,
+  params: UpdateScreenProjectParams,
+): Promise<Response> {
+  const tokens = loadTokens('admin');
+  return fetch(`${API_BASE_URL}/screen/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${tokens.accessToken}`,
+    },
+    body: JSON.stringify(params),
+  });
 }
 
 export async function publishScreenProject(

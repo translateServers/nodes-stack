@@ -37,10 +37,10 @@ export function buildNestedUpdate<T extends Record<string, unknown>>(
 ): Partial<T> {
   const keys = path.split('.');
   if (keys.length === 1) {
-    return { [keys[0]!]: value } as Partial<T>;
+    return { [keys[0]]: value } as Partial<T>;
   }
   const [head, ...rest] = keys;
-  const headKey = head!;
+  const headKey = head;
   const currentValue = source[headKey];
   const nestedSource = (currentValue ?? {}) as Record<string, unknown>;
   const updatedNested = buildNestedUpdate(nestedSource, rest.join('.'), value);

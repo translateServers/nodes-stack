@@ -228,7 +228,7 @@ describe('property-schema · schemas 注册表', () => {
     });
 
     it('所有 schema 的分区 id 唯一', () => {
-      for (const [type, schema] of Object.entries(PROPERTY_SCHEMAS)) {
+      for (const [, schema] of Object.entries(PROPERTY_SCHEMAS)) {
         const ids = schema.map((s) => s.id);
         const unique = new Set(ids);
         expect(unique.size).toBe(ids.length);

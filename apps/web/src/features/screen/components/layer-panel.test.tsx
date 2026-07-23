@@ -122,7 +122,7 @@ function makeComp(overrides: Partial<ScreenComponent> & { id: string }): ScreenC
     zIndex: 0,
     status: { locked: false, hidden: false },
     ...overrides,
-  } as unknown as ScreenComponent;
+  };
 }
 
 function makeStore(overrides: Partial<StoreState> = {}): StoreState {
@@ -161,7 +161,7 @@ function setStoreState(state: StoreState): void {
 let originalGetElementById: typeof document.getElementById;
 
 beforeEach(() => {
-  originalGetElementById = document.getElementById;
+  originalGetElementById = document.getElementById.bind(document);
 });
 
 /** 触发右键菜单：在 jsdom 中通过 fireEvent.contextMenu 触发 onContextMenu 回调 */
@@ -292,7 +292,7 @@ describe('LayerPanel · 命令执行接入', () => {
     fireEvent.click(screen.getByTestId('layer-command-rename'));
 
     expect(screen.getByTestId('layer-rename-input')).toBeInTheDocument();
-    expect((screen.getByTestId('layer-rename-input') as HTMLInputElement).value).toBe('原始名');
+    expect(screen.getByTestId('layer-rename-input').value).toBe('原始名');
   });
 
   it('inline input: Enter 提交 → renameComponent 调用并退出编辑态', () => {

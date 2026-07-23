@@ -10,7 +10,6 @@
  * 声明式优先，复杂编辑器走 CustomField 逃生舱。
  */
 
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -36,7 +35,7 @@ const NumberField: FieldControlComponent = (props: FieldControlProps<unknown>) =
     <NumberInput
       label={label}
       value={value as number}
-      onChange={onChange as (v: number) => void}
+      onChange={onChange}
       className={numberInputClass}
       syncKey={syncKey}
       disabled={disabled}
@@ -51,25 +50,13 @@ const NumberField: FieldControlComponent = (props: FieldControlProps<unknown>) =
 /** ColorField：取色器 + 文本输入 */
 const ColorField: FieldControlComponent = (props: FieldControlProps<unknown>) => {
   const { value, onChange, label } = props;
-  return (
-    <ColorInput
-      label={label ?? ''}
-      value={(value as string) ?? ''}
-      onChange={onChange as (v: string) => void}
-    />
-  );
+  return <ColorInput label={label ?? ''} value={(value as string) ?? ''} onChange={onChange} />;
 };
 
 /** TextField：单行文本输入 */
 const TextField: FieldControlComponent = (props: FieldControlProps<unknown>) => {
   const { value, onChange, label } = props;
-  return (
-    <TextInput
-      label={label ?? ''}
-      value={(value as string) ?? ''}
-      onChange={onChange as (v: string) => void}
-    />
-  );
+  return <TextInput label={label ?? ''} value={(value as string) ?? ''} onChange={onChange} />;
 };
 
 /** TextAreaField：多行文本输入（内容编辑） */
@@ -84,7 +71,7 @@ const TextAreaField: FieldControlComponent = (props: FieldControlProps<unknown>)
         className={textareaClass}
         rows={3}
         value={(value as string) ?? ''}
-        onChange={(e) => onChange(e.target.value as unknown)}
+        onChange={(e) => onChange(e.target.value)}
       />
     </div>
   );
@@ -105,7 +92,7 @@ const SelectField: FieldControlComponent = (props: FieldControlProps<unknown>) =
   return (
     <div className="flex items-center gap-2">
       {label && <label className="w-14 shrink-0 text-xs text-muted-foreground">{label}</label>}
-      <Select value={(value as string) ?? ''} onValueChange={(v) => onChange(v as unknown)}>
+      <Select value={(value as string) ?? ''} onValueChange={(v) => onChange(v)}>
         <SelectTrigger size="sm" className="h-7 w-full text-sm">
           <SelectValue />
         </SelectTrigger>
@@ -129,7 +116,7 @@ const SwitchField: FieldControlComponent = (props: FieldControlProps<unknown>) =
       {label && <span className="w-14 shrink-0 text-xs text-muted-foreground">{label}</span>}
       <Switch
         checked={Boolean(value)}
-        onCheckedChange={(checked) => onChange(checked as unknown)}
+        onCheckedChange={(checked) => onChange(checked)}
         disabled={disabled}
       />
     </div>

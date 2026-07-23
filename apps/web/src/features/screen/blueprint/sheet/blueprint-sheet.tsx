@@ -49,9 +49,10 @@ import { X } from 'lucide-react';
 import type { EventBlueprint, ScreenComponent } from '@nebula/shared';
 
 import { useScreenEditorStore } from '../../stores/editor-store';
-import { ActionNode, CommentNode, TriggerNode } from '../nodes';
+import { ActionNode, CommentNode, ConditionNode, TriggerNode } from '../nodes';
 import { ExecEdge } from '../edges';
 import { ViewportToolbar } from '../panels/viewport-toolbar';
+import { AlignDistributeToolbar } from '../panels/align-distribute-toolbar';
 import {
   useBlueprintViewport,
   useBlueprintDrag,
@@ -64,6 +65,14 @@ import {
 import { SearchPanel, type NodeOption, type PendingConnection } from '../panels/search-panel';
 import { ProblemsPanel } from '../panels/problems-panel';
 import { ToolbarButton } from '../../components/ui-primitives';
+import {
+  alignNodes,
+  applyAlignResultToNodes,
+  distributeNodes,
+  type AlignMode,
+  type AlignNode,
+  type DistributeMode,
+} from '../lib/align-distribute';
 
 // ===== ReactFlow 类型映射 =====
 
@@ -71,6 +80,7 @@ const nodeTypes: NodeTypes = {
   trigger: TriggerNode,
   action: ActionNode,
   comment: CommentNode,
+  condition: ConditionNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -91,7 +101,7 @@ const edgeTypes: EdgeTypes = {
  * - action.refreshDataSource：刷新数据：<componentName>
  * - comment：config.text
  */
-function getNodeLabel(
+export function getNodeLabel(
   kind: 'trigger' | 'condition' | 'action' | 'comment',
   config: Record<string, unknown>,
   components: ScreenComponent[],
@@ -139,6 +149,26 @@ function getNodeLabel(
     return commentConfig.text || '注释';
   }
 
+  if (kind === 'condition') {
+    const condConfig = config as { type: string; expression?: { operator?: string } };
+    if (condConfig.type !== 'condition' || !condConfig.expression) {
+      return '条件分支';
+    }
+    const opLabelMap: Record<string, string> = {
+      eq: '等于',
+      ne: '不等于',
+      gt: '大于',
+      gte: '大于等于',
+      lt: '小于',
+      lte: '小于等于',
+      contains: '包含',
+      empty: '为空',
+      notEmpty: '非空',
+    };
+    const op = condConfig.expression.operator ?? '';
+    return `条件：${opLabelMap[op] ?? op}`;
+  }
+
   return '节点';
 }
 
@@ -164,6 +194,18 @@ function isNodeDangling(
       return !components.some((c) => c.id === actionConfig.targetComponentId);
     }
     return false;
+  }
+
+  if (kind === 'condition') {
+    // condition 节点 dangling：表达式 source.componentId 不存在
+    const condConfig = config as {
+      type: string;
+      expression?: { source?: { componentId?: string } };
+    };
+    if (condConfig.type !== 'condition' || !condConfig.expression?.source) return false;
+    const sourceComponentId = condConfig.expression.source.componentId;
+    if (!sourceComponentId) return false;
+    return !components.some((c) => c.id === sourceComponentId);
   }
 
   return false;
@@ -285,6 +327,16 @@ function createNodeFromOption(
       default:
         throw new Error(`Unknown action subtype: ${option.subtype}`);
     }
+  } else if (option.kind === 'condition') {
+    // condition 默认表达式：componentProp 空比较（待属性面板填充）
+    config = {
+      type: 'condition',
+      expression: {
+        source: { kind: 'componentProp', componentId: '', key: '' },
+        operator: 'eq',
+        value: '',
+      },
+    };
   } else {
     config = { text: '' };
   }
@@ -412,8 +464,7 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
     };
     updateBlueprint(newBlueprint);
     // nodes/edges 变化时同步；updateBlueprint 内部有深比较守卫避免循环
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges]);
+  }, [nodes, edges, updateBlueprint]);
 
   // ReactFlow 变更处理：仅更新本地状态（→ 由 useEffect 同步到 blueprint）
   const onNodesChange: OnNodesChange = useCallback((changes) => {
@@ -569,7 +620,7 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
       if (!targetNode) return;
 
       // 居中到目标节点
-      reactFlowInstance.setCenter(targetNode.position.x, targetNode.position.y, {
+      void reactFlowInstance.setCenter(targetNode.position.x, targetNode.position.y, {
         zoom: 1,
         duration: 300,
       });
@@ -596,6 +647,59 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
       if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
     };
   }, []);
+
+  // 任务 9.4：多选对齐与分布
+  // 选中节点（ReactFlow Node 的 selected 字段）转换为 AlignNode 输入
+  const selectedAlignNodes: AlignNode[] = nodes
+    .filter((n) => n.selected)
+    .map((n) => ({
+      id: n.id,
+      position: { x: n.position.x, y: n.position.y },
+      width: n.measured?.width ?? 0,
+      height: n.measured?.height ?? 0,
+    }));
+
+  const selectedCount = selectedAlignNodes.length;
+
+  // 对齐：调用纯函数计算新位置，应用到 nodes 并写回 blueprint（一次提交一条历史）
+  const handleAlign = useCallback(
+    (mode: AlignMode) => {
+      const result = alignNodes(selectedAlignNodes, mode);
+      if (!result.hasChange) return;
+      const nextNodes = applyAlignResultToNodes(nodes, result.items);
+      setNodes(nextNodes);
+      // nodes/edges→blueprint useEffect 会在下一帧自动同步
+      // 但为了避免 dragActive 误判（此处不是拖拽），直接同步更新 blueprint
+      if (project) {
+        const nextBlueprint: EventBlueprint = {
+          version: 1,
+          nodes: nextNodes.map(rfNodeToBlueprintNode),
+          edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
+        };
+        updateBlueprint(nextBlueprint);
+      }
+    },
+    [selectedAlignNodes, nodes, project, updateBlueprint],
+  );
+
+  // 分布：等距分布逻辑，与 handleAlign 同模式
+  const handleDistribute = useCallback(
+    (mode: DistributeMode) => {
+      const result = distributeNodes(selectedAlignNodes, mode);
+      if (!result.hasChange) return;
+      const nextNodes = applyAlignResultToNodes(nodes, result.items);
+      setNodes(nextNodes);
+      if (project) {
+        const nextBlueprint: EventBlueprint = {
+          version: 1,
+          nodes: nextNodes.map(rfNodeToBlueprintNode),
+          edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
+        };
+        updateBlueprint(nextBlueprint);
+      }
+    },
+    [selectedAlignNodes, nodes, project, updateBlueprint],
+  );
 
   // 空蓝图空态
   const isEmpty = nodes.length === 0;
@@ -674,6 +778,17 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
               pendingConnection={searchPanelState.pendingConnection}
               onInsert={handleInsertNode}
               onClose={() => setSearchPanelState((s) => ({ ...s, visible: false }))}
+            />
+          </div>
+        ) : null}
+
+        {/* 任务 9.4：多选对齐与分布工具条（左下角悬浮，selectedCount >= 2 时显示） */}
+        {selectedCount >= 2 ? (
+          <div className="pointer-events-auto absolute bottom-4 left-4 z-10">
+            <AlignDistributeToolbar
+              selectedCount={selectedCount}
+              onAlign={handleAlign}
+              onDistribute={handleDistribute}
             />
           </div>
         ) : null}

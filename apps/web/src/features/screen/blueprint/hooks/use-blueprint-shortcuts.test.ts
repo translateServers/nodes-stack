@@ -45,8 +45,8 @@ describe('useBlueprintShortcuts（任务 5.4）', () => {
   beforeEach(() => {
     onClose = vi.fn();
     onCloseSearchPanel = vi.fn();
-    setNodes = vi.fn((updater) => updater);
-    setEdges = vi.fn((updater) => updater);
+    setNodes = vi.fn(<T>(updater: T) => updater);
+    setEdges = vi.fn(<T>(updater: T) => updater);
     isConnectingRef = { current: false };
 
     // 重置 store 状态

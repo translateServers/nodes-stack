@@ -145,7 +145,7 @@ describe('useBlueprintDiagnostics（任务 6.1）', () => {
     expect(fixedDanglingDiags).toHaveLength(0);
   });
 
-  it('高频编辑经 rAF 节流合并', () => {
+  it('高频编辑经 rAF 节流合并', async () => {
     const componentIds = new Set(['comp-1']);
     const blueprint: EventBlueprint = {
       version: 1,
@@ -161,9 +161,10 @@ describe('useBlueprintDiagnostics（任务 6.1）', () => {
     };
 
     let compileCount = 0;
-    const originalCompile = vi.importActual('../compiler').compileBlueprint;
+    const originalModule = await vi.importActual<typeof import('../compiler')>('../compiler');
+    const originalCompile = originalModule.compileBlueprint;
     vi.doMock('../compiler', () => ({
-      ...vi.importActual('../compiler'),
+      ...originalModule,
       compileBlueprint: (...args: Parameters<typeof originalCompile>) => {
         compileCount++;
         return originalCompile(...args);

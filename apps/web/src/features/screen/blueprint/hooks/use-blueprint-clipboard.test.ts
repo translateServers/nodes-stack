@@ -52,27 +52,30 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
   let clipboardStore: string;
   let setNodes: ReturnType<typeof vi.fn>;
   let setEdges: ReturnType<typeof vi.fn>;
+  let writeTextMock: ReturnType<typeof vi.fn>;
   let nodes: Node[];
   let edges: Edge[];
 
   beforeEach(() => {
     clipboardStore = '';
-    setNodes = vi.fn((updater) => {
+    setNodes = vi.fn((updater: Node[] | ((nodes: Node[]) => Node[])) => {
       nodes = typeof updater === 'function' ? updater(nodes) : updater;
     });
-    setEdges = vi.fn((updater) => {
+    setEdges = vi.fn((updater: Edge[] | ((edges: Edge[]) => Edge[])) => {
       edges = typeof updater === 'function' ? updater(edges) : updater;
     });
     nodes = [];
     edges = [];
 
     // Mock navigator.clipboard
+    writeTextMock = vi.fn((text: string) => {
+      clipboardStore = text;
+      return Promise.resolve();
+    });
     Object.assign(navigator, {
       clipboard: {
-        writeText: vi.fn(async (text: string) => {
-          clipboardStore = text;
-        }),
-        readText: vi.fn(async () => clipboardStore),
+        writeText: writeTextMock,
+        readText: vi.fn(() => Promise.resolve(clipboardStore)),
       },
     });
 
@@ -91,8 +94,8 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
       await result.current.copy();
     });
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
-    const payload: BlueprintClipboard = JSON.parse(clipboardStore);
+    expect(writeTextMock).toHaveBeenCalledTimes(1);
+    const payload: BlueprintClipboard = JSON.parse(clipboardStore) as BlueprintClipboard;
     expect(payload.kind).toBe(BLUEPRINT_CLIPBOARD_KIND);
     expect(payload.nodes).toHaveLength(1);
     expect(payload.nodes[0]?.id).toBe('n1');
@@ -112,7 +115,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
       await result.current.copy();
     });
 
-    const payload: BlueprintClipboard = JSON.parse(clipboardStore);
+    const payload: BlueprintClipboard = JSON.parse(clipboardStore) as BlueprintClipboard;
     expect(payload.nodes).toHaveLength(2);
     expect(payload.edges).toHaveLength(1);
     expect(payload.edges[0]?.source).toBe('n1');
@@ -131,7 +134,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
       await result.current.copy();
     });
 
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(writeTextMock).not.toHaveBeenCalled();
   });
 
   it('paste：重新生成节点 ID', async () => {
@@ -316,8 +319,8 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
     });
 
     // 写入剪贴板
-    expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
-    const payload: BlueprintClipboard = JSON.parse(clipboardStore);
+    expect(writeTextMock).toHaveBeenCalledTimes(1);
+    const payload: BlueprintClipboard = JSON.parse(clipboardStore) as BlueprintClipboard;
     expect(payload.nodes).toHaveLength(2);
     expect(payload.edges).toHaveLength(1); // 只有 n1→n2（两端均选中）
 
@@ -349,7 +352,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
     });
 
     // 不写入系统剪贴板
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(writeTextMock).not.toHaveBeenCalled();
 
     // setNodes 被调用，mock 已自动更新 nodes
     expect(setNodes).toHaveBeenCalledTimes(1);
@@ -374,7 +377,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    expect(writeTextMock).toHaveBeenCalledTimes(1);
   });
 
   it('Ctrl+V 键盘快捷键触发 paste', async () => {
@@ -410,6 +413,6 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
     });
 
     expect(setNodes).toHaveBeenCalledTimes(1);
-    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+    expect(writeTextMock).not.toHaveBeenCalled();
   });
 });

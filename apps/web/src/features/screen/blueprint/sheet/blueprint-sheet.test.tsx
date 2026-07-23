@@ -63,12 +63,44 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
-    ReactFlow: ({ nodes, edges }: { nodes: unknown[]; edges: unknown[] }) => (
+    ReactFlow: ({
+      nodes,
+      edges,
+      onNodesChange,
+    }: {
+      nodes: { id: string; selected?: boolean }[];
+      edges: unknown[];
+      onNodesChange?: (changes: { id: string; type: 'select'; selected: boolean }[]) => void;
+    }) => (
       <div
         data-testid="blueprint-reactflow"
         data-node-count={nodes.length}
         data-edge-count={edges.length}
-      />
+        data-selected-count={nodes.filter((n) => n.selected).length}
+      >
+        {onNodesChange && nodes.length > 0 ? (
+          <button
+            type="button"
+            data-testid="rf-test-select-all"
+            onClick={() =>
+              onNodesChange(nodes.map((n) => ({ id: n.id, type: 'select', selected: true })))
+            }
+          >
+            select-all
+          </button>
+        ) : null}
+        {onNodesChange && nodes.length > 0 ? (
+          <button
+            type="button"
+            data-testid="rf-test-deselect-all"
+            onClick={() =>
+              onNodesChange(nodes.map((n) => ({ id: n.id, type: 'select', selected: false })))
+            }
+          >
+            deselect-all
+          </button>
+        ) : null}
+      </div>
     ),
     ReactFlowProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
     Background: () => <div data-testid="rf-background" />,
@@ -258,6 +290,73 @@ describe('BlueprintSheet', () => {
       render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
       const rf = screen.getByTestId('blueprint-reactflow');
       expect(rf.getAttribute('data-node-count')).toBe('0');
+    });
+  });
+
+  describe('对齐分布工具条（任务 9.4）', () => {
+    it('selectedCount=0 时不渲染对齐分布工具条', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+      expect(screen.queryByTestId('align-distribute-toolbar')).not.toBeInTheDocument();
+    });
+
+    it('选中 2 个节点后渲染对齐分布工具条且 selectedCount=2', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      // 模拟 ReactFlow 全选（通过 mock 提供的 select-all 按钮）
+      fireEvent.click(screen.getByTestId('rf-test-select-all'));
+
+      const toolbar = screen.getByTestId('align-distribute-toolbar');
+      expect(toolbar).toBeInTheDocument();
+      expect(toolbar.getAttribute('data-selected-count')).toBe('2');
+    });
+
+    it('选中后再取消选择，工具条消失', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId('rf-test-select-all'));
+      expect(screen.getByTestId('align-distribute-toolbar')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('rf-test-deselect-all'));
+      expect(screen.queryByTestId('align-distribute-toolbar')).not.toBeInTheDocument();
+    });
+
+    it('selectedCount=2 时分布按钮禁用', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+      fireEvent.click(screen.getByTestId('rf-test-select-all'));
+
+      expect(screen.getByLabelText('左对齐')).toBeEnabled();
+      expect(screen.getByLabelText('水平等距分布')).toBeDisabled();
+    });
+
+    it('点击左对齐按钮触发 updateBlueprint 入一条历史', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      const initialPastLength = useScreenEditorStore.getState().history.past.length;
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId('rf-test-select-all'));
+      fireEvent.click(screen.getByLabelText('左对齐'));
+
+      // 验证历史栈 +1（对齐产生一条历史）
+      expect(useScreenEditorStore.getState().history.past.length).toBe(initialPastLength + 1);
+      // 验证 blueprint 节点位置已变更（两个节点都左对齐到 minX=100）
+      const current = useScreenEditorStore.getState().project?.blueprint;
+      expect(current?.nodes.every((n) => n.position.x === 100)).toBe(true);
+    });
+
+    it('点击水平分布按钮在 selectedCount<3 时不触发更新', () => {
+      // selectedCount=2，分布按钮 disabled，点击不应触发回调
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      const initialPastLength = useScreenEditorStore.getState().history.past.length;
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId('rf-test-select-all'));
+      // 分布按钮在 selectedCount=2 时禁用，fireEvent.click 不会触发 onClick
+      fireEvent.click(screen.getByLabelText('水平等距分布'));
+      expect(useScreenEditorStore.getState().history.past.length).toBe(initialPastLength);
     });
   });
 });
