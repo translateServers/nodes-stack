@@ -2,8 +2,9 @@
  * 快捷键帮助面板
  *
  * 渲染 SHORTCUTS_REGISTRY 内容，按 category 分组展示。
+ * 画布快捷键（scope: global/canvas）与蓝图快捷键（scope: blueprint）分区展示。
  * 受控组件：open + onOpenChange，由 screen-editor.tsx 控制。
- * 触发键：Ctrl/Cmd + /（在 use-keyboard-shortcuts.ts 中注册）
+ * 触发键：Ctrl/Cmd + /（在 use-keyboard-shortcuts.ts 和 use-blueprint-shortcuts.ts 中注册）
  */
 
 import { memo, useMemo } from 'react';
@@ -20,6 +21,7 @@ import {
   formatKeys,
   type ShortcutCategory,
   type ShortcutDefinition,
+  type ShortcutScope,
 } from '../hooks/shortcuts-registry';
 
 interface ShortcutsHelpDialogProps {
@@ -49,21 +51,38 @@ function ShortcutRow({ shortcut }: { shortcut: ShortcutDefinition }) {
   );
 }
 
+/** 按作用域分组，再按 category 分组，保持注册表顺序；过滤 hidden 条目 */
+function groupByScope(scope: ShortcutScope): Array<[ShortcutCategory, ShortcutDefinition[]]> {
+  const map = new Map<ShortcutCategory, ShortcutDefinition[]>();
+  for (const s of SHORTCUTS_REGISTRY) {
+    if (s.hidden) continue;
+    if (s.scope !== scope) continue;
+    const list = map.get(s.category) ?? [];
+    list.push(s);
+    map.set(s.category, list);
+  }
+  return Array.from(map.entries());
+}
+
 export const ShortcutsHelpDialog = memo(function ShortcutsHelpDialog({
   open,
   onOpenChange,
 }: ShortcutsHelpDialogProps) {
-  // 按 category 分组，保持注册表顺序；过滤掉 hidden 条目（如 noop 拦截条目）
-  const grouped = useMemo(() => {
+  // 画布快捷键（global + canvas 合并展示）
+  const canvasGrouped = useMemo(() => {
     const map = new Map<ShortcutCategory, ShortcutDefinition[]>();
     for (const s of SHORTCUTS_REGISTRY) {
       if (s.hidden) continue;
+      if (s.scope !== 'global' && s.scope !== 'canvas') continue;
       const list = map.get(s.category) ?? [];
       list.push(s);
       map.set(s.category, list);
     }
     return Array.from(map.entries());
   }, []);
+
+  // 蓝图快捷键
+  const blueprintGrouped = useMemo(() => groupByScope('blueprint'), []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -72,17 +91,39 @@ export const ShortcutsHelpDialog = memo(function ShortcutsHelpDialog({
           <DialogTitle>快捷键</DialogTitle>
           <DialogDescription>大屏编辑器支持的键盘快捷键</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-6 py-2 md:grid-cols-2">
-          {grouped.map(([category, shortcuts]) => (
-            <div key={category} className="space-y-1">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {SHORTCUT_CATEGORY_LABELS[category]}
-              </h3>
-              {shortcuts.map((s) => (
-                <ShortcutRow key={s.id} shortcut={s} />
+        <div className="space-y-6 py-2">
+          <div>
+            <h2 className="mb-3 text-sm font-semibold text-foreground">画布编辑器</h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              {canvasGrouped.map(([category, shortcuts]) => (
+                <div key={category} className="space-y-1">
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {SHORTCUT_CATEGORY_LABELS[category]}
+                  </h3>
+                  {shortcuts.map((s) => (
+                    <ShortcutRow key={s.id} shortcut={s} />
+                  ))}
+                </div>
               ))}
             </div>
-          ))}
+          </div>
+          {blueprintGrouped.length > 0 ? (
+            <div>
+              <h2 className="mb-3 text-sm font-semibold text-foreground">事件蓝图</h2>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                {blueprintGrouped.map(([category, shortcuts]) => (
+                  <div key={category} className="space-y-1">
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {SHORTCUT_CATEGORY_LABELS[category]}
+                    </h3>
+                    {shortcuts.map((s) => (
+                      <ShortcutRow key={s.id} shortcut={s} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

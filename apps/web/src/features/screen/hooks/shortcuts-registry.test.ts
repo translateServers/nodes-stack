@@ -172,6 +172,49 @@ describe('SHORTCUTS_REGISTRY 合规性（防冲突方法论）', () => {
   });
 });
 
+describe('蓝图快捷键条目（scope: blueprint）', () => {
+  const blueprintEntries = SHORTCUTS_REGISTRY.filter((e) => e.scope === 'blueprint');
+
+  it('包含 14 个蓝图快捷键条目', () => {
+    expect(blueprintEntries.length).toBe(14);
+  });
+
+  it('所有蓝图条目都有 preventDefault 与 browserConflict 字段', () => {
+    for (const entry of blueprintEntries) {
+      expect(entry.preventDefault).toBeDefined();
+      expect(entry.browserConflict).toBeDefined();
+    }
+  });
+
+  it('所有 browserConflict=overridable 的蓝图条目都有 preventDefault !== none', () => {
+    const overridable = blueprintEntries.filter((e) => e.browserConflict === 'overridable');
+    expect(overridable.length).toBeGreaterThan(0);
+    for (const entry of overridable) {
+      expect(entry.preventDefault).not.toBe('none');
+    }
+  });
+
+  it('包含 Ctrl+S 保存、Ctrl+= 缩放、Ctrl+0 适配、Ctrl+/ 帮助', () => {
+    const ids = blueprintEntries.map((e) => e.id);
+    expect(ids).toContain('bp-save');
+    expect(ids).toContain('bp-zoomIn');
+    expect(ids).toContain('bp-zoomOut');
+    expect(ids).toContain('bp-fitView');
+    expect(ids).toContain('bp-showHelp');
+  });
+
+  it('bp-zoomIn 有 mod+shift+equal 别名', () => {
+    const zoomIn = blueprintEntries.find((e) => e.id === 'bp-zoomIn');
+    expect(zoomIn).toBeDefined();
+    expect(zoomIn?.aliases).toContain('mod+shift+equal');
+  });
+
+  it('validateRegistry 对蓝图条目返回空警告', () => {
+    const warnings = validateRegistry(blueprintEntries);
+    expect(warnings).toHaveLength(0);
+  });
+});
+
 describe('formatKeys（code 名 → 可读字符映射）', () => {
   // 确保帮助面板对用户友好：code 名（equal/minus/bracketleft 等）应渲染为字面量符号
   it('mod+equal → [Ctrl, =]', () => {

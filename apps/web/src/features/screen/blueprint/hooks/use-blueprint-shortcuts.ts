@@ -1,14 +1,17 @@
 /**
- * 蓝图编辑器快捷键分层 hook（任务 5.4）
+ * 蓝图编辑器快捷键分层 hook（任务 5.4 + 交互一致性缺口 1/2）
  *
  * 在全屏弹层（BlueprintSheet）打开期间接管键盘事件：
  * - Ctrl+Z / Ctrl+Shift+Z：走全局本地编辑历史（undo/redo）
- * - Esc 分层：关闭搜索面板 → 取消连线 → 取消选择 → 关闭弹层
+ * - Ctrl+S：保存项目（防止浏览器"保存网页"对话框）
+ * - Ctrl+= / Ctrl+- / Ctrl+0：视口放大/缩小/适配（防止浏览器页面缩放）
+ * - Ctrl+/：打开快捷键帮助面板
+ * - Esc 分层：关闭搜索面板 -> 取消连线 -> 取消选择 -> 关闭弹层
  *
  * Delete/Backspace 和 Ctrl+A 由 ReactFlow 内置处理，
  * 通过 onNodesChange/onEdgesChange 同步到 blueprint store。
  *
- * 使用 capture 阶段监听 Esc，在 ReactFlow 内部处理之前拦截，
+ * 使用 capture 阶段监听，在 ReactFlow 内部处理之前拦截，
  * 防止 Esc 在关闭弹层的同时也触发 ReactFlow 的取消选择。
  */
 
@@ -25,6 +28,16 @@ interface UseBlueprintShortcutsOptions {
   setNodes: (updater: (nds: Node[]) => Node[]) => void;
   setEdges: (updater: (eds: Edge[]) => Edge[]) => void;
   isConnectingRef: React.RefObject<boolean>;
+  /** 保存项目回调（缺口 1：Ctrl+S 接管） */
+  onSave?: () => void;
+  /** 视口放大（缺口 1：Ctrl+= 接管） */
+  onZoomIn?: () => void;
+  /** 视口缩小（缺口 1：Ctrl+- 接管） */
+  onZoomOut?: () => void;
+  /** 适配视图（缺口 1：Ctrl+0 接管） */
+  onFitView?: () => void;
+  /** 显示快捷键帮助（缺口 2：Ctrl+/ 接管） */
+  onShowHelp?: () => void;
 }
 
 export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): void {
@@ -37,6 +50,11 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
     setNodes,
     setEdges,
     isConnectingRef,
+    onSave,
+    onZoomIn,
+    onZoomOut,
+    onFitView,
+    onShowHelp,
   } = options;
 
   useEffect(() => {
@@ -52,6 +70,41 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
         } else {
           store.undo();
         }
+        return;
+      }
+
+      // 缺口 1：Ctrl+S 保存项目（防止浏览器"保存网页"对话框）
+      if (isCtrl && e.key === 's') {
+        e.preventDefault();
+        onSave?.();
+        return;
+      }
+
+      // 缺口 1：Ctrl+= / Ctrl++ 视口放大（防止浏览器页面缩放）
+      if (isCtrl && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        onZoomIn?.();
+        return;
+      }
+
+      // 缺口 1：Ctrl+- 视口缩小
+      if (isCtrl && e.key === '-') {
+        e.preventDefault();
+        onZoomOut?.();
+        return;
+      }
+
+      // 缺口 1：Ctrl+0 适配视图
+      if (isCtrl && e.key === '0') {
+        e.preventDefault();
+        onFitView?.();
+        return;
+      }
+
+      // 缺口 2：Ctrl+/ 打开快捷键帮助
+      if (isCtrl && e.key === '/') {
+        e.preventDefault();
+        onShowHelp?.();
         return;
       }
 
@@ -98,6 +151,11 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
     setNodes,
     setEdges,
     isConnectingRef,
+    onSave,
+    onZoomIn,
+    onZoomOut,
+    onFitView,
+    onShowHelp,
   ]);
 }
 

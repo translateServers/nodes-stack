@@ -24,12 +24,15 @@ function makeEdge(overrides: Partial<Edge> = {}): Edge {
   };
 }
 
-function fireKeyDown(key: string, options: { ctrlKey?: boolean; shiftKey?: boolean } = {}): void {
+function fireKeyDown(
+  key: string,
+  options: { ctrlKey?: boolean; shiftKey?: boolean; metaKey?: boolean } = {},
+): void {
   const event = new KeyboardEvent('keydown', {
     key,
     ctrlKey: options.ctrlKey ?? false,
     shiftKey: options.shiftKey ?? false,
-    metaKey: false,
+    metaKey: options.metaKey ?? false,
     bubbles: true,
   });
   window.dispatchEvent(event);
@@ -267,5 +270,155 @@ describe('useBlueprintShortcuts（任务 5.4）', () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('useBlueprintShortcuts - 缺口 1/2：浏览器默认行为接管', () => {
+  let onClose: ReturnType<typeof vi.fn<() => void>>;
+  let onCloseSearchPanel: ReturnType<typeof vi.fn<() => void>>;
+  let setNodes: ReturnType<typeof vi.fn<(updater: (nds: Node[]) => Node[]) => void>>;
+  let setEdges: ReturnType<typeof vi.fn<(updater: (eds: Edge[]) => Edge[]) => void>>;
+  let isConnectingRef: React.RefObject<boolean>;
+  let onSave: ReturnType<typeof vi.fn<() => void>>;
+  let onZoomIn: ReturnType<typeof vi.fn<() => void>>;
+  let onZoomOut: ReturnType<typeof vi.fn<() => void>>;
+  let onFitView: ReturnType<typeof vi.fn<() => void>>;
+  let onShowHelp: ReturnType<typeof vi.fn<() => void>>;
+
+  beforeEach(() => {
+    onClose = vi.fn<() => void>();
+    onCloseSearchPanel = vi.fn<() => void>();
+    setNodes = vi.fn<(updater: (nds: Node[]) => Node[]) => void>(() => undefined);
+    setEdges = vi.fn<(updater: (eds: Edge[]) => Edge[]) => void>(() => undefined);
+    isConnectingRef = { current: false };
+    onSave = vi.fn<() => void>();
+    onZoomIn = vi.fn<() => void>();
+    onZoomOut = vi.fn<() => void>();
+    onFitView = vi.fn<() => void>();
+    onShowHelp = vi.fn<() => void>();
+
+    useScreenEditorStore.setState({
+      history: { past: [], future: [] },
+      isDirty: false,
+    });
+  });
+
+  function renderShortcutsHook(
+    overrides: Partial<Parameters<typeof useBlueprintShortcuts>[0]> = {},
+  ): void {
+    renderHook(() =>
+      useBlueprintShortcuts({
+        onClose,
+        searchPanelVisible: false,
+        onCloseSearchPanel,
+        nodes: [],
+        edges: [],
+        setNodes,
+        setEdges,
+        isConnectingRef,
+        onSave,
+        onZoomIn,
+        onZoomOut,
+        onFitView,
+        onShowHelp,
+        ...overrides,
+      }),
+    );
+  }
+
+  it('Ctrl+S 调用 onSave 并 preventDefault', () => {
+    const spy = vi.spyOn(KeyboardEvent.prototype, 'preventDefault');
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('s', { ctrlKey: true });
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('Cmd+S（Mac）调用 onSave', () => {
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('s', { metaKey: true });
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl+= 调用 onZoomIn 并 preventDefault', () => {
+    const spy = vi.spyOn(KeyboardEvent.prototype, 'preventDefault');
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('=', { ctrlKey: true });
+    });
+
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('Ctrl++ （Shift+=）调用 onZoomIn', () => {
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('+', { ctrlKey: true, shiftKey: true });
+    });
+
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl+- 调用 onZoomOut', () => {
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('-', { ctrlKey: true });
+    });
+
+    expect(onZoomOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl+0 调用 onFitView', () => {
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('0', { ctrlKey: true });
+    });
+
+    expect(onFitView).toHaveBeenCalledTimes(1);
+  });
+
+  it('Ctrl+/ 调用 onShowHelp', () => {
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('/', { ctrlKey: true });
+    });
+
+    expect(onShowHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cmd+/ （Mac）调用 onShowHelp', () => {
+    renderShortcutsHook();
+
+    act(() => {
+      fireKeyDown('/', { metaKey: true });
+    });
+
+    expect(onShowHelp).toHaveBeenCalledTimes(1);
+  });
+
+  it('未提供回调时不报错（onSave 为 undefined）', () => {
+    renderShortcutsHook({ onSave: undefined });
+
+    expect(() => {
+      act(() => {
+        fireKeyDown('s', { ctrlKey: true });
+      });
+    }).not.toThrow();
   });
 });

@@ -379,10 +379,14 @@ function generateEdgeId(): string {
 interface BlueprintSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** 蓝图→画布高亮联动：点击节点时调用，由 screen-editor 注入 flashComponent */
+  /** 蓝图->画布高亮联动：点击节点时调用，由 screen-editor 注入 flashComponent */
   onLocateComponent?: (componentId: string) => void;
-  /** 画布→蓝图过滤联动：当前选中组件 id（null 表示不过滤） */
+  /** 画布->蓝图过滤联动：当前选中组件 id（null 表示不过滤） */
   filterComponentId?: string | null;
+  /** 保存项目回调（缺口 1：Ctrl+S 接管） */
+  onSave?: () => void;
+  /** 显示快捷键帮助（缺口 2：Ctrl+/ 接管） */
+  onShowHelp?: () => void;
 }
 
 /**
@@ -396,6 +400,8 @@ export function BlueprintSheet({
   onOpenChange,
   onLocateComponent,
   filterComponentId,
+  onSave,
+  onShowHelp,
 }: BlueprintSheetProps): JSX.Element | null {
   if (!open) return null;
   return (
@@ -411,6 +417,8 @@ export function BlueprintSheet({
           onOpenChange={onOpenChange}
           onLocateComponent={onLocateComponent}
           filterComponentId={filterComponentId}
+          onSave={onSave}
+          onShowHelp={onShowHelp}
         />
       </ReactFlowProvider>
     </div>
@@ -421,6 +429,8 @@ interface BlueprintSheetInnerProps {
   onOpenChange: (open: boolean) => void;
   onLocateComponent?: (componentId: string) => void;
   filterComponentId?: string | null;
+  onSave?: () => void;
+  onShowHelp?: () => void;
 }
 
 interface SearchPanelState {
@@ -434,6 +444,8 @@ function BlueprintSheetInner({
   onOpenChange,
   onLocateComponent,
   filterComponentId,
+  onSave,
+  onShowHelp,
 }: BlueprintSheetInnerProps): JSX.Element {
   const project = useScreenEditorStore((s) => s.project);
   const updateBlueprint = useScreenEditorStore((s) => s.updateBlueprint);
@@ -602,6 +614,11 @@ function BlueprintSheetInner({
   // 视口控制
   const viewport = useBlueprintViewport();
 
+  // 首次挂载时恢复上次缓存的视口（避免每次打开都回到 {0,0,1}）
+  useEffect(() => {
+    viewport.restoreViewport();
+  }, [viewport]);
+
   // 双击空白呼出搜索面板（创建模式）
   const handleDoubleClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -650,7 +667,8 @@ function BlueprintSheetInner({
     [searchPanelState, components],
   );
 
-  // 任务 5.4：快捷键分层 —— Ctrl+Z/Shift+Z 走全局历史，Esc 分层
+  // 任务 5.4：快捷键分层 -- Ctrl+Z/Shift+Z 走全局历史，Esc 分层
+  // 缺口 1/2：Ctrl+S 保存、Ctrl+=/-/0 视口缩放、Ctrl+/ 帮助
   useBlueprintShortcuts({
     onClose: () => onOpenChange(false),
     searchPanelVisible: searchPanelState.visible,
@@ -660,6 +678,11 @@ function BlueprintSheetInner({
     setNodes,
     setEdges,
     isConnectingRef,
+    onSave,
+    onZoomIn: () => void viewport.zoomIn(),
+    onZoomOut: () => void viewport.zoomOut(),
+    onFitView: () => void viewport.fitView(),
+    onShowHelp,
   });
 
   // 任务 5.5：跨项目剪贴板 —— Ctrl+C/X/V/D
@@ -955,6 +978,7 @@ function BlueprintSheetInner({
           onNodeDragStop={handleNodeDragStop}
           onNodeClick={handleNodeClick}
           {...viewport.config}
+          onMoveEnd={viewport.onMoveEnd}
           zoomOnDoubleClick={false}
           className="bg-background"
           data-testid="blueprint-reactflow"

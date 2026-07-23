@@ -47,11 +47,11 @@ export function formatZoom(zoom: number): string {
 
 /** 工具条按钮公共样式 */
 const buttonClassName =
-  'inline-flex h-8 w-8 items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
+  'inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
 
 /** 缩放百分比显示样式 */
 const zoomLabelClassName =
-  'inline-flex h-7 min-w-[3.5rem] items-center justify-center rounded bg-slate-800 px-2 text-xs font-medium text-slate-200';
+  'inline-flex h-7 min-w-[3.5rem] items-center justify-center rounded bg-muted px-2 text-xs font-medium text-muted-foreground';
 
 /**
  * 蓝图视口控制工具条。
@@ -91,8 +91,8 @@ export function ViewportToolbar({
   return (
     <div
       className={cn(
-        'flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/95 p-1 shadow-lg backdrop-blur',
-        spacePressed && 'ring-2 ring-blue-500/50',
+        'flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-lg backdrop-blur',
+        spacePressed && 'ring-2 ring-ring/50',
         className,
       )}
       data-testid="viewport-toolbar"
@@ -131,7 +131,7 @@ export function ViewportToolbar({
         <Minus className="h-4 w-4" />
       </button>
 
-      <div className="mx-1 h-5 w-px bg-slate-700" />
+      <div className="mx-1 h-5 w-px bg-border" />
 
       <button
         type="button"

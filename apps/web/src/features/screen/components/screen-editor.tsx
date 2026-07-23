@@ -510,6 +510,8 @@ export function ScreenEditor() {
         onOpenChange={setShowEventBlueprint}
         onLocateComponent={flashComponent}
         filterComponentId={filterComponentId}
+        onSave={handleSave}
+        onShowHelp={() => setShowHelp(true)}
       />
       <CodeEditorSheet open={showCodeEditor} onOpenChange={setShowCodeEditor} />
       <SaveConflictDialog

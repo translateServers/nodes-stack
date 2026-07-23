@@ -12,8 +12,14 @@
  * 全局快捷键挂起由 Task 5.4 在 Sheet 快捷键分层处理。
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { useKeyPress, useReactFlow, useViewport } from '@xyflow/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useKeyPress,
+  useReactFlow,
+  useViewport,
+  type OnMoveEnd,
+  type Viewport,
+} from '@xyflow/react';
 
 /** 缩放下限（M1 规格：0.25x） */
 export const MIN_ZOOM = 0.25;
@@ -21,6 +27,15 @@ export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 2;
 /** 单次缩放步长（zoomIn / zoomOut 按钮） */
 export const ZOOM_STEP = 0.2;
+
+/**
+ * 模块级 viewport 缓存：跨 BlueprintSheet 挂载/卸载周期保留视口位置。
+ *
+ * BlueprintSheet 在 open=false 时直接 return null 卸载整棵树，
+ * ReactFlow 实例随之销毁，viewport 状态丢失。
+ * 用模块级变量在卸载前快照、挂载后恢复，避免每次打开都回到 {0,0,1}。
+ */
+let cachedViewport: Viewport | null = null;
 
 export interface UseBlueprintViewportOptions {
   /** 初始是否启用 Space 平移（默认 true） */
@@ -45,6 +60,8 @@ export interface UseBlueprintViewportResult {
     panOnDrag: boolean | number[];
     zoomOnDoubleClick: boolean;
     preventScrolling: boolean;
+    /** 裸拖框选（Space 未按下时启用，与平移互斥） */
+    selectionOnDrag: boolean;
   };
   /** 当前缩放级别（响应式） */
   zoom: number;
@@ -62,6 +79,10 @@ export interface UseBlueprintViewportResult {
   zoomTo: (zoomLevel: number) => Promise<boolean>;
   /** 重置视口到 1x 并居中 */
   resetViewport: () => Promise<boolean>;
+  /** ReactFlow onMoveEnd 回调：视口变化结束后缓存快照 */
+  onMoveEnd: OnMoveEnd;
+  /** 恢复上次缓存的视口（组件挂载后调用） */
+  restoreViewport: () => void;
 }
 
 /**
@@ -85,6 +106,9 @@ export function useBlueprintViewport(
 
   const reactFlow = useReactFlow();
   const viewport = useViewport();
+
+  // 标记是否已恢复过缓存的视口（仅恢复一次，避免覆盖用户操作）
+  const restoredRef = useRef(false);
 
   // Space 平移：监听 Space 按键，按下时切换 panOnDrag
   const spacePressed = useKeyPress('Space', { actInsideInputWithModifier: false });
@@ -114,6 +138,9 @@ export function useBlueprintViewport(
     panOnDrag,
     zoomOnDoubleClick: true,
     preventScrolling: true,
+    // 缺口 3：Space 未按下时裸拖框选（与画布 Selecto 行为对齐）；
+    // Space 按下时禁用框选、启用平移（panOnDrag=true）
+    selectionOnDrag: !isSpacePanning,
   };
 
   // 当前缩放级别（来自 viewport，响应式）
@@ -189,6 +216,27 @@ export function useBlueprintViewport(
     });
   }, [reactFlow, minZoom, maxZoom]);
 
+  // 视口变化结束时缓存快照（pan/zoom 后）
+  const onMoveEnd: OnMoveEnd = useCallback((_, vp) => {
+    cachedViewport = vp;
+  }, []);
+
+  // 恢复上次缓存的视口（组件挂载后调用一次）
+  const restoreViewport = useCallback(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (cachedViewport) {
+      void reactFlow.setViewport(cachedViewport, { duration: 0 });
+    }
+  }, [reactFlow]);
+
+  // 卸载时缓存当前视口，供下次打开恢复
+  useEffect(() => {
+    return () => {
+      cachedViewport = viewport;
+    };
+  }, [viewport]);
+
   return {
     config,
     zoom,
@@ -199,5 +247,7 @@ export function useBlueprintViewport(
     zoomOut,
     zoomTo,
     resetViewport,
+    onMoveEnd,
+    restoreViewport,
   };
 }
