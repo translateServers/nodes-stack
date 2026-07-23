@@ -10,10 +10,14 @@
 
 import type { CompiledRule } from '../compiler/types.js';
 
-/** 触发事件类型 */
+/** 触发事件类型（M1 + 任务 10.3 扩展） */
 export type TriggerEventType =
   | { kind: 'componentClick'; componentId: string }
-  | { kind: 'pageLoad' };
+  | { kind: 'pageLoad' }
+  | { kind: 'componentHover'; componentId: string }
+  | { kind: 'dataLoaded'; componentId: string }
+  | { kind: 'dataError'; componentId: string; error?: string }
+  | { kind: 'interval' };
 
 /** 执行计划项：一个动作 + 在链路中的深度 */
 export interface PlannedAction {
@@ -62,4 +66,31 @@ export interface RuntimeDeps {
   hasComponent: (componentId: string) => boolean;
   /** 记录运行时告警（深度截断等） */
   logWarning: (message: string) => void;
+  /**
+   * 发起 HTTP 请求（requestApi 动作，任务 10.4）
+   *
+   * @param params 已完成模板插值的请求参数（headers 已脱敏前传入，由执行器内部按 secretHeaderKeys 脱敏日志）
+   * @returns 响应状态码与简要正文摘要（避免日志膨胀）
+   */
+  requestApi: (params: RequestApiRuntimeParams) => Promise<RequestApiRuntimeResult>;
+}
+
+/** requestApi 运行时请求参数（任务 10.4） */
+export interface RequestApiRuntimeParams {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+  secretHeaderKeys: readonly string[];
+  timeoutMs: number;
+}
+
+/** requestApi 运行时响应结果（任务 10.4） */
+export interface RequestApiRuntimeResult {
+  /** HTTP 状态码 */
+  status: number;
+  /** 响应正文摘要（前 500 字符，避免日志膨胀） */
+  bodyPreview: string;
+  /** 是否成功（2xx 视为成功） */
+  ok: boolean;
 }

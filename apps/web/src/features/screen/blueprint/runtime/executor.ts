@@ -102,6 +102,35 @@ async function executeAction(
         await deps.refreshDataSource(config.targetComponentId);
         return { kind: 'success', nodeId, durationMs: elapsed(start) };
 
+      case 'requestApi': {
+        // requestApi 动作（任务 10.4）
+        if (config.url === '') {
+          return {
+            kind: 'skipped',
+            nodeId,
+            reason: '请求 URL 为空（未配置）',
+          };
+        }
+        // 调用注入的 requestApi，由调用方实现真实 fetch / 沙盒 no-op
+        const result = await deps.requestApi({
+          method: config.method,
+          url: config.url,
+          headers: config.headers,
+          body: config.body,
+          secretHeaderKeys: config.secretHeaderKeys,
+          timeoutMs: config.timeoutMs,
+        });
+        if (!result.ok) {
+          return {
+            kind: 'failure',
+            nodeId,
+            error: `HTTP ${result.status}: ${result.bodyPreview.slice(0, 200)}`,
+            durationMs: elapsed(start),
+          };
+        }
+        return { kind: 'success', nodeId, durationMs: elapsed(start) };
+      }
+
       default: {
         // 穷尽性检查：未知动作类型跳过
         const _exhaustive: never = config;

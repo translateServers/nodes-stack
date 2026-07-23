@@ -62,6 +62,7 @@ export function ActionNode({ id, data, selected }: NodeProps<ActionNode>): JSX.E
   return (
     <BaseNodeShell
       colorScheme="action"
+      nodeId={id}
       icon={icon}
       typeLabel={typeLabel}
       label={label}

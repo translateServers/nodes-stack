@@ -12,7 +12,7 @@ function makeRule(
   triggerConfig: CompiledRule['triggerConfig'],
   actions: CompiledRule['actions'],
 ): CompiledRule {
-  return { triggerNodeId, triggerConfig, actions };
+  return { triggerNodeId, triggerConfig, actions, conditions: [] };
 }
 
 function makeMockDeps(overrides: Partial<RuntimeDeps> = {}): RuntimeDeps {
@@ -24,6 +24,7 @@ function makeMockDeps(overrides: Partial<RuntimeDeps> = {}): RuntimeDeps {
     refreshDataSource: vi.fn().mockResolvedValue(undefined),
     hasComponent: vi.fn(() => true),
     logWarning: vi.fn(),
+    requestApi: vi.fn().mockResolvedValue({ status: 200, bodyPreview: '', ok: true }),
     ...overrides,
   };
 }
@@ -415,5 +416,266 @@ describe('triggerAndExecute — 多规则聚合', () => {
 
     expect(logs).toHaveLength(1);
     expect(logs[0].triggerNodeId).toBe('t1');
+  });
+});
+
+// ===== 任务 10.3：高级触发器规则匹配 =====
+
+describe('collectRules — 高级触发器（任务 10.3）', () => {
+  it('componentHover 事件匹配相同 componentId 的规则', () => {
+    const rules = [
+      makeRule('t1', { type: 'componentHover', componentId: 'c1' }, []),
+      makeRule('t2', { type: 'componentHover', componentId: 'c2' }, []),
+      makeRule('t3', { type: 'componentClick', componentId: 'c1' }, []),
+    ];
+    const event: TriggerEventType = { kind: 'componentHover', componentId: 'c1' };
+    const matched = collectRules(rules, event);
+    expect(matched).toHaveLength(1);
+    expect(matched[0].triggerNodeId).toBe('t1');
+  });
+
+  it('componentHover 空 componentId 不匹配', () => {
+    const rules = [makeRule('t1', { type: 'componentHover', componentId: '' }, [])];
+    expect(collectRules(rules, { kind: 'componentHover', componentId: '' })).toHaveLength(0);
+  });
+
+  it('dataLoaded 事件匹配相同 componentId 的规则', () => {
+    const rules = [
+      makeRule('t1', { type: 'dataLoaded', componentId: 'c1' }, []),
+      makeRule('t2', { type: 'dataLoaded', componentId: 'c2' }, []),
+      makeRule('t3', { type: 'dataError', componentId: 'c1' }, []),
+    ];
+    const event: TriggerEventType = { kind: 'dataLoaded', componentId: 'c1' };
+    const matched = collectRules(rules, event);
+    expect(matched).toHaveLength(1);
+    expect(matched[0].triggerNodeId).toBe('t1');
+  });
+
+  it('dataError 事件匹配相同 componentId 的规则', () => {
+    const rules = [
+      makeRule('t1', { type: 'dataError', componentId: 'c1' }, []),
+      makeRule('t2', { type: 'dataLoaded', componentId: 'c1' }, []),
+    ];
+    const event: TriggerEventType = { kind: 'dataError', componentId: 'c1', error: 'network' };
+    const matched = collectRules(rules, event);
+    expect(matched).toHaveLength(1);
+    expect(matched[0].triggerNodeId).toBe('t1');
+  });
+
+  it('interval 事件匹配所有 interval 规则（每条定时器规则触发）', () => {
+    const rules = [
+      makeRule('t1', { type: 'interval', intervalMs: 1000 }, []),
+      makeRule('t2', { type: 'interval', intervalMs: 2000 }, []),
+      makeRule('t3', { type: 'pageLoad' }, []),
+    ];
+    const event: TriggerEventType = { kind: 'interval' };
+    const matched = collectRules(rules, event);
+    expect(matched).toHaveLength(2);
+    expect(matched.map((r) => r.triggerNodeId)).toEqual(['t1', 't2']);
+  });
+
+  it('不同触发器类型不互相匹配（componentHover ≠ componentClick）', () => {
+    const rules = [makeRule('t1', { type: 'componentHover', componentId: 'c1' }, [])];
+    expect(collectRules(rules, { kind: 'componentClick', componentId: 'c1' })).toHaveLength(0);
+  });
+
+  it('interval 规则不匹配 componentClick 事件', () => {
+    const rules = [makeRule('t1', { type: 'interval', intervalMs: 1000 }, [])];
+    expect(collectRules(rules, { kind: 'componentClick', componentId: 'c1' })).toHaveLength(0);
+  });
+
+  it('多规则匹配 interval 事件保持编译顺序', () => {
+    const rules = [
+      makeRule('t1', { type: 'interval', intervalMs: 1000 }, []),
+      makeRule('t2', { type: 'interval', intervalMs: 5000 }, []),
+      makeRule('t3', { type: 'interval', intervalMs: 60000 }, []),
+    ];
+    const matched = collectRules(rules, { kind: 'interval' });
+    expect(matched.map((r) => r.triggerNodeId)).toEqual(['t1', 't2', 't3']);
+  });
+});
+
+// ===== 任务 10.4：requestApi 动作执行 =====
+
+describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
+  it('requestApi 2xx 响应返回 success', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'GET',
+          url: 'https://api.example.com/data',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({
+      requestApi: vi.fn().mockResolvedValue({
+        status: 200,
+        bodyPreview: '{"ok":true}',
+        ok: true,
+      }),
+    });
+
+    const log = await executeRule(rule, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledTimes(1);
+    expect(log.results[0].kind).toBe('success');
+  });
+
+  it('requestApi 4xx/5xx 响应返回 failure 且 error 包含状态码', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'POST',
+          url: 'https://api.example.com/login',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({
+      requestApi: vi.fn().mockResolvedValue({
+        status: 500,
+        bodyPreview: 'Internal Server Error',
+        ok: false,
+      }),
+    });
+
+    const log = await executeRule(rule, deps);
+
+    expect(log.results[0].kind).toBe('failure');
+    expect(log.results[0]).toHaveProperty('error');
+    const error = (log.results[0] as { error: string }).error;
+    expect(error).toContain('500');
+    expect(error).toContain('Internal Server Error');
+  });
+
+  it('requestApi 空 URL 跳过并记录原因', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'GET',
+          url: '',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps();
+
+    const log = await executeRule(rule, deps);
+
+    expect(deps.requestApi).not.toHaveBeenCalled();
+    expect(log.results[0].kind).toBe('skipped');
+    expect((log.results[0] as { reason: string }).reason).toContain('URL');
+  });
+
+  it('requestApi 网络错误（reject）返回 failure 且 error 为错误消息', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'GET',
+          url: 'https://api.example.com/data',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({
+      requestApi: vi.fn().mockRejectedValue(new Error('网络超时')),
+    });
+
+    const log = await executeRule(rule, deps);
+
+    expect(log.results[0].kind).toBe('failure');
+    expect((log.results[0] as { error: string }).error).toBe('网络超时');
+  });
+
+  it('requestApi 调用参数正确传递（method/url/headers/body/secretHeaderKeys/timeoutMs）', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'POST',
+          url: 'https://api.example.com/users',
+          headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+          body: '{"name":"foo"}',
+          secretHeaderKeys: ['Authorization'],
+          timeoutMs: 5000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps();
+
+    await executeRule(rule, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledWith({
+      method: 'POST',
+      url: 'https://api.example.com/users',
+      headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+      body: '{"name":"foo"}',
+      secretHeaderKeys: ['Authorization'],
+      timeoutMs: 5000,
+    });
+  });
+
+  it('requestApi 失败不中断后续独立动作', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'GET',
+          url: 'https://api.example.com/data',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+      {
+        nodeId: 'a2',
+        config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'show' },
+        depth: 1,
+      },
+    ]);
+    const deps = makeMockDeps({
+      requestApi: vi.fn().mockResolvedValue({
+        status: 503,
+        bodyPreview: 'Service Unavailable',
+        ok: false,
+      }),
+    });
+
+    const log = await executeRule(rule, deps);
+
+    expect(log.results).toHaveLength(2);
+    expect(log.results[0].kind).toBe('failure');
+    expect(log.results[1].kind).toBe('success');
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
   });
 });

@@ -12,6 +12,7 @@ import type {
   BlueprintActionConfig,
   BlueprintTriggerConfig,
   CommentNodeConfig,
+  ConditionNodeConfig,
 } from '@nebula/shared';
 
 /** 触发器节点 data */
@@ -50,5 +51,21 @@ export interface CommentNodeData extends Record<string, unknown> {
   label: string;
 }
 
+/** 条件节点 data（任务 10.2） */
+export interface ConditionNodeData extends Record<string, unknown> {
+  /** 条件配置（含表达式） */
+  config: ConditionNodeConfig;
+  /** 显示名称（条件表达式摘要） */
+  label: string;
+  /** 是否被编译器标记为 dangling（condition 引用的组件不存在） */
+  dangling?: boolean;
+  /** 是否在执行流环中 */
+  inCycle?: boolean;
+}
+
 /** 节点 data 联合类型，便于类型推断 */
-export type BlueprintNodeData = TriggerNodeData | ActionNodeData | CommentNodeData;
+export type BlueprintNodeData =
+  | TriggerNodeData
+  | ActionNodeData
+  | CommentNodeData
+  | ConditionNodeData;

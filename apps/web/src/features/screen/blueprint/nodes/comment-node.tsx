@@ -43,6 +43,7 @@ export function CommentNode({ id, data, selected }: NodeProps<CommentNode>): JSX
   return (
     <BaseNodeShell
       colorScheme="comment"
+      nodeId={id}
       icon={<MessageSquare className="size-3.5" />}
       typeLabel="注释"
       label={label}

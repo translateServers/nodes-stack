@@ -188,6 +188,97 @@ describe('BlueprintTriggerConfigSchema', () => {
     });
     expect(BlueprintNodeSchema.parse(node)).toEqual(node);
   });
+
+  it('接受 componentHover 触发器（任务 10.3）', () => {
+    const node = makeTriggerNode({
+      id: 't-h',
+      config: { type: 'componentHover', componentId: 'c1' },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('接受 dataLoaded 触发器（任务 10.3）', () => {
+    const node = makeTriggerNode({
+      id: 't-dl',
+      config: { type: 'dataLoaded', componentId: 'c1' },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('接受 dataError 触发器（任务 10.3）', () => {
+    const node = makeTriggerNode({
+      id: 't-de',
+      config: { type: 'dataError', componentId: 'c1' },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('接受合法 interval 触发器（任务 10.3）', () => {
+    const node = makeTriggerNode({
+      id: 't-iv',
+      config: { type: 'interval', intervalMs: 1000 },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('interval 触发器接受 100ms 最小值', () => {
+    const node = makeTriggerNode({
+      id: 't-iv-min',
+      config: { type: 'interval', intervalMs: 100 },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('interval 触发器接受 86400000ms 最大值（24h）', () => {
+    const node = makeTriggerNode({
+      id: 't-iv-max',
+      config: { type: 'interval', intervalMs: 86_400_000 },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('interval 触发器拒绝 99ms（小于 100ms）', () => {
+    const node = makeTriggerNode({
+      config: { type: 'interval', intervalMs: 99 },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('interval 触发器拒绝 0ms', () => {
+    const node = makeTriggerNode({
+      config: { type: 'interval', intervalMs: 0 },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('interval 触发器拒绝负数', () => {
+    const node = makeTriggerNode({
+      config: { type: 'interval', intervalMs: -1000 },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('interval 触发器拒绝小数', () => {
+    const node = makeTriggerNode({
+      config: { type: 'interval', intervalMs: 1500.5 },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('interval 触发器拒绝超过 24h 的间隔', () => {
+    const node = makeTriggerNode({
+      config: { type: 'interval', intervalMs: 86_400_001 },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('拒绝未知触发器类型', () => {
+    const node = makeTriggerNode({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: { type: 'unknown' } as any,
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
 });
 
 describe('BlueprintActionConfigSchema', () => {
@@ -255,6 +346,150 @@ describe('BlueprintActionConfigSchema', () => {
     });
     expect(BlueprintNodeSchema.parse(node)).toEqual(node);
   });
+
+  it('接受 requestApi 动作（任务 10.4，最小配置）', () => {
+    const node = makeActionNode({
+      id: 'a-req',
+      config: { type: 'requestApi', method: 'GET', url: 'https://api.example.com/data' },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect(parsed).toMatchObject({
+      id: 'a-req',
+      kind: 'action',
+      config: { type: 'requestApi', method: 'GET', url: 'https://api.example.com/data' },
+    });
+  });
+
+  it('接受 requestApi 动作（POST + headers + body + secretHeaderKeys）', () => {
+    const node = makeActionNode({
+      id: 'a-req2',
+      config: {
+        type: 'requestApi',
+        method: 'POST',
+        url: 'https://api.example.com/login',
+        headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' },
+        body: '{"user":"foo"}',
+        secretHeaderKeys: ['Authorization'],
+        timeoutMs: 5000,
+      },
+    });
+    expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+
+  it('接受全部 5 种 HTTP 方法', () => {
+    for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const) {
+      const node = makeActionNode({
+        id: `a-req-${method}`,
+        config: { type: 'requestApi', method, url: 'https://api.example.com/data' },
+      });
+      const parsed = BlueprintNodeSchema.parse(node);
+      expect(parsed).toMatchObject({
+        id: `a-req-${method}`,
+        kind: 'action',
+        config: { type: 'requestApi', method, url: 'https://api.example.com/data' },
+      });
+    }
+  });
+
+  it('requestApi 拒绝未知 HTTP 方法', () => {
+    const node = makeActionNode({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: { type: 'requestApi', method: 'HEAD' as any, url: 'https://a.com' },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('requestApi 拒绝 javascript: URL', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: 'javascript:alert(1)' },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('requestApi 允许空 URL（由编译器诊断，非破坏保存）', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: '' },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect(parsed).toMatchObject({
+      id: 'a1',
+      kind: 'action',
+      config: { type: 'requestApi', method: 'GET', url: '' },
+    });
+  });
+
+  it('requestApi 拒绝 0 timeoutMs', () => {
+    const node = makeActionNode({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com', timeoutMs: 0 as any },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('requestApi 拒绝负数 timeoutMs', () => {
+    const node = makeActionNode({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com', timeoutMs: -1000 as any },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('requestApi 拒绝超过 300000ms 的 timeoutMs', () => {
+    const node = makeActionNode({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      config: {
+        type: 'requestApi',
+        method: 'GET',
+        url: 'https://a.com',
+        timeoutMs: 300_001 as any,
+      },
+    });
+    expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+  });
+
+  it('requestApi 接受 300000ms 上限', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com', timeoutMs: 300_000 },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect(parsed).toMatchObject({
+      id: 'a1',
+      kind: 'action',
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com', timeoutMs: 300_000 },
+    });
+  });
+
+  it('requestApi 默认 headers 为空对象', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com' },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect((parsed.config as { headers: Record<string, string> }).headers).toEqual({});
+  });
+
+  it('requestApi 默认 body 为空字符串', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com' },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect((parsed.config as { body: string }).body).toBe('');
+  });
+
+  it('requestApi 默认 secretHeaderKeys 为空数组', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com' },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect((parsed.config as { secretHeaderKeys: string[] }).secretHeaderKeys).toEqual([]);
+  });
+
+  it('requestApi 默认 timeoutMs 为 10000', () => {
+    const node = makeActionNode({
+      config: { type: 'requestApi', method: 'GET', url: 'https://a.com' },
+    });
+    const parsed = BlueprintNodeSchema.parse(node);
+    expect((parsed.config as { timeoutMs: number }).timeoutMs).toBe(10_000);
+  });
 });
 
 describe('isAllowedNavigateUrl', () => {
@@ -278,7 +513,7 @@ describe('isAllowedNavigateUrl', () => {
   });
 });
 
-describe('ConditionNodeConfigSchema（M3 预留）', () => {
+describe('ConditionNodeConfigSchema（任务 10.1 开放）', () => {
   it('接受合法 condition 配置', () => {
     const node = makeConditionNode();
     expect(BlueprintNodeSchema.parse(node)).toEqual(node);
@@ -309,6 +544,159 @@ describe('ConditionNodeConfigSchema（M3 预留）', () => {
       },
     });
     expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+  });
+});
+
+describe('ConditionExpression 契约（任务 10.1）', () => {
+  function makeExpr(overrides: Record<string, unknown> = {}): unknown {
+    return {
+      source: { kind: 'componentProp', componentId: 'c1', key: 'value' },
+      operator: 'eq',
+      value: '1',
+      ...overrides,
+    };
+  }
+
+  function makeNodeWithExpr(expression: unknown): BlueprintNode {
+    return {
+      id: 'cd1',
+      kind: 'condition',
+      position: { x: 0, y: 0 },
+      config: { type: 'condition', expression: expression as never },
+    } as BlueprintNode;
+  }
+
+  describe('operator 与 value 类型组合', () => {
+    it('接受 eq + string value', () => {
+      const node = makeNodeWithExpr(makeExpr({ operator: 'eq', value: 'abc' }));
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+
+    it('接受 eq + number value', () => {
+      const node = makeNodeWithExpr(makeExpr({ operator: 'eq', value: 42 }));
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+
+    it('接受 eq + boolean value', () => {
+      const node = makeNodeWithExpr(makeExpr({ operator: 'eq', value: true }));
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+
+    it('接受 ne/gt/gte/lt/lte + 数值比较', () => {
+      for (const op of ['ne', 'gt', 'gte', 'lt', 'lte'] as const) {
+        const node = makeNodeWithExpr(makeExpr({ operator: op, value: 100 }));
+        expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+      }
+    });
+
+    it('接受 contains + string value', () => {
+      const node = makeNodeWithExpr(makeExpr({ operator: 'contains', value: 'sub' }));
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+
+    it('接受 empty / notEmpty（value 缺省）', () => {
+      for (const op of ['empty', 'notEmpty'] as const) {
+        const node = makeNodeWithExpr({
+          source: { kind: 'componentProp', componentId: 'c1', key: 'value' },
+          operator: op,
+        });
+        expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+      }
+    });
+
+    it('接受 empty / notEmpty 同时携带 value（schema 不强制禁止，由 UI 层约束）', () => {
+      const node = makeNodeWithExpr(makeExpr({ operator: 'empty', value: 'ignored' }));
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+  });
+
+  describe('source 字段来源', () => {
+    it('接受 componentProp 来源', () => {
+      const node = makeNodeWithExpr(
+        makeExpr({
+          source: { kind: 'componentProp', componentId: 'c1', key: 'props.value' },
+        }),
+      );
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+
+    it('接受 componentData 来源（path 点分隔）', () => {
+      const node = makeNodeWithExpr(
+        makeExpr({
+          source: { kind: 'componentData', componentId: 'c1', path: 'list.0.name' },
+        }),
+      );
+      expect(BlueprintNodeSchema.parse(node)).toEqual(node);
+    });
+  });
+
+  describe('拒绝非法表达式', () => {
+    it('拒绝未知 operator', () => {
+      const node = makeNodeWithExpr(makeExpr({ operator: 'unknown' }));
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝未知 source.kind', () => {
+      const node = makeNodeWithExpr(makeExpr({ source: { kind: 'unknown', componentId: 'c1' } }));
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 componentProp 缺少 componentId', () => {
+      const node = makeNodeWithExpr(makeExpr({ source: { kind: 'componentProp', key: 'value' } }));
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 componentProp 缺少 key', () => {
+      const node = makeNodeWithExpr(
+        makeExpr({ source: { kind: 'componentProp', componentId: 'c1' } }),
+      );
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 componentData 缺少 path', () => {
+      const node = makeNodeWithExpr(
+        makeExpr({ source: { kind: 'componentData', componentId: 'c1' } }),
+      );
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 value 为非法类型（对象）', () => {
+      const node = makeNodeWithExpr(makeExpr({ value: { foo: 1 } }));
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 value 为 null', () => {
+      const node = makeNodeWithExpr(makeExpr({ value: null }));
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 value 为数组', () => {
+      const node = makeNodeWithExpr(makeExpr({ value: [1, 2, 3] }));
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 expression 缺少 source', () => {
+      const node = makeNodeWithExpr({ operator: 'eq', value: '1' });
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 expression 缺少 operator', () => {
+      const node = makeNodeWithExpr({
+        source: { kind: 'componentProp', componentId: 'c1', key: 'v' },
+        value: '1',
+      });
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
+
+    it('拒绝 config.type 不为 condition', () => {
+      const node: BlueprintNode = {
+        id: 'cd1',
+        kind: 'condition',
+        position: { x: 0, y: 0 },
+        config: { type: 'setVisibility', expression: makeExpr() } as never,
+      };
+      expect(() => BlueprintNodeSchema.parse(node)).toThrow();
+    });
   });
 });
 

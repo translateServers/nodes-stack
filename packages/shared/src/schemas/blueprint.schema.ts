@@ -16,8 +16,15 @@ import { z } from 'zod';
 
 // ===== 触发器配置 =====
 
-/** 触发器类型（M1：componentClick / pageLoad；M3 扩展 hover/data/interval） */
-export const BlueprintTriggerTypeSchema = z.enum(['componentClick', 'pageLoad']);
+/** 触发器类型（M1：componentClick / pageLoad；M3 扩展 componentHover / dataLoaded / dataError / interval） */
+export const BlueprintTriggerTypeSchema = z.enum([
+  'componentClick',
+  'pageLoad',
+  'componentHover',
+  'dataLoaded',
+  'dataError',
+  'interval',
+]);
 export type BlueprintTriggerType = z.infer<typeof BlueprintTriggerTypeSchema>;
 
 export const TriggerComponentClickConfigSchema = z.object({
@@ -31,9 +38,59 @@ export const TriggerPageLoadConfigSchema = z.object({
 });
 export type TriggerPageLoadConfig = z.infer<typeof TriggerPageLoadConfigSchema>;
 
+/** 组件悬停触发（任务 10.3） */
+export const TriggerComponentHoverConfigSchema = z.object({
+  type: z.literal('componentHover'),
+  componentId: z.string().describe('悬停触发的组件 ID'),
+});
+export type TriggerComponentHoverConfig = z.infer<typeof TriggerComponentHoverConfigSchema>;
+
+/** 数据加载完成触发（任务 10.3） */
+export const TriggerDataLoadedConfigSchema = z.object({
+  type: z.literal('dataLoaded'),
+  componentId: z.string().describe('数据源组件 ID（数据成功加载后触发）'),
+});
+export type TriggerDataLoadedConfig = z.infer<typeof TriggerDataLoadedConfigSchema>;
+
+/** 数据加载错误触发（任务 10.3） */
+export const TriggerDataErrorConfigSchema = z.object({
+  type: z.literal('dataError'),
+  componentId: z.string().describe('数据源组件 ID（数据加载失败后触发）'),
+});
+export type TriggerDataErrorConfig = z.infer<typeof TriggerDataErrorConfigSchema>;
+
+/** 定时器触发（任务 10.3） */
+export const TriggerIntervalConfigSchema = z
+  .object({
+    type: z.literal('interval'),
+    /** 触发间隔（毫秒），必须 > 0；运行时由执行器安排 setInterval */
+    intervalMs: z.number().int().positive().describe('触发间隔（毫秒），必须为正整数'),
+  })
+  .superRefine((config, ctx) => {
+    if (config.intervalMs < 100) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['intervalMs'],
+        message: '定时器间隔不得小于 100ms，避免高频触发影响性能',
+      });
+    }
+    if (config.intervalMs > 86_400_000) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['intervalMs'],
+        message: '定时器间隔不得超过 86400000ms（24 小时）',
+      });
+    }
+  });
+export type TriggerIntervalConfig = z.infer<typeof TriggerIntervalConfigSchema>;
+
 export const BlueprintTriggerConfigSchema = z.discriminatedUnion('type', [
   TriggerComponentClickConfigSchema,
   TriggerPageLoadConfigSchema,
+  TriggerComponentHoverConfigSchema,
+  TriggerDataLoadedConfigSchema,
+  TriggerDataErrorConfigSchema,
+  TriggerIntervalConfigSchema,
 ]);
 export type BlueprintTriggerConfig = z.infer<typeof BlueprintTriggerConfigSchema>;
 
@@ -87,11 +144,49 @@ export const ActionRefreshDataSourceConfigSchema = z.object({
 });
 export type ActionRefreshDataSourceConfig = z.infer<typeof ActionRefreshDataSourceConfigSchema>;
 
+/** HTTP 方法白名单（任务 10.4） */
+export const REQUEST_API_METHOD_SCHEMA_ENUM = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+export type RequestApiMethod = (typeof REQUEST_API_METHOD_SCHEMA_ENUM)[number];
+
+/**
+ * requestApi 动作配置（任务 10.4）
+ *
+ * 发起 HTTP 请求，运行时由执行器调用 fetch：
+ * - method 仅允许 GET/POST/PUT/PATCH/DELETE
+ * - url 必须为 http/https 协议（与 navigate 一致白名单）
+ * - headers / body 由调用方模板插值后传入（任务 10.5）
+ * - secretHeaderKeys 标记需要脱敏的 header 键名（日志与诊断中脱敏展示）
+ */
+export const ActionRequestApiConfigSchema = z
+  .object({
+    type: z.literal('requestApi'),
+    method: z.enum(REQUEST_API_METHOD_SCHEMA_ENUM).describe('HTTP 方法'),
+    url: z.string().describe('请求 URL（必须 http/https）'),
+    headers: z.record(z.string(), z.string()).default({}).describe('请求头（键值对）'),
+    body: z.string().default('').describe('请求体（POST/PUT/PATCH 使用；GET/DELETE 忽略）'),
+    /** 需要脱敏的 header 键名（用于日志/诊断中替换为 ***） */
+    secretHeaderKeys: z.array(z.string()).default([]).describe('需要脱敏的 header 键名列表'),
+    /** 请求超时（毫秒），默认 10000ms */
+    timeoutMs: z.number().int().positive().max(300_000).default(10_000).describe('请求超时毫秒'),
+  })
+  .superRefine((config, ctx) => {
+    if (config.url.length > 0 && !isAllowedNavigateUrl(config.url)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message: '仅允许 http/https 协议的请求 URL',
+      });
+    }
+    // GET / DELETE 不应携带 body（schema 不强制拒绝，但产出 warning 诊断由编译器处理）
+  });
+export type ActionRequestApiConfig = z.infer<typeof ActionRequestApiConfigSchema>;
+
 export const BlueprintActionConfigSchema = z.discriminatedUnion('type', [
   ActionSetVisibilityConfigSchema,
   ActionNavigateConfigSchema,
   ActionScrollToComponentConfigSchema,
   ActionRefreshDataSourceConfigSchema,
+  ActionRequestApiConfigSchema,
 ]);
 export type BlueprintActionConfig = z.infer<typeof BlueprintActionConfigSchema>;
 

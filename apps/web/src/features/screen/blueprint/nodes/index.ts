@@ -1,17 +1,19 @@
 /**
- * 蓝图节点组件模块入口（任务 4.2）
+ * 蓝图节点组件模块入口（任务 4.2 + 10.2）
  *
  * 公开 API：
  * - TriggerNode：触发器节点组件（componentClick / pageLoad）
  * - ActionNode：动作节点组件（setVisibility / navigate / scrollToComponent / refreshDataSource）
  * - CommentNode：注释节点组件
+ * - ConditionNode：条件节点组件（任务 10.2，then/else 双输出引脚）
  * - BaseNodeShell：共享节点外壳（选中态、dangling 标记态、cycle 标记态）
- * - 类型：TriggerNodeData / ActionNodeData / CommentNodeData / TriggerNode / ActionNode / CommentNode
+ * - 类型：TriggerNodeData / ActionNodeData / CommentNodeData / ConditionNodeData / TriggerNode / ActionNode / CommentNode / ConditionNode
  */
 
 export { TriggerNode } from './trigger-node';
 export { ActionNode } from './action-node';
 export { CommentNode } from './comment-node';
+export { ConditionNode, summarizeCondition } from './condition-node';
 export { BaseNodeShell } from './base-node';
 export type { NodeColorScheme } from './base-node';
 
@@ -19,5 +21,6 @@ export type {
   ActionNodeData,
   BlueprintNodeData,
   CommentNodeData,
+  ConditionNodeData,
   TriggerNodeData,
 } from './node-data-types';

@@ -55,6 +55,7 @@ export function TriggerNode({ id, data, selected }: NodeProps<TriggerNode>): JSX
   return (
     <BaseNodeShell
       colorScheme="trigger"
+      nodeId={id}
       icon={icon}
       typeLabel={typeLabel}
       label={label}

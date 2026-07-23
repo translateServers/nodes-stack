@@ -23,6 +23,7 @@ import {
   Crosshair,
   Eye,
   FileText,
+  GitBranch,
   MessageSquare,
   MousePointerClick,
   Navigation,
@@ -34,7 +35,7 @@ export interface NodeOption {
   /** 唯一标识（用于去重与键控） */
   id: string;
   /** 节点 kind（与 schema 对齐） */
-  kind: 'trigger' | 'action' | 'comment';
+  kind: 'trigger' | 'action' | 'comment' | 'condition';
   /** 节点类型子标识（trigger.type / action.type） */
   subtype: string;
   /** 显示名称 */
@@ -45,7 +46,7 @@ export interface NodeOption {
   icon: JSX.Element;
 }
 
-/** 全部可插入节点选项（M1） */
+/** 全部可插入节点选项（M1 + 10.2） */
 export const NODE_OPTIONS: readonly NodeOption[] = [
   {
     id: 'trigger.componentClick',
@@ -94,6 +95,14 @@ export const NODE_OPTIONS: readonly NodeOption[] = [
     label: '刷新数据源',
     description: '重新拉取并更新目标组件的数据',
     icon: <RefreshCw className="size-4" />,
+  },
+  {
+    id: 'condition',
+    kind: 'condition',
+    subtype: 'condition',
+    label: '条件分支',
+    description: '根据条件表达式选择 then / else 分支执行',
+    icon: <GitBranch className="size-4" />,
   },
   {
     id: 'comment',

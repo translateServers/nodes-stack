@@ -18,11 +18,13 @@ import type { JSX, ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 /** 节点类型配色方案 */
-export type NodeColorScheme = 'trigger' | 'action' | 'comment';
+export type NodeColorScheme = 'trigger' | 'action' | 'comment' | 'condition';
 
 interface BaseNodeShellProps {
   /** 节点类型配色 */
   colorScheme: NodeColorScheme;
+  /** 节点 ID（用于 E2E 定位与诊断映射） */
+  nodeId: string;
   /** 节点图标 */
   icon: ReactNode;
   /** 节点标签（类型名称） */
@@ -50,6 +52,13 @@ interface BaseNodeShellProps {
   showInputHandle: boolean;
   /** 是否显示输出引脚（comment 无引脚） */
   showOutputHandle: boolean;
+  /**
+   * 任务 10.2：输出引脚模式。
+   * - 'single'：单个 `out` 引脚（trigger / action 默认）
+   * - 'then-else'：then / else 双输出引脚（condition 节点）
+   * 仅当 showOutputHandle=true 时生效。
+   */
+  outputHandleMode?: 'single' | 'then-else';
   /** 子元素（节点配置摘要或编辑器入口） */
   children?: ReactNode;
 }
@@ -76,15 +85,24 @@ const COLOR_SCHEMES: Record<
     text: 'text-gray-700 dark:text-gray-300',
     iconBg: 'bg-gray-500/20 dark:bg-gray-500/30',
   },
+  condition: {
+    bg: 'bg-purple-500/10 dark:bg-purple-500/15',
+    border: 'border-purple-500/50 dark:border-purple-400/50',
+    text: 'text-purple-700 dark:text-purple-300',
+    iconBg: 'bg-purple-500/20 dark:bg-purple-500/30',
+  },
 };
+
+const HANDLE_BASE_CLASS = '!h-2.5 !w-2.5 !border-2 !border-background !bg-muted-foreground';
 
 /**
  * 节点共享外壳组件。
  *
- * 不直接作为 React Flow 节点渲染，由 trigger-node / action-node / comment-node 包装使用。
+ * 不直接作为 React Flow 节点渲染，由 trigger-node / action-node / comment-node / condition-node 包装使用。
  */
 export function BaseNodeShell({
   colorScheme,
+  nodeId,
   icon,
   typeLabel,
   label,
@@ -95,6 +113,7 @@ export function BaseNodeShell({
   locating = false,
   showInputHandle,
   showOutputHandle,
+  outputHandleMode = 'single',
   children,
 }: BaseNodeShellProps): JSX.Element {
   const scheme = COLOR_SCHEMES[colorScheme];
@@ -118,6 +137,9 @@ export function BaseNodeShell({
   return (
     <div
       className={`relative min-w-[180px] max-w-[280px] rounded-md border-2 ${scheme.bg} ${borderClass} ${locateClass} px-3 py-2 transition-colors`}
+      data-testid="blueprint-node"
+      data-node-id={nodeId}
+      data-node-kind={colorScheme}
       data-blueprint-node-selected={selected}
       data-blueprint-node-dangling={dangling}
       data-blueprint-node-cycle={inCycle}
@@ -125,11 +147,7 @@ export function BaseNodeShell({
       data-locating={locating || undefined}
     >
       {showInputHandle && (
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="!h-2.5 !w-2.5 !border-2 !border-background !bg-muted-foreground"
-        />
+        <Handle type="target" position={Position.Left} className={HANDLE_BASE_CLASS} />
       )}
       <div className="flex items-center gap-2">
         <div
@@ -147,12 +165,26 @@ export function BaseNodeShell({
         </div>
       </div>
       {children && <div className="mt-2 border-t border-border/30 pt-2">{children}</div>}
-      {showOutputHandle && (
-        <Handle
-          type="source"
-          position={Position.Right}
-          className="!h-2.5 !w-2.5 !border-2 !border-background !bg-muted-foreground"
-        />
+      {showOutputHandle && outputHandleMode === 'single' && (
+        <Handle type="source" position={Position.Right} id="out" className={HANDLE_BASE_CLASS} />
+      )}
+      {showOutputHandle && outputHandleMode === 'then-else' && (
+        <>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="then"
+            style={{ top: '40%' }}
+            className={HANDLE_BASE_CLASS}
+          />
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="else"
+            style={{ top: '70%' }}
+            className={HANDLE_BASE_CLASS}
+          />
+        </>
       )}
     </div>
   );
