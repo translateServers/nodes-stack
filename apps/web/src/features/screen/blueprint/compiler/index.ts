@@ -10,6 +10,7 @@ export { compileBlueprint } from './compile.js';
 export { buildIndexes } from './indexes.js';
 export { detectCycles } from './cycle.js';
 export { diagnoseNode } from './validate.js';
+export { filterBlueprintByComponent } from './filter-by-component.js';
 
 export type {
   BlueprintIndexes,
@@ -17,6 +18,7 @@ export type {
   CompileInput,
   CompileResult,
   CompiledAction,
+  CompiledCondition,
   CompiledRule,
   Diagnostic,
   DiagnosticCode,
@@ -24,3 +26,4 @@ export type {
   EdgeIndex,
   NodeIndex,
 } from './types.js';
+export type { FilteredBlueprint } from './filter-by-component.js';

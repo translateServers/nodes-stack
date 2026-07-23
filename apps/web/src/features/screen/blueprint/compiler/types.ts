@@ -10,6 +10,7 @@ import type {
   BlueprintEdge,
   BlueprintNode,
   BlueprintTriggerConfig,
+  ConditionNodeConfig,
   EventBlueprint,
 } from '@nebula/shared';
 
@@ -50,11 +51,35 @@ export interface CompiledAction {
   depth: number;
 }
 
-/** 编译后的规则：以一个 trigger 为入口的线性动作链 */
+/**
+ * 编译后的条件分支（任务 10.1）
+ *
+ * condition 节点在编译期无法预知表达式求值结果，
+ * 因此同时保留 then 与 else 两条分支的动作链。
+ * 运行时（任务 10.3）根据表达式求值结果选择对应分支执行。
+ *
+ * - `thenActions`：condition 节点 `then` 输出引脚连接的动作链（按拓扑顺序）
+ * - `elseActions`：condition 节点 `else` 输出引脚连接的动作链（按拓扑顺序）
+ * - 未连接的分支引脚对应空数组（合法，运行时跳过该分支）
+ */
+export interface CompiledCondition {
+  nodeId: string;
+  config: ConditionNodeConfig;
+  /** then 分支动作链（按拓扑顺序，深度相对 trigger） */
+  thenActions: CompiledAction[];
+  /** else 分支动作链（按拓扑顺序，深度相对 trigger） */
+  elseActions: CompiledAction[];
+  /** condition 节点在触发链路中的深度：trigger 直连为 0，每经过一个节点 +1 */
+  depth: number;
+}
+
+/** 编译后的规则：以一个 trigger 为入口的线性动作链 + 条件分支集合 */
 export interface CompiledRule {
   triggerNodeId: string;
   triggerConfig: BlueprintTriggerConfig;
   actions: CompiledAction[];
+  /** 条件分支：链路中所有 condition 节点，按拓扑顺序 */
+  conditions: CompiledCondition[];
 }
 
 /** 编译结果：规则集 + 诊断列表 */
