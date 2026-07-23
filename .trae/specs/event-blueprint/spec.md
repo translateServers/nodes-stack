@@ -174,6 +174,42 @@
 - **AND** Esc 分层执行：取消进行中的连线 → 取消选择 → 关闭全屏弹层
 - **AND** 弹层内撤销/重做与编辑器全局本地编辑历史同一栈
 
+### Requirement: 节点参数配置
+
+系统 SHALL 在蓝图编辑器中提供节点参数配置面板，使用户能够为 trigger / action / comment 节点填写参数（组件绑定、动作参数、注释文本），闭合"创建节点 -> 配置参数 -> 编译执行"的主链路。节点创建时参数可为空，但空参数节点须经编译器诊断为 error 级（见「蓝图编译器」空参数诊断），用户通过配置面板填写参数后诊断消失。
+
+#### Scenario: 面板展示条件
+
+- **WHEN** 用户选中单个节点（trigger / action / comment）
+- **THEN** 展示该节点的参数配置面板
+- **AND** 多选节点或选中边时不展示配置面板
+- **AND** 配置面板位置不遮挡画布主交互区
+
+#### Scenario: 按节点类型渲染表单
+
+- **WHEN** 配置面板展示节点参数
+- **THEN** trigger.componentClick 渲染组件单选
+- **AND** trigger.pageLoad 无组件字段
+- **AND** action.setVisibility 渲染组件单选 + show / hide / toggle 选项
+- **AND** action.navigate 渲染 URL 输入 + target 选项，非法协议 URL 被共享 Schema 拒绝
+- **AND** action.scrollToComponent / action.refreshDataSource 渲染组件单选
+- **AND** comment 节点渲染纯文本域
+- **AND** 组件下拉显示组件 name、值为 id
+
+#### Scenario: 绑定写回与历史
+
+- **WHEN** 用户在面板修改节点参数
+- **THEN** 经 setNodes 更新该节点 data.config
+- **AND** 由既有 useEffect[nodes,edges] 同步到 updateBlueprint
+- **AND** 每次参数修改产生且仅产生一条本地编辑历史
+- **AND** undo/redo 正确恢复参数
+
+#### Scenario: 悬空引用保留原值
+
+- **WHEN** 节点已绑定的 componentId 在当前项目组件列表中不存在（组件被删除）
+- **THEN** 面板中该引用显示 dangling 态并保留原 id
+- **AND** 不静默清空原值，遵守非破坏原则
+
 ### Requirement: 蓝图编辑进入本地编辑历史
 
 系统 SHALL 将蓝图编辑纳入本地编辑历史，撤销/重做语义与既有约定一致。
@@ -206,7 +242,7 @@
 - **WHEN** 图存在错误级诊断
 - **THEN** 不阻塞项目保存（非破坏原则）
 - **AND** 发布操作给出明确确认提示，列出错误级诊断摘要
-- **AND** 错误级诊断对应的触发器在预览运行时不执行
+- **AND** 错误级诊断对应的触发器在预览运行时不执行（公开预览与模拟沙盒均须显式排除，不依赖参数空串匹配等副作用）
 
 ### Requirement: 模拟调试（M2）
 
@@ -366,5 +402,5 @@
 | 引擎 | 规则匹配 / 深度截断 / 动作计划展开 | Vitest 纯函数测试 |
 | 执行器 | setVisibility 覆盖表 / refreshDataSource 取消 / navigate 白名单 | Vitest + mock fetch |
 | 历史 | 快照三要素同步恢复 / 拖拽合并单条历史 | editor-store 测试 |
-| 编辑器 | 搜索面板过滤 / 剪贴板重新生成 id / 引脚兼容判定 | 组件测试 |
+| 编辑器 | 搜索面板过滤 / 剪贴板重新生成 id / 引脚兼容判定 / 节点配置面板表单渲染与写回 | 组件测试 |
 | 调试 | 沙盒执行 / 日志输出 / 不污染真实状态 | Hook 测试 |

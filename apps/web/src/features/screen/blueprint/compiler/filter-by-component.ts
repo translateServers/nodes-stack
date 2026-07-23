@@ -28,9 +28,11 @@ function isNodeRelatedToComponent(node: BlueprintNode, componentId: string): boo
   }
 
   if (node.kind === 'action') {
-    // navigate 无 targetComponentId；其他动作类型有 targetComponentId
-    if (node.config.type === 'navigate') return false;
-    return node.config.targetComponentId === componentId;
+    // navigate / requestApi 无 targetComponentId；其他动作类型有 targetComponentId
+    if ('targetComponentId' in node.config) {
+      return node.config.targetComponentId === componentId;
+    }
+    return false;
   }
 
   // comment / condition（M3 预留）：不涉及组件

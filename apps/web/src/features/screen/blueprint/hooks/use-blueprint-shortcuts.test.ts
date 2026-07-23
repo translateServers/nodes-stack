@@ -36,17 +36,17 @@ function fireKeyDown(key: string, options: { ctrlKey?: boolean; shiftKey?: boole
 }
 
 describe('useBlueprintShortcuts（任务 5.4）', () => {
-  let onClose: ReturnType<typeof vi.fn>;
-  let onCloseSearchPanel: ReturnType<typeof vi.fn>;
-  let setNodes: ReturnType<typeof vi.fn>;
-  let setEdges: ReturnType<typeof vi.fn>;
+  let onClose: ReturnType<typeof vi.fn<() => void>>;
+  let onCloseSearchPanel: ReturnType<typeof vi.fn<() => void>>;
+  let setNodes: ReturnType<typeof vi.fn<(updater: (nds: Node[]) => Node[]) => void>>;
+  let setEdges: ReturnType<typeof vi.fn<(updater: (eds: Edge[]) => Edge[]) => void>>;
   let isConnectingRef: React.RefObject<boolean>;
 
   beforeEach(() => {
-    onClose = vi.fn();
-    onCloseSearchPanel = vi.fn();
-    setNodes = vi.fn(<T>(updater: T) => updater);
-    setEdges = vi.fn(<T>(updater: T) => updater);
+    onClose = vi.fn<() => void>();
+    onCloseSearchPanel = vi.fn<() => void>();
+    setNodes = vi.fn<(updater: (nds: Node[]) => Node[]) => void>(() => undefined);
+    setEdges = vi.fn<(updater: (eds: Edge[]) => Edge[]) => void>(() => undefined);
     isConnectingRef = { current: false };
 
     // 重置 store 状态

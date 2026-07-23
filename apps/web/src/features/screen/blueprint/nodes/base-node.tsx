@@ -147,7 +147,7 @@ export function BaseNodeShell({
       data-locating={locating || undefined}
     >
       {showInputHandle && (
-        <Handle type="target" position={Position.Left} className={HANDLE_BASE_CLASS} />
+        <Handle type="target" position={Position.Left} id="in" className={HANDLE_BASE_CLASS} />
       )}
       <div className="flex items-center gap-2">
         <div

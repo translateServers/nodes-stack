@@ -24,7 +24,37 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { EventBlueprint, ScreenComponent } from '@nebula/shared';
 import { compileBlueprint, type CompiledRule, type Diagnostic } from '../compiler/index.js';
 import { executeRule } from './executor.js';
-import type { RuleExecutionLog, RuntimeDeps, VisibilityOverrides } from './types.js';
+import type {
+  RuleExecutionLog,
+  RuntimeDeps,
+  VisibilityOverrides,
+  RequestApiRuntimeResult,
+  TriggerEventType,
+} from './types.js';
+
+/** 根据触发器配置构造模拟事件 */
+function buildTriggerEvent(triggerConfig: CompiledRule['triggerConfig']): TriggerEventType {
+  switch (triggerConfig.type) {
+    case 'componentClick':
+      return { kind: 'componentClick', componentId: triggerConfig.componentId };
+    case 'componentHover':
+      return { kind: 'componentHover', componentId: triggerConfig.componentId };
+    case 'dataLoaded':
+      return { kind: 'dataLoaded', componentId: triggerConfig.componentId };
+    case 'dataError':
+      return { kind: 'dataError', componentId: triggerConfig.componentId, error: '模拟错误' };
+    case 'pageLoad':
+      return { kind: 'pageLoad' };
+    case 'interval':
+      return { kind: 'interval' };
+    default: {
+      // 穷尽性检查
+      const _exhaustive: never = triggerConfig;
+      void _exhaustive;
+      return { kind: 'pageLoad' };
+    }
+  }
+}
 
 /** 模拟触发结果 */
 export interface SandboxSimulationResult {
@@ -121,11 +151,27 @@ export function useBlueprintSandboxRuntime(
       refreshDataSource: async (): Promise<void> => {
         /* no-op: 沙盒模拟，不 fetch */
       },
+      // 沙盒内不发起真实 HTTP 请求（返回模拟成功结果）
+      requestApi: (): Promise<RequestApiRuntimeResult> => {
+        return Promise.resolve({
+          status: 200,
+          bodyPreview: '[sandbox] 模拟请求未发起',
+          ok: true,
+        });
+      },
       hasComponent: (componentId: string): boolean => {
         return componentsRef.current.some((c) => c.id === componentId);
       },
       logWarning: (message: string): void => {
         console.warn(`[blueprint-sandbox] ${message}`);
+      },
+      getComponentValue: (componentId: string): unknown => {
+        const component = componentsRef.current.find((c) => c.id === componentId);
+        return component?.props?.value;
+      },
+      getComponentData: (): Record<string, unknown> | undefined => {
+        // 沙盒内无真实数据源缓存，返回 undefined；condition 与插值降级为空值
+        return undefined;
       },
     }),
     [],
@@ -171,7 +217,8 @@ export function useBlueprintSandboxRuntime(
 
       setIsSimulating(true);
       try {
-        const log = await executeRule(rule, sandboxDeps);
+        const event = buildTriggerEvent(rule.triggerConfig);
+        const log = await executeRule(rule, event, sandboxDeps);
         // 收集本次模拟涉及的所有节点 id：trigger + 全部 action 结果
         const nodeIds = new Set<string>();
         nodeIds.add(rule.triggerNodeId);

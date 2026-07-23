@@ -29,3 +29,5 @@ export { AlignDistributeToolbar } from './align-distribute-toolbar';
 export type { AlignDistributeToolbarProps } from './align-distribute-toolbar';
 export { ConditionBuilder, needsValue } from './condition-builder';
 export type { ConditionBuilderProps } from './condition-builder';
+export { NodeConfigPanel } from './node-config-panel';
+export type { NodeConfigPanelProps } from './node-config-panel';

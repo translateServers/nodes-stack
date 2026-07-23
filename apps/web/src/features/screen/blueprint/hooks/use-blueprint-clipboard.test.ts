@@ -50,19 +50,19 @@ function fireKeyDown(key: string, options: { ctrlKey?: boolean } = {}): void {
 
 describe('useBlueprintClipboard（任务 5.5）', () => {
   let clipboardStore: string;
-  let setNodes: ReturnType<typeof vi.fn>;
-  let setEdges: ReturnType<typeof vi.fn>;
-  let writeTextMock: ReturnType<typeof vi.fn>;
+  let setNodes: ReturnType<typeof vi.fn<(updater: (nds: Node[]) => Node[]) => void>>;
+  let setEdges: ReturnType<typeof vi.fn<(updater: (eds: Edge[]) => Edge[]) => void>>;
+  let writeTextMock: ReturnType<typeof vi.fn<(text: string) => Promise<void>>>;
   let nodes: Node[];
   let edges: Edge[];
 
   beforeEach(() => {
     clipboardStore = '';
-    setNodes = vi.fn((updater: Node[] | ((nodes: Node[]) => Node[])) => {
-      nodes = typeof updater === 'function' ? updater(nodes) : updater;
+    setNodes = vi.fn((updater: (nds: Node[]) => Node[]) => {
+      nodes = updater(nodes);
     });
-    setEdges = vi.fn((updater: Edge[] | ((edges: Edge[]) => Edge[])) => {
-      edges = typeof updater === 'function' ? updater(edges) : updater;
+    setEdges = vi.fn((updater: (eds: Edge[]) => Edge[]) => {
+      edges = updater(edges);
     });
     nodes = [];
     edges = [];
@@ -164,7 +164,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
 
     expect(setNodes).toHaveBeenCalledTimes(1);
     // 获取 setNodes 调用时的 updater 函数结果
-    const updater = vi.mocked(setNodes).mock.calls[0]?.[0] as (nds: Node[]) => Node[];
+    const updater = vi.mocked(setNodes).mock.calls[0]?.[0];
     const resultNodes = updater([makeNode({ id: 'existing-1', selected: false })]);
     expect(resultNodes).toHaveLength(2);
     // 新节点 ID 不等于旧 ID
@@ -214,7 +214,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
 
     // setEdges 被调用
     expect(setEdges).toHaveBeenCalledTimes(1);
-    const edgeUpdater = vi.mocked(setEdges).mock.calls[0]?.[0] as (eds: Edge[]) => Edge[];
+    const edgeUpdater = vi.mocked(setEdges).mock.calls[0]?.[0];
     const resultEdges = edgeUpdater([]);
     expect(resultEdges).toHaveLength(1);
     // 边 ID 已重新生成
@@ -224,7 +224,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
     expect(resultEdges[0]?.target).not.toBe('old-n2');
 
     // 验证 source/target 与粘贴的节点 ID 一致
-    const nodeUpdater = vi.mocked(setNodes).mock.calls[0]?.[0] as (nds: Node[]) => Node[];
+    const nodeUpdater = vi.mocked(setNodes).mock.calls[0]?.[0];
     const resultNodes = nodeUpdater([]);
     const newNodeIds = resultNodes.map((n) => n.id);
     expect(newNodeIds).toContain(resultEdges[0]?.source);
@@ -291,7 +291,7 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
       await result.current.paste();
     });
 
-    const updater = vi.mocked(setNodes).mock.calls[0]?.[0] as (nds: Node[]) => Node[];
+    const updater = vi.mocked(setNodes).mock.calls[0]?.[0];
     const resultNodes = updater([makeNode({ id: 'project-A-node-1', selected: false })]);
     // 新节点 ID 不等于已有节点 ID
     const newNode = resultNodes.find((n) => n.id !== 'project-A-node-1');
@@ -325,13 +325,13 @@ describe('useBlueprintClipboard（任务 5.5）', () => {
     expect(payload.edges).toHaveLength(1); // 只有 n1→n2（两端均选中）
 
     // 删除选中节点
-    const nodeUpdater = vi.mocked(setNodes).mock.calls[0]?.[0] as (nds: Node[]) => Node[];
+    const nodeUpdater = vi.mocked(setNodes).mock.calls[0]?.[0];
     const resultNodes = nodeUpdater(nodes);
     expect(resultNodes).toHaveLength(1);
     expect(resultNodes[0]?.id).toBe('n3');
 
     // 删除与选中节点相关的边
-    const edgeUpdater = vi.mocked(setEdges).mock.calls[0]?.[0] as (eds: Edge[]) => Edge[];
+    const edgeUpdater = vi.mocked(setEdges).mock.calls[0]?.[0];
     const resultEdges = edgeUpdater(edges);
     expect(resultEdges).toHaveLength(0); // e1 和 e2 都涉及选中节点
   });

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { CompiledRule } from '../compiler/types.js';
+import type { CompiledCondition, CompiledRule } from '../compiler/types.js';
+import type { ConditionNodeConfig } from '@nebula/shared';
 import { collectRules } from './matcher.js';
 import { planActions, MAX_TRIGGER_DEPTH } from './plan.js';
 import { executeRule, triggerAndExecute } from './executor.js';
@@ -11,8 +12,25 @@ function makeRule(
   triggerNodeId: string,
   triggerConfig: CompiledRule['triggerConfig'],
   actions: CompiledRule['actions'],
+  conditions: CompiledRule['conditions'] = [],
 ): CompiledRule {
-  return { triggerNodeId, triggerConfig, actions, conditions: [] };
+  return { triggerNodeId, triggerConfig, actions, conditions };
+}
+
+function makeCondition(
+  nodeId: string,
+  expression: ConditionNodeConfig['expression'],
+  thenActions: CompiledCondition['thenActions'] = [],
+  elseActions: CompiledCondition['elseActions'] = [],
+  depth = 0,
+): CompiledCondition {
+  return {
+    nodeId,
+    config: { type: 'condition', expression },
+    thenActions,
+    elseActions,
+    depth,
+  };
 }
 
 function makeMockDeps(overrides: Partial<RuntimeDeps> = {}): RuntimeDeps {
@@ -25,6 +43,8 @@ function makeMockDeps(overrides: Partial<RuntimeDeps> = {}): RuntimeDeps {
     hasComponent: vi.fn(() => true),
     logWarning: vi.fn(),
     requestApi: vi.fn().mockResolvedValue({ status: 200, bodyPreview: '', ok: true }),
+    getComponentValue: vi.fn(() => undefined),
+    getComponentData: vi.fn(() => undefined),
     ...overrides,
   };
 }
@@ -183,7 +203,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
     expect(log.results[0].kind).toBe('success');
@@ -199,7 +219,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.applyVisibility).toHaveBeenCalledWith('c2', false);
   });
@@ -214,7 +234,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps({ getVisibility: () => false });
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
   });
@@ -229,7 +249,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps({ getVisibility: () => true });
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.applyVisibility).toHaveBeenCalledWith('c2', false);
   });
@@ -244,7 +264,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.openUrl).toHaveBeenCalledWith('https://example.com', '_blank');
   });
@@ -255,7 +275,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.openUrl).not.toHaveBeenCalled();
     expect(log.results[0].kind).toBe('success'); // 空URL不视为失败，静默跳过
@@ -267,7 +287,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.scrollToComponent).toHaveBeenCalledWith('c2');
   });
@@ -278,7 +298,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.refreshDataSource).toHaveBeenCalledWith('c2');
   });
@@ -303,7 +323,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps({ hasComponent: () => false });
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(log.results).toHaveLength(3);
     expect(log.results.every((r) => r.kind === 'skipped')).toBe(true);
@@ -325,7 +345,7 @@ describe('executeRule — 动作执行', () => {
       refreshDataSource: vi.fn().mockRejectedValue(new Error('网络错误')),
     });
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(log.results).toHaveLength(2);
     expect(log.results[0].kind).toBe('failure');
@@ -344,7 +364,7 @@ describe('executeRule — 动作执行', () => {
     ]);
     const deps = makeMockDeps();
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'pageLoad' }, deps);
 
     expect(log.truncated).toBe(true);
     expect(deps.logWarning).toHaveBeenCalledTimes(1);
@@ -522,7 +542,7 @@ describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
       }),
     });
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.requestApi).toHaveBeenCalledTimes(1);
     expect(log.results[0].kind).toBe('success');
@@ -552,7 +572,7 @@ describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
       }),
     });
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(log.results[0].kind).toBe('failure');
     expect(log.results[0]).toHaveProperty('error');
@@ -579,7 +599,7 @@ describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
     ]);
     const deps = makeMockDeps();
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.requestApi).not.toHaveBeenCalled();
     expect(log.results[0].kind).toBe('skipped');
@@ -606,7 +626,7 @@ describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
       requestApi: vi.fn().mockRejectedValue(new Error('网络超时')),
     });
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(log.results[0].kind).toBe('failure');
     expect((log.results[0] as { error: string }).error).toBe('网络超时');
@@ -630,7 +650,7 @@ describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
     ]);
     const deps = makeMockDeps();
 
-    await executeRule(rule, deps);
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(deps.requestApi).toHaveBeenCalledWith({
       method: 'POST',
@@ -671,11 +691,418 @@ describe('executeRule — requestApi 动作执行（任务 10.4）', () => {
       }),
     });
 
-    const log = await executeRule(rule, deps);
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
 
     expect(log.results).toHaveLength(2);
     expect(log.results[0].kind).toBe('failure');
     expect(log.results[1].kind).toBe('success');
     expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
+  });
+});
+
+// ===== 任务 10.1 + 10.3：condition 条件分支执行 =====
+
+describe('executeRule — condition 条件分支执行（任务 10.1 + 10.3）', () => {
+  it('表达式为 true 时执行 then 分支，不执行 else 分支', async () => {
+    const rule = makeRule(
+      't1',
+      { type: 'componentClick', componentId: 'c1' },
+      [],
+      [
+        makeCondition(
+          'cond1',
+          {
+            source: { kind: 'componentProp', componentId: 'c1', key: 'status' },
+            operator: 'eq',
+            value: 'active',
+          },
+          [
+            {
+              nodeId: 'a-then',
+              config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'show' },
+              depth: 0,
+            },
+          ],
+          [
+            {
+              nodeId: 'a-else',
+              config: { type: 'setVisibility', targetComponentId: 'c3', visible: 'show' },
+              depth: 0,
+            },
+          ],
+        ),
+      ],
+    );
+    const deps = makeMockDeps({
+      getComponentValue: () => ({ status: 'active' }),
+    });
+
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(log.results).toHaveLength(1);
+    expect(log.results[0].nodeId).toBe('a-then');
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
+    expect(deps.applyVisibility).not.toHaveBeenCalledWith('c3', true);
+  });
+
+  it('表达式为 false 时执行 else 分支', async () => {
+    const rule = makeRule(
+      't1',
+      { type: 'componentClick', componentId: 'c1' },
+      [],
+      [
+        makeCondition(
+          'cond1',
+          {
+            source: { kind: 'componentProp', componentId: 'c1', key: 'status' },
+            operator: 'eq',
+            value: 'active',
+          },
+          [
+            {
+              nodeId: 'a-then',
+              config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'show' },
+              depth: 0,
+            },
+          ],
+          [
+            {
+              nodeId: 'a-else',
+              config: { type: 'setVisibility', targetComponentId: 'c3', visible: 'hide' },
+              depth: 0,
+            },
+          ],
+        ),
+      ],
+    );
+    const deps = makeMockDeps({
+      getComponentValue: () => ({ status: 'inactive' }),
+    });
+
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c3', false);
+    expect(deps.applyVisibility).not.toHaveBeenCalledWith('c2', true);
+  });
+
+  it('componentData 路径支持嵌套字段判断', async () => {
+    const rule = makeRule(
+      't1',
+      { type: 'dataLoaded', componentId: 'c1' },
+      [],
+      [
+        makeCondition(
+          'cond1',
+          {
+            source: { kind: 'componentData', componentId: 'c1', path: 'user.age' },
+            operator: 'gte',
+            value: 18,
+          },
+          [
+            {
+              nodeId: 'a-then',
+              config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'show' },
+              depth: 0,
+            },
+          ],
+        ),
+      ],
+    );
+    const deps = makeMockDeps({
+      getComponentData: () => ({ user: { age: 20 } }),
+    });
+
+    await executeRule(rule, { kind: 'dataLoaded', componentId: 'c1' }, deps);
+
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
+  });
+
+  it('empty / notEmpty 运算符按空值语义判断', async () => {
+    const rule = makeRule(
+      't1',
+      { type: 'componentClick', componentId: 'c1' },
+      [],
+      [
+        makeCondition(
+          'cond1',
+          {
+            source: { kind: 'componentProp', componentId: 'c1', key: 'value' },
+            operator: 'empty',
+          },
+          [
+            {
+              nodeId: 'a-then',
+              config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'show' },
+              depth: 0,
+            },
+          ],
+        ),
+        makeCondition(
+          'cond2',
+          {
+            source: { kind: 'componentProp', componentId: 'c1', key: 'value' },
+            operator: 'notEmpty',
+          },
+          [
+            {
+              nodeId: 'a-then2',
+              config: { type: 'setVisibility', targetComponentId: 'c3', visible: 'show' },
+              depth: 0,
+            },
+          ],
+        ),
+      ],
+    );
+    const deps = makeMockDeps({ getComponentValue: () => ({ value: '' }) });
+
+    const log = await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    const nodeIds = log.results.map((r) => r.nodeId);
+    expect(nodeIds).toContain('a-then');
+    expect(nodeIds).not.toContain('a-then2');
+  });
+
+  it('condition 分支内动作深度超过上限时截断并记录告警', async () => {
+    const rule = makeRule(
+      't1',
+      { type: 'componentClick', componentId: 'c1' },
+      [],
+      [
+        makeCondition(
+          'cond1',
+          {
+            source: { kind: 'componentProp', componentId: 'c1', key: 'value' },
+            operator: 'eq',
+            value: 'foo',
+          },
+          [
+            {
+              nodeId: 'a-deep',
+              config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'show' },
+              depth: MAX_TRIGGER_DEPTH,
+            },
+          ],
+        ),
+      ],
+    );
+    const deps = makeMockDeps({ getComponentValue: () => ({ value: 'foo' }) });
+
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(deps.logWarning).toHaveBeenCalledTimes(1);
+    expect(deps.applyVisibility).not.toHaveBeenCalled();
+  });
+
+  it('condition 分支动作支持模板插值', async () => {
+    const rule = makeRule(
+      't1',
+      { type: 'componentClick', componentId: 'c1' },
+      [],
+      [
+        makeCondition(
+          'cond1',
+          {
+            source: { kind: 'componentData', componentId: 'c1', path: 'flags.run' },
+            operator: 'eq',
+            value: true,
+          },
+          [
+            {
+              nodeId: 'a-then',
+              config: {
+                type: 'requestApi',
+                method: 'GET',
+                url: 'https://api.example.com/{{trigger.value}}',
+                headers: {},
+                body: '',
+                secretHeaderKeys: [],
+                timeoutMs: 10_000,
+              },
+              depth: 0,
+            },
+          ],
+        ),
+      ],
+    );
+    const deps = makeMockDeps({
+      getComponentValue: () => 'foo',
+      getComponentData: () => ({ flags: { run: true } }),
+    });
+
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://api.example.com/foo',
+      }),
+    );
+  });
+});
+
+// ===== 任务 10.5：模板插值集成 =====
+
+describe('executeRule — 模板插值集成（任务 10.5）', () => {
+  it('requestApi URL / Body / Headers 使用 trigger.value / data 插值', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'POST',
+          url: 'https://api.example.com/items/{{trigger.value}}',
+          headers: { 'X-Item-Id': '{{trigger.data.id}}' },
+          body: '{"name":"{{trigger.data.name}}"}',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({
+      getComponentValue: () => 'foo',
+      getComponentData: () => ({ id: 42, name: 'bar' }),
+    });
+
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledWith({
+      method: 'POST',
+      url: 'https://api.example.com/items/foo',
+      headers: { 'X-Item-Id': '42' },
+      body: '{"name":"bar"}',
+      secretHeaderKeys: [],
+      timeoutMs: 10_000,
+    });
+  });
+
+  it('dataError 事件使用 event.error 插值', async () => {
+    const rule = makeRule('t1', { type: 'dataError', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'POST',
+          url: 'https://api.example.com/log',
+          headers: {},
+          body: '{"error":"{{event.error}}"}',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps();
+
+    await executeRule(
+      rule,
+      { kind: 'dataError', componentId: 'c1', error: 'network timeout' },
+      deps,
+    );
+
+    expect(deps.requestApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: '{"error":"network timeout"}',
+      }),
+    );
+  });
+
+  it('navigate URL 支持模板插值', async () => {
+    const rule = makeRule('t1', { type: 'componentHover', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'navigate',
+          url: 'https://example.com?q={{trigger.value}}',
+          target: '_blank',
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({ getComponentValue: () => 'hovered' });
+
+    await executeRule(rule, { kind: 'componentHover', componentId: 'c1' }, deps);
+
+    expect(deps.openUrl).toHaveBeenCalledWith('https://example.com?q=hovered', '_blank');
+  });
+
+  it('缺失路径降级为空字符串，不破坏 URL 结构', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'GET',
+          url: 'https://api.example.com/items/{{trigger.data.missing}}',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({ getComponentData: () => ({ id: 1 }) });
+
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://api.example.com/items/',
+      }),
+    );
+  });
+
+  it('非法 JS 表达式路径降级为空字符串', async () => {
+    const rule = makeRule('t1', { type: 'componentClick', componentId: 'c1' }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'POST',
+          url: 'https://api.example.com/safe',
+          headers: {},
+          body: '{"payload":"{{a+b}}"}',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps();
+
+    await executeRule(rule, { kind: 'componentClick', componentId: 'c1' }, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: '{"payload":""}',
+      }),
+    );
+  });
+
+  it('interval / pageLoad 事件无 trigger 上下文，模板占位符清空', async () => {
+    const rule = makeRule('t1', { type: 'interval', intervalMs: 1000 }, [
+      {
+        nodeId: 'a1',
+        config: {
+          type: 'requestApi',
+          method: 'GET',
+          url: 'https://api.example.com/ping/{{trigger.value}}',
+          headers: {},
+          body: '',
+          secretHeaderKeys: [],
+          timeoutMs: 10_000,
+        },
+        depth: 0,
+      },
+    ]);
+    const deps = makeMockDeps({ getComponentValue: () => 'should-not-be-used' });
+
+    await executeRule(rule, { kind: 'interval' }, deps);
+
+    expect(deps.requestApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://api.example.com/ping/',
+      }),
+    );
   });
 });

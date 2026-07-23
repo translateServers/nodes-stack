@@ -66,13 +66,16 @@ export interface RuntimeDeps {
   hasComponent: (componentId: string) => boolean;
   /** 记录运行时告警（深度截断等） */
   logWarning: (message: string) => void;
-  /**
-   * 发起 HTTP 请求（requestApi 动作，任务 10.4）
+  /** 发起 HTTP 请求（requestApi 动作，任务 10.4）
    *
    * @param params 已完成模板插值的请求参数（headers 已脱敏前传入，由执行器内部按 secretHeaderKeys 脱敏日志）
    * @returns 响应状态码与简要正文摘要（避免日志膨胀）
    */
   requestApi: (params: RequestApiRuntimeParams) => Promise<RequestApiRuntimeResult>;
+  /** 读取组件 props.value（用于模板插值 {{trigger.value}}） */
+  getComponentValue: (componentId: string) => unknown;
+  /** 读取组件最新解析数据（用于模板插值 {{trigger.data.xxx}}） */
+  getComponentData: (componentId: string) => Record<string, unknown> | undefined;
 }
 
 /** requestApi 运行时请求参数（任务 10.4） */

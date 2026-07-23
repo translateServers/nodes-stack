@@ -10,7 +10,11 @@ import {
   isAllowedNavigateUrl,
   BlueprintClipboardSchema,
   BLUEPRINT_CLIPBOARD_KIND,
+  type BlueprintActionNode,
+  type BlueprintCommentNode,
+  type BlueprintConditionNode,
   type BlueprintNode,
+  type BlueprintTriggerNode,
   type EventBlueprint,
 } from './blueprint.schema.js';
 import { ScreenProjectSchema } from './screen.schema.js';
@@ -19,37 +23,39 @@ import { ScreenProjectSchema } from './screen.schema.js';
 
 const basePosition = { x: 0, y: 0 };
 
-function makeTriggerNode(overrides: Partial<BlueprintNode> = {}): BlueprintNode {
+function makeTriggerNode(overrides: { id?: string; config?: unknown } = {}): BlueprintTriggerNode {
   return {
     id: 't1',
     kind: 'trigger',
     position: basePosition,
     config: { type: 'componentClick', componentId: 'c1' },
     ...overrides,
-  } as BlueprintNode;
+  } as BlueprintTriggerNode;
 }
 
-function makeActionNode(overrides: Partial<BlueprintNode> = {}): BlueprintNode {
+function makeActionNode(overrides: { id?: string; config?: unknown } = {}): BlueprintActionNode {
   return {
     id: 'a1',
     kind: 'action',
     position: basePosition,
     config: { type: 'setVisibility', targetComponentId: 'c2', visible: 'toggle' },
     ...overrides,
-  } as BlueprintNode;
+  } as BlueprintActionNode;
 }
 
-function makeCommentNode(overrides: Partial<BlueprintNode> = {}): BlueprintNode {
+function makeCommentNode(overrides: { id?: string; config?: unknown } = {}): BlueprintCommentNode {
   return {
     id: 'cm1',
     kind: 'comment',
     position: basePosition,
     config: { text: '备注' },
     ...overrides,
-  } as BlueprintNode;
+  } as BlueprintCommentNode;
 }
 
-function makeConditionNode(overrides: Partial<BlueprintNode> = {}): BlueprintNode {
+function makeConditionNode(
+  overrides: { id?: string; config?: unknown } = {},
+): BlueprintConditionNode {
   return {
     id: 'cd1',
     kind: 'condition',
@@ -63,7 +69,7 @@ function makeConditionNode(overrides: Partial<BlueprintNode> = {}): BlueprintNod
       },
     },
     ...overrides,
-  } as BlueprintNode;
+  } as BlueprintConditionNode;
 }
 
 function makeEdge(overrides: Partial<{ id: string; source: string; target: string }> = {}) {

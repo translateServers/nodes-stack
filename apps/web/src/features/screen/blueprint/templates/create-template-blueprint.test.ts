@@ -36,7 +36,7 @@ describe('createTemplateBlueprint（任务 9.3）', () => {
 
       if (trigger?.kind === 'trigger') {
         expect(trigger.config.type).toBe('componentClick');
-        expect(trigger.config.componentId).toBe('');
+        expect((trigger.config as { componentId: string }).componentId).toBe('');
       }
     });
 
@@ -51,8 +51,8 @@ describe('createTemplateBlueprint（任务 9.3）', () => {
 
       if (action?.kind === 'action') {
         expect(action.config.type).toBe('navigate');
-        expect(action.config.url).toBe('');
-        expect(action.config.target).toBe('_blank');
+        expect((action.config as { url: string }).url).toBe('');
+        expect((action.config as { target: string }).target).toBe('_blank');
       }
     });
 
@@ -77,7 +77,7 @@ describe('createTemplateBlueprint（任务 9.3）', () => {
       expect(trigger?.kind).toBe('trigger');
       if (trigger?.kind === 'trigger') {
         expect(trigger.config.type).toBe('componentClick');
-        expect(trigger.config.componentId).toBe('');
+        expect((trigger.config as { componentId: string }).componentId).toBe('');
       }
     });
 
@@ -88,8 +88,8 @@ describe('createTemplateBlueprint（任务 9.3）', () => {
       expect(action?.kind).toBe('action');
       if (action?.kind === 'action') {
         expect(action.config.type).toBe('setVisibility');
-        expect(action.config.targetComponentId).toBe('');
-        expect(action.config.visible).toBe('toggle');
+        expect((action.config as { targetComponentId: string }).targetComponentId).toBe('');
+        expect((action.config as { visible: string }).visible).toBe('toggle');
       }
     });
   });
@@ -112,7 +112,7 @@ describe('createTemplateBlueprint（任务 9.3）', () => {
       expect(action?.kind).toBe('action');
       if (action?.kind === 'action') {
         expect(action.config.type).toBe('refreshDataSource');
-        expect(action.config.targetComponentId).toBe('');
+        expect((action.config as { targetComponentId: string }).targetComponentId).toBe('');
       }
     });
   });

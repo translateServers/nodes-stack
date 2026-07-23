@@ -416,7 +416,7 @@ function makeCondition(
       },
       ...config,
     },
-  } as BlueprintNode;
+  };
 }
 
 function makeBranchEdge(
@@ -452,22 +452,22 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
 
       expect(result.rules).toHaveLength(1);
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
       // trigger 直连 condition：actions 不含 condition，仅 actions 列表为空
       expect(rule.actions).toHaveLength(0);
       // conditions 含 1 个 CompiledCondition
       expect(rule.conditions).toHaveLength(1);
-      const cond = rule.conditions[0]!;
+      const cond = rule.conditions[0];
       expect(cond.nodeId).toBe('cd1');
       expect(cond.depth).toBe(0);
       // then 分支：1 个 action
       expect(cond.thenActions).toHaveLength(1);
-      expect(cond.thenActions[0]!.nodeId).toBe('a1');
-      expect(cond.thenActions[0]!.depth).toBe(1);
+      expect(cond.thenActions[0].nodeId).toBe('a1');
+      expect(cond.thenActions[0].depth).toBe(1);
       // else 分支：1 个 action
       expect(cond.elseActions).toHaveLength(1);
-      expect(cond.elseActions[0]!.nodeId).toBe('a2');
-      expect(cond.elseActions[0]!.depth).toBe(1);
+      expect(cond.elseActions[0].nodeId).toBe('a2');
+      expect(cond.elseActions[0].depth).toBe(1);
     });
 
     it('condition 前置 action：condition depth 累加，then/else 子动作 depth 跟随', () => {
@@ -490,20 +490,20 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
 
       // 主链：a0 (depth 0)
       expect(rule.actions).toHaveLength(1);
-      expect(rule.actions[0]!.nodeId).toBe('a0');
-      expect(rule.actions[0]!.depth).toBe(0);
+      expect(rule.actions[0].nodeId).toBe('a0');
+      expect(rule.actions[0].depth).toBe(0);
 
       // condition 节点 depth 1（a0 之后）
       expect(rule.conditions).toHaveLength(1);
-      const cond = rule.conditions[0]!;
+      const cond = rule.conditions[0];
       expect(cond.depth).toBe(1);
       // then/else 子动作 depth 2
-      expect(cond.thenActions[0]!.depth).toBe(2);
-      expect(cond.elseActions[0]!.depth).toBe(2);
+      expect(cond.thenActions[0].depth).toBe(2);
+      expect(cond.elseActions[0].depth).toBe(2);
     });
 
     it('condition 后接串联 action：分支内 action 链按顺序展开', () => {
@@ -518,14 +518,14 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
 
       // then 分支：a1 → a2 串联
       expect(cond.thenActions).toHaveLength(2);
-      expect(cond.thenActions[0]!.nodeId).toBe('a1');
-      expect(cond.thenActions[0]!.depth).toBe(1);
-      expect(cond.thenActions[1]!.nodeId).toBe('a2');
-      expect(cond.thenActions[1]!.depth).toBe(2);
+      expect(cond.thenActions[0].nodeId).toBe('a1');
+      expect(cond.thenActions[0].depth).toBe(1);
+      expect(cond.thenActions[1].nodeId).toBe('a2');
+      expect(cond.thenActions[1].depth).toBe(2);
       // else 分支：未连接 → 空数组
       expect(cond.elseActions).toHaveLength(0);
     });
@@ -539,7 +539,7 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
 
       expect(cond.thenActions).toHaveLength(1);
       expect(cond.elseActions).toHaveLength(0);
@@ -552,7 +552,7 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
 
       expect(cond.thenActions).toHaveLength(0);
       expect(cond.elseActions).toHaveLength(1);
@@ -565,10 +565,10 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
 
       expect(rule.conditions).toHaveLength(1);
-      const cond = rule.conditions[0]!;
+      const cond = rule.conditions[0];
       expect(cond.thenActions).toHaveLength(0);
       expect(cond.elseActions).toHaveLength(0);
     });
@@ -584,7 +584,7 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
 
       expect(cond.thenActions).toHaveLength(0);
       expect(cond.elseActions).toHaveLength(0);
@@ -615,12 +615,12 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
 
       expect(cond.thenActions).toHaveLength(2);
       expect(cond.thenActions.map((a) => a.nodeId)).toEqual(['a1', 'a2']);
       expect(cond.elseActions).toHaveLength(1);
-      expect(cond.elseActions[0]!.nodeId).toBe('a3');
+      expect(cond.elseActions[0].nodeId).toBe('a3');
     });
 
     it('trigger → cd1 →(then) cd2 嵌套 condition：cd1 进入顶层 conditions，cd2 在 thenActions 之外', () => {
@@ -643,11 +643,11 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
 
       // 顶层 conditions：仅 cd1（嵌套 cd2 不向顶层透传）
       expect(rule.conditions).toHaveLength(1);
-      const cd1 = rule.conditions[0]!;
+      const cd1 = rule.conditions[0];
       expect(cd1.nodeId).toBe('cd1');
       // cd1.thenActions 不应包含嵌套 condition（仅含 action 节点）
       expect(cd1.thenActions.every((a) => !a.nodeId.startsWith('cd'))).toBe(true);
@@ -675,15 +675,15 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
 
       // 两个 condition 都进入顶层 conditions（按访问顺序）
       expect(rule.conditions).toHaveLength(2);
-      expect(rule.conditions[0]!.nodeId).toBe('cd1');
-      expect(rule.conditions[1]!.nodeId).toBe('cd2');
+      expect(rule.conditions[0].nodeId).toBe('cd1');
+      expect(rule.conditions[1].nodeId).toBe('cd2');
       // cd1.then 含 a1，cd2.then 含 a2
-      expect(rule.conditions[0]!.thenActions[0]!.nodeId).toBe('a1');
-      expect(rule.conditions[1]!.thenActions[0]!.nodeId).toBe('a2');
+      expect(rule.conditions[0].thenActions[0].nodeId).toBe('a1');
+      expect(rule.conditions[1].thenActions[0].nodeId).toBe('a2');
     });
   });
 
@@ -706,10 +706,10 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       // cycle 诊断仍然产出（cycle.ts 检测到 cd1 → a1 → cd1）
       expect(result.diagnostics.some((d) => d.code === 'cycle')).toBe(true);
       // cd1 进入 conditions，a1 在 thenActions 中（环回边被 visited 跳过）
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
       expect(cond.nodeId).toBe('cd1');
       expect(cond.thenActions).toHaveLength(1);
-      expect(cond.thenActions[0]!.nodeId).toBe('a1');
+      expect(cond.thenActions[0].nodeId).toBe('a1');
     });
 
     it('condition 分支内串联形成环 → cycle 诊断产出', () => {
@@ -730,7 +730,7 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       expect(result.rules).toHaveLength(1);
       expect(result.diagnostics.some((d) => d.code === 'cycle')).toBe(true);
       // cd1.thenActions 含 a1, a2（a2→cd1 回环被 visited 跳过）
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
       expect(cond.thenActions).toHaveLength(2);
       expect(cond.thenActions.map((a) => a.nodeId)).toEqual(['a1', 'a2']);
     });
@@ -767,7 +767,7 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const cond = result.rules[0]!.conditions[0]!;
+      const cond = result.rules[0].conditions[0];
 
       expect(cond.config.type).toBe('condition');
       expect(cond.config.expression.source).toEqual(expr.source);
@@ -805,7 +805,7 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       const bp = makeBlueprint([makeTrigger('t1'), makeAction('a1')], [makeEdge('e1', 't1', 'a1')]);
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
 
       expect(rule.conditions).toEqual([]);
     });
@@ -823,12 +823,12 @@ describe('compileBlueprint — condition 分支编译（任务 10.1）', () => {
       );
 
       const result = compileBlueprint(bp, ctxWithComponents(['c1', 'c2']));
-      const rule = result.rules[0]!;
+      const rule = result.rules[0];
 
       expect(rule.actions).toHaveLength(1);
-      expect(rule.actions[0]!.nodeId).toBe('a0');
+      expect(rule.actions[0].nodeId).toBe('a0');
       expect(rule.conditions).toHaveLength(1);
-      expect(rule.conditions[0]!.thenActions[0]!.nodeId).toBe('a1');
+      expect(rule.conditions[0].thenActions[0].nodeId).toBe('a1');
     });
   });
 });

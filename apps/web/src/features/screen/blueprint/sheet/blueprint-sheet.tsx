@@ -22,7 +22,7 @@
  * 注意：编辑器画布不执行蓝图（预览专用），本组件仅做可视化编排。
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
 import {
   Background,
@@ -39,14 +39,24 @@ import {
   type Edge,
   type EdgeTypes,
   type Node,
+  type NodeMouseHandler,
   type NodeTypes,
   type OnConnect,
   type OnEdgesChange,
   type OnNodeDrag,
   type OnNodesChange,
 } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { X } from 'lucide-react';
-import type { EventBlueprint, ScreenComponent } from '@nebula/shared';
+import { toast } from 'sonner';
+import type {
+  EventBlueprint,
+  ScreenComponent,
+  BlueprintTriggerConfig,
+  BlueprintActionConfig,
+  CommentNodeConfig,
+  ConditionNodeConfig,
+} from '@nebula/shared';
 
 import { useScreenEditorStore } from '../../stores/editor-store';
 import { ActionNode, CommentNode, ConditionNode, TriggerNode } from '../nodes';
@@ -63,8 +73,18 @@ import {
   buildDiagnosticMap,
 } from '../hooks';
 import { SearchPanel, type NodeOption, type PendingConnection } from '../panels/search-panel';
-import { ProblemsPanel } from '../panels/problems-panel';
+import { ProblemsPanel, ExecutionLogPanel } from '../panels';
+import { NodeConfigPanel, type NodeConfigPanelProps } from '../panels/node-config-panel';
+import { EmptyBlueprintState } from '../templates';
+import {
+  useBlueprintSandboxRuntime,
+  useBlueprintSandboxHighlight,
+  getNodeLocateComponentId,
+  type SandboxSimulationResult,
+} from '../runtime';
+import { filterBlueprintByComponent } from '../compiler';
 import { ToolbarButton } from '../../components/ui-primitives';
+import { Play, RotateCcw } from 'lucide-react';
 import {
   alignNodes,
   applyAlignResultToNodes,
@@ -359,6 +379,10 @@ function generateEdgeId(): string {
 interface BlueprintSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** 蓝图→画布高亮联动：点击节点时调用，由 screen-editor 注入 flashComponent */
+  onLocateComponent?: (componentId: string) => void;
+  /** 画布→蓝图过滤联动：当前选中组件 id（null 表示不过滤） */
+  filterComponentId?: string | null;
 }
 
 /**
@@ -367,7 +391,12 @@ interface BlueprintSheetProps {
  * 容器形态：full-overlay（全屏弹层，带顶栏）。
  * 数据流：editor-store.blueprint → ReactFlow nodes/edges → editor-store.updateBlueprint
  */
-export function BlueprintSheet({ open, onOpenChange }: BlueprintSheetProps): JSX.Element | null {
+export function BlueprintSheet({
+  open,
+  onOpenChange,
+  onLocateComponent,
+  filterComponentId,
+}: BlueprintSheetProps): JSX.Element | null {
   if (!open) return null;
   return (
     <div
@@ -378,7 +407,11 @@ export function BlueprintSheet({ open, onOpenChange }: BlueprintSheetProps): JSX
       aria-label="事件蓝图"
     >
       <ReactFlowProvider>
-        <BlueprintSheetInner onOpenChange={onOpenChange} />
+        <BlueprintSheetInner
+          onOpenChange={onOpenChange}
+          onLocateComponent={onLocateComponent}
+          filterComponentId={filterComponentId}
+        />
       </ReactFlowProvider>
     </div>
   );
@@ -386,6 +419,8 @@ export function BlueprintSheet({ open, onOpenChange }: BlueprintSheetProps): JSX
 
 interface BlueprintSheetInnerProps {
   onOpenChange: (open: boolean) => void;
+  onLocateComponent?: (componentId: string) => void;
+  filterComponentId?: string | null;
 }
 
 interface SearchPanelState {
@@ -395,7 +430,11 @@ interface SearchPanelState {
   pendingConnection?: PendingConnection;
 }
 
-function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.Element {
+function BlueprintSheetInner({
+  onOpenChange,
+  onLocateComponent,
+  filterComponentId,
+}: BlueprintSheetInnerProps): JSX.Element {
   const project = useScreenEditorStore((s) => s.project);
   const updateBlueprint = useScreenEditorStore((s) => s.updateBlueprint);
   const beginBlueprintGesture = useScreenEditorStore((s) => s.beginBlueprintGesture);
@@ -403,6 +442,30 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
 
   const blueprint = project?.blueprint;
   const components = project?.components ?? [];
+
+  // 任务 9.2：画布选中组件 → 蓝图过滤联动
+  // 当 filterComponentId 为非空字符串时，Sheet 内 ReactFlow 切换到过滤视图
+  const isFiltering =
+    filterComponentId !== undefined && filterComponentId !== null && filterComponentId !== '';
+
+  // 任务 9.2：过滤后的蓝图节点/边 id 集合（仅 isFiltering 时计算）
+  const filteredIds = useMemo(() => {
+    if (!isFiltering || !blueprint || !filterComponentId) return null;
+    const filtered = filterBlueprintByComponent(blueprint, filterComponentId);
+    return {
+      nodeIds: new Set(filtered.nodes.map((n) => n.id)),
+      edgeIds: new Set(filtered.edges.map((e) => e.id)),
+    };
+  }, [isFiltering, blueprint, filterComponentId]);
+
+  // 任务 8.1：沙盒运行时（独立于预览/画布真实状态）
+  const sandbox = useBlueprintSandboxRuntime(blueprint, components);
+
+  // 任务 8.3：最近一次模拟结果（用于 ExecutionLogPanel 显示拒绝/未找到原因）
+  const [lastSimResult, setLastSimResult] = useState<SandboxSimulationResult | null>(null);
+
+  // 任务 8.2：链路高亮状态机（基于沙盒 executionLogs 驱动）
+  const highlight = useBlueprintSandboxHighlight(sandbox.executionLogs, blueprint);
 
   // ReactFlow 本地状态（从 blueprint 派生）
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -701,8 +764,103 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
     [selectedAlignNodes, nodes, project, updateBlueprint],
   );
 
+  // 任务 4.8：选中单个节点时展示节点参数配置面板
+  // 从 nodes 中找出 selected 为 true 的节点（ReactFlow 通过 onNodesChange 更新 selected 字段）
+  // 多选时不展示配置面板（恰好一个节点选中时才展示）
+  const selectedNodes = nodes.filter((n) => n.selected);
+  const selectedNode = selectedNodes.length === 1 ? selectedNodes[0] : null;
+  const showConfigPanel = selectedNode !== null;
+
+  // 配置变更回调：更新该节点的 data.config，由既有 useEffect[nodes,edges] 同步到 updateBlueprint
+  const handleConfigChange = useCallback(
+    (
+      next:
+        | BlueprintTriggerConfig
+        | BlueprintActionConfig
+        | CommentNodeConfig
+        | ConditionNodeConfig,
+    ) => {
+      if (!selectedNode) return;
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === selectedNode.id ? { ...n, data: { ...n.data, config: next } } : n,
+        ),
+      );
+      // nodes/edges->blueprint useEffect 会在下一帧自动同步，updateBlueprint 内部有深比较守卫
+      // 但为避免 dragActive 误判（此处非拖拽），直接同步更新 blueprint
+      if (project) {
+        const nextNodes = nodesRef.current.map((n) =>
+          n.id === selectedNode.id ? { ...n, data: { ...n.data, config: next } } : n,
+        );
+        nodesRef.current = nextNodes;
+        const nextBlueprint: EventBlueprint = {
+          version: 1,
+          nodes: nextNodes.map(rfNodeToBlueprintNode),
+          edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
+        };
+        updateBlueprint(nextBlueprint);
+      }
+    },
+    [selectedNode, project, updateBlueprint],
+  );
+
   // 空蓝图空态
   const isEmpty = nodes.length === 0;
+
+  // 任务 8.2 + 9.2：链路高亮 + 过滤视图叠加
+  // 先过滤（9.2），再叠加高亮 className（8.2）
+  const displayNodes = useMemo(() => {
+    const filteredNodes = filteredIds ? nodes.filter((n) => filteredIds.nodeIds.has(n.id)) : nodes;
+    if (highlight.highlightedNodeIds.size === 0) return filteredNodes;
+    return filteredNodes.map((n) =>
+      highlight.highlightedNodeIds.has(n.id)
+        ? { ...n, className: `${n.className ?? ''} blueprint-node-highlighted`.trim() }
+        : n,
+    );
+  }, [nodes, filteredIds, highlight.highlightedNodeIds]);
+
+  // 任务 8.2 + 9.2：边流动高亮 + 过滤视图叠加
+  const displayEdges = useMemo(() => {
+    const filteredEdges = filteredIds ? edges.filter((e) => filteredIds.edgeIds.has(e.id)) : edges;
+    if (highlight.highlightedEdgeIds.size === 0) return filteredEdges;
+    return filteredEdges.map((e) =>
+      highlight.highlightedEdgeIds.has(e.id)
+        ? {
+            ...e,
+            className: `${e.className ?? ''} blueprint-edge-highlighted`.trim(),
+            animated: true,
+          }
+        : e,
+    );
+  }, [edges, filteredIds, highlight.highlightedEdgeIds]);
+
+  // 任务 8.1：模拟触发回调 — 对选中 trigger 节点执行沙盒模拟
+  const handleSimulateTrigger = useCallback(async () => {
+    if (!selectedNode || selectedNode.type !== 'trigger') return;
+    const result = await sandbox.simulateTrigger(selectedNode.id);
+    setLastSimResult(result);
+  }, [selectedNode, sandbox]);
+
+  // 任务 8.1：重置沙盒
+  const handleResetSandbox = useCallback(() => {
+    sandbox.resetSandbox();
+    setLastSimResult(null);
+  }, [sandbox]);
+
+  // 任务 9.1：节点点击 → 提取关联 componentId → 通知 screen-editor 闪烁
+  const handleNodeClick = useCallback<NodeMouseHandler<Node>>(
+    (_event, node) => {
+      if (!onLocateComponent) return;
+      const componentId = getNodeLocateComponentId(node);
+      if (componentId) {
+        onLocateComponent(componentId);
+      }
+    },
+    [onLocateComponent],
+  );
+
+  // 是否可触发模拟：选中单个 trigger 节点
+  const canSimulate = selectedNode?.type === 'trigger';
 
   return (
     <BlueprintDiagnosticMapProvider value={diagnosticMap}>
@@ -712,7 +870,34 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
         data-testid="blueprint-sheet-header"
       >
         <span className="text-sm font-medium text-foreground">事件蓝图</span>
+        {/* 任务 9.2：过滤模式提示标签 */}
+        {isFiltering ? (
+          <span
+            className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700"
+            data-testid="blueprint-filter-badge"
+          >
+            过滤模式
+          </span>
+        ) : null}
         <div className="ml-auto flex items-center gap-1">
+          {/* 任务 8.1：模拟触发按钮（仅选中 trigger 节点时启用） */}
+          <ToolbarButton
+            tooltip={canSimulate ? '模拟触发选中触发器' : '请选中一个触发器节点'}
+            onClick={() => void handleSimulateTrigger()}
+            disabled={!canSimulate || sandbox.isSimulating}
+            data-testid="blueprint-simulate-trigger"
+          >
+            <Play className="size-4" />
+          </ToolbarButton>
+          {/* 任务 8.1：重置沙盒状态 */}
+          <ToolbarButton
+            tooltip="重置沙盒"
+            onClick={handleResetSandbox}
+            disabled={sandbox.executionLogs.length === 0 && !sandbox.isSimulating}
+            data-testid="blueprint-reset-sandbox"
+          >
+            <RotateCcw className="size-4" />
+          </ToolbarButton>
           <ViewportToolbar
             zoom={viewport.zoom}
             spacePressed={viewport.spacePressed}
@@ -739,14 +924,26 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
         onDoubleClick={handleDoubleClick}
       >
         {isEmpty && !searchPanelState.visible ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-            <p className="text-sm">空蓝图</p>
-            <p className="text-xs">双击画布添加节点，或从搜索面板选择节点类型</p>
+          <div className="absolute inset-0 z-10 flex flex-col bg-background">
+            <EmptyBlueprintState
+              onInsertTemplate={(templateBlueprint) => {
+                if (!project) return;
+                updateBlueprint(templateBlueprint);
+              }}
+              onError={(error) => {
+                toast.error(`模板插入失败：${error}`);
+              }}
+              onStartFromScratch={() => {
+                if (!project) return;
+                // 创建空蓝图状态（无节点无边）进入自由编排
+                updateBlueprint({ version: 1, nodes: [], edges: [] });
+              }}
+            />
           </div>
         ) : null}
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={displayNodes}
+          edges={displayEdges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
@@ -756,6 +953,7 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
           onConnectEnd={handleConnectEnd}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
+          onNodeClick={handleNodeClick}
           {...viewport.config}
           zoomOnDoubleClick={false}
           className="bg-background"
@@ -792,6 +990,18 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
             />
           </div>
         ) : null}
+
+        {/* 任务 4.8：节点参数配置面板（右侧悬浮，选中单个节点时显示） */}
+        {showConfigPanel && selectedNode ? (
+          <div className="pointer-events-auto absolute right-4 top-4 z-10 w-64 max-h-[70%] overflow-y-auto rounded border border-border bg-background shadow-md">
+            <NodeConfigPanel
+              kind={selectedNode.type as 'trigger' | 'condition' | 'action' | 'comment'}
+              config={(selectedNode.data as { config: NodeConfigPanelProps['config'] }).config}
+              components={components}
+              onChange={handleConfigChange}
+            />
+          </div>
+        ) : null}
       </div>
 
       {/* 问题面板（任务 6.2） */}
@@ -802,6 +1012,18 @@ function BlueprintSheetInner({ onOpenChange }: BlueprintSheetInnerProps): JSX.El
         infoCount={infoCount}
         onLocateNode={handleLocateNode}
       />
+
+      {/* 任务 8.3：执行日志面板（沙盒模拟触发后展示） */}
+      {sandbox.executionLogs.length > 0 || sandbox.isSimulating || lastSimResult ? (
+        <ExecutionLogPanel
+          executionLogs={sandbox.executionLogs}
+          isSimulating={sandbox.isSimulating}
+          refusalReason={lastSimResult?.refused ? lastSimResult.refusalReason : undefined}
+          triggerNotFound={lastSimResult?.triggerNotFound ?? false}
+          onLocateNode={handleLocateNode}
+          onClear={handleResetSandbox}
+        />
+      ) : null}
     </BlueprintDiagnosticMapProvider>
   );
 }

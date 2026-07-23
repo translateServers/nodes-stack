@@ -123,15 +123,15 @@ export function ConditionBuilder({
   }
 
   function handleComponentIdChange(event: ChangeEvent<HTMLSelectElement>): void {
-    updateSource({ componentId: event.target.value } as Partial<ConditionValueSource>);
+    updateSource({ componentId: event.target.value });
   }
 
   function handleKeyChange(event: ChangeEvent<HTMLInputElement>): void {
-    updateSource({ key: event.target.value } as Partial<ConditionValueSource>);
+    updateSource({ key: event.target.value });
   }
 
   function handlePathChange(event: ChangeEvent<HTMLInputElement>): void {
-    updateSource({ path: event.target.value } as Partial<ConditionValueSource>);
+    updateSource({ path: event.target.value });
   }
 
   function handleOperatorChange(event: ChangeEvent<HTMLSelectElement>): void {

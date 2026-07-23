@@ -46,12 +46,15 @@ function buildClipboardPayload(nodes: Node[], edges: Edge[]): BlueprintClipboard
   const selectedIds = new Set(selectedNodes.map((n) => n.id));
   const selectedEdges = edges.filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target));
 
-  const blueprintNodes: BlueprintNode[] = selectedNodes.map((n) => ({
-    id: n.id,
-    kind: n.type as BlueprintNode['kind'],
-    position: { x: n.position.x, y: n.position.y },
-    config: (n.data as { config: BlueprintNode['config'] }).config,
-  }));
+  const blueprintNodes = selectedNodes.map(
+    (n) =>
+      ({
+        id: n.id,
+        kind: n.type,
+        position: { x: n.position.x, y: n.position.y },
+        config: (n.data as { config: BlueprintNode['config'] }).config,
+      }) as BlueprintNode,
+  );
 
   const blueprintEdges: BlueprintEdge[] = selectedEdges.map((e) => ({
     id: e.id,

@@ -23,6 +23,8 @@ import { ImportDialog } from './import-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
 import { BlueprintSheet } from '../blueprint/sheet';
 import { compileBlueprint, type Diagnostic } from '../blueprint/compiler';
+import { useCanvasFlash } from '../hooks/use-canvas-flash';
+import { CanvasFlashOverlay } from './canvas-flash-overlay';
 import { CodeEditorSheet } from './code-editor-sheet';
 import { SaveConflictDialog } from './save-conflict-dialog';
 import { PublishConfirmDialog } from './publish-confirm-dialog';
@@ -66,6 +68,11 @@ export function ScreenEditor() {
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishDiagnostics, setPublishDiagnostics] = useState<Diagnostic[]>([]);
+  // 任务 9.1：蓝图→画布闪烁高亮联动
+  const { flashingComponentId, flashComponent } = useCanvasFlash();
+  // 任务 9.2：画布→蓝图过滤联动（选中单个组件时传给 BlueprintSheet 过滤视图）
+  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  const filterComponentId = selectedComponentIds.length === 1 ? selectedComponentIds[0] : null;
   const toolStateMachine = useToolStateMachine();
   const interactionStateMachine = useInteractionStateMachine();
   // 任务 2.2：编辑器只创建一套会话控制器，下发给画布、工具入口、状态栏和快捷键
@@ -473,6 +480,13 @@ export function ScreenEditor() {
                     onExit={handleTextEditorExit}
                   />
                 )}
+              {/* 任务 9.1：蓝图→画布闪烁高亮覆盖层 */}
+              {storeProject && (
+                <CanvasFlashOverlay
+                  flashingComponentId={flashingComponentId}
+                  components={storeProject.components}
+                />
+              )}
             </div>
           </CanvasContextMenu>
 
@@ -491,7 +505,12 @@ export function ScreenEditor() {
         onOpenChange={setShowSnapshotManager}
         projectId={storeProject?.id}
       />
-      <BlueprintSheet open={showEventBlueprint} onOpenChange={setShowEventBlueprint} />
+      <BlueprintSheet
+        open={showEventBlueprint}
+        onOpenChange={setShowEventBlueprint}
+        onLocateComponent={flashComponent}
+        filterComponentId={filterComponentId}
+      />
       <CodeEditorSheet open={showCodeEditor} onOpenChange={setShowCodeEditor} />
       <SaveConflictDialog
         open={showConflictDialog}

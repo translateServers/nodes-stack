@@ -561,3 +561,179 @@ describe('useBlueprintPreviewRuntime - 与 ScreenProject 集成', () => {
     expect(result.current.compiledRules).toEqual([]);
   });
 });
+
+describe('useBlueprintPreviewRuntime - error 诊断触发器显式收口（任务 4.9）', () => {
+  it('componentClick 空组件 ID 的 trigger 被显式排除（不依赖空串匹配副作用）', () => {
+    const blueprint = makeBlueprint(
+      't-empty',
+      { type: 'componentClick', componentId: '' },
+      'a-hide',
+      { type: 'setVisibility', targetComponentId: 'comp-a', visible: 'hide' },
+    );
+    const component = makeComponent('comp-a');
+
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // 空 componentId 的 trigger 有 error 级诊断，规则被显式排除
+    expect(result.current.compiledRules).toHaveLength(0);
+    expect(result.current.isEnabled).toBe(false);
+  });
+
+  it('非空 componentId 但存在 error 级诊断的 trigger 仍被排除', () => {
+    // 构造一个 dangling trigger：componentId 不为空但组件不存在
+    // 编译器会对 dangling 产出 warning，不是 error；
+    // 但如果 trigger 的 action 有 empty-param error（如 setVisibility 空 targetComponentId），
+    // error 诊断在 action 节点上，不影响 trigger 规则的排除
+    // 这里测试 trigger 自身有 error 诊断的场景：环 trigger（cycle error）
+    const blueprint: EventBlueprint = {
+      version: 1,
+      nodes: [
+        {
+          id: 't-cycle',
+          kind: 'trigger',
+          position: { x: 0, y: 0 },
+          config: { type: 'componentClick', componentId: 'comp-a' },
+        },
+        {
+          id: 'a-back',
+          kind: 'action',
+          position: { x: 100, y: 0 },
+          config: {
+            type: 'setVisibility',
+            targetComponentId: 'comp-a',
+            visible: 'toggle',
+          },
+        },
+      ],
+      edges: [
+        {
+          id: 'e-out',
+          source: 't-cycle',
+          sourceHandle: 'out',
+          target: 'a-back',
+          targetHandle: 'in',
+        },
+        // 环：action -> trigger
+        {
+          id: 'e-back',
+          source: 'a-back',
+          sourceHandle: 'out',
+          target: 't-cycle',
+          targetHandle: 'in',
+        },
+      ],
+    };
+    const component = makeComponent('comp-a');
+
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // 环 trigger 被 cycle error 诊断标记 -> 显式排除
+    expect(result.current.compiledRules).toHaveLength(0);
+    expect(result.current.isEnabled).toBe(false);
+  });
+
+  it('仅有 warning 级诊断的 trigger 不被排除（正常执行）', () => {
+    // dangling 是 warning 级：componentId 指向不存在的组件，但仍可产出规则
+    const blueprint = makeBlueprint(
+      't-dangling',
+      { type: 'componentClick', componentId: 'non-existent' },
+      'a-hide',
+      { type: 'setVisibility', targetComponentId: 'comp-a', visible: 'hide' },
+    );
+    const component = makeComponent('comp-a');
+
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // warning 级诊断不排除规则
+    expect(result.current.compiledRules).toHaveLength(1);
+    expect(result.current.isEnabled).toBe(true);
+  });
+
+  it('error 级 trigger 不执行 componentClick 动作', async () => {
+    const blueprint = makeBlueprint(
+      't-empty',
+      { type: 'componentClick', componentId: '' },
+      'a-hide',
+      { type: 'setVisibility', targetComponentId: 'comp-a', visible: 'hide' },
+    );
+    const component = makeComponent('comp-a');
+
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // 尝试触发 componentClick（空串不会被匹配，但即使匹配了规则也被排除）
+    act(() => {
+      result.current.onComponentClick('');
+    });
+
+    await Promise.resolve();
+    // 不应有任何 visibilityOverrides 写入
+    expect(result.current.contextValue.visibilityOverrides.size).toBe(0);
+  });
+
+  it('混合场景：error trigger 被排除，正常 trigger 仍执行', async () => {
+    const component = makeComponent('comp-a');
+    const componentB = makeComponent('comp-b');
+    const blueprint: EventBlueprint = {
+      version: 1,
+      nodes: [
+        // trigger 1：空 componentId（error 诊断 -> 排除）
+        {
+          id: 't-error',
+          kind: 'trigger',
+          position: { x: 0, y: 0 },
+          config: { type: 'componentClick', componentId: '' },
+        },
+        // trigger 2：正常 componentClick
+        {
+          id: 't-ok',
+          kind: 'trigger',
+          position: { x: 0, y: 200 },
+          config: { type: 'componentClick', componentId: 'comp-a' },
+        },
+        // action：隐藏 comp-b
+        {
+          id: 'a-hide-b',
+          kind: 'action',
+          position: { x: 200, y: 200 },
+          config: { type: 'setVisibility', targetComponentId: 'comp-b', visible: 'hide' },
+        },
+      ],
+      edges: [
+        // t-error -> a-hide-b（这条规则被排除）
+        {
+          id: 'e1',
+          source: 't-error',
+          sourceHandle: 'out',
+          target: 'a-hide-b',
+          targetHandle: 'in',
+        },
+        // t-ok -> a-hide-b（这条规则保留）
+        {
+          id: 'e2',
+          source: 't-ok',
+          sourceHandle: 'out',
+          target: 'a-hide-b',
+          targetHandle: 'in',
+        },
+      ],
+    };
+
+    const { result } = renderHook(() =>
+      useBlueprintPreviewRuntime(blueprint, [component, componentB]),
+    );
+
+    // 仅 t-ok 的规则保留
+    expect(result.current.compiledRules).toHaveLength(1);
+    expect(result.current.compiledRules[0]?.triggerNodeId).toBe('t-ok');
+    expect(result.current.isEnabled).toBe(true);
+
+    // 点击 comp-a -> t-ok 触发 -> comp-b 隐藏
+    act(() => {
+      result.current.onComponentClick('comp-a');
+    });
+
+    await waitFor(() => {
+      expect(result.current.contextValue.visibilityOverrides.get('comp-b')).toBe(false);
+    });
+  });
+});

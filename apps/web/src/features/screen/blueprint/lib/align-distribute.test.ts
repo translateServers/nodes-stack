@@ -240,9 +240,12 @@ describe('distributeNodes', () => {
       const aItem = result.items.find((i) => i.id === 'a');
       const bItem = result.items.find((i) => i.id === 'b');
       const cItem = result.items.find((i) => i.id === 'c');
-      expect(aItem?.position.x + 50).toBe(50);
-      expect(bItem?.position.x + 50).toBe(150);
-      expect(cItem?.position.x + 50).toBe(250);
+      expect(aItem).toBeDefined();
+      expect(bItem).toBeDefined();
+      expect(cItem).toBeDefined();
+      expect(aItem!.position.x + 50).toBe(50);
+      expect(bItem!.position.x + 50).toBe(150);
+      expect(cItem!.position.x + 50).toBe(250);
     });
 
     it('4 个节点等距分布', () => {

@@ -100,6 +100,22 @@ vi.mock('@xyflow/react', async (importOriginal) => {
             deselect-all
           </button>
         ) : null}
+        {onNodesChange && nodes.length > 0 ? (
+          <button
+            type="button"
+            data-testid="rf-test-select-first"
+            onClick={() =>
+              onNodesChange([
+                { id: nodes[0].id, type: 'select', selected: true },
+                ...nodes
+                  .slice(1)
+                  .map((n) => ({ id: n.id, type: 'select' as const, selected: false })),
+              ])
+            }
+          >
+            select-first
+          </button>
+        ) : null}
       </div>
     ),
     ReactFlowProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -188,7 +204,10 @@ function makeProject(blueprint?: EventBlueprint): ScreenProject {
   return {
     id: 'screen-1',
     name: '测试屏幕',
-    components: [],
+    components: [
+      { id: 'comp-a', name: '柱状图' } as unknown as ScreenProject['components'][number],
+      { id: 'comp-b', name: '按钮' } as unknown as ScreenProject['components'][number],
+    ],
     canvas: {
       width: 1920,
       height: 1080,
@@ -261,18 +280,18 @@ describe('BlueprintSheet', () => {
   });
 
   describe('空蓝图态', () => {
-    it('blueprint 为空时显示空态提示', () => {
+    it('blueprint 为空时显示空态引导（EmptyBlueprintState）', () => {
       resetStore();
       // loadProject with empty blueprint
       useScreenEditorStore.getState().loadProject(makeProject(makeEmptyBlueprint()));
       render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
-      expect(screen.getByText('空蓝图')).toBeInTheDocument();
+      expect(screen.getByTestId('empty-blueprint-state')).toBeInTheDocument();
     });
 
-    it('blueprint 为 undefined 时显示空态提示', () => {
+    it('blueprint 为 undefined 时显示空态引导（EmptyBlueprintState）', () => {
       resetStore();
       render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
-      expect(screen.getByText('空蓝图')).toBeInTheDocument();
+      expect(screen.getByTestId('empty-blueprint-state')).toBeInTheDocument();
     });
   });
 
@@ -357,6 +376,84 @@ describe('BlueprintSheet', () => {
       // 分布按钮在 selectedCount=2 时禁用，fireEvent.click 不会触发 onClick
       fireEvent.click(screen.getByLabelText('水平等距分布'));
       expect(useScreenEditorStore.getState().history.past.length).toBe(initialPastLength);
+    });
+  });
+
+  describe('节点参数配置面板（任务 4.8）', () => {
+    function makeBlueprintWithComponentClick(): EventBlueprint {
+      return {
+        version: 1,
+        nodes: [
+          {
+            id: 'trigger-1',
+            kind: 'trigger',
+            position: { x: 100, y: 100 },
+            config: { type: 'componentClick', componentId: '' },
+          },
+        ],
+        edges: [],
+      };
+    }
+
+    it('未选中节点时不显示配置面板', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithComponentClick()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+      expect(screen.queryByTestId('node-config-panel')).not.toBeInTheDocument();
+    });
+
+    it('选中单个节点后显示配置面板', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithComponentClick()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId('rf-test-select-first'));
+
+      const panel = screen.getByTestId('node-config-panel');
+      expect(panel).toBeInTheDocument();
+      expect(panel.getAttribute('data-node-kind')).toBe('trigger');
+    });
+
+    it('多选时不显示配置面板', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithNodes()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      // 全选（2 个节点 -> 多选）
+      fireEvent.click(screen.getByTestId('rf-test-select-all'));
+      expect(screen.queryByTestId('node-config-panel')).not.toBeInTheDocument();
+    });
+
+    it('在配置面板选择组件后 blueprint 同步更新且产生单条历史', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithComponentClick()));
+      const initialPastLength = useScreenEditorStore.getState().history.past.length;
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      // 选中 trigger 节点
+      fireEvent.click(screen.getByTestId('rf-test-select-first'));
+
+      // 在配置面板选择组件 comp-a
+      fireEvent.change(screen.getByTestId('config-component-id'), {
+        target: { value: 'comp-a' },
+      });
+
+      // 验证 blueprint 已更新
+      const blueprint = useScreenEditorStore.getState().project?.blueprint;
+      expect(blueprint?.nodes[0].config).toEqual({
+        type: 'componentClick',
+        componentId: 'comp-a',
+      });
+
+      // 验证产生单条历史
+      expect(useScreenEditorStore.getState().history.past.length).toBe(initialPastLength + 1);
+    });
+
+    it('取消选择后配置面板消失', () => {
+      useScreenEditorStore.getState().loadProject(makeProject(makeBlueprintWithComponentClick()));
+      render(<BlueprintSheet open={true} onOpenChange={vi.fn()} />);
+
+      fireEvent.click(screen.getByTestId('rf-test-select-first'));
+      expect(screen.getByTestId('node-config-panel')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByTestId('rf-test-deselect-all'));
+      expect(screen.queryByTestId('node-config-panel')).not.toBeInTheDocument();
     });
   });
 });

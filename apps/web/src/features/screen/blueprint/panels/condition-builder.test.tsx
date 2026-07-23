@@ -85,17 +85,17 @@ describe('ConditionBuilder', () => {
       render(
         <ConditionBuilder config={makeConfig()} onChange={vi.fn()} components={makeComponents()} />,
       );
-      const select = screen.getByTestId('condition-component-id') as HTMLSelectElement;
+      const select = screen.getByTestId<HTMLSelectElement>('condition-component-id');
       expect(select.options.length).toBe(3); // 1 占位 + 2 组件
-      expect(select.options[1]!.value).toBe('c1');
-      expect(select.options[2]!.value).toBe('c2');
+      expect(select.options[1]?.value).toBe('c1');
+      expect(select.options[2]?.value).toBe('c2');
     });
 
     it('渲染所有 9 个运算符选项', () => {
       render(
         <ConditionBuilder config={makeConfig()} onChange={vi.fn()} components={makeComponents()} />,
       );
-      const select = screen.getByTestId('condition-operator') as HTMLSelectElement;
+      const select = screen.getByTestId<HTMLSelectElement>('condition-operator');
       expect(select.options.length).toBe(9);
     });
 
@@ -137,7 +137,7 @@ describe('ConditionBuilder', () => {
         },
       });
       render(<ConditionBuilder config={config} onChange={vi.fn()} components={makeComponents()} />);
-      const input = screen.getByTestId('condition-value') as HTMLInputElement;
+      const input = screen.getByTestId<HTMLInputElement>('condition-value');
       expect(input.value).toBe('true');
     });
 
@@ -150,14 +150,14 @@ describe('ConditionBuilder', () => {
         },
       });
       render(<ConditionBuilder config={config} onChange={vi.fn()} components={makeComponents()} />);
-      const input = screen.getByTestId('condition-value') as HTMLInputElement;
+      const input = screen.getByTestId<HTMLInputElement>('condition-value');
       expect(input.value).toBe('100');
     });
   });
 
   describe('交互触发 onChange', () => {
     it('切换字段来源类型触发 onChange 重置 key/path', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -169,14 +169,14 @@ describe('ConditionBuilder', () => {
         target: { value: 'componentData' },
       });
       expect(onChange).toHaveBeenCalledTimes(1);
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.source.kind).toBe('componentData');
       expect(next.expression.source.componentId).toBe('');
-      expect(next.expression.source.path).toBe('');
+      expect((next.expression.source as { path: string }).path).toBe('');
     });
 
     it('选择组件 ID 触发 onChange', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -186,12 +186,12 @@ describe('ConditionBuilder', () => {
       );
       fireEvent.change(screen.getByTestId('condition-component-id'), { target: { value: 'c2' } });
       expect(onChange).toHaveBeenCalledTimes(1);
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.source.componentId).toBe('c2');
     });
 
     it('输入属性键触发 onChange', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -203,12 +203,12 @@ describe('ConditionBuilder', () => {
         target: { value: 'props.label' },
       });
       expect(onChange).toHaveBeenCalledTimes(1);
-      const next = onChange.mock.calls[0]![0];
-      expect(next.expression.source.key).toBe('props.label');
+      const next = onChange.mock.calls[0][0];
+      expect((next.expression.source as { key: string }).key).toBe('props.label');
     });
 
     it('输入数据路径触发 onChange', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       const config = makeConfig({
         expression: {
           source: { kind: 'componentData', componentId: 'c1', path: '' },
@@ -223,12 +223,12 @@ describe('ConditionBuilder', () => {
         target: { value: 'list.0.value' },
       });
       expect(onChange).toHaveBeenCalledTimes(1);
-      const next = onChange.mock.calls[0]![0];
-      expect(next.expression.source.path).toBe('list.0.value');
+      const next = onChange.mock.calls[0][0];
+      expect((next.expression.source as { path: string }).path).toBe('list.0.value');
     });
 
     it('切换运算符触发 onChange', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -238,12 +238,12 @@ describe('ConditionBuilder', () => {
       );
       fireEvent.change(screen.getByTestId('condition-operator'), { target: { value: 'ne' } });
       expect(onChange).toHaveBeenCalledTimes(1);
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.operator).toBe('ne');
     });
 
     it('切换到 empty 移除 value', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -253,13 +253,13 @@ describe('ConditionBuilder', () => {
       );
       fireEvent.change(screen.getByTestId('condition-operator'), { target: { value: 'empty' } });
       expect(onChange).toHaveBeenCalledTimes(1);
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.operator).toBe('empty');
       expect(next.expression.value).toBeUndefined();
     });
 
     it('从 empty 切回 eq 时补充默认 value', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       const config = makeConfig({
         expression: {
           source: { kind: 'componentProp', componentId: 'c1', key: 'value' },
@@ -270,13 +270,13 @@ describe('ConditionBuilder', () => {
         <ConditionBuilder config={config} onChange={onChange} components={makeComponents()} />,
       );
       fireEvent.change(screen.getByTestId('condition-operator'), { target: { value: 'eq' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.operator).toBe('eq');
       expect(next.expression.value).toBe('');
     });
 
     it('输入纯数字比较值 → value 推断为 number', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -285,13 +285,13 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: '42' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe(42);
       expect(typeof next.expression.value).toBe('number');
     });
 
     it('输入小数比较值 → value 推断为 number', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -300,12 +300,12 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: '3.14' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe(3.14);
     });
 
     it('输入 true 比较 → value 推断为 boolean', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -314,13 +314,13 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: 'true' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe(true);
       expect(typeof next.expression.value).toBe('boolean');
     });
 
     it('输入 false 比较 → value 推断为 boolean', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -329,12 +329,12 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: 'false' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe(false);
     });
 
     it('输入普通字符串 → value 保持 string', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -343,13 +343,13 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: 'hello' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe('hello');
       expect(typeof next.expression.value).toBe('string');
     });
 
     it('空字符串 value 推断为 string', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -358,12 +358,12 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: '' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe('');
     });
 
     it('负数 value 推断为 number', () => {
-      const onChange = vi.fn();
+      const onChange = vi.fn<(next: ConditionNodeConfig) => void>();
       render(
         <ConditionBuilder
           config={makeConfig()}
@@ -372,7 +372,7 @@ describe('ConditionBuilder', () => {
         />,
       );
       fireEvent.change(screen.getByTestId('condition-value'), { target: { value: '-10' } });
-      const next = onChange.mock.calls[0]![0];
+      const next = onChange.mock.calls[0][0];
       expect(next.expression.value).toBe(-10);
     });
   });

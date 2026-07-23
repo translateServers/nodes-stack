@@ -111,8 +111,8 @@ describe('maskJsonBody', () => {
     const body = JSON.stringify([{ token: 't1' }, { token: 't2' }]);
     const result = maskJsonBody(body, ['token']);
     const parsed = JSON.parse(result) as Array<Record<string, unknown>>;
-    expect(parsed[0]!.token).toBe(SECRET_MASK);
-    expect(parsed[1]!.token).toBe(SECRET_MASK);
+    expect(parsed[0].token).toBe(SECRET_MASK);
+    expect(parsed[1].token).toBe(SECRET_MASK);
   });
 
   it('大小写不敏感', () => {
@@ -146,8 +146,8 @@ describe('maskJsonBody', () => {
       list: Array<Record<string, unknown>>;
       meta: Record<string, unknown>;
     };
-    expect(parsed.list[0]!.token).toBe(SECRET_MASK);
-    expect(parsed.list[1]!.other).toBe('b');
+    expect(parsed.list[0].token).toBe(SECRET_MASK);
+    expect(parsed.list[1].other).toBe('b');
     expect(parsed.meta.secret).toBe(SECRET_MASK);
   });
 });

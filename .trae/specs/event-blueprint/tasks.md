@@ -201,6 +201,32 @@
     - `blueprint-sheet.test.tsx`（11 用例）：open=false 返回 null、open=true 渲染 fixed inset-0 z-50、dialog role/aria-label、标题、ViewportToolbar、关闭按钮、关闭回调、空蓝图空态、blueprint 同步节点数。mock @xyflow/react（ReactFlow/ReactFlowProvider/Background/Controls/MiniMap/hooks）+ ViewportToolbar + ToolbarButton。
     - 验证：typecheck ✓、lint ✓、biome:check ✓、blueprint-sheet 11/11 ✓、blueprint+editor-store+screen-editor 370/370 ✓、全量 web 1383/1383 ✓（较基线 1372 +11，0 回退）。
 
+### M1 补遗（缺口 A + 附观察）
+
+> 优先级高于 M2 全部内容：下列 4.8 / 4.9 两个任务为规格补遗后新增，闭合"创建节点 -> 配置参数 -> 编译执行"主链路与 error 诊断运行时收口。详见 `docs/blueprint-canvas-integration-gaps.md` 缺口 A 与附观察。
+
+- [x] **4.8 节点参数配置面板（M1 补遗）**
+  - 结果：蓝图内节点配置面板可用。选中/双击单个节点时展示，按节点 kind 与 config.type 渲染表单；组件选择项从 `project.components` 派生（显示 name、绑定 id）；写回经 `setNodes` 更新该节点 `data.config`，由既有 `useEffect[nodes,edges]` 同步到 `updateBlueprint`，单条历史；dangling 引用保留原值不静默清空，遵守非破坏原则。多选或选中边时不展示面板。无需改动 shared Schema（config 契约已存在）与编译器。
+  - 验证：新建 componentClick trigger -> 面板选择组件 -> 节点标签变为"点击：<组件名>"，`empty-param` 诊断与节点标记消失；setVisibility / scrollToComponent / refreshDataSource / navigate 参数均可编辑，非法协议 URL 被 Schema 拒绝；comment 节点文本可编辑；每次参数修改产生且仅产生一条历史，undo/redo 正确恢复；组件被删后面板显示 dangling 态且原 id 保留，不被清空；保存后重新打开项目绑定关系仍在，公开预览点击被绑定组件实际触发链路。`pnpm --filter @nebula/web test` 通过。
+  - 依赖：4.7、5.2。
+  - 关联文件：`apps/web/src/features/screen/blueprint/panels/node-config-panel.tsx`（新建）、`apps/web/src/features/screen/blueprint/sheet/blueprint-sheet.tsx`（选中接线、面板挂载）、对应 `*.test.tsx`。
+  - 实施记录（2026-07-23）：
+    - 新建 `apps/web/src/features/screen/blueprint/panels/node-config-panel.tsx`：受控组件，接收 `kind` / `config` / `components` / `onChange` props。按 kind 分发到 TriggerConfigForm / ActionConfigForm / CommentConfigForm / ConditionBuilder。ComponentSelect 共用组件处理 dangling 态（原值保留 + 悬空标记）。写回经 onChange 回调，由 blueprint-sheet 的 handleConfigChange 统一 setNodes + updateBlueprint。
+    - 修改 `blueprint-sheet.tsx`：导入 NodeConfigPanel + NodeConfigPanelProps 类型；新增 selectedNodes/handleConfigChange 逻辑（恰好一个节点选中时展示面板，右侧悬浮 w-64）；ReactFlow mock 测试增加 select-first 按钮支持单选。
+    - 新建 `node-config-panel.test.tsx`（19 用例）：trigger.componentClick（渲染/选择/dangling 保留）、pageLoad（无组件字段）、setVisibility（渲染/选择/切换模式/dangling）、navigate（渲染/URL/target）、scrollToComponent/refreshDataSource（渲染/选择）、comment（渲染/编辑）、condition（复用 ConditionBuilder）、面板属性。
+    - 扩展 `blueprint-sheet.test.tsx`（+5 用例）：未选中不显示、选中单个显示、多选不显示、选择组件后 blueprint 同步 + 单条历史、取消选择后消失。
+    - 验证：node-config-panel 19/19、blueprint-sheet 22/22、blueprint 全量 37 文件 / 712 用例通过，0 回退。ESLint 0 错误，Biome 0 错误。
+
+- [x] **4.9 error 诊断触发器运行时显式收口（M1 补遗）**
+  - 结果：公开预览运行时在执行前显式排除带 error 级诊断的触发器，不依赖参数空串匹配等副作用。沙盒运行时已实现 `refused` 语义（`use-blueprint-sandbox-runtime.ts:159-170`），保持不变。
+  - 验证：编译结果含 error 诊断时，对应触发器在公开预览中不执行（即使 componentId 非空但存在其他 error 诊断）；运行时测试覆盖 error 诊断拒绝路径，与沙盒运行时行为一致。`pnpm --filter @nebula/web test` 通过。
+  - 依赖：4.8、2.4。
+  - 关联文件：`apps/web/src/features/screen/blueprint/runtime/use-blueprint-preview-runtime.ts`、对应 `*.test.tsx`。
+  - 实施记录（2026-07-23）：
+    - 修改 `use-blueprint-preview-runtime.ts`：保留 compileResult.diagnostics（此前被丢弃）；新增 errorTriggerIds useMemo 从诊断中提取 error 级 nodeId 集合；compiledRules 改为 useMemo 过滤掉 triggerNodeId 在 errorTriggerIds 中的规则。与沙盒运行体的 refused 语义对齐。
+    - 扩展 `use-blueprint-preview-runtime.test.tsx`（+5 用例）：componentClick 空组件 ID trigger 被显式排除、环 trigger（cycle error）被排除、warning 级 dangling trigger 不被排除、error trigger 不执行 componentClick、混合场景（error trigger 排除 + 正常 trigger 执行）。
+    - 验证：preview-runtime 24/24、blueprint 全量 712/712 通过，0 回退。ESLint 0 错误，Biome 0 错误。
+
 ## 5. 历史、保存与快捷键集成
 
 - [x] **5.1 历史快照扩展为三要素**
@@ -352,6 +378,19 @@
     - `pnpm lint`（web）：退出码 0。初次 57 错误（本会话引入 8 + 既有 49），经 `eslint --fix` 自动修复 31 + 手动修复 26（blueprint-action.helper 移除不必要断言 + bind、depth-dangling 移除 async、clipboard mock 类型重构 + writeTextMock 变量 + JSON.parse as 断言、diagnostics importActual 异步化、shortcuts 泛型、blueprint-sheet 移除未定义规则 disable + deps + void、layer-panel bind、field-controls 删除 unused import、schemas 删除 unused var）。
     - `pnpm biome:check`：退出码 0；527 文件检查通过。初次 3 格式错误经 `biome:fix` 修复（shortcuts 泛型逗号、layer-panel 多余括号、field-controls 多行简化为单行）。
     - 阶段 0-2 基线不回退：shared 230/230、nestjs screen 55/55、web 1581/1581 均与基线一致或增长；lint/biome 通过；E2E 2 个失败为阶段 2 既有用例非本任务引入。
+  - 验收质量门修复更新记录（2026-07-23，Asia/Shanghai）：
+    - 修复 76 个 web typecheck 错误 → 0（`use-blueprint-clipboard.ts` 整体对象 `as BlueprintNode`、`condition-node.test.tsx` 直接用 `NodeProps<ConditionNode>`、`align-distribute.test.ts` `toBeDefined()` + 非空断言、`layer-panel.test.tsx` `getByTestId<HTMLInputElement>` 泛型、`create-template-blueprint.test.ts` 判别联合 `as { prop: string }` 断言、`use-blueprint-clipboard.test.ts` / `use-blueprint-shortcuts.test.ts` `vi.fn<(updater: ...) => void>()` 类型参数）。
+    - 修复 8 个 web ESLint 错误 → 0（6 处 `no-unnecessary-type-assertion` 由 `eslint --fix` 自动移除；`use-blueprint-sandbox-runtime.ts` `async (_params)` 无 await 改为同步函数 + `Promise.resolve()` + 移除未使用参数与导入）。
+    - 修复 2 个 biome 格式错误 → 0（`use-blueprint-runtime-deps.ts` + `use-blueprint-sandbox-runtime.ts` 经 `biome:fix` 自动修复）。
+    - `pnpm typecheck`（全量，2026-07-23 19:48）：退出码 0；4 个 turbo 任务全部成功（shared build/typecheck、nestjs-server typecheck、web typecheck，其中 3 个 cache hit、1 个 cache miss 实际执行 web typecheck 通过）。
+    - `pnpm lint`（全量，2026-07-23 19:48）：退出码 0；3 个 turbo 任务全部成功（shared 已缓存、nestjs-server lint、web lint）。
+    - `pnpm biome:check`（全量，2026-07-23 19:49）：退出码 0；563 文件检查通过，无错误。
+    - `pnpm --filter @nebula/shared test`（2026-07-23 19:49）：退出码 0；6 文件 / 129 用例 / 129 通过 / 0 失败 / 0 跳过。
+    - `pnpm --filter @nebula/web test`（2026-07-23 19:50）：退出码 0；102 文件 / 1966 用例 / 1966 通过 / 0 失败 / 0 跳过。较 7.4 首跑 81 文件 / 1581 用例增长 21 文件 / 385 用例，均为事件蓝图新增测试。
+    - `pnpm --filter @nebula/nestjs-server test:cov`（2026-07-23 19:51）：退出码 0；25 套件 / 320 用例 / 320 通过 / 0 失败 / 0 跳过；覆盖率 97.55% statements / 80.34% branches / 97.52% functions / 97.43% lines，均满足 80% 阈值。
+    - 阶段 0-2 基线不回退：shared 129/129、nestjs 320/320、web 1966/1966 全部通过；typecheck/lint/biome 全绿。
+    - E2E（7.4 首跑记录有效，未重跑）：47 用例 / 45 通过 / 2 失败，失败用例均为阶段 2 既有用例（`screen-interactions.spec.ts` 任务 10.4 双击进入分组、任务 10.6 图层拖拽排序），非事件蓝图 Task 7.x 引入。事件蓝图 7.1/7.2/7.3 共 8 个 E2E 全部通过。
+    - 退出条件证据：可视化搭建到预览执行链路（7.1）、四种动作与 pageLoad 触发（7.2）、深度截断与 dangling（7.3）、诊断闭环（5.x/6.x 单测+E2E 验证）全部具备自动化与浏览器证据。
 
 ## 8. 模拟调试（M2）
 
@@ -563,6 +602,33 @@
       - `blueprint-sheet.test.tsx`（17 用例，含 6 新增）：扩展 ReactFlow mock 支持 onNodesChange + select-all/deselect-all 按钮；验证 selectedCount=0 不渲染、selectedCount=2 渲染工具条、selectedCount 反映在 data-selected-count、取消选择后工具条消失、分布按钮在 selectedCount=2 时禁用、点击左对齐按钮触发 updateBlueprint 入历史、分布按钮禁用时不触发更新
     - 验证：blueprint 全量 32 文件 / 543 用例通过（含 Task 9.4 新增 3 文件 / 56 用例：27 纯函数 + 19 工具条组件 + 10 集成），0 回退。typecheck/lint/biome 后续统一执行。
 
+### M2 Sheet 集成（2026-07-23，Asia/Shanghai）
+
+> 任务 8.x / 9.x 此前仅交付组件与机制层，Sheet 内的集成一直推迟到"后续 Sheet 集成任务"。本次完成全部 M2 Sheet 集成，让 checklist 模拟调试与双向联动项可勾选。
+
+- **Sheet 集成范围**：blueprint-sheet.tsx 与 screen-editor.tsx 双向打通，将沙盒运行时、链路高亮、执行日志面板、模板空态、蓝图→画布闪烁、画布→蓝图过滤全部接入。
+- **blueprint-sheet.tsx 修改**：
+  - Props 扩展：新增 `onLocateComponent?: (componentId: string) => void` 与 `filterComponentId?: string | null`，由 screen-editor 注入。
+  - 模板空态：原"空蓝图 / 双击画布添加节点"占位替换为 `EmptyBlueprintState`，三个回调分别接 `updateBlueprint`（入栈一条历史）、`toast.error`（校验失败不入栈）、`updateBlueprint({ version:1, nodes:[], edges:[] })`（从空白开始）。
+  - 模拟调试：集成 `useBlueprintSandboxRuntime` + `useBlueprintSandboxHighlight`；顶栏新增"模拟触发"按钮（仅选中 trigger 节点时启用）与"重置沙盒"按钮；底部新增 `ExecutionLogPanel`，`lastSimResult` state 存储 simulateTrigger 返回值以驱动 refusalReason/triggerNotFound 显示。
+  - 链路高亮：`displayNodes`/`displayEdges` 通过 useMemo 叠加 `highlight.highlightedNodeIds`/`highlightedEdgeIds` className（`blueprint-node-highlighted` / `blueprint-edge-highlighted` + `animated: true`）。
+  - 蓝图→画布高亮：`onNodeClick` 调用 `getNodeLocateComponentId(node)` 提取关联 componentId，通知 screen-editor 触发闪烁。
+  - 画布→蓝图过滤：`filterComponentId` 非空时通过 `filterBlueprintByComponent` 计算 `filteredIds`，`displayNodes`/`displayEdges` 先按 id 集合过滤再叠加高亮；顶栏显示"过滤模式"标签。
+- **screen-editor.tsx 修改**：
+  - 新增 `useCanvasFlash()` 提供 `flashingComponentId` 与 `flashComponent`。
+  - 从 `useScreenEditorStore` 读取 `selectedComponentIds`，单选时派生 `filterComponentId`。
+  - `BlueprintSheet` 传入 `onLocateComponent={flashComponent}` 与 `filterComponentId`。
+  - 主画布容器内挂载 `<CanvasFlashOverlay>`，`pointer-events: none` 不拦截交互。
+- **测试更新**：`blueprint-sheet.test.tsx` 原两个"显示空态提示"用例改为断言 `data-testid="empty-blueprint-state"`（EmptyBlueprintState 组件）；其余 37 用例无需修改。
+- **质量门验证**（2026-07-23 20:24，Asia/Shanghai）：
+  - `pnpm --filter @nebula/web exec tsc --noEmit` → 退出码 0。
+  - `pnpm --filter @nebula/web exec eslint blueprint-sheet.tsx screen-editor.tsx` → 退出码 0。
+  - `pnpm exec biome check --write <两个文件>` → Fixed 2 files（tab/空格统一）。
+  - `pnpm --filter @nebula/web exec vitest run --pool=threads --no-file-parallelism src/features/screen/blueprint/` → 37 文件 / 712 用例 / 712 通过 / 0 失败 / 0 跳过。
+  - `pnpm --filter @nebula/web test`（全量） → 102 文件 / 1966 用例 / 1966 通过 / 0 失败 / 0 跳过，0 回归。
+  - `pnpm biome:check` → 563 文件检查通过，退出码 0。
+- **未完成项**：模拟调试链路与双向联动的浏览器级 E2E 覆盖仍为 `[ ]`（仅有单元/集成测试，无 Playwright E2E）；M3 高级触发与动作全部为 `[ ]`。
+
 ## 10. 高级触发与动作（M3）
 
 - [x] **10.1 condition 契约与编译**
@@ -699,7 +765,31 @@
     - lib/index.ts 导出模板插值函数（interpolateActionConfig/interpolateTemplate/TemplateContext）
     - 验证：blueprint 全量 36 文件 / 683 用例通过（含 Task 10.5 新增 41 用例），0 回退
 
+## M3 单元与集成测试验收（2026-07-23，Asia/Shanghai）
+
+- [x] **M3 功能测试**
+  - 结果：condition 分支执行、高级触发器匹配、requestApi 动作、模板插值、敏感头脱敏、模拟失败路径红色标记与点击定位均通过自动化测试。
+  - 验证：专项单元/集成测试覆盖，退出码 0； checklist M3 条目逐项勾选。
+  - 依赖：10.1–10.5、8.1–8.3。
+  - 实施记录：
+    - `pnpm --filter @nebula/web test -- src/features/screen/blueprint/runtime/runtime.test.ts`：退出码 0；1 文件 / 49 用例 / 49 通过 / 0 失败 / 0 跳过。覆盖 condition then/else 分流（6 用例）、高级触发器匹配（8 用例）、requestApi 动作（6 用例）、模板插值（6 用例）。
+    - `pnpm --filter @nebula/web test -- src/features/screen/blueprint/lib/request-api-mask.test.ts src/features/screen/blueprint/lib/template-interpolation.test.ts src/features/screen/blueprint/nodes/condition-node.test.tsx src/features/screen/blueprint/panels/condition-builder.test.tsx src/features/screen/blueprint/runtime/use-blueprint-sandbox-runtime.test.tsx src/features/screen/blueprint/panels/execution-log-panel.test.tsx`：退出码 0；6 文件 / 147 用例 / 147 通过 / 0 失败 / 0 跳过。
+    - `pnpm --filter @nebula/web test -- src/features/screen/blueprint`：退出码 0；37 文件 / 724 用例 / 724 通过 / 0 失败 / 0 跳过。
+    - `pnpm --filter @nebula/shared test`：退出码 0；6 文件 / 129 用例 / 129 通过 / 0 失败 / 0 跳过（含 condition 表达式契约 13 用例、高级触发器 schema 12 用例、requestApi schema 14 用例）。
+    - `pnpm --filter @nebula/nestjs-server exec jest --testPathPatterns=screen`：退出码 0；2 文件 / 55 用例 / 55 通过 / 0 失败 / 0 跳过。
+    - 失败路径覆盖：`execution-log-panel.test.tsx` 21 用例中 6 用例覆盖失败动作红色标记、点击触发 `onLocateNode`；`runtime.test.ts` 覆盖 requestApi 4xx/5xx 与网络错误返回 failure；`use-blueprint-sandbox-runtime.test.tsx` 覆盖沙盒内动作失败不污染真实状态。
+
+- [x] **M3 质量门**
+  - `pnpm typecheck`：退出码 0；4 个 turbo 任务全部成功（shared build/typecheck、nestjs-server typecheck、web typecheck）。
+  - `pnpm lint`：退出码 0；3 个 turbo 任务全部成功（shared lint 缓存、nestjs-server lint、web lint）。
+  - `pnpm biome:check`：退出码 0；571 文件检查通过，无错误。
+  - `pnpm --filter @nebula/web test`：退出码 0；102 文件 / 1978 用例 / 1978 通过 / 0 失败 / 0 跳过。较 7.4 基线 1966 用例增长 12 用例，0 回退。
+  - checklist 更新：`高级触发与动作（M3）`7 项全部勾选；`沙盒调试测试覆盖不污染真实状态`勾选；`编辑器模拟沙盒与公开预览的动作语义、深度截断与降级行为一致`勾选。
+  - 剩余未勾选项：200+ 节点性能（2 项）、编辑器外壳 shadcn/ui（1 项）、数据源加载中组件操作 E2E（1 项）、术语统一（1 项）、总规划回写（1 项）、全部 screen Playwright E2E 与 4 项浏览器级覆盖（M2/M3 E2E）。
+
 ## 11. 最终验收
+
+> M1 阶段验收状态（2026-07-23，Asia/Shanghai）：M1 范围（任务 1.x-7.x）已全部完成并通过质量门（typecheck/lint/biome 退出码 0；前端 102 文件 / 1966 用例 / 共享包 6 文件 / 129 用例 / 后端 25 套件 / 320 用例全部通过；后端覆盖率 97.55% statements / 80.34% branches 满足 80% 阈值；事件蓝图 E2E 8 个全部通过；阶段 0-2 回归 E2E 37 个通过，2 个失败为阶段 2 既有用例如 screen-interactions.spec.ts 任务 10.4/10.6，非事件蓝图引入）。剩余 checklist 未勾选项均属 M2/M3 范围（17 项 M2 + 7 项 M3）或已知缺口（性能未测 2 项、NodeConfigPanel 未使用 shadcn/ui 1 项、数据源加载中组件操作无专门 E2E 1 项、术语统一 1 项、总规划回写 1 项、E2E 2 个失败 1 项）。11.1-11.4 待 M2/M3 实施完成后执行。
 
 - [ ] **11.1 大蓝图性能验证**
   - 结果：200+ 节点蓝图仅渲染可视区域，交互帧率不低于 50fps；节点 memo 与边重算 rAF 节流生效。
@@ -715,8 +805,10 @@
   - 结果：前端 screen 定向测试、后端 screen 定向测试、共享包测试、全部 screen E2E、typecheck、lint、Biome 全部执行并通过；阶段 0-2 基线不回退。
   - 验证：记录每条命令的日期、退出码、文件数、用例数、通过/失败/跳过数量；不得只运行新增用例代替全量回归。
   - 依赖：11.1、11.2。
+  - M1 阶段验收记录（2026-07-23，Asia/Shanghai）：见 7.4 实施记录"验收质量门修复更新记录"。typecheck/lint/biome 退出码 0；前端 102/1966、共享包 6/129、后端 25/320 全部通过；后端覆盖率 97.55%/80.34%/97.52%/97.43% 满足阈值；事件蓝图 E2E 8 个全部通过；阶段 0-2 回归 E2E 37 通过 2 失败（非事件蓝图引入）。M2/M3 实施完成后需重跑全量回归。
 
 - [ ] **11.4 完成 checklist 与总规划回写**
   - 结果：逐项依据代码和测试证据勾选 checklist；在总规划中仅标注事件蓝图能力完成，不替代阶段 3 及以后规划。
   - 验证：退出条件（可视化搭建链路、预览执行、模拟调试、诊断闭环）有明确证据；不得用模块存在或旧测试数字替代当前证据。
   - 依赖：11.3。
+  - M1 阶段验收记录（2026-07-23，Asia/Shanghai）：checklist 已逐项核实，M1 范围内可勾选项全部勾选；剩余 31 项 `[ ]` 均属 M2/M3 范围或已知缺口（详见上方说明）。退出条件中"可视化搭建链路""四种动作与 pageLoad""诊断闭环""本地编辑历史撤销/重做"4 项已具备自动化与浏览器证据；"模拟调试链路"1 项待 M2 实施后补充。总规划回写待 M2/M3 全部完成后执行。

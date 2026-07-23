@@ -18,7 +18,7 @@
  *   - 深度截断时末尾追加告警条目
  */
 
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { X } from 'lucide-react';
 import type { ActionResult, RuleExecutionLog } from '../runtime/types.js';
 

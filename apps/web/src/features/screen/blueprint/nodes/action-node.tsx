@@ -15,7 +15,7 @@
 
 import type { JSX } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
-import { Crosshair, Eye, Navigation, RefreshCw } from 'lucide-react';
+import { Crosshair, Eye, Globe, Navigation, RefreshCw } from 'lucide-react';
 import { BaseNodeShell } from './base-node';
 import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
 import type { ActionNodeData } from './node-data-types';
@@ -37,6 +37,8 @@ function getActionIcon(config: ActionNodeData['config']): { icon: JSX.Element; t
       };
     case 'refreshDataSource':
       return { icon: <RefreshCw className="size-3.5" />, typeLabel: '刷新数据源' };
+    case 'requestApi':
+      return { icon: <Globe className="size-3.5" />, typeLabel: '请求接口' };
   }
 }
 

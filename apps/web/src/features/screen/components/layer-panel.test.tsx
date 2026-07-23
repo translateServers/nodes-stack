@@ -292,7 +292,7 @@ describe('LayerPanel · 命令执行接入', () => {
     fireEvent.click(screen.getByTestId('layer-command-rename'));
 
     expect(screen.getByTestId('layer-rename-input')).toBeInTheDocument();
-    expect(screen.getByTestId('layer-rename-input').value).toBe('原始名');
+    expect(screen.getByTestId<HTMLInputElement>('layer-rename-input').value).toBe('原始名');
   });
 
   it('inline input: Enter 提交 → renameComponent 调用并退出编辑态', () => {

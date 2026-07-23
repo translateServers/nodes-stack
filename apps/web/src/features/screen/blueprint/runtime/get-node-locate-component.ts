@@ -46,7 +46,7 @@ export function getNodeLocateComponentId(node: Node): string | undefined {
   const { type, data } = node;
 
   if (type === 'trigger') {
-    const triggerData = data as TriggerNodeDataLike;
+    const triggerData = data as unknown as TriggerNodeDataLike;
     // componentClick：取关联组件 id（空字符串视为未配置，返回 undefined）
     return triggerData.componentId && triggerData.componentId.length > 0
       ? triggerData.componentId
@@ -54,14 +54,14 @@ export function getNodeLocateComponentId(node: Node): string | undefined {
   }
 
   if (type === 'action') {
-    const actionData = data as ActionNodeDataLike;
+    const actionData = data as unknown as ActionNodeDataLike;
     return actionData.targetComponentId && actionData.targetComponentId.length > 0
       ? actionData.targetComponentId
       : undefined;
   }
 
   // comment 节点：data 为 CommentNodeDataLike，无关联组件
-  const _commentData = data as CommentNodeDataLike;
+  const _commentData = data as unknown as CommentNodeDataLike;
   void _commentData;
   return undefined;
 }

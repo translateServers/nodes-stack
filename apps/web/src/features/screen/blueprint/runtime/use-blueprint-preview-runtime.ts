@@ -48,7 +48,23 @@ export function useBlueprintPreviewRuntime(
     return compileBlueprint(blueprint, { componentIds });
   }, [blueprint, components]);
 
-  const compiledRules = compileResult?.rules ?? [];
+  // 任务 4.9：显式排除带 error 级诊断的触发器（spec: "错误级诊断对应的触发器在预览运行时不执行"）
+  // 不依赖参数空串匹配等副作用，与沙盒运行时的 refused 语义对齐
+  const allDiagnostics = compileResult?.diagnostics ?? [];
+  const errorTriggerIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const diag of allDiagnostics) {
+      if (diag.level === 'error' && diag.nodeId) {
+        ids.add(diag.nodeId);
+      }
+    }
+    return ids;
+  }, [allDiagnostics]);
+
+  const compiledRules = useMemo(
+    () => (compileResult?.rules ?? []).filter((rule) => !errorTriggerIds.has(rule.triggerNodeId)),
+    [compileResult?.rules, errorTriggerIds],
+  );
   const isEnabled = compiledRules.length > 0;
 
   // API 数据源 override：refreshDataSource 完成后写入
@@ -64,7 +80,22 @@ export function useBlueprintPreviewRuntime(
     });
   }, []);
 
-  const { deps, visibilityOverrides } = useBlueprintRuntimeDeps(components, onRefreshComplete);
+  // apiDataOverrides 通过 ref 暴露给 getComponentData，避免 deps 频繁重建
+  const apiDataOverridesRef = useRef(apiDataOverrides);
+  apiDataOverridesRef.current = apiDataOverrides;
+
+  const getComponentData = useCallback(
+    (componentId: string): Record<string, unknown> | undefined => {
+      return apiDataOverridesRef.current.get(componentId) as Record<string, unknown> | undefined;
+    },
+    [],
+  );
+
+  const { deps, visibilityOverrides } = useBlueprintRuntimeDeps(
+    components,
+    onRefreshComplete,
+    getComponentData,
+  );
 
   // deps 通过 ref 暴露给 onComponentClick 与 pageLoad effect，避免重订阅
   const depsRef = useRef(deps);

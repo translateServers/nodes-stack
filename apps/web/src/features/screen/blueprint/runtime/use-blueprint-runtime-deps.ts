@@ -16,7 +16,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
-import type { RuntimeDeps, VisibilityOverrides } from './types.js';
+import type {
+  RuntimeDeps,
+  VisibilityOverrides,
+  RequestApiRuntimeParams,
+  RequestApiRuntimeResult,
+} from './types.js';
 import { API_REQUEST_TIMEOUT_MS, buildUrlWithParams } from '../../hooks/use-api-data-source.js';
 
 /** 单次刷新请求的内部状态 */
@@ -70,10 +75,12 @@ function cssEscape(value: string): string {
  *
  * @param components 当前项目组件列表（用于 hasComponent 判定）
  * @param onRefreshComplete 数据源刷新成功回调（预览页可据此更新组件 API 缓存）
+ * @param getComponentData 读取组件最新解析数据（预览页传入 apiDataOverrides）
  */
 export function useBlueprintRuntimeDeps(
   components: readonly ScreenComponent[],
   onRefreshComplete?: RefreshCompleteHandler,
+  getComponentDataProp?: (componentId: string) => Record<string, unknown> | undefined,
 ): {
   deps: RuntimeDeps;
   visibilityOverrides: VisibilityOverrides;
@@ -106,6 +113,18 @@ export function useBlueprintRuntimeDeps(
   const hasComponent = useCallback((componentId: string): boolean => {
     return componentsRef.current.some((c) => c.id === componentId);
   }, []);
+
+  const getComponentValue = useCallback((componentId: string): unknown => {
+    const component = componentsRef.current.find((c) => c.id === componentId);
+    return component?.props?.value;
+  }, []);
+
+  const getComponentData = useCallback(
+    (componentId: string): Record<string, unknown> | undefined => {
+      return getComponentDataProp?.(componentId);
+    },
+    [getComponentDataProp],
+  );
 
   const applyVisibility = useCallback((componentId: string, visible: boolean): void => {
     setVisibilityOverrides((prev) => {
@@ -211,6 +230,31 @@ export function useBlueprintRuntimeDeps(
     setVisibilityOverrides(new Map());
   }, []);
 
+  // requestApi 动作运行时实现（任务 10.4）：fetch + timeout 取消协议
+  const requestApi = useCallback(
+    async (params: RequestApiRuntimeParams): Promise<RequestApiRuntimeResult> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
+      try {
+        const response = await fetch(params.url, {
+          method: params.method,
+          headers: params.headers,
+          body: params.method === 'GET' ? undefined : params.body,
+          signal: controller.signal,
+        });
+        const text = await response.text();
+        return {
+          status: response.status,
+          bodyPreview: text.slice(0, 500),
+          ok: response.ok,
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    },
+    [],
+  );
+
   const deps = useMemo<RuntimeDeps>(
     () => ({
       applyVisibility,
@@ -218,8 +262,11 @@ export function useBlueprintRuntimeDeps(
       openUrl,
       scrollToComponent,
       refreshDataSource,
+      requestApi,
       hasComponent,
       logWarning,
+      getComponentValue,
+      getComponentData,
     }),
     [
       applyVisibility,
@@ -227,8 +274,11 @@ export function useBlueprintRuntimeDeps(
       openUrl,
       scrollToComponent,
       refreshDataSource,
+      requestApi,
       hasComponent,
       logWarning,
+      getComponentValue,
+      getComponentData,
     ],
   );
 

@@ -51,7 +51,7 @@ function makeConfig(overrides: Partial<ConditionNodeConfig> = {}): ConditionNode
 function makeProps(
   configOverrides: Partial<ConditionNodeConfig> = {},
   extra: Partial<ConditionNodeData> = {},
-): NodeProps<Parameters<typeof ConditionNode>[0]> {
+): NodeProps<ConditionNode> {
   return {
     id: 'cd-1',
     type: 'condition',
@@ -72,7 +72,7 @@ function makeProps(
     yPos: 0,
     width: 0,
     height: 0,
-  } as unknown as NodeProps<Parameters<typeof ConditionNode>[0]>;
+  } as unknown as NodeProps<ConditionNode>;
 }
 
 describe('summarizeCondition 纯函数', () => {
