@@ -1,24 +1,90 @@
-# 大屏设计器文档索引
+# Nebula 文档
 
-> 本目录存放项目级设计文档与规范文档。仅保留设计类与规范类文档，计划型文档已移除。
-> 维护约定：每个文档顶部需带 `状态` 与 `最近更新` 字段；阶段完成后更新状态。
+> 本目录是项目所有设计文档、规范文档、决策记录的统一入口。
+> **双依据定位**：既是产品文档的依据，也是开发实现的依据。文档结构遵循 [_structure.md](./_structure.md)。
 
-## 设计文档
+## 快速入口
+
+### 我是开发，想开始动手
+
+1. 读 [系统总览](./architecture/system-overview.md) 理解全局（新人第一篇必读）
+2. 读 [编码规范](./conventions/coding-standards.md) 了解编码约定（**编码前必读**）
+3. 读 [大屏设计器架构](./architecture/screen-editor-architecture.md) 理解核心 feature
+4. 读 [蓝图运行时架构](./architecture/blueprint-runtime-architecture.md) 理解事件蓝图
+5. 动手新增功能时，参考 [开发指南](./architecture/development-guide.md) 按步骤操作
+6. 遇到"为什么这样设计"的疑问，查 [决策记录](./decisions/README.md)
+
+### 我是产品，想了解功能定义
+
+1. 读 [产品文档](./product/README.md) 了解产品方向与功能矩阵（_待创建_）
+2. 找到对应功能的 [功能规格](./specs/README.md)，查看功能概述与 UI 规格
+3. 了解决策背景时，查 [分析文档](./analysis/README.md) 与 [决策记录](./decisions/README.md)
+
+## 七层架构总览
+
+| 层 | 目录 | 回答什么 | 主要受众 |
+| --- | --- | --- | --- |
+| 产品 | [product/](./product/README.md) | 做什么？为谁做？功能边界 | 产品/设计/利益相关方 |
+| 架构 | [architecture/](./architecture/README.md) | 系统怎么设计？如何新增功能？ | **开发**/架构师 |
+| 规格 | [specs/](./specs/README.md) | 某功能的具体规格？实现契约？ | **开发**/产品 |
+| 规范 | [conventions/](./conventions/README.md) | 遵循什么约定？ | **开发** |
+| 决策 | [decisions/](./decisions/README.md) | 为什么这么决策？ | 开发/架构师 |
+| 分析 | [analysis/](./analysis/README.md) | 现状如何？有什么缺口？ | 开发/产品 |
+| 计划 | [plans/](./plans/README.md) | 怎么落地？分几步？ | 执行者 |
+
+> 完整的分层架构、归属规则、命名规范见 [_structure.md](./_structure.md)。
+
+## 重点文档
+
+### 架构文档
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [screen-designer-panels-architecture.md](./screen-designer-panels-architecture.md) | 进行中（2026-07-21 更新） | 面板系统架构与方法论。注册表驱动 / Schema 驱动渲染 / 命令描述符 / 单向数据流四条方法论 |
-| [blueprint-canvas-integration-gaps.md](./blueprint-canvas-integration-gaps.md) | 进行中 | 蓝图与画布集成缺口分析 |
-| [canvas-drag-optimization-plan.md](./canvas-drag-optimization-plan.md) | 待执行（2026-07-22 创建） | 画布拖拽性能优化方案（transform 定位 + Moveable 内置 snappable） |
+| [system-overview.md](./architecture/system-overview.md) | 生效中（2026-07-24） | 系统总览。新人入职第一篇必读 |
+| [screen-editor-architecture.md](./architecture/screen-editor-architecture.md) | 生效中（2026-07-24） | 大屏设计器架构 |
+| [blueprint-runtime-architecture.md](./architecture/blueprint-runtime-architecture.md) | 生效中（2026-07-24） | 蓝图运行时架构 |
+| [development-guide.md](./architecture/development-guide.md) | 生效中（2026-07-24） | 开发指南（新增组件/模块/API/页面/工具/蓝图节点） |
 
-## 规范文档
+### 规范文档
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [screen-designer-blackbox-test-cases.md](./screen-designer-blackbox-test-cases.md) | 进行中 | 大屏设计器黑盒测试用例 |
+| [coding-standards.md](./conventions/coding-standards.md) | 生效中（2026-07-24） | 编码规范总集（编码前必读） |
+
+### 功能规格
+
+| 功能 | 状态 | 说明 |
+| --- | --- | --- |
+| [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-24） | 大屏编辑器功能规格（现状基线） |
+| [dataset-management-spec/](./dataset-management-spec/README.md) | 设计中（2026-07-24） | 数据集管理设计规格（待迁移到 specs/） |
+
+## 文档与开发流程
+
+```
+[product] 产品定义功能 → [analysis] 分析缺口 → [specs] 产出实现契约
+    → [decisions] 记录决策 → [plans] 分解任务 → 编码（遵循 conventions）
+    → [specs] 更新检查清单 → 计划归档
+```
+
+详见 [_structure.md](./_structure.md) 第 7 节。
+
+## 新增文档流程
+
+1. 判断文档属于哪一层（参考 [_structure.md](./_structure.md) 第 3 节）
+2. 在对应层目录下创建文件（遵循命名规范）
+3. 文档顶部添加元信息（状态/最近更新/定位）
+4. 更新该层 `README.md` 索引
+5. 若是重要文档，更新本文件
 
 ## 关联目录
 
-- `.trae/archive/` - 已归档过程文档（浏览器默认行为冲突解决方案 / 画布交互审计报告）
-- `.trae/rules/project_rules.md` - 项目级开发规则
-- `.trae/skills/` - IDE skill 离线副本（cloudbase / playwright-cli / shadcn-ui / ui-ux-pro-max），由 skill 系统自动管理，请勿手动修改
+- `.trae/archive/` — 已归档过程文档
+- `.trae/rules/project_rules.md` — AI 专用开发规则（与 `conventions/` 对应）
+- `.trae/skills/` — IDE skill 离线副本，由 skill 系统自动管理
+- `AGENTS.md` — AI agent 指导，含项目结构与常用命令
+
+## 待办：文档迁移
+
+以下目录建议从 docs 根目录迁移到对应层（详见 [_structure.md](./_structure.md) 第 8 节）：
+
+- [ ] `dataset-management-spec/` → `specs/dataset-management/`
