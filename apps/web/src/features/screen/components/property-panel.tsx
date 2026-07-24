@@ -1,4 +1,5 @@
-import { useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
+import type { ComponentType } from 'react';
 import {
   AlignLeft,
   AlignCenter,
@@ -25,7 +26,42 @@ import { PanelSection } from './ui-primitives';
 // Phase 2 Slice B：属性面板 Schema 化（注册表驱动 + 声明式字段 + customRender 逃生舱）
 import { getSchemaForComponentType, PropertySchemaRenderer } from '../property-schema';
 
-function CanvasSettingsFields({
+/**
+ * rerender-no-inline-components：对齐命令表提升到模块级。
+ *
+ * 原实现 6 个对齐按钮各自内联 Tooltip+Button 块，代码重复且每次渲染都重建 JSX。
+ * 提取为 ALIGN_COMMANDS 后：
+ * - 数组在模块级初始化一次，不随组件重渲染重建
+ * - apply 函数闭包捕获对齐函数，类型安全（horizontal 分支只接受 'left'|'center'|'right'）
+ * - 渲染从 6 个重复块简化为 1 个 map
+ */
+type AlignHorizontalFn = (alignment: 'left' | 'center' | 'right') => void;
+type AlignVerticalFn = (alignment: 'top' | 'middle' | 'bottom') => void;
+
+interface AlignCommand {
+  key: string;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+  apply: (h: AlignHorizontalFn, v: AlignVerticalFn) => void;
+}
+
+const ALIGN_COMMANDS: ReadonlyArray<AlignCommand> = [
+  { key: 'left', label: '左对齐', Icon: AlignLeft, apply: (h) => h('left') },
+  { key: 'h-center', label: '水平居中', Icon: AlignCenter, apply: (h) => h('center') },
+  { key: 'right', label: '右对齐', Icon: AlignRight, apply: (h) => h('right') },
+  { key: 'top', label: '顶对齐', Icon: AlignStartVertical, apply: (_, v) => v('top') },
+  { key: 'v-center', label: '垂直居中', Icon: AlignCenterVertical, apply: (_, v) => v('middle') },
+  { key: 'bottom', label: '底对齐', Icon: AlignEndVertical, apply: (_, v) => v('bottom') },
+];
+
+/**
+ * H5 性能优化：memo 化画布设置字段。
+ *
+ * 父组件 PropertyPanel 在拖拽期间会因 components 数组引用变化而重渲染，
+ * 即使 canvas 对象未变，CanvasSettingsFields 也会跟着重渲染，导致 4 个 NumberInput
+ * 与 Select 重建。memo 后仅在 canvas prop 引用变化时重渲染。
+ */
+const CanvasSettingsFields = memo(function CanvasSettingsFields({
   canvas,
   onUpdate,
 }: {
@@ -75,15 +111,24 @@ function CanvasSettingsFields({
       </div>
     </div>
   );
-}
+});
 
-function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
-  const project = useScreenEditorStore((s) => s.project);
+/**
+ * H5 性能优化：memo 化多选面板。
+ *
+ * 原实现订阅 `s.project` 仅为 null 检查，但父组件 PropertyPanel 已在
+ * `if (!components || !canvas) return null;` 处保证 project 存在，此处订阅冗余，
+ * 反而每次拖拽（components 变化）都触发 MultiSelectPanel 重渲染。
+ * memo 后仅在 selectedIds 引用变化时重渲染。
+ */
+const MultiSelectPanel = memo(function MultiSelectPanel({
+  selectedIds,
+}: {
+  selectedIds: string[];
+}) {
   const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
   const alignSelectedHorizontal = useScreenEditorStore((s) => s.alignSelectedHorizontal);
   const alignSelectedVertical = useScreenEditorStore((s) => s.alignSelectedVertical);
-
-  if (!project) return null;
 
   return (
     <TooltipProvider>
@@ -92,84 +137,21 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
 
         <PanelSection title="对齐">
           <div className="grid grid-cols-6 gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="左对齐"
-                  onClick={() => alignSelectedHorizontal('left')}
-                >
-                  <AlignLeft />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>左对齐</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="水平居中"
-                  onClick={() => alignSelectedHorizontal('center')}
-                >
-                  <AlignCenter />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>水平居中</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="右对齐"
-                  onClick={() => alignSelectedHorizontal('right')}
-                >
-                  <AlignRight />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>右对齐</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="顶对齐"
-                  onClick={() => alignSelectedVertical('top')}
-                >
-                  <AlignStartVertical />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>顶对齐</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="垂直居中"
-                  onClick={() => alignSelectedVertical('middle')}
-                >
-                  <AlignCenterVertical />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>垂直居中</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="底对齐"
-                  onClick={() => alignSelectedVertical('bottom')}
-                >
-                  <AlignEndVertical />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>底对齐</TooltipContent>
-            </Tooltip>
+            {ALIGN_COMMANDS.map(({ key, label, Icon, apply }) => (
+              <Tooltip key={key}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={label}
+                    onClick={() => apply(alignSelectedHorizontal, alignSelectedVertical)}
+                  >
+                    <Icon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            ))}
           </div>
         </PanelSection>
 
@@ -181,7 +163,7 @@ function MultiSelectPanel({ selectedIds }: { selectedIds: string[] }) {
       </div>
     </TooltipProvider>
   );
-}
+});
 
 export function PropertyPanel() {
   // 细粒度订阅：仅当 components 数组引用变化时重渲染（拖拽 onDragEnd / onResizeEnd 通过

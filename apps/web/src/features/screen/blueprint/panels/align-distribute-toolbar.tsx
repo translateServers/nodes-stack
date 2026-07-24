@@ -7,7 +7,7 @@
  *
  * 启用规则：
  * - 对齐按钮：selectedCount >= 2 时可用
- * - 分布按钮：selectedCount >= 3 时可用
+ * - 分布按钮：selectedCount >= 2 时可用（2 个节点时无中间元素可调整，纯函数返回 hasChange=false）
  *
  * 交互：
  * - 点击按钮触发 onAlign/onDistribute 回调，由调用方接入 editor-store（一次提交一条历史）
@@ -34,7 +34,7 @@ export interface AlignDistributeToolbarProps {
   selectedCount: number;
   /** 对齐按钮回调（selectedCount >= 2 时触发） */
   onAlign: (mode: AlignMode) => void;
-  /** 分布按钮回调（selectedCount >= 3 时触发） */
+  /** 分布按钮回调（selectedCount >= 2 时触发） */
   onDistribute: (mode: DistributeMode) => void;
   /** 自定义类名 */
   className?: string;
@@ -94,7 +94,7 @@ export function AlignDistributeToolbar({
   className,
 }: AlignDistributeToolbarProps): JSX.Element {
   const isAlignDisabled = selectedCount < 2;
-  const isDistributeDisabled = selectedCount < 3;
+  const isDistributeDisabled = selectedCount < 2;
 
   function handleStopPropagation(event: MouseEvent<HTMLButtonElement>): void {
     event.stopPropagation();

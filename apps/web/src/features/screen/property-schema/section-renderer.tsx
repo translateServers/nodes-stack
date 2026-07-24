@@ -11,7 +11,7 @@
  * 单向数据流不变：所有 onChange → buildNestedUpdate → onUpdate → store.updateComponent
  */
 
-import { Fragment, useMemo, useState, type ComponentType } from 'react';
+import { Fragment, useMemo, useState, type ComponentType, type JSX } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PanelSection } from '../components/ui-primitives';
@@ -180,16 +180,19 @@ export function PropertySchemaRenderer({
       </div>
       {tabs.map((tab) => (
         <TabsContent key={tab} value={tab}>
-          {schema
-            .filter((s) => s.tab === tab)
-            .map((section) => (
-              <PropertySectionRenderer
-                key={section.id}
-                section={section}
-                component={component}
-                onUpdate={onUpdate}
-              />
-            ))}
+          {schema.reduce<JSX.Element[]>((acc, section) => {
+            if (section.tab === tab) {
+              acc.push(
+                <PropertySectionRenderer
+                  key={section.id}
+                  section={section}
+                  component={component}
+                  onUpdate={onUpdate}
+                />,
+              );
+            }
+            return acc;
+          }, [])}
         </TabsContent>
       ))}
     </Tabs>

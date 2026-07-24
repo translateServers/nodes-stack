@@ -67,11 +67,18 @@ export function ProblemsPanel({
     );
   }
 
-  const grouped = SEVERITY_ORDER.map((level) => ({
-    level,
-    items: diagnostics.filter((d) => d.level === level),
-    config: SEVERITY_CONFIG[level],
-  })).filter((g) => g.items.length > 0);
+  // 单次遍历按 severity 分组（避免对 diagnostics 数组多次 filter）
+  const buckets = new Map<string, Diagnostic[]>();
+  for (const d of diagnostics) {
+    const list = buckets.get(d.level);
+    if (list) list.push(d);
+    else buckets.set(d.level, [d]);
+  }
+  const grouped = SEVERITY_ORDER.flatMap((level) => {
+    const items = buckets.get(level);
+    if (!items || items.length === 0) return [];
+    return [{ level, items, config: SEVERITY_CONFIG[level] }];
+  });
 
   return (
     <div className="border-t border-border bg-background" data-testid="blueprint-problems-panel">

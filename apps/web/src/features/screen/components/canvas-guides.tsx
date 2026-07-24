@@ -1,9 +1,46 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { useScreenEditorStore } from '../stores/editor-store';
 
 const RULER_SIZE = 20;
 /** 参考线拖出画布外多少距离后删除（屏幕像素） */
 const REMOVE_THRESHOLD = 30;
+
+/**
+ * rendering-hoist-jsx：参考线 style 的静态部分提升到模块级。
+ *
+ * 原实现每次参考线 map 渲染都新建完整 style 对象，静态字段（top/bottom/width/
+ * backgroundColor 等）每次都重新序列化。拆分后 spread 合并，静态字段引用稳定，
+ * 仅动态字段（left/top 位置、pointerEvents 状态）每次计算。
+ */
+const VERTICAL_GUIDE_BASE_STYLE: CSSProperties = {
+  top: RULER_SIZE,
+  bottom: 0,
+  width: 1,
+  backgroundColor: 'rgb(56 132 209)',
+};
+const HORIZONTAL_GUIDE_BASE_STYLE: CSSProperties = {
+  left: RULER_SIZE,
+  right: 0,
+  height: 1,
+  backgroundColor: 'rgb(56 132 209)',
+};
+const VERTICAL_GUIDE_HIT_AREA_STYLE: CSSProperties = { left: -3, width: 7 };
+const HORIZONTAL_GUIDE_HIT_AREA_STYLE: CSSProperties = { top: -3, height: 7 };
+const PREVIEW_VERTICAL_BASE_STYLE: CSSProperties = {
+  top: RULER_SIZE,
+  bottom: 0,
+  width: 1,
+  backgroundColor: 'rgb(56 132 209)',
+  opacity: 0.5,
+};
+const PREVIEW_HORIZONTAL_BASE_STYLE: CSSProperties = {
+  left: RULER_SIZE,
+  right: 0,
+  height: 1,
+  backgroundColor: 'rgb(56 132 209)',
+  opacity: 0.5,
+};
 
 /**
  * 安全地设置指针捕获。
@@ -244,18 +281,15 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
               isDragging ? 'opacity-100' : 'opacity-90'
             }`}
             style={{
+              ...VERTICAL_GUIDE_BASE_STYLE,
               left: screenX,
-              top: RULER_SIZE,
-              bottom: 0,
-              width: 1,
-              backgroundColor: 'rgb(56 132 209)',
               pointerEvents: guides.locked ? 'none' : 'auto',
             }}
             onPointerDown={handleGuidePointerDown('vertical', i)}
             onDoubleClick={handleGuideDoubleClick('vertical', i)}
           >
             {/* 加宽点击热区 */}
-            <div className="absolute inset-y-0" style={{ left: -3, width: 7 }} />
+            <div className="absolute inset-y-0" style={VERTICAL_GUIDE_HIT_AREA_STYLE} />
           </div>
         );
       })}
@@ -270,17 +304,14 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
               isDragging ? 'opacity-100' : 'opacity-90'
             }`}
             style={{
+              ...HORIZONTAL_GUIDE_BASE_STYLE,
               top: screenY,
-              left: RULER_SIZE,
-              right: 0,
-              height: 1,
-              backgroundColor: 'rgb(56 132 209)',
               pointerEvents: guides.locked ? 'none' : 'auto',
             }}
             onPointerDown={handleGuidePointerDown('horizontal', i)}
             onDoubleClick={handleGuideDoubleClick('horizontal', i)}
           >
-            <div className="absolute inset-x-0" style={{ top: -3, height: 7 }} />
+            <div className="absolute inset-x-0" style={HORIZONTAL_GUIDE_HIT_AREA_STYLE} />
           </div>
         );
       })}
@@ -292,12 +323,8 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
             <div
               className="absolute"
               style={{
+                ...PREVIEW_VERTICAL_BASE_STYLE,
                 left: canvasScreenLeft + hoverPos.pos * canvasScale,
-                top: RULER_SIZE,
-                bottom: 0,
-                width: 1,
-                backgroundColor: 'rgb(56 132 209)',
-                opacity: 0.5,
               }}
             />
           )}
@@ -305,12 +332,8 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
             <div
               className="absolute"
               style={{
+                ...PREVIEW_HORIZONTAL_BASE_STYLE,
                 top: canvasScreenTop + hoverPos.pos * canvasScale,
-                left: RULER_SIZE,
-                right: 0,
-                height: 1,
-                backgroundColor: 'rgb(56 132 209)',
-                opacity: 0.5,
               }}
             />
           )}

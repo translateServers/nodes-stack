@@ -107,7 +107,7 @@ export const ShortcutsHelpDialog = memo(function ShortcutsHelpDialog({
               ))}
             </div>
           </div>
-          {blueprintGrouped.length > 0 ? (
+          {blueprintGrouped.length > 0 && (
             <div>
               <h2 className="mb-3 text-sm font-semibold text-foreground">事件蓝图</h2>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -123,7 +123,7 @@ export const ShortcutsHelpDialog = memo(function ShortcutsHelpDialog({
                 ))}
               </div>
             </div>
-          ) : null}
+          )}
         </div>
       </DialogContent>
     </Dialog>

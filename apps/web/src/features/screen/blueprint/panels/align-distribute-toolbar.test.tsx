@@ -69,7 +69,7 @@ describe('AlignDistributeToolbar', () => {
       expect(screen.getByLabelText('水平等距分布')).toBeDisabled();
     });
 
-    it('selectedCount=2：对齐按钮启用，分布按钮禁用', () => {
+    it('selectedCount=2：对齐与分布按钮全部启用', () => {
       render(<AlignDistributeToolbar selectedCount={2} onAlign={vi.fn()} onDistribute={vi.fn()} />);
 
       expect(screen.getByLabelText('左对齐')).toBeEnabled();
@@ -78,9 +78,9 @@ describe('AlignDistributeToolbar', () => {
       expect(screen.getByLabelText('顶对齐')).toBeEnabled();
       expect(screen.getByLabelText('垂直居中')).toBeEnabled();
       expect(screen.getByLabelText('底对齐')).toBeEnabled();
-      // 分布需要 >= 3
-      expect(screen.getByLabelText('水平等距分布')).toBeDisabled();
-      expect(screen.getByLabelText('垂直等距分布')).toBeDisabled();
+      // 分布阈值与对齐一致（>= 2），2 个节点时纯函数返回 hasChange=false
+      expect(screen.getByLabelText('水平等距分布')).toBeEnabled();
+      expect(screen.getByLabelText('垂直等距分布')).toBeEnabled();
     });
 
     it('selectedCount=3：对齐与分布按钮全部启用', () => {
@@ -105,7 +105,7 @@ describe('AlignDistributeToolbar', () => {
 
     it('data-distribute-disabled 属性反映禁用状态', () => {
       const { rerender } = render(
-        <AlignDistributeToolbar selectedCount={2} onAlign={vi.fn()} onDistribute={vi.fn()} />,
+        <AlignDistributeToolbar selectedCount={1} onAlign={vi.fn()} onDistribute={vi.fn()} />,
       );
       expect(screen.getByLabelText('水平等距分布')).toHaveAttribute(
         'data-distribute-disabled',
@@ -113,7 +113,7 @@ describe('AlignDistributeToolbar', () => {
       );
 
       rerender(
-        <AlignDistributeToolbar selectedCount={3} onAlign={vi.fn()} onDistribute={vi.fn()} />,
+        <AlignDistributeToolbar selectedCount={2} onAlign={vi.fn()} onDistribute={vi.fn()} />,
       );
       expect(screen.getByLabelText('水平等距分布')).toHaveAttribute(
         'data-distribute-disabled',

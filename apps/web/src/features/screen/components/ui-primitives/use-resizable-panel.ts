@@ -5,6 +5,11 @@
  * - 拖拽 handle 实时调整，min/max 钳制
  * - 双击 handle 复位到默认宽度
  * - 宽度持久化到 localStorage（按 storageKey 区分左右面板）
+ *
+ * 性能优化（react-best-practices）：
+ * - js-cache-storage：拖拽结束时一次性写 localStorage，避免 pointermove 高频写入
+ * - advanced-event-handler-refs：widthRef 在 render 期同步，handlePointerDown 依赖空数组稳定
+ * - client-passive-event-listeners：pointermove/pointerup 使用 passive 监听
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -47,24 +52,39 @@ export function useResizablePanel({
   // 拖拽起点：初始指针 x 与初始宽度
   const dragStartRef = useRef<{ pointerX: number; width: number } | null>(null);
 
+  // P0 优化：render 期同步 width 到 ref，handlePointerDown 依赖空数组稳定
+  // advanced-event-handler-refs：避免 handlePointerDown 依赖 width 频繁重建
+  const widthRef = useRef(width);
+  widthRef.current = width;
+
   const clamp = useCallback(
     (value: number) => Math.min(maxWidth, Math.max(minWidth, Math.round(value))),
     [minWidth, maxWidth],
   );
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      dragStartRef.current = { pointerX: e.clientX, width };
-      setIsDragging(true);
+  // js-cache-storage：拖拽结束后一次性写入 localStorage，避免 pointermove 高频写入
+  const persistWidth = useCallback(
+    (value: number) => {
+      try {
+        localStorage.setItem(storageKey, String(value));
+      } catch {
+        // 隐私模式等场景下写入失败，忽略
+      }
     },
-    [width],
+    [storageKey],
   );
 
-  /** 双击复位默认宽度 */
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    dragStartRef.current = { pointerX: e.clientX, width: widthRef.current };
+    setIsDragging(true);
+  }, []);
+
+  /** 双击复位默认宽度并持久化 */
   const handleDoubleClick = useCallback(() => {
     setWidth(defaultWidth);
-  }, [defaultWidth]);
+    persistWidth(defaultWidth);
+  }, [defaultWidth, persistWidth]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -81,24 +101,18 @@ export function useResizablePanel({
     const handlePointerUp = () => {
       setIsDragging(false);
       dragStartRef.current = null;
+      // 拖拽结束时一次性持久化最终宽度
+      persistWidth(widthRef.current);
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+    // client-passive-event-listeners：拖拽场景不调用 preventDefault，passive 提升滚动性能
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerup', handlePointerUp, { passive: true });
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isDragging, clamp, direction]);
-
-  // 宽度持久化（拖拽结束后也会触发，代价可忽略）
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, String(width));
-    } catch {
-      // 隐私模式等场景下写入失败，忽略
-    }
-  }, [storageKey, width]);
+  }, [isDragging, clamp, direction, persistWidth]);
 
   return { width, isDragging, handlePointerDown, handleDoubleClick };
 }

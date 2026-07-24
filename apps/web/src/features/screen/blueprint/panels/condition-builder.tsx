@@ -34,6 +34,14 @@ export interface ConditionBuilderProps {
   className?: string;
 }
 
+/**
+ * js-hoist-regexp：数值识别正则提升到模块级。
+ *
+ * updateValue 在每次输入变更时调用，原实现内联正则字面量虽然 V8 会缓存，
+ * 但严格遵循 react-best-practices 规则要求提升到模块级，避免每次调用重新编译。
+ */
+const NUMERIC_RE = /^-?\d+(\.\d+)?$/;
+
 const OPERATOR_OPTIONS: ReadonlyArray<{ value: ConditionOperator; label: string }> = [
   { value: 'eq', label: '等于 (=)' },
   { value: 'ne', label: '不等于 (≠)' },
@@ -93,7 +101,7 @@ export function ConditionBuilder({
     let typedValue: string | number | boolean = value;
     if (value === 'true') typedValue = true;
     else if (value === 'false') typedValue = false;
-    else if (/^-?\d+(\.\d+)?$/.test(value) && value !== '') typedValue = Number(value);
+    else if (NUMERIC_RE.test(value) && value !== '') typedValue = Number(value);
     onChange({
       ...config,
       expression: { ...expression, value: typedValue },
@@ -237,7 +245,7 @@ export function ConditionBuilder({
         </label>
 
         {/* 比较值（empty/notEmpty 不显示） */}
-        {showValue ? (
+        {showValue && (
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-muted-foreground">
               比较值（自动识别 number / boolean / string）
@@ -251,7 +259,7 @@ export function ConditionBuilder({
               data-testid="condition-value"
             />
           </label>
-        ) : null}
+        )}
       </div>
     </div>
   );

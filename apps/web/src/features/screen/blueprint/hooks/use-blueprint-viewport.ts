@@ -10,9 +10,14 @@
  * - 缩放按钮：zoomIn / zoomOut / zoomTo
  *
  * 全局快捷键挂起由 Task 5.4 在 Sheet 快捷键分层处理。
+ *
+ * 性能优化（react-best-practices）：
+ * - rerender-derived-state-no-effect：isSpacePanning 在 render 期派生，避免 useState+useEffect 双重渲染
+ * - rerender-functional-setstate：zoomIn/zoomOut 通过 reactFlow.getZoom() 读取最新值，回调稳定
+ * - advanced-event-handler-refs：viewportRef 在 render 期同步，cleanup effect 只依赖空数组
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   useKeyPress,
   useReactFlow,
@@ -111,22 +116,16 @@ export function useBlueprintViewport(
   const restoredRef = useRef(false);
 
   // Space 平移：监听 Space 按键，按下时切换 panOnDrag
+  // rerender-derived-state-no-effect：直接在 render 期派生 isSpacePanning，
+  // 避免 useState + useEffect 的双重渲染开销
   const spacePressed = useKeyPress('Space', { actInsideInputWithModifier: false });
-  const [isSpacePanning, setIsSpacePanning] = useState(false);
-
-  useEffect(() => {
-    if (!enableSpacePan) {
-      setIsSpacePanning(false);
-      return;
-    }
-    setIsSpacePanning(spacePressed);
-  }, [spacePressed, enableSpacePan]);
+  const isSpacePanning = enableSpacePan && spacePressed;
 
   // panOnDrag：
   // - Space 按下时启用拖拽平移（true）
   // - 默认（左键拖拽）：false（避免与框选冲突，框选由 selectionKeyCode=Meta 触发）
   // - 也可设为 [1]（中键拖拽），但 M1 简化为 Space 模式
-  const panOnDrag = isSpacePanning ? true : false;
+  const panOnDrag: boolean | number[] = isSpacePanning;
 
   const config: UseBlueprintViewportResult['config'] = {
     minZoom,
@@ -143,8 +142,14 @@ export function useBlueprintViewport(
     selectionOnDrag: !isSpacePanning,
   };
 
-  // 当前缩放级别（来自 viewport，响应式）
+  // 当前缩放级别（来自 viewport，响应式）—— 仅供展示用
+  // 缩放操作回调通过 reactFlow.getZoom() 读取最新值，避免依赖 zoom 造成回调不稳定
   const zoom = viewport.zoom;
+
+  // render 期同步 viewport 到 ref，供 unmount cleanup 读取最新值
+  // advanced-event-handler-refs：避免 effect 依赖 viewport 导致每次视口变化都重新注册 cleanup
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
 
   // Fit View：适配所有节点
   const fitView = useCallback(async () => {
@@ -185,16 +190,20 @@ export function useBlueprintViewport(
   );
 
   // 放大一级
+  // rerender-functional-setstate：通过 reactFlow.getZoom() 读取最新值，
+  // 避免依赖响应式 zoom 造成回调重建
   const zoomIn = useCallback(async () => {
-    const nextZoom = Math.min(zoom + zoomStep, maxZoom);
+    const currentZoom = reactFlow.getZoom();
+    const nextZoom = Math.min(currentZoom + zoomStep, maxZoom);
     return reactFlow.zoomTo(nextZoom, { duration: 200 });
-  }, [reactFlow, zoom, zoomStep, maxZoom]);
+  }, [reactFlow, zoomStep, maxZoom]);
 
   // 缩小一级
   const zoomOut = useCallback(async () => {
-    const nextZoom = Math.max(zoom - zoomStep, minZoom);
+    const currentZoom = reactFlow.getZoom();
+    const nextZoom = Math.max(currentZoom - zoomStep, minZoom);
     return reactFlow.zoomTo(nextZoom, { duration: 200 });
-  }, [reactFlow, zoom, zoomStep, minZoom]);
+  }, [reactFlow, zoomStep, minZoom]);
 
   // 缩放到指定级别（限制在 min/max 范围内）
   const zoomTo = useCallback(
@@ -231,11 +240,12 @@ export function useBlueprintViewport(
   }, [reactFlow]);
 
   // 卸载时缓存当前视口，供下次打开恢复
+  // 依赖空数组：通过 viewportRef 读取最新 viewport，避免每次视口变化都重新注册 effect
   useEffect(() => {
     return () => {
-      cachedViewport = viewport;
+      cachedViewport = viewportRef.current;
     };
-  }, [viewport]);
+  }, []);
 
   return {
     config,

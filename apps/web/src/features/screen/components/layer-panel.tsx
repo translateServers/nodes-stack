@@ -326,7 +326,8 @@ export function LayerPanel() {
   const canGroup = selectedComponentIds.length >= 2;
   const canUngroup = (() => {
     if (!project || selectedComponentIds.length === 0) return false;
-    return project.components.some((c) => c.parentId && selectedComponentIds.includes(c.id));
+    // O(1) 查询复用 selectedIdSet，避免 N×M 线性扫描
+    return project.components.some((c) => c.parentId && selectedIdSet.has(c.id));
   })();
 
   // 选中组件快照：供命令上下文使用
@@ -489,9 +490,8 @@ export function LayerPanel() {
   /** 构造单个组件行的 LayerCommandContext */
   const buildComponentCtx = (comp: ScreenComponent): LayerCommandContext => {
     // 调用方约定：onContextMenu 已保证选区包含 target；这里做防御性兜底
-    const ctxSelected = selectedComponents.some((c) => c.id === comp.id)
-      ? selectedComponents
-      : [comp];
+    // O(1) 查询复用 selectedIdSet，避免每行渲染线性扫描选中列表
+    const ctxSelected = selectedIdSet.has(comp.id) ? selectedComponents : [comp];
     return {
       selectedComponents: ctxSelected,
       targetComponent: comp,

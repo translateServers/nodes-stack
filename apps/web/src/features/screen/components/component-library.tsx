@@ -60,8 +60,30 @@ export function ComponentLibrary() {
   // 按名称 / 类型 / keywords 过滤（大小写不敏感）
   const filtered = useMemo(() => searchComponentDefinitions(keyword), [keyword]);
 
-  const visibleCategories = CATEGORIES.filter((category) =>
-    filtered.some((d) => d.category === category),
+  /**
+   * js-combine-iterations + js-set-map-lookups：原实现为
+   * `CATEGORIES.filter(category => filtered.some(d => d.category === category))`，
+   * 嵌套 O(N×M)；下方渲染又对每个 category 重新 `filtered.filter(d => d.category === category)`，
+   * 总计 O(N×M) + O(C×N)。改为单次遍历按 category 分组为 Map，后续渲染直接从 Map 取值，
+   * 总复杂度降为 O(N)。
+   */
+  const filteredByCategory = useMemo(() => {
+    const map = new Map<string, ComponentDefinition[]>();
+    for (const d of filtered) {
+      const list = map.get(d.category);
+      if (list) {
+        list.push(d);
+      } else {
+        map.set(d.category, [d]);
+      }
+    }
+    return map;
+  }, [filtered]);
+
+  // visibleCategories 直接从 Map 的 key 迭代获取，避免 O(N×M) 嵌套查找
+  const visibleCategories = useMemo(
+    () => CATEGORIES.filter((category) => filteredByCategory.has(category)),
+    [filteredByCategory],
   );
 
   // 关键词为空时显示最近使用区，关键词非空时不显示（搜索结果优先）
@@ -97,11 +119,9 @@ export function ComponentLibrary() {
           {visibleCategories.map((category) => (
             <PanelSection key={category} title={CATEGORY_LABELS[category] ?? category}>
               <div className="flex flex-col gap-1">
-                {filtered
-                  .filter((d) => d.category === category)
-                  .map((def) => (
-                    <ComponentLibraryItem key={def.type} def={def} onDragStart={handleDragStart} />
-                  ))}
+                {(filteredByCategory.get(category) ?? []).map((def) => (
+                  <ComponentLibraryItem key={def.type} def={def} onDragStart={handleDragStart} />
+                ))}
               </div>
             </PanelSection>
           ))}

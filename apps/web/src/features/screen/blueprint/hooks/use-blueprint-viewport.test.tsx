@@ -228,8 +228,8 @@ describe('use-blueprint-viewport', () => {
     });
 
     it('zoomIn 不超过 maxZoom', async () => {
-      // 模拟当前 zoom 已达上限
-      mocks.viewport.zoom = 2;
+      // 模拟当前 zoom 已达上限（zoomIn 通过 reactFlow.getZoom() 读取最新值）
+      mocks.getZoom.mockReturnValue(2);
 
       const { result } = renderHook(() => useBlueprintViewport(), { wrapper: Wrapper });
 
@@ -242,7 +242,8 @@ describe('use-blueprint-viewport', () => {
     });
 
     it('zoomOut 不低于 minZoom', async () => {
-      mocks.viewport.zoom = 0.25;
+      // 模拟当前 zoom 已达下限（zoomOut 通过 reactFlow.getZoom() 读取最新值）
+      mocks.getZoom.mockReturnValue(0.25);
 
       const { result } = renderHook(() => useBlueprintViewport(), { wrapper: Wrapper });
 

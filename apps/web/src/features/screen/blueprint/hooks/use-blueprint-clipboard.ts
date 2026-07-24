@@ -13,7 +13,7 @@
  *   并更新边的 source/target 引用，防止跨项目 ID 冲突
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import {
   BlueprintClipboardSchema,
@@ -144,18 +144,31 @@ export function useBlueprintClipboard(
 ): UseBlueprintClipboardResult {
   const { nodes, edges, setNodes, setEdges } = options;
 
+  // P0 优化：render 期同步最新 props 到 ref，callback 依赖空数组稳定
+  // advanced-event-handler-refs：避免 callback 依赖 nodes/edges/setNodes/setEdges 频繁重建
+  // client-event-listeners：callback 稳定后，keydown 监听只注册一次
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  const setNodesRef = useRef(setNodes);
+  const setEdgesRef = useRef(setEdges);
+  nodesRef.current = nodes;
+  edgesRef.current = edges;
+  setNodesRef.current = setNodes;
+  setEdgesRef.current = setEdges;
+
   const copy = useCallback(async () => {
-    const payload = buildClipboardPayload(nodes, edges);
+    const payload = buildClipboardPayload(nodesRef.current, edgesRef.current);
     if (!payload) return;
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload));
     } catch {
       toast.error('复制到剪贴板失败，请检查浏览器权限');
     }
-  }, [nodes, edges]);
+  }, []);
 
   const cut = useCallback(async () => {
-    const payload = buildClipboardPayload(nodes, edges);
+    const currentNodes = nodesRef.current;
+    const payload = buildClipboardPayload(currentNodes, edgesRef.current);
     if (!payload) return;
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload));
@@ -163,10 +176,12 @@ export function useBlueprintClipboard(
       toast.error('复制到剪贴板失败，请检查浏览器权限');
       return;
     }
-    const selectedIds = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
-    setNodes((nds) => nds.filter((n) => !selectedIds.has(n.id)));
-    setEdges((eds) => eds.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)));
-  }, [nodes, edges, setNodes, setEdges]);
+    const selectedIds = new Set(currentNodes.filter((n) => n.selected).map((n) => n.id));
+    setNodesRef.current((nds) => nds.filter((n) => !selectedIds.has(n.id)));
+    setEdgesRef.current((eds) =>
+      eds.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)),
+    );
+  }, []);
 
   const paste = useCallback(async () => {
     let text: string;
@@ -203,12 +218,12 @@ export function useBlueprintClipboard(
     }));
     const rfEdges = toRFEdges(newBpEdges);
 
-    setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...rfNodes]);
-    setEdges((eds) => [...eds, ...rfEdges]);
-  }, [setNodes, setEdges]);
+    setNodesRef.current((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...rfNodes]);
+    setEdgesRef.current((eds) => [...eds, ...rfEdges]);
+  }, []);
 
   const duplicate = useCallback(() => {
-    const payload = buildClipboardPayload(nodes, edges);
+    const payload = buildClipboardPayload(nodesRef.current, edgesRef.current);
     if (!payload) return;
 
     const { nodes: newBpNodes, edges: newBpEdges } = regenerateIds(payload.nodes, payload.edges);
@@ -220,11 +235,11 @@ export function useBlueprintClipboard(
     }));
     const rfEdges = toRFEdges(newBpEdges);
 
-    setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...rfNodes]);
-    setEdges((eds) => [...eds, ...rfEdges]);
-  }, [nodes, edges, setNodes, setEdges]);
+    setNodesRef.current((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...rfNodes]);
+    setEdgesRef.current((eds) => [...eds, ...rfEdges]);
+  }, []);
 
-  // 键盘监听
+  // 键盘监听：callback 稳定后 effect deps 不变，监听只注册一次
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const isCtrl = e.ctrlKey || e.metaKey;

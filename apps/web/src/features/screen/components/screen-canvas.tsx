@@ -155,6 +155,25 @@ const initialDimension: DimensionInfo = {
 };
 
 /**
+ * H1 性能优化：Moveable 配置常量提升到模块级。
+ *
+ * react-moveable 内部对 snapDirections / elementSnapDirections / renderDirections
+ * 做引用相等性检查决定是否重算吸附方向与渲染控制点。若在组件函数体内以对象/数组
+ * 字面量传入，每次渲染都会产生新引用，触发 Moveable 内部全量重算。
+ * 提升为模块级常量后引用稳定，仅初始化一次。
+ */
+const SNAP_DIRECTIONS = {
+  top: true,
+  bottom: true,
+  left: true,
+  right: true,
+  center: true,
+  middle: true,
+};
+const ELEMENT_SNAP_DIRECTIONS = SNAP_DIRECTIONS;
+const RENDER_DIRECTIONS = ['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w'];
+
+/**
  * 独立的 dimension 状态 store。
  * 将拖拽过程中的尺寸/位置提示信息从画布主组件中剥离，
  * 避免 onDrag 高频回调触发整个画布重渲染导致拖拽抖动。
@@ -318,6 +337,16 @@ export function ScreenCanvas({
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
 
+  /**
+   * Canvas Pan Optimization：用 ref 镜像 canvasScale / canvasOffset，
+   * 供 handlePanMove / handlePanStart / shapeCreation 等高频回调读取最新值，
+   * 消除对 canvasOffset 的 closure 依赖（每次平移 canvasOffset 变化会导致回调重建）。
+   */
+  const canvasScaleRef = useRef(canvasScale);
+  const canvasOffsetRef = useRef(canvasOffset);
+  canvasScaleRef.current = canvasScale;
+  canvasOffsetRef.current = canvasOffset;
+
   const showBorderGuides = useScreenEditorStore((s) => s.showBorderGuides);
   const selectComponents = useScreenEditorStore((s) => s.selectComponents);
   const clearSelection = useScreenEditorStore((s) => s.clearSelection);
@@ -331,7 +360,13 @@ export function ScreenCanvas({
   // Alt+拖拽复制（适配表 #12）：onDragEnd 时调用，复制选中到光标位置
   const duplicateSelectedToPosition = useScreenEditorStore((s) => s.duplicateSelectedToPosition);
   const setCanvasScaleAndOffset = useScreenEditorStore((s) => s.setCanvasScaleAndOffset);
-  const guides = useScreenEditorStore((s) => s.guides);
+  // M1 优化：拆分 guides 订阅为独立字段，避免单字段变化触发整个 ScreenCanvas 重渲染。
+  // - guides.locked 变化不影响画布渲染（仅状态栏有 toggle 显示），不订阅
+  // - guides.vertical / horizontal 是数组引用，addGuide/moveGuide 仅修改对应方向数组，
+  //   拆分后另一方向订阅不会触发重渲染
+  const guidesVisible = useScreenEditorStore((s) => s.guides.visible);
+  const guidesVertical = useScreenEditorStore((s) => s.guides.vertical);
+  const guidesHorizontal = useScreenEditorStore((s) => s.guides.horizontal);
   const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
   const smartGuidesEnabled = useScreenEditorStore((s) => s.smartGuidesEnabled);
   const gridEnabled = useScreenEditorStore((s) => s.gridEnabled);
@@ -344,6 +379,14 @@ export function ScreenCanvas({
   const moveableRef = useRef<Moveable>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  /**
+   * 画布变换层 div 的 ref（应用 translate3d + scale 的元素）。
+   *
+   * Canvas Pan Optimization：抓手工具拖拽画布时，直接操作此 DOM 元素的 transform
+   * （同步，GPU 合成层），rAF 节流 zustand store 更新，避免每次 pointermove 触发
+   * 整个 ScreenCanvas 重渲染（Moveable/Selecto/所有组件）导致掉帧。
+   */
+  const canvasTransformRef = useRef<HTMLDivElement>(null);
   // 手动双击检测：Selecto 在 click 事件上调用 preventDefault 会抑制原生 dblclick，
   // 因此这里记录上一次单击的 componentId 与时间戳，自行判定双击。
   const lastClickRef = useRef<ClickRecord | null>(null);
@@ -755,17 +798,17 @@ export function ScreenCanvas({
       e.preventDefault();
       e.stopPropagation();
       trySetPointerCapture(e.target, e.pointerId);
+      // Canvas Pan Optimization：用 ref 读取最新 offset，消除对 canvasOffset 的 closure 依赖
       panState.current = {
         startX: e.clientX,
         startY: e.clientY,
-        origX: canvasOffset.x,
-        origY: canvasOffset.y,
+        origX: canvasOffsetRef.current.x,
+        origY: canvasOffsetRef.current.y,
       };
       // 任务 3.6：镜像平移开始到交互状态机
       dispatchInteraction('start-pan');
     },
     [
-      canvasOffset,
       dispatchInteraction,
       activeTool,
       interactionState,
@@ -785,8 +828,11 @@ export function ScreenCanvas({
         const el = containerRef.current;
         if (!el) return;
         const rect = el.getBoundingClientRect();
-        const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
-        const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+        // Canvas Pan Optimization：用 ref 读取最新 offset/scale
+        const off = canvasOffsetRef.current;
+        const scale = canvasScaleRef.current;
+        const canvasX = (e.clientX - rect.left - off.x) / scale;
+        const canvasY = (e.clientY - rect.top - off.y) / scale;
         setShapeCreation((prev) =>
           prev ? { ...prev, currentX: canvasX, currentY: canvasY } : null,
         );
@@ -795,12 +841,22 @@ export function ScreenCanvas({
       if (!panState.current) return;
       const dx = e.clientX - panState.current.startX;
       const dy = e.clientY - panState.current.startY;
-      setCanvasScaleAndOffset(canvasScale, {
-        x: panState.current.origX + dx,
-        y: panState.current.origY + dy,
+      const newX = panState.current.origX + dx;
+      const newY = panState.current.origY + dy;
+      const scale = canvasScaleRef.current;
+      // Canvas Pan Optimization：直接操作 DOM transform（同步，GPU 合成层），
+      // 避免 pointermove 触发 zustand store 更新 -> ScreenCanvas 重渲染 -> 掉帧。
+      // transform 值与 React 渲染产物一致，store 更新后 React style diff 不会覆盖。
+      const transformEl = canvasTransformRef.current;
+      if (transformEl) {
+        transformEl.style.transform = `translate3d(${newX}px, ${newY}px, 0) scale(${scale})`;
+      }
+      // rAF 节流 store 更新：同帧多次 pointermove 仅最后一次生效，降低重渲染频率
+      gestureRafThrottlerRef.current?.schedule(() => {
+        setCanvasScaleAndOffset(scale, { x: newX, y: newY });
       });
     },
-    [shapeCreation, canvasScale, canvasOffset, setCanvasScaleAndOffset],
+    [shapeCreation, setCanvasScaleAndOffset],
   );
 
   const handlePanEnd = useCallback(
@@ -850,10 +906,32 @@ export function ScreenCanvas({
       if (!panState.current) return;
       panState.current = null;
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-      // 任务 3.6：镜像平移结束到交互状态机（panning → idle）
+      // Canvas Pan Optimization：丢弃挂起的 rAF store 更新，同步最终值到 store。
+      gestureRafThrottlerRef.current?.cancel();
+      const transformEl = canvasTransformRef.current;
+      if (transformEl) {
+        const match = transformEl.style.transform.match(
+          /translate3d\(([-\d.]+)px,\s*([-\d.]+)px,\s*0\)\s*scale\(([\d.]+)\)/,
+        );
+        if (match) {
+          setCanvasScaleAndOffset(Number.parseFloat(match[3]), {
+            x: Number.parseFloat(match[1]),
+            y: Number.parseFloat(match[2]),
+          });
+        } else {
+          setCanvasScaleAndOffset(canvasScaleRef.current, canvasOffsetRef.current);
+        }
+      }
       dispatchInteraction('pointer-up');
     },
-    [shapeCreation, project, addComponent, selectComponent, dispatchInteraction],
+    [
+      shapeCreation,
+      project,
+      addComponent,
+      selectComponent,
+      dispatchInteraction,
+      setCanvasScaleAndOffset,
+    ],
   );
 
   useEffect(() => {
@@ -886,10 +964,30 @@ export function ScreenCanvas({
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
-  }, [setCanvasScaleAndOffset, project]);
+    // H4 优化：handleWheel 内通过 useScreenEditorStore.getState() 读取最新状态，
+    // 不依赖闭包中的 project，移除该依赖避免每次 project 变化重绑事件监听器。
+  }, [setCanvasScaleAndOffset]);
 
   const components = project?.components ?? [];
   const canvas = project?.canvas;
+
+  /**
+   * H2 性能优化：构建组件 ID → 组件的 Map，替代 12 处 Array.find 查找。
+   *
+   * react-moveable 的 onDragStart/onResizeStart/onRotateStart 等高频回调内
+   * 需要按 data-component-id 查找组件，原先 O(N) 的 find 在组件数量较多时
+   * 累积开销显著。Map.get 为 O(1)，且依赖数组稳定（components 引用不变时
+   * Map 引用也不变），不会触发下游 useMemo 重算。
+   *
+   * 仅依赖 components 引用，组件 CRUD 后 store 返回新数组触发重建。
+   */
+  const componentMap = useMemo(() => {
+    const map = new Map<string, ScreenComponent>();
+    for (const c of components) {
+      map.set(c.id, c);
+    }
+    return map;
+  }, [components]);
 
   /**
    * Memo 化可见组件列表（过滤 + 按 zIndex 排序）。
@@ -933,11 +1031,11 @@ export function ScreenCanvas({
         ? [
             '0',
             `${canvas.width}`,
-            ...(guides.visible ? guides.vertical.map(String) : []),
+            ...(guidesVisible ? guidesVertical.map(String) : []),
             ...(gridEnabled ? gridVerticalLines.map(String) : []),
           ]
         : [],
-    [canvas, guides.visible, guides.vertical, gridEnabled, gridVerticalLines],
+    [canvas, guidesVisible, guidesVertical, gridEnabled, gridVerticalLines],
   );
   const horizontalGuidelines = useMemo(
     () =>
@@ -945,11 +1043,11 @@ export function ScreenCanvas({
         ? [
             '0',
             `${canvas.height}`,
-            ...(guides.visible ? guides.horizontal.map(String) : []),
+            ...(guidesVisible ? guidesHorizontal.map(String) : []),
             ...(gridEnabled ? gridHorizontalLines.map(String) : []),
           ]
         : [],
-    [canvas, guides.visible, guides.horizontal, gridEnabled, gridHorizontalLines],
+    [canvas, guidesVisible, guidesHorizontal, gridEnabled, gridHorizontalLines],
   );
 
   /**
@@ -991,6 +1089,7 @@ export function ScreenCanvas({
       onPointerUp={handlePanEnd}
     >
       <div
+        ref={canvasTransformRef}
         className="absolute"
         style={{
           transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${canvasScale})`,
@@ -1069,9 +1168,11 @@ export function ScreenCanvas({
           resizable={moveableResizable}
           rotatable={moveableRotatable}
           // Canvas Drag Optimization：用 Moveable 内置 snappable 替代自定义 Smart Guides。
-          // smartGuidesEnabled 时通过 elementGuidelines 传入其他组件 DOM 作为吸附目标，
-          // snapEnabled 控制标尺/网格对齐，gridEnabled 控制网格对齐。
-          snappable={snapEnabled || smartGuidesEnabled || gridEnabled}
+          // snapEnabled 是状态栏总开关：关闭后所有吸附（组件间/标尺/网格）一律禁用。
+          // smartGuidesEnabled / gridEnabled / guidesVisible 仅控制各自吸附目标是否填充
+          //（见 elementGuidelines / verticalGuidelines / horizontalGuidelines memo），
+          // 不再参与 snappable 的 OR，否则关掉总开关时吸附仍会生效。
+          snappable={snapEnabled}
           snapThreshold={5}
           snapGap={false}
           keepRatio={shiftHeld}
@@ -1080,22 +1181,8 @@ export function ScreenCanvas({
           throttleResize={1}
           throttleRotate={shiftHeld ? 15 : 0}
           hideChildMoveableDefaultLines={isGroupSelect}
-          snapDirections={{
-            top: true,
-            bottom: true,
-            left: true,
-            right: true,
-            center: true,
-            middle: true,
-          }}
-          elementSnapDirections={{
-            top: true,
-            bottom: true,
-            left: true,
-            right: true,
-            center: true,
-            middle: true,
-          }}
+          snapDirections={SNAP_DIRECTIONS}
+          elementSnapDirections={ELEMENT_SNAP_DIRECTIONS}
           elementGuidelines={elementGuidelines}
           verticalGuidelines={verticalGuidelines}
           horizontalGuidelines={horizontalGuidelines}
@@ -1103,7 +1190,7 @@ export function ScreenCanvas({
           isDisplayInnerSnapDigit={true}
           zoom={1 / canvasScale}
           origin={false}
-          renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}
+          renderDirections={RENDER_DIRECTIONS}
           // --- Single target events ---
           onDragStart={(e) => {
             // 任务 12.1：拖拽由状态机仲裁，拒绝非法重入
@@ -1116,7 +1203,7 @@ export function ScreenCanvas({
             }
             const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
-            const comp = components.find((c: ScreenComponent) => c.id === id);
+            const comp = componentMap.get(id);
             if (comp?.status.locked) return false;
             const datas = e.datas as unknown as DragDatas;
             datas.id = id;
@@ -1208,7 +1295,7 @@ export function ScreenCanvas({
             if (datas.isAltCopy) {
               duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
             } else {
-              const comp = components.find((c: ScreenComponent) => c.id === id);
+              const comp = componentMap.get(id);
               if (!comp) return;
               updateComponent(id, {
                 position: {
@@ -1227,7 +1314,7 @@ export function ScreenCanvas({
             }
             const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
-            const comp = components.find((c: ScreenComponent) => c.id === id);
+            const comp = componentMap.get(id);
             if (comp?.status.locked) return false;
             const datas = e.datas as unknown as ResizeDatas;
             datas.id = id;
@@ -1314,7 +1401,7 @@ export function ScreenCanvas({
             const datas = e.datas as unknown as Partial<ResizeDatas>;
             const id = datas.id;
             if (!id) return;
-            const comp = components.find((c: ScreenComponent) => c.id === id);
+            const comp = componentMap.get(id);
             if (!comp) return;
             const last = e.lastEvent as unknown as
               | {
@@ -1343,7 +1430,7 @@ export function ScreenCanvas({
             }
             const id = getComponentIdFromTarget(e.target);
             if (!id) return false;
-            const comp = components.find((c: ScreenComponent) => c.id === id);
+            const comp = componentMap.get(id);
             if (comp?.status.locked) return false;
             const datas = e.datas as unknown as RotateDatas;
             datas.id = id;
@@ -1390,7 +1477,7 @@ export function ScreenCanvas({
             const datas = e.datas as unknown as Partial<RotateDatas>;
             const id = datas.id;
             if (!id) return;
-            const comp = components.find((c: ScreenComponent) => c.id === id);
+            const comp = componentMap.get(id);
             if (!comp) return;
             const last = e.lastEvent as unknown as
               | { rotation: number; isDrag: boolean }
@@ -1420,7 +1507,7 @@ export function ScreenCanvas({
             for (const t of e.targets) {
               const id = getComponentIdFromTarget(t);
               if (id) {
-                const comp = components.find((c: ScreenComponent) => c.id === id);
+                const comp = componentMap.get(id);
                 if (comp?.status.locked) return false;
                 ids.push(id);
                 // Canvas Drag Optimization：记录每个组件的 rotation/flip，
@@ -1515,7 +1602,7 @@ export function ScreenCanvas({
                 .map((ev) => {
                   const id = getComponentIdFromTarget(ev.target);
                   if (!id) return null;
-                  const comp = components.find((c: ScreenComponent) => c.id === id);
+                  const comp = componentMap.get(id);
                   if (!comp) return null;
                   const last = ev.lastEvent as unknown as
                     | { beforeTranslate: [number, number] }
@@ -1552,7 +1639,7 @@ export function ScreenCanvas({
             for (const t of e.targets) {
               const id = getComponentIdFromTarget(t);
               if (id) {
-                const comp = components.find((c: ScreenComponent) => c.id === id);
+                const comp = componentMap.get(id);
                 if (comp?.status.locked) return false;
               }
             }
@@ -1562,7 +1649,7 @@ export function ScreenCanvas({
           onResizeGroup={(e) => {
             for (const ev of e.events) {
               const id = getComponentIdFromTarget(ev.target);
-              const comp = id ? components.find((c: ScreenComponent) => c.id === id) : undefined;
+              const comp = id ? componentMap.get(id) : undefined;
               const rotation = comp?.position.rotation ?? 0;
               const flipX = comp?.style.flipX === true;
               const flipY = comp?.style.flipY === true;
@@ -1589,7 +1676,7 @@ export function ScreenCanvas({
               .map((ev) => {
                 const id = getComponentIdFromTarget(ev.target);
                 if (!id) return null;
-                const comp = components.find((c: ScreenComponent) => c.id === id);
+                const comp = componentMap.get(id);
                 if (!comp) return null;
                 const last = ev.lastEvent as unknown as
                   | {
@@ -1725,9 +1812,7 @@ export function ScreenCanvas({
           // 任务 5.3：双击文本组件进入编辑，不触发分组进入
           // 仅在选择工具下生效（其他工具的创建行为由各自处理器负责）
           if (result.isDoubleClick && activeTool === 'select' && result.selection.length === 1) {
-            const clickedComp = components.find(
-              (c: ScreenComponent) => c.id === result.selection[0],
-            );
+            const clickedComp = componentMap.get(result.selection[0]);
             if (clickedComp?.type === 'text') {
               // 进入文本编辑态
               const content = (clickedComp.props as { content?: unknown }).content;

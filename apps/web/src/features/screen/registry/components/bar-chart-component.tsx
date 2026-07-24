@@ -83,25 +83,37 @@ export function BarChartComponent({
   }
 
   const data = parseResult.data;
-  const maxValue = Math.max(...data.map((d) => d.value), 1);
   const barColor = style.backgroundColor || '#3b82f6';
   const padding = { top: title ? 30 : 10, right: 10, bottom: 30, left: 40 };
   const tooltipOnHover = interaction?.tooltipOnHover ?? false;
 
+  // L1+L2 性能优化：将原本在 data.map 内每次迭代都重复计算的不变量提到循环外。
+  // 原实现每项都重算 chartWidth/chartHeight/barWidth/gap，这些只依赖 data.length
+  // 与 padding，与 item 无关；循环内仅需 barHeight / x / y 这类依赖 item.value 与 i 的值。
+  // 同时缓存 style.color 回退值，避免每次渲染都重算。
+  // 注意：maxValue 不用 useMemo（react-best-practices 规则 rerender-simple-expression-in-memo：
+  // 简单 primitive 表达式不需要 memo 包裹；且 useMemo 不能放在 early return 之后违反 Hooks 规则）
+  const maxValue = Math.max(...data.map((d) => d.value), 1);
+  const chartWidth = 400 - padding.left - padding.right;
+  const chartHeight = 300 - padding.top - padding.bottom;
+  const barWidth = (chartWidth / data.length) * 0.7;
+  const gap = (chartWidth / data.length) * 0.3;
+  const barWidthPlusGap = barWidth + gap;
+  const halfBarWidth = barWidth / 2;
+  const labelColor = style.color ?? '#aaa';
+  const titleColor = style.color ?? '#fff';
+  const bottomLabelY = 300 - 10;
+
   return (
     <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
       {title && (
-        <text x={200} y={20} textAnchor="middle" fontSize={14} fill={style.color ?? '#fff'}>
+        <text x={200} y={20} textAnchor="middle" fontSize={14} fill={titleColor}>
           {title}
         </text>
       )}
       {data.map((item, i) => {
-        const chartWidth = 400 - padding.left - padding.right;
-        const chartHeight = 300 - padding.top - padding.bottom;
-        const barWidth = (chartWidth / data.length) * 0.7;
-        const gap = (chartWidth / data.length) * 0.3;
         const barHeight = (item.value / maxValue) * chartHeight;
-        const x = padding.left + i * (barWidth + gap) + gap / 2;
+        const x = padding.left + i * barWidthPlusGap + gap / 2;
         const y = padding.top + chartHeight - barHeight;
 
         return (
@@ -109,20 +121,20 @@ export function BarChartComponent({
             {tooltipOnHover && <title>{`${item.name}: ${item.value}`}</title>}
             <rect x={x} y={y} width={barWidth} height={barHeight} fill={barColor} rx={2} />
             <text
-              x={x + barWidth / 2}
-              y={300 - 10}
+              x={x + halfBarWidth}
+              y={bottomLabelY}
               textAnchor="middle"
               fontSize={11}
-              fill={style.color ?? '#aaa'}
+              fill={labelColor}
             >
               {item.name}
             </text>
             <text
-              x={x + barWidth / 2}
+              x={x + halfBarWidth}
               y={y - 4}
               textAnchor="middle"
               fontSize={10}
-              fill={style.color ?? '#aaa'}
+              fill={labelColor}
             >
               {item.value}
             </text>

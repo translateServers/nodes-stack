@@ -352,13 +352,22 @@ export function ScreenEditor() {
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
 
+  /**
+   * P0 优化：提前计算文本编辑器组件，避免 JSX 中重复 find 调用（原代码两次 find 同一组件）。
+   * js-cache-property-access：单次查找 + 复用结果
+   */
+  const editingComponent = editorSession.textEditing
+    ? storeProject?.components.find((c) => c.id === editorSession.textEditing?.componentId)
+    : undefined;
+
+  // P0 优化：用 getState() 读取 canvasScale，避免 callback 依赖 canvasScale 导致每次缩放重建
   const handleZoomIn = useCallback(() => {
-    setCanvasScale(Math.min(5, canvasScale + 0.1));
-  }, [canvasScale, setCanvasScale]);
+    setCanvasScale(Math.min(5, useScreenEditorStore.getState().canvasScale + 0.1));
+  }, [setCanvasScale]);
 
   const handleZoomOut = useCallback(() => {
-    setCanvasScale(Math.max(0.1, canvasScale - 0.1));
-  }, [canvasScale, setCanvasScale]);
+    setCanvasScale(Math.max(0.1, useScreenEditorStore.getState().canvasScale - 0.1));
+  }, [setCanvasScale]);
 
   const handleFitToScreen = useCallback(() => {
     if (!canvasContainerRef.current || !storeProject) return;
@@ -464,22 +473,15 @@ export function ScreenEditor() {
                 canvasHeight={canvasHeight}
               />
               {/* 任务 5.4：文本编辑器浮层，仅在 textEditing 非空时渲染 */}
-              {editorSession.textEditing &&
-                storeProject?.components.find(
-                  (c) => c.id === editorSession.textEditing?.componentId,
-                ) && (
-                  <TextEditorOverlay
-                    component={
-                      storeProject.components.find(
-                        (c) => c.id === editorSession.textEditing?.componentId,
-                      )!
-                    }
-                    isNewlyCreated={editorSession.textEditing.isNewlyCreated}
-                    canvasScale={canvasScale}
-                    canvasOffset={canvasOffset}
-                    onExit={handleTextEditorExit}
-                  />
-                )}
+              {editingComponent && editorSession.textEditing && (
+                <TextEditorOverlay
+                  component={editingComponent}
+                  isNewlyCreated={editorSession.textEditing.isNewlyCreated}
+                  canvasScale={canvasScale}
+                  canvasOffset={canvasOffset}
+                  onExit={handleTextEditorExit}
+                />
+              )}
               {/* 任务 9.1：蓝图→画布闪烁高亮覆盖层 */}
               {storeProject && (
                 <CanvasFlashOverlay

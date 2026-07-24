@@ -10,7 +10,6 @@
  */
 
 import { memo } from 'react';
-import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
@@ -82,10 +81,22 @@ function Divider() {
 export const CanvasStatusBar = memo(function CanvasStatusBar({
   editorSession,
 }: CanvasStatusBarProps) {
-  const project = useScreenEditorStore((s) => s.project);
+  // H3+M6 性能优化：拆分细粒度 selector，避免订阅整个 project 对象。
+  // 原实现订阅 `s.project`，导致画布任何字段（组件位置、style、props 等）变化都
+  // 触发状态栏重渲染；拆分后仅在 canvas.width/height 或选中组件名真正变化时重渲染。
+  const canvasWidth = useScreenEditorStore((s) => s.project?.canvas.width ?? 1920);
+  const canvasHeight = useScreenEditorStore((s) => s.project?.canvas.height ?? 1080);
+  const selectedCount = useScreenEditorStore((s) => s.selectedComponentIds.length);
+  // 仅在选中单个组件时查找其 name；返回 primitive（string | undefined | null），
+  // zustand 使用 Object.is 比较避免不必要重渲染
+  const selectedComponentName = useScreenEditorStore((s) => {
+    if (s.selectedComponentIds.length !== 1) return null;
+    const id = s.selectedComponentIds[0];
+    if (!id) return null;
+    return s.project?.components.find((c) => c.id === id)?.name ?? null;
+  });
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
-  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
   const guidesVisible = useScreenEditorStore((s) => s.guides.visible);
 
@@ -101,14 +112,6 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
   const ToolIcon = toolMeta.icon;
   const toolName = toolMeta.name;
 
-  const selectedCount = selectedComponentIds.length;
-  const selectedComponentName =
-    selectedCount === 1 && project
-      ? project.components.find((c: ScreenComponent) => c.id === selectedComponentIds[0])?.name
-      : null;
-
-  const canvasWidth = project?.canvas.width ?? 1920;
-  const canvasHeight = project?.canvas.height ?? 1080;
   const zoomPercent = Math.round(canvasScale * 100);
 
   return (

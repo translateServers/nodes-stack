@@ -684,7 +684,10 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       duplicateSelectedToPosition: (x, y) => {
         const { selectedComponentIds, project } = get();
         if (selectedComponentIds.length === 0 || !project) return;
-        const selectedComps = project.components.filter((c) => selectedComponentIds.includes(c.id));
+        // M3 优化：用 Set 替代 Array.includes，O(N+M) → O(N)，避免组件数与选中数
+        // 同时较多时的 O(N×M) 累积开销
+        const selectedSet = new Set(selectedComponentIds);
+        const selectedComps = project.components.filter((c) => selectedSet.has(c.id));
         if (selectedComps.length === 0) return;
         // 以选中组件边界框左上角为基准，整体平移到 (x, y)，保持组件间相对位置
         const minX = Math.min(...selectedComps.map((c) => c.position.x));

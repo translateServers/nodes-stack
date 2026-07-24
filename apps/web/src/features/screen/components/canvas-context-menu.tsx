@@ -9,7 +9,15 @@
  * 在 onContextMenu 事件中判断目标是组件还是画布空白，切换 mode。
  */
 
-import { cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { flushSync } from 'react-dom';
 import type { MouseEventHandler, ReactElement } from 'react';
 import {
@@ -134,12 +142,15 @@ function ComponentMenuItems() {
   const selectedCount = selectedComponentIds.length;
   const hasSelection = selectedCount > 0;
   const canAlign = selectedCount >= 2;
-  const canDistribute = selectedCount >= 3;
+  const canDistribute = selectedCount >= 2;
   const canGroup = selectedCount >= 2;
 
-  const selectedComponents: ScreenComponent[] = project
-    ? project.components.filter((c: ScreenComponent) => selectedComponentIds.includes(c.id))
-    : [];
+  // O(1) 查询：构建选中 ID Set，避免对每个组件线性扫描 selectedComponentIds
+  const selectedComponents = useMemo<ScreenComponent[]>(() => {
+    if (!project) return [];
+    const idSet = new Set(selectedComponentIds);
+    return project.components.filter((c) => idSet.has(c.id));
+  }, [project, selectedComponentIds]);
   const allLocked = selectedComponents.every((c: ScreenComponent) => c.status.locked);
   const hasGrouped = selectedComponents.some((c: ScreenComponent) => c.parentId);
 

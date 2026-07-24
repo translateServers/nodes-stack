@@ -241,30 +241,30 @@ export function NodeConfigPanel({
     >
       <h3 className="mb-2 text-xs font-medium text-foreground">节点配置</h3>
       <div className="space-y-2">
-        {kind === 'trigger' ? (
+        {kind === 'trigger' && (
           <TriggerConfigForm
             config={config as BlueprintTriggerConfig}
             components={components}
             onChange={onChange}
           />
-        ) : null}
-        {kind === 'action' ? (
+        )}
+        {kind === 'action' && (
           <ActionConfigForm
             config={config as BlueprintActionConfig}
             components={components}
             onChange={onChange}
           />
-        ) : null}
-        {kind === 'comment' ? (
+        )}
+        {kind === 'comment' && (
           <CommentConfigForm config={config as CommentNodeConfig} onChange={onChange} />
-        ) : null}
-        {kind === 'condition' ? (
+        )}
+        {kind === 'condition' && (
           <ConditionBuilder
             config={config as ConditionNodeConfig}
             onChange={onChange}
             components={components}
           />
-        ) : null}
+        )}
       </div>
     </div>
   );
