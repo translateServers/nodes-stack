@@ -269,7 +269,7 @@ describe('ScreenPreview', () => {
      * 并以旋转为强制断言——删除预览旋转逻辑（如停止使用 resolveComponentContainerStyle）
      * 会使测试失败。
      */
-    it('预览容器渲染非零旋转的 transform: rotate(<angle>deg)', () => {
+    it('预览容器渲染非零旋转的 transform: translate(...) rotate(<angle>deg)', () => {
       const comp = makeComponent({
         id: 'comp-rot',
         name: '旋转组件',
@@ -283,7 +283,8 @@ describe('ScreenPreview', () => {
       const wrapper = renderer.parentElement as HTMLElement;
       expect(wrapper).not.toBeNull();
       // 旋转为强制断言：删除预览旋转逻辑会使此断言失败
-      expect(wrapper.style.transform).toBe('rotate(45deg)');
+      // Canvas Drag Optimization：transform 始终含 translate（位置由 transform 控制）
+      expect(wrapper.style.transform).toBe('translate(10px, 20px) rotate(45deg)');
     });
 
     it('预览容器样式与 resolveComponentContainerStyle 输出一致（编辑器与预览共享同一解析函数）', () => {
@@ -326,7 +327,7 @@ describe('ScreenPreview', () => {
       expect(wrapper.style.transform).toBe(expected.transform);
     });
 
-    it('零旋转时 transform 为空（与 resolveComponentContainerStyle 一致）', () => {
+    it('零旋转时 transform 仅含 translate（与 resolveComponentContainerStyle 一致）', () => {
       const comp = makeComponent({
         id: 'comp-no-rot',
         name: '无旋转组件',
@@ -339,12 +340,11 @@ describe('ScreenPreview', () => {
       const renderer = screen.getByTestId('renderer-comp-no-rot');
       const wrapper = renderer.parentElement as HTMLElement;
       expect(wrapper).not.toBeNull();
-      // 零旋转时 resolveComponentContainerStyle 返回 transform: undefined，
-      // React 渲染为空字符串，与编辑器行为一致
-      expect(wrapper.style.transform).toBe('');
+      // Canvas Drag Optimization：零旋转时 transform 仅含 translate（位置由 transform 控制）
+      expect(wrapper.style.transform).toBe('translate(10px, 20px)');
     });
 
-    it('负角度旋转同样生成 rotate(<angle>deg)', () => {
+    it('负角度旋转同样生成 translate(...) rotate(<angle>deg)', () => {
       const comp = makeComponent({
         id: 'comp-neg-rot',
         name: '负旋转组件',
@@ -358,7 +358,7 @@ describe('ScreenPreview', () => {
       const wrapper = renderer.parentElement as HTMLElement;
       expect(wrapper).not.toBeNull();
       // 旋转为强制断言：负角度也应正确渲染
-      expect(wrapper.style.transform).toBe('rotate(-90deg)');
+      expect(wrapper.style.transform).toBe('translate(10px, 20px) rotate(-90deg)');
     });
   });
 });

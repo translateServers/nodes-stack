@@ -1672,7 +1672,7 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     capturedMoveable!.onDragEnd!({
       ...startEvent,
       isDrag: true,
-      lastEvent: { left: 130, top: 160, isDrag: true },
+      lastEvent: { beforeTranslate: [130, 160], isDrag: true },
     });
 
     expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
@@ -1684,8 +1684,8 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
   it('Alt+拖拽复制（PS 风格）：onDragStart 立即创建克隆体，原件全程不动', () => {
     const { dispatchInteraction } = renderSelectCanvas();
     const target = makeComponentTarget();
-    target.style.left = '100px';
-    target.style.top = '100px';
+    // Canvas Drag Optimization：初始位置由 transform translate 控制
+    target.style.transform = 'translate(100px, 100px)';
     const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
 
     capturedMoveable!.onDragStart!(startEvent);
@@ -1694,51 +1694,44 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     const datas = startEvent.datas as { altCopyClone: HTMLElement | null; isAltCopy: boolean };
     expect(datas.isAltCopy).toBe(true);
     expect(datas.altCopyClone).not.toBeNull();
-    // 克隆体初始位置与原件一致
-    expect(datas.altCopyClone!.style.left).toBe('100px');
-    expect(datas.altCopyClone!.style.top).toBe('100px');
-    // 原件 DOM 不动
-    expect(target.style.left).toBe('100px');
-    expect(target.style.top).toBe('100px');
+    // 克隆体初始 transform 与原件一致（cloneNode 复制 transform）
+    expect(datas.altCopyClone!.style.transform).toBe('translate(100px, 100px)');
+    // 原件 DOM transform 不动
+    expect(target.style.transform).toBe('translate(100px, 100px)');
     expect(dispatchInteraction).toHaveBeenCalledWith('start-drag');
   });
 
   it('Alt+拖拽复制（PS 风格）：onDrag 移动克隆体，原件不动', () => {
     renderSelectCanvas();
     const target = makeComponentTarget();
-    target.style.left = '100px';
-    target.style.top = '100px';
+    target.style.transform = 'translate(100px, 100px)';
     const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
     capturedMoveable!.onDragStart!(startEvent);
     const datas = startEvent.datas as { altCopyClone: HTMLElement };
 
     capturedMoveable!.onDrag!({
       ...startEvent,
-      left: 150,
-      top: 180,
+      beforeTranslate: [150, 180],
       target,
     });
 
-    // PS 风格：克隆体跟随鼠标移动
-    expect(datas.altCopyClone.style.left).toBe('150px');
-    expect(datas.altCopyClone.style.top).toBe('180px');
+    // PS 风格：克隆体 transform 跟随鼠标移动
+    expect(datas.altCopyClone.style.transform).toBe('translate(150px, 180px)');
     // 原件全程不动
-    expect(target.style.left).toBe('100px');
-    expect(target.style.top).toBe('100px');
+    expect(target.style.transform).toBe('translate(100px, 100px)');
   });
 
   it('Alt+拖拽复制（PS 风格）：onDragEnd 创建真实副本并清理克隆体', () => {
     const { dispatchInteraction } = renderSelectCanvas();
     const target = makeComponentTarget();
-    target.style.left = '100px';
-    target.style.top = '100px';
+    target.style.transform = 'translate(100px, 100px)';
     const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
     capturedMoveable!.onDragStart!(startEvent);
 
     capturedMoveable!.onDragEnd!({
       ...startEvent,
       isDrag: true,
-      lastEvent: { left: 150, top: 180, isDrag: true },
+      lastEvent: { beforeTranslate: [150, 180], isDrag: true },
     });
 
     expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
@@ -1746,9 +1739,8 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     expect(store.duplicateSelectedToPosition).toHaveBeenCalledWith(150, 180);
     // 原件 state 不变
     expect(store.updateComponent).not.toHaveBeenCalled();
-    // 原件 DOM 仍在原位
-    expect(target.style.left).toBe('100px');
-    expect(target.style.top).toBe('100px');
+    // 原件 DOM transform 仍在原位
+    expect(target.style.transform).toBe('translate(100px, 100px)');
     // 克隆体已移除
     expect(document.querySelector('[data-alt-copy-clone]')).toBeNull();
   });
@@ -1756,15 +1748,14 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
   it('Alt+拖拽复制（PS 风格）：零位移点击不创建副本但清理克隆体', () => {
     const { dispatchInteraction } = renderSelectCanvas();
     const target = makeComponentTarget();
-    target.style.left = '100px';
-    target.style.top = '100px';
+    target.style.transform = 'translate(100px, 100px)';
     const startEvent = { target, datas: {}, inputEvent: { altKey: true } };
     capturedMoveable!.onDragStart!(startEvent);
 
     capturedMoveable!.onDragEnd!({
       ...startEvent,
       isDrag: false,
-      lastEvent: { left: 100, top: 100, isDrag: false },
+      lastEvent: { beforeTranslate: [100, 100], isDrag: false },
     });
 
     expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');

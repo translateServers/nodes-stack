@@ -37,20 +37,21 @@ describe('resolveComponentContainerStyle', () => {
       expect(style.overflow).toBe('hidden');
     });
 
-    it('当 rotation 缺失时，transform 为 undefined', () => {
+    it('当 rotation 缺失时，transform 仅含 translate（无 rotate/flip）', () => {
       const component = createComponent();
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBeUndefined();
+      // Canvas Drag Optimization：transform 始终含 translate（位置由 transform 控制）
+      expect(style.transform).toBe('translate(100px, 200px)');
     });
 
-    it('当 rotation=0 时，transform 仍为 undefined', () => {
+    it('当 rotation=0 时，transform 仅含 translate（无 rotate）', () => {
       const component = createComponent({
         position: { x: 0, y: 0, width: 100, height: 100, rotation: 0 },
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBeUndefined();
+      expect(style.transform).toBe('translate(0px, 0px)');
     });
 
     it('position 始终为 absolute', () => {
@@ -59,82 +60,92 @@ describe('resolveComponentContainerStyle', () => {
 
       expect(style.position).toBe('absolute');
     });
+
+    it('Canvas Drag Optimization：left/top 固定为 0（位置由 transform translate 控制）', () => {
+      const component = createComponent({
+        position: { x: 100, y: 200, width: 300, height: 120 },
+      });
+      const style = resolveComponentContainerStyle(component);
+
+      expect(style.left).toBe(0);
+      expect(style.top).toBe(0);
+    });
   });
 
   describe('旋转', () => {
-    it('非零旋转生成 rotate(<angle>deg) 的 transform', () => {
+    it('非零旋转生成 translate + rotate 的 transform', () => {
       const component = createComponent({
         position: { x: 0, y: 0, width: 100, height: 100, rotation: 45 },
       });
       const style = resolveComponentContainerStyle(component);
 
       // 关键样式字段，删除旋转逻辑会导致此断言失败
-      expect(style.transform).toBe('rotate(45deg)');
+      expect(style.transform).toBe('translate(0px, 0px) rotate(45deg)');
     });
 
-    it('负角度旋转同样生成 rotate(<angle>deg)', () => {
+    it('负角度旋转同样生成 translate + rotate', () => {
       const component = createComponent({
         position: { x: 0, y: 0, width: 100, height: 100, rotation: -90 },
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBe('rotate(-90deg)');
+      expect(style.transform).toBe('translate(0px, 0px) rotate(-90deg)');
     });
   });
 
   describe('Phase 2 Slice D · 翻转（flipX / flipY）', () => {
-    it('flipX=true 生成 scaleX(-1) transform', () => {
+    it('flipX=true 生成 translate + scaleX(-1) transform', () => {
       const component = createComponent({
         style: { flipX: true },
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBe('scaleX(-1)');
+      expect(style.transform).toBe('translate(100px, 200px) scaleX(-1)');
     });
 
-    it('flipY=true 生成 scaleY(-1) transform', () => {
+    it('flipY=true 生成 translate + scaleY(-1) transform', () => {
       const component = createComponent({
         style: { flipY: true },
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBe('scaleY(-1)');
+      expect(style.transform).toBe('translate(100px, 200px) scaleY(-1)');
     });
 
-    it('flipX + flipY 同时为 true 时 transform 包含 scaleX 与 scaleY', () => {
+    it('flipX + flipY 同时为 true 时 transform 包含 translate + scaleX 与 scaleY', () => {
       const component = createComponent({
         style: { flipX: true, flipY: true },
       });
       const style = resolveComponentContainerStyle(component);
 
-      // CSS transform 链从右到左应用：rotate -> scaleX -> scaleY
-      expect(style.transform).toBe('scaleX(-1) scaleY(-1)');
+      // CSS transform 链从右到左应用：translate -> scaleX -> scaleY
+      expect(style.transform).toBe('translate(100px, 200px) scaleX(-1) scaleY(-1)');
     });
 
-    it('旋转 + 翻转组合：rotate -> scaleX -> scaleY 顺序（视觉上先翻转再旋转）', () => {
+    it('旋转 + 翻转组合：translate -> rotate -> scaleX -> scaleY 顺序（视觉上先翻转再旋转）', () => {
       const component = createComponent({
         position: { x: 0, y: 0, width: 100, height: 100, rotation: 90 },
         style: { flipX: true, flipY: true },
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBe('rotate(90deg) scaleX(-1) scaleY(-1)');
+      expect(style.transform).toBe('translate(0px, 0px) rotate(90deg) scaleX(-1) scaleY(-1)');
     });
 
-    it('flipX/flipY 显式为 false 时不生成 transform', () => {
+    it('flipX/flipY 显式为 false 时 transform 仅含 translate', () => {
       const component = createComponent({
         style: { flipX: false, flipY: false },
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBeUndefined();
+      expect(style.transform).toBe('translate(100px, 200px)');
     });
 
-    it('flipX/flipY 缺失时 transform 为 undefined', () => {
+    it('flipX/flipY 缺失时 transform 仅含 translate', () => {
       const component = createComponent();
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.transform).toBeUndefined();
+      expect(style.transform).toBe('translate(100px, 200px)');
     });
   });
 
@@ -208,18 +219,20 @@ describe('resolveComponentContainerStyle', () => {
   });
 
   describe('位置与尺寸', () => {
-    it('left/top/width/height/zIndex 来自 component.position 与 zIndex', () => {
+    it('left/top 固定为 0，width/height/zIndex 来自 component.position 与 zIndex，translate 来自 position.x/y', () => {
       const component = createComponent({
         position: { x: 12, y: 34, width: 560, height: 780 },
         zIndex: 42,
       });
       const style = resolveComponentContainerStyle(component);
 
-      expect(style.left).toBe(12);
-      expect(style.top).toBe(34);
+      // Canvas Drag Optimization：left/top 固定为 0，位置由 transform translate 控制
+      expect(style.left).toBe(0);
+      expect(style.top).toBe(0);
       expect(style.width).toBe(560);
       expect(style.height).toBe(780);
       expect(style.zIndex).toBe(42);
+      expect(style.transform).toBe('translate(12px, 34px)');
     });
   });
 
@@ -260,8 +273,9 @@ describe('resolveComponentContainerStyle', () => {
 
       // 关键字段一次性验证，确保多字段映射不互相干扰
       expect(style.position).toBe('absolute');
-      expect(style.left).toBe(10);
-      expect(style.top).toBe(20);
+      // Canvas Drag Optimization：left/top 固定为 0，位置由 transform translate 控制
+      expect(style.left).toBe(0);
+      expect(style.top).toBe(0);
       expect(style.width).toBe(100);
       expect(style.height).toBe(50);
       expect(style.zIndex).toBe(9);
@@ -273,7 +287,8 @@ describe('resolveComponentContainerStyle', () => {
       expect(style.backgroundColor).toBe('#abcdef');
       expect(style.overflow).toBe('visible');
       // 旋转为强制断言，删除旋转逻辑会让此用例失败
-      expect(style.transform).toBe('rotate(30deg)');
+      // transform 链：translate -> rotate（Canvas Drag Optimization 扩展 translate）
+      expect(style.transform).toBe('translate(10px, 20px) rotate(30deg)');
     });
   });
 });

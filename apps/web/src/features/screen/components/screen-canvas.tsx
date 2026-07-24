@@ -6,24 +6,19 @@ import Selecto from 'react-selecto';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useModifierKeys } from '../hooks/use-modifier-keys';
-import { resolveComponentContainerStyle } from '../registry/component-container-style';
+import {
+  resolveComponentContainerStyle,
+  composeComponentTransform,
+} from '../registry/component-container-style';
 import { ComponentRenderer } from '../registry/renderer';
 import { createComponentInstance } from '../registry';
 import { handleSelectEnd, type ClickRecord } from '../lib/canvas-event-router';
-import {
-  findAlignmentLines,
-  snapPosition,
-  SMART_GUIDES_SNAP_THRESHOLD,
-  type AlignmentLine,
-  type AlignmentRect,
-} from '../lib/smart-guides';
 import { DEFAULT_TEXT_CONTENT } from '../lib/text-editing-contract';
 import { computeShapeCreation } from '../lib/shape-creation-geometry';
 import { pickImageFile, type ImageFileResult } from '../lib/image-file-adapter';
 import { zoomWithBoundary, zoomToolClick, WHEEL_ZOOM_FACTOR } from '../lib/zoom-boundary';
 import { createRafThrottler, type RafThrottler } from '../lib/raf-throttle';
 import { SELECTO_ALLOWED_STATES } from '../hooks/use-interaction-state-machine';
-import { SmartGuidesOverlay, useAlignmentLinesStore } from './smart-guides-overlay';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
 
@@ -52,6 +47,12 @@ interface DragDatas {
   startY: number;
   origW: number;
   origH: number;
+  /** 组件原始旋转角（来自 store，拖拽期间保持不变） */
+  rotation: number;
+  /** 组件水平翻转标志（来自 store，拖拽期间保持不变） */
+  flipX: boolean;
+  /** 组件垂直翻转标志（来自 store，拖拽期间保持不变） */
+  flipY: boolean;
   isAltCopy: boolean;
   altCopyClone: HTMLElement | null;
 }
@@ -64,23 +65,38 @@ interface ResizeDatas {
   origY: number;
   keepRatio: boolean;
   isAltCenter: boolean;
+  /** 组件原始旋转角（来自 store，缩放期间保持不变） */
+  rotation: number;
+  /** 组件水平翻转标志（来自 store，缩放期间保持不变） */
+  flipX: boolean;
+  /** 组件垂直翻转标志（来自 store，缩放期间保持不变） */
+  flipY: boolean;
 }
 
 interface RotateDatas {
   id: string;
   snapRotate: boolean;
+  /** 组件原始位置 x（来自 store，旋转期间保持不变，用于 compose transform 的 translate） */
+  origX: number;
+  /** 组件原始位置 y（来自 store，旋转期间保持不变） */
+  origY: number;
+  /** 组件水平翻转标志（来自 store，旋转期间保持不变） */
+  flipX: boolean;
+  /** 组件垂直翻转标志（来自 store，旋转期间保持不变） */
+  flipY: boolean;
 }
 
 interface GroupDragDatas {
   ids: string[];
   isAltCopy: boolean;
   altCopyClones: HTMLElement[];
+  /** 每个组件的 [rotation, flipX, flipY]，用于 compose transform */
+  transforms: Array<{ rotation: number; flipX: boolean; flipY: boolean }>;
 }
 
-/** OnDragEnd / OnResizeEnd 中 `e.lastEvent` 的最小形状（left/top/width/height/isDrag） */
+/** OnDragEnd / OnResizeEnd 中 `e.lastEvent` 的最小形状（beforeTranslate/width/height/isDrag） */
 interface MoveableLastEvent {
-  left: number;
-  top: number;
+  beforeTranslate: [number, number];
   width?: number;
   height?: number;
   isDrag: boolean;
@@ -323,9 +339,6 @@ export function ScreenCanvas({
 
   // 从独立 store 获取 setDimension，避免拖拽高频回调触发画布重渲染
   const setDimension = useDimensionStore((s) => s.setDimension);
-  // Smart Guides：从独立 store 获取 setLines / clear，避免 onDrag 高频回调触发画布重渲染
-  const setAlignmentLines = useAlignmentLinesStore((s) => s.setLines);
-  const clearAlignmentLines = useAlignmentLinesStore((s) => s.clear);
 
   const componentRefs = useRef<Map<string, HTMLElement>>(new Map());
   const moveableRef = useRef<Moveable>(null);
@@ -940,79 +953,22 @@ export function ScreenCanvas({
   );
 
   /**
-   * Smart Guides 参考矩形数组：所有可见且未选中的组件位置（画布坐标系）。
-   * 在 onDrag 中用于 findAlignmentLines 计算，避免每次拖拽都重新 filter。
+   * Moveable elementGuidelines：所有可见且未选中的组件 DOM 元素引用。
+   *
+   * Canvas Drag Optimization：替代自定义 Smart Guides 的 findAlignmentLines 计算，
+   * 由 Moveable 内置 snappable + elementGuidelines 完成组件间对齐吸附与辅助线渲染。
    * 排除当前选中的组件（自身不需要与自己对齐）。
+   *
+   * 注意：componentRefs.current 是 mutable ref，memo 不会感知 ref 注册时机。
+   * 实践中拖拽发生在组件已挂载之后（ref 已注册），一帧滞后不影响功能。
    */
-  const smartGuidesReferenceRects = useMemo<AlignmentRect[]>(() => {
-    // L2 优化：功能禁用时跳过 filter/map 计算
+  const elementGuidelines = useMemo<HTMLElement[]>(() => {
     if (!smartGuidesEnabled) return [];
     return visibleComponents
       .filter((c: ScreenComponent) => !selectedIdSet.has(c.id))
-      .map((c: ScreenComponent) => ({
-        x: c.position.x,
-        y: c.position.y,
-        width: c.position.width,
-        height: c.position.height,
-        id: c.id,
-      }));
+      .map((c: ScreenComponent) => componentRefs.current.get(c.id))
+      .filter((el): el is HTMLElement => el != null);
   }, [smartGuidesEnabled, visibleComponents, selectedIdSet]);
-
-  /**
-   * Smart Guides 吸附计算（纯计算，无副作用）。
-   *
-   * 拖拽过程中同步执行：吸附结果决定 DOM style 写入值，必须与 Moveable 的
-   * updateRect 同步读取保持同一时序。对齐线数据返回给调用方，
-   * 由调用方在 rAF 帧中写入 store（浮层重渲染可延迟一帧，不影响组件位置）。
-   *
-   * 返回 null 表示功能禁用或无参考组件，调用方直接使用原始坐标并清理对齐线。
-   */
-  const computeSnappedPosition = useCallback(
-    (
-      movedX: number,
-      movedY: number,
-      movedW: number,
-      movedH: number,
-    ): {
-      snappedLeft: number;
-      snappedTop: number;
-      lines: AlignmentLine[];
-      snappedRect: AlignmentRect;
-    } | null => {
-      if (!smartGuidesEnabled || smartGuidesReferenceRects.length === 0) {
-        return null;
-      }
-      const movedRect: AlignmentRect = {
-        x: movedX,
-        y: movedY,
-        width: movedW,
-        height: movedH,
-      };
-      const lines = findAlignmentLines(movedRect, smartGuidesReferenceRects);
-      // 吸附：对距离 < 3px 的对齐线应用吸附
-      const snapped = snapPosition(movedX, movedY, movedW, movedH, lines);
-      // overlay 中显示的 movedRect 为吸附后位置，保持辅助线与实际位置同步
-      const snappedRect: AlignmentRect = {
-        x: snapped.left,
-        y: snapped.top,
-        width: movedW,
-        height: movedH,
-      };
-      // 优化（掉帧修复）：之前此处二次调用 findAlignmentLines(snappedRect, ...)
-      // 仅为把吸附线的 distance 置 0 用于高亮，但每次 onDrag 都执行 O(N×18) 双倍
-      // 遍历。改为直接遍历第一次结果，对吸附线（distance < 阈值）置 0，避免重复计算。
-      const snappedLines = lines.map((line) =>
-        line.distance < SMART_GUIDES_SNAP_THRESHOLD ? { ...line, distance: 0 } : line,
-      );
-      return {
-        snappedLeft: snapped.left,
-        snappedTop: snapped.top,
-        lines: snappedLines,
-        snappedRect,
-      };
-    },
-    [smartGuidesEnabled, smartGuidesReferenceRects],
-  );
 
   if (!project || !canvas) return null;
 
@@ -1076,9 +1032,6 @@ export function ScreenCanvas({
           {/* 活动分组包围盒：双击进入分组后高亮 */}
           <ActiveGroupOutline groupId={activeGroupId} components={visibleComponents} />
 
-          {/* Smart Guides 智能对齐线浮层 */}
-          <SmartGuidesOverlay canvasWidth={canvas.width} canvasHeight={canvas.height} />
-
           {/* 任务 6.3/6.4：形状拖拽创建预览（与组件同画布坐标系） */}
           {shapeCreation &&
             (() => {
@@ -1115,8 +1068,16 @@ export function ScreenCanvas({
           draggable={moveableDraggable}
           resizable={moveableResizable}
           rotatable={moveableRotatable}
-          snappable={snapEnabled || gridEnabled}
+          // Canvas Drag Optimization：用 Moveable 内置 snappable 替代自定义 Smart Guides。
+          // smartGuidesEnabled 时通过 elementGuidelines 传入其他组件 DOM 作为吸附目标，
+          // snapEnabled 控制标尺/网格对齐，gridEnabled 控制网格对齐。
+          snappable={snapEnabled || smartGuidesEnabled || gridEnabled}
+          snapThreshold={5}
+          snapGap={false}
           keepRatio={shiftHeld}
+          // 整数对齐：避免亚像素渲染抖动（transform 合成层下无布局重排，整数对齐更稳定）
+          throttleDrag={1}
+          throttleResize={1}
           throttleRotate={shiftHeld ? 15 : 0}
           hideChildMoveableDefaultLines={isGroupSelect}
           snapDirections={{
@@ -1135,8 +1096,11 @@ export function ScreenCanvas({
             center: true,
             middle: true,
           }}
+          elementGuidelines={elementGuidelines}
           verticalGuidelines={verticalGuidelines}
           horizontalGuidelines={horizontalGuidelines}
+          isDisplaySnapDigit={true}
+          isDisplayInnerSnapDigit={true}
           zoom={1 / canvasScale}
           origin={false}
           renderDirections={['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w']}
@@ -1160,17 +1124,20 @@ export function ScreenCanvas({
             datas.startY = comp?.position.y ?? 0;
             datas.origW = comp?.position.width ?? 0;
             datas.origH = comp?.position.height ?? 0;
+            // Canvas Drag Optimization：记录组件原始 rotation/flip，
+            // 拖拽期间保持不变，用于 compose transform（translate 变化，rotate/flip 恒定）
+            datas.rotation = comp?.position.rotation ?? 0;
+            datas.flipX = comp?.style.flipX === true;
+            datas.flipY = comp?.style.flipY === true;
             datas.isAltCopy = readAltKey(e.inputEvent);
             datas.altCopyClone = null;
             // Alt+拖拽复制（PS 风格）：按下 Alt 启动拖拽时立即克隆目标 DOM，
             // 拖拽过程中移动克隆体（原件不动），松手时在克隆位置创建真实副本。
+            // cloneNode(true) 复制原 transform（translate + rotate + flip），
+            // 拖拽中 onDrag 会覆盖 transform 的 translate 部分。
             if (datas.isAltCopy && contentRef.current) {
               const clone = e.target.cloneNode(true) as HTMLElement;
               clone.style.position = 'absolute';
-              clone.style.left = `${datas.startX}px`;
-              clone.style.top = `${datas.startY}px`;
-              clone.style.width = `${datas.origW}px`;
-              clone.style.height = `${datas.origH}px`;
               clone.style.pointerEvents = 'none';
               clone.style.userSelect = 'none';
               clone.setAttribute('data-alt-copy-clone', 'true');
@@ -1189,38 +1156,31 @@ export function ScreenCanvas({
           onDrag={(e) => {
             const datas = e.datas as unknown as DragDatas;
             const target = e.target as HTMLElement;
-            const w = datas.origW || 0;
-            const h = datas.origH || 0;
-            // 吸附计算 + DOM style 写入同步执行：Moveable 在 onDrag 返回后同步
-            // updateRect() 读取 DOM 位置，延迟写入会让控制框与组件错开一帧（抖动）
-            const snap = computeSnappedPosition(e.left, e.top, w, h);
-            // 直接用浮点值写 DOM，与 Moveable 内部状态保持一致。
-            // 之前用 Math.round 会让 DOM（整数）与 Moveable 内部 e.left（浮点）不同步，
-            // 导致拖拽过程中控制框与 target 错开、松手时跳变。
-            // 现在让 DOM / Moveable 内部状态 / store 三者全程浮点一致，
-            // 最终位置精度由消费者按需 round，避免拖拽阶段任何 round 引入的跳变。
-            const finalLeft = snap?.snappedLeft ?? e.left;
-            const finalTop = snap?.snappedTop ?? e.top;
+            // Canvas Drag Optimization：用 beforeTranslate 替代 left/top DOM 回读。
+            // beforeTranslate 是 Moveable 内部维护的累积位移，与 transform 的 translate 一一对应，
+            // 无精度损失；吸附由 Moveable 内置 snappable 完成，无需自定义 computeSnappedPosition。
+            const { beforeTranslate } = e;
+            const tx = beforeTranslate[0];
+            const ty = beforeTranslate[1];
+            const transform = composeComponentTransform(
+              tx,
+              ty,
+              datas.rotation,
+              datas.flipX,
+              datas.flipY,
+            );
             // Alt+拖拽复制（PS 风格）：移动克隆体，原件不动
             if (datas.isAltCopy && datas.altCopyClone) {
-              datas.altCopyClone.style.left = `${finalLeft}px`;
-              datas.altCopyClone.style.top = `${finalTop}px`;
+              datas.altCopyClone.style.transform = transform;
             } else {
-              target.style.left = `${finalLeft}px`;
-              target.style.top = `${finalTop}px`;
+              target.style.transform = transform;
             }
-            // rAF 节流仅保留 React store 更新（对齐线浮层 / 尺寸提示），
-            // 同帧多次事件仅生效最后一次
+            // rAF 节流仅保留 dimension store 更新（对齐线由 Moveable 内部渲染）
             gestureRafThrottlerRef.current?.schedule(() => {
-              if (snap) {
-                setAlignmentLines(snap.lines, snap.snappedRect);
-              } else if (useAlignmentLinesStore.getState().lines.length > 0) {
-                clearAlignmentLines();
-              }
               setDimension((d) => ({
                 ...d,
-                x: finalLeft,
-                y: finalTop,
+                x: tx,
+                y: ty,
                 visible: true,
               }));
             });
@@ -1246,20 +1206,19 @@ export function ScreenCanvas({
             if (!last) return;
             // Alt+拖拽复制（PS 风格）：拖拽结束时在克隆体最终位置创建真实副本
             if (datas.isAltCopy) {
-              duplicateSelectedToPosition(last.left, last.top);
+              duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
             } else {
               const comp = components.find((c: ScreenComponent) => c.id === id);
               if (!comp) return;
               updateComponent(id, {
                 position: {
                   ...comp.position,
-                  x: last.left,
-                  y: last.top,
+                  x: last.beforeTranslate[0],
+                  y: last.beforeTranslate[1],
                 },
               });
             }
             setDimension((d) => ({ ...d, visible: false }));
-            clearAlignmentLines();
           }}
           onResizeStart={(e) => {
             // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
@@ -1277,8 +1236,12 @@ export function ScreenCanvas({
             datas.origX = comp?.position.x ?? 0;
             datas.origY = comp?.position.y ?? 0;
             datas.keepRatio = shiftRef.current;
+            // Canvas Drag Optimization：记录组件原始 rotation/flip，缩放期间保持不变
+            datas.rotation = comp?.position.rotation ?? 0;
+            datas.flipX = comp?.style.flipX === true;
+            datas.flipY = comp?.style.flipY === true;
             // Alt 中心变换（适配表 #11）：以组件中心为原点对称缩放，
-            // 调整 left/top 抵消 width/height 变化使中心点位置不变
+            // 调整 translate 抵消 width/height 变化使中心点位置不变
             datas.isAltCenter = readAltKey(e.inputEvent);
             if (datas.isAltCenter) {
               setDimension((d) => ({ ...d, mode: '中心变换' }));
@@ -1289,7 +1252,8 @@ export function ScreenCanvas({
           onResize={(e) => {
             const datas = e.datas as unknown as ResizeDatas;
             const target = e.target as HTMLElement;
-            const { origW, origH, origX, origY, keepRatio, isAltCenter } = datas;
+            const { origW, origH, origX, origY, keepRatio, isAltCenter, rotation, flipX, flipY } =
+              datas;
             // 尺寸计算 + DOM style 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
             let w = e.width;
             let h = e.height;
@@ -1312,23 +1276,28 @@ export function ScreenCanvas({
             }
             target.style.width = `${w}px`;
             target.style.height = `${h}px`;
+            // Canvas Drag Optimization：用 beforeTranslate 替代 left/top。
+            // e.drag.beforeTranslate 是缩放过程中组件的新位置（Moveable 内部计算）。
+            let tx: number;
+            let ty: number;
             if (isAltCenter) {
-              // 中心变换：左上角 = 原左上 + (origSize - newSize) / 2
-              target.style.left = `${origX + (origW - w) / 2}px`;
-              target.style.top = `${origY + (origH - h) / 2}px`;
+              // 中心变换：translate = 原位置 + (origSize - newSize) / 2
+              tx = origX + (origW - w) / 2;
+              ty = origY + (origH - h) / 2;
             } else if (e.drag) {
-              target.style.left = `${e.drag.left}px`;
-              target.style.top = `${e.drag.top}px`;
+              tx = e.drag.beforeTranslate[0];
+              ty = e.drag.beforeTranslate[1];
+            } else {
+              tx = origX;
+              ty = origY;
             }
-            // 同步写入后可直接读回当前位置
-            const displayX = Number.parseFloat(target.style.left || '0');
-            const displayY = Number.parseFloat(target.style.top || '0');
+            target.style.transform = composeComponentTransform(tx, ty, rotation, flipX, flipY);
             // rAF 节流仅保留 React store 更新（尺寸提示）
             gestureRafThrottlerRef.current?.schedule(() => {
               setDimension((d) => ({
                 ...d,
-                x: displayX,
-                y: displayY,
+                x: tx,
+                y: ty,
                 w: Math.round(w),
                 h: Math.round(h),
                 visible: true,
@@ -1347,16 +1316,22 @@ export function ScreenCanvas({
             if (!id) return;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (!comp) return;
-            // lastEvent 仅用于 guard，实际值从 e.target.style 读取以避免 any 扩散
-            const last = e.lastEvent as unknown as MoveableLastEvent | undefined;
+            const last = e.lastEvent as unknown as
+              | {
+                  width: number;
+                  height: number;
+                  drag: { beforeTranslate: [number, number] };
+                  isDrag: boolean;
+                }
+              | undefined;
             if (!last) return;
             updateComponent(id, {
               position: {
                 ...comp.position,
-                x: Number.parseFloat(e.target.style.left),
-                y: Number.parseFloat(e.target.style.top),
-                width: Number.parseFloat(e.target.style.width),
-                height: Number.parseFloat(e.target.style.height),
+                x: last.drag.beforeTranslate[0],
+                y: last.drag.beforeTranslate[1],
+                width: last.width,
+                height: last.height,
               },
             });
             setDimension((d) => ({ ...d, visible: false, mode: undefined }));
@@ -1373,28 +1348,33 @@ export function ScreenCanvas({
             const datas = e.datas as unknown as RotateDatas;
             datas.id = id;
             datas.snapRotate = shiftRef.current;
+            // Canvas Drag Optimization：记录组件原始位置/flip，旋转期间保持不变。
+            // translate 在旋转期间不变（旋转围绕组件中心，位置由 translate 决定）。
+            datas.origX = comp?.position.x ?? 0;
+            datas.origY = comp?.position.y ?? 0;
+            datas.flipX = comp?.style.flipX === true;
+            datas.flipY = comp?.style.flipY === true;
             // 任务 3.4：镜像旋转开始到交互状态机
             dispatchInteraction('start-rotate');
           }}
           onRotate={(e) => {
             const datas = e.datas as unknown as RotateDatas;
             const target = e.target as HTMLElement;
-            const { snapRotate } = datas;
+            const { snapRotate, origX, origY, flipX, flipY } = datas;
             // 旋转角计算 + transform 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
             let rotation = e.rotation;
             if (snapRotate) {
               rotation = Math.round(rotation / 15) * 15;
             }
-            const currentTransform = target.style.transform || '';
-            const rotateMatch = currentTransform.match(/rotate\([^)]*\)/);
-            if (rotateMatch) {
-              target.style.transform = currentTransform.replace(
-                rotateMatch[0],
-                `rotate(${rotation}deg)`,
-              );
-            } else {
-              target.style.transform = `${currentTransform} rotate(${rotation}deg)`.trim();
-            }
+            // Canvas Drag Optimization：用 composeComponentTransform 合并 translate + rotate + flip，
+            // 替代字符串拼接/正则替换，避免 translate 部分被意外覆盖。
+            target.style.transform = composeComponentTransform(
+              origX,
+              origY,
+              rotation,
+              flipX,
+              flipY,
+            );
             // rAF 节流仅保留 React store 更新（尺寸提示）
             gestureRafThrottlerRef.current?.schedule(() => {
               setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
@@ -1412,11 +1392,15 @@ export function ScreenCanvas({
             if (!id) return;
             const comp = components.find((c: ScreenComponent) => c.id === id);
             if (!comp) return;
-            const transform = e.target.style.transform || '';
-            const match = transform.match(/rotate\(([^)]+)deg\)/);
-            const rotation = match ? Number.parseFloat(match[1]) : 0;
+            const last = e.lastEvent as unknown as
+              | { rotation: number; isDrag: boolean }
+              | undefined;
+            if (!last) return;
+            const rotation = datas.snapRotate
+              ? Math.round(last.rotation / 15) * 15
+              : Math.round(last.rotation);
             updateComponent(id, {
-              position: { ...comp.position, rotation: Math.round(rotation) },
+              position: { ...comp.position, rotation },
             });
             setDimension((d) => ({ ...d, visible: false }));
           }}
@@ -1432,28 +1416,34 @@ export function ScreenCanvas({
               return false;
             }
             const ids: string[] = [];
+            const transforms: Array<{ rotation: number; flipX: boolean; flipY: boolean }> = [];
             for (const t of e.targets) {
               const id = getComponentIdFromTarget(t);
               if (id) {
                 const comp = components.find((c: ScreenComponent) => c.id === id);
                 if (comp?.status.locked) return false;
                 ids.push(id);
+                // Canvas Drag Optimization：记录每个组件的 rotation/flip，
+                // 组拖拽期间保持不变，用于 compose transform
+                transforms.push({
+                  rotation: comp?.position.rotation ?? 0,
+                  flipX: comp?.style.flipX === true,
+                  flipY: comp?.style.flipY === true,
+                });
               }
             }
             const datas = e.datas as unknown as GroupDragDatas;
             datas.ids = ids;
+            datas.transforms = transforms;
             datas.isAltCopy = readAltKey(e.inputEvent);
             datas.altCopyClones = [];
             // Alt+组拖拽复制（PS 风格）：立即克隆所有选中组件 DOM，
             // 拖拽过程中移动克隆体（原件不动），松手时创建真实副本。
+            // cloneNode(true) 复制原 transform，拖拽中 onDragGroup 覆盖 translate 部分。
             if (datas.isAltCopy && contentRef.current) {
               for (const t of e.targets) {
                 const clone = t.cloneNode(true) as HTMLElement;
                 clone.style.position = 'absolute';
-                clone.style.left = t.style.left;
-                clone.style.top = t.style.top;
-                clone.style.width = t.style.width;
-                clone.style.height = t.style.height;
                 clone.style.pointerEvents = 'none';
                 clone.style.userSelect = 'none';
                 clone.setAttribute('data-alt-copy-clone', 'true');
@@ -1466,20 +1456,34 @@ export function ScreenCanvas({
           }}
           onDragGroup={(e) => {
             const datas = e.datas as unknown as GroupDragDatas;
-            // Alt+组拖拽复制（PS 风格）：移动克隆体，原件不动
-            // 直接用浮点值（原因同单组件 onDrag）：与 Moveable 内部状态一致，
-            // 避免拖拽中 DOM 与 Moveable 不同步、松手时跳变。
+            // Canvas Drag Optimization：用 beforeTranslate + composeComponentTransform 替代 left/top。
+            // 每个 target 保留各自的 rotation/flip，仅 translate 跟随组拖拽变化。
             if (datas.isAltCopy && datas.altCopyClones.length > 0) {
               for (let i = 0; i < e.events.length && i < datas.altCopyClones.length; i++) {
                 const ev = e.events[i];
                 const clone = datas.altCopyClones[i];
-                clone.style.left = `${ev.left}px`;
-                clone.style.top = `${ev.top}px`;
+                const t = datas.transforms[i] ?? { rotation: 0, flipX: false, flipY: false };
+                const { beforeTranslate } = ev;
+                clone.style.transform = composeComponentTransform(
+                  beforeTranslate[0],
+                  beforeTranslate[1],
+                  t.rotation,
+                  t.flipX,
+                  t.flipY,
+                );
               }
             } else {
-              for (const ev of e.events) {
-                ev.target.style.left = `${ev.left}px`;
-                ev.target.style.top = `${ev.top}px`;
+              for (let i = 0; i < e.events.length; i++) {
+                const ev = e.events[i];
+                const t = datas.transforms[i] ?? { rotation: 0, flipX: false, flipY: false };
+                const { beforeTranslate } = ev;
+                ev.target.style.transform = composeComponentTransform(
+                  beforeTranslate[0],
+                  beforeTranslate[1],
+                  t.rotation,
+                  t.flipX,
+                  t.flipY,
+                );
               }
             }
           }}
@@ -1499,11 +1503,13 @@ export function ScreenCanvas({
             if (!ids || ids.length === 0) return;
             // Alt+组拖拽复制（PS 风格）：在克隆体最终位置创建真实副本
             if (datas.isAltCopy) {
-              const lefts = e.events.map((ev) => Number.parseFloat(ev.target.style.left));
-              const tops = e.events.map((ev) => Number.parseFloat(ev.target.style.top));
-              const minLeft = Math.min(...lefts);
-              const minTop = Math.min(...tops);
-              duplicateSelectedToPosition(minLeft, minTop);
+              // 用第一个事件的 beforeTranslate 作为副本基准位置
+              const firstEvent = e.events[0];
+              const last = firstEvent?.lastEvent as unknown as
+                | { beforeTranslate: [number, number] }
+                | undefined;
+              if (!last) return;
+              duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
             } else {
               const updates = e.events
                 .map((ev) => {
@@ -1511,13 +1517,17 @@ export function ScreenCanvas({
                   if (!id) return null;
                   const comp = components.find((c: ScreenComponent) => c.id === id);
                   if (!comp) return null;
+                  const last = ev.lastEvent as unknown as
+                    | { beforeTranslate: [number, number] }
+                    | undefined;
+                  if (!last) return null;
                   return {
                     id,
                     changes: {
                       position: {
                         ...comp.position,
-                        x: Number.parseFloat(ev.target.style.left),
-                        y: Number.parseFloat(ev.target.style.top),
+                        x: last.beforeTranslate[0],
+                        y: last.beforeTranslate[1],
                       },
                     },
                   };
@@ -1551,11 +1561,23 @@ export function ScreenCanvas({
           }}
           onResizeGroup={(e) => {
             for (const ev of e.events) {
+              const id = getComponentIdFromTarget(ev.target);
+              const comp = id ? components.find((c: ScreenComponent) => c.id === id) : undefined;
+              const rotation = comp?.position.rotation ?? 0;
+              const flipX = comp?.style.flipX === true;
+              const flipY = comp?.style.flipY === true;
               ev.target.style.width = `${ev.width}px`;
               ev.target.style.height = `${ev.height}px`;
+              // Canvas Drag Optimization：用 beforeTranslate 替代 left/top
               if (ev.drag) {
-                ev.target.style.left = `${ev.drag.left}px`;
-                ev.target.style.top = `${ev.drag.top}px`;
+                const { beforeTranslate } = ev.drag;
+                ev.target.style.transform = composeComponentTransform(
+                  beforeTranslate[0],
+                  beforeTranslate[1],
+                  rotation,
+                  flipX,
+                  flipY,
+                );
               }
             }
           }}
@@ -1569,15 +1591,23 @@ export function ScreenCanvas({
                 if (!id) return null;
                 const comp = components.find((c: ScreenComponent) => c.id === id);
                 if (!comp) return null;
+                const last = ev.lastEvent as unknown as
+                  | {
+                      width: number;
+                      height: number;
+                      drag: { beforeTranslate: [number, number] };
+                    }
+                  | undefined;
+                if (!last) return null;
                 return {
                   id,
                   changes: {
                     position: {
                       ...comp.position,
-                      x: Number.parseFloat(ev.target.style.left),
-                      y: Number.parseFloat(ev.target.style.top),
-                      width: Number.parseFloat(ev.target.style.width),
-                      height: Number.parseFloat(ev.target.style.height),
+                      x: last.drag.beforeTranslate[0],
+                      y: last.drag.beforeTranslate[1],
+                      width: last.width,
+                      height: last.height,
                     },
                   },
                 };

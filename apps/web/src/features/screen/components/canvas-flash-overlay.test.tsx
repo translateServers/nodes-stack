@@ -59,9 +59,10 @@ describe('CanvasFlashOverlay（任务 9.1）', () => {
     render(<CanvasFlashOverlay flashingComponentId="positioned" components={[component]} />);
 
     const overlay = screen.getByTestId('canvas-flash-overlay');
-    // 位置与尺寸来自 resolveComponentContainerStyle
-    expect(overlay.style.left).toBe('250px');
-    expect(overlay.style.top).toBe('350px');
+    // Canvas Drag Optimization：位置由 transform translate 控制（left/top 固定为 0）
+    expect(overlay.style.left).toBe('0px');
+    expect(overlay.style.top).toBe('0px');
+    expect(overlay.style.transform).toBe('translate(250px, 350px)');
     expect(overlay.style.width).toBe('120px');
     expect(overlay.style.height).toBe('90px');
   });
@@ -83,8 +84,8 @@ describe('CanvasFlashOverlay（任务 9.1）', () => {
     render(<CanvasFlashOverlay flashingComponentId="target" components={components} />);
 
     const overlay = screen.getByTestId('canvas-flash-overlay');
-    expect(overlay.style.left).toBe('500px');
-    expect(overlay.style.top).toBe('600px');
+    // Canvas Drag Optimization：位置由 transform translate 控制
+    expect(overlay.style.transform).toBe('translate(500px, 600px)');
     expect(overlay.style.width).toBe('100px');
     expect(overlay.style.height).toBe('50px');
   });

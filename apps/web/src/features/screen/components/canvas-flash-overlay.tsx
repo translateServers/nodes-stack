@@ -27,6 +27,9 @@ interface CanvasFlashOverlayProps {
  * 定位策略：从 components 列表中找到 flashingComponentId 对应组件，
  * 复用 resolveComponentContainerStyle 计算其画布位置与尺寸，
  * 渲染一个绝对定位的蓝色 ring + pulse 动画框。
+ *
+ * Canvas Drag Optimization：resolveComponentContainerStyle 现返回 left:0/top:0 + transform: translate()，
+ * 闪烁框需使用 transform 定位以匹配组件实际位置。
  */
 export function CanvasFlashOverlay({
   flashingComponentId,
@@ -43,10 +46,11 @@ export function CanvasFlashOverlay({
     <div
       className="pointer-events-none absolute z-[9999] animate-pulse rounded-sm ring-4 ring-blue-500 ring-offset-2"
       style={{
-        left: style.left,
-        top: style.top,
+        left: 0,
+        top: 0,
         width: style.width,
         height: style.height,
+        transform: style.transform,
       }}
       data-testid="canvas-flash-overlay"
       data-flashing-component-id={flashingComponentId}
