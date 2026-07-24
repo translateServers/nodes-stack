@@ -25,11 +25,12 @@ import type { FieldControlComponent, FieldControlProps } from './types';
 /** NumberField：数值输入（PS 风格微调 + draft 提交） */
 const NumberField: FieldControlComponent = (props: FieldControlProps<unknown>) => {
   const { value, onChange, label, syncKey, disabled } = props;
-  const { min, max, step, shiftStep } = props as FieldControlProps<unknown> & {
+  const { min, max, step, shiftStep, precision } = props as FieldControlProps<unknown> & {
     min?: number;
     max?: number;
     step?: number;
     shiftStep?: number;
+    precision?: number;
   };
   return (
     <NumberInput
@@ -43,6 +44,7 @@ const NumberField: FieldControlComponent = (props: FieldControlProps<unknown>) =
       max={max}
       step={step}
       shiftStep={shiftStep}
+      precision={precision}
     />
   );
 };

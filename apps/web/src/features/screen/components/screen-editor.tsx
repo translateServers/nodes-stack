@@ -327,7 +327,8 @@ export function ScreenEditor() {
   }, [doPublish]);
 
   const handlePreview = useCallback(() => {
-    window.open(`/screen-preview/${id}`, '_blank');
+    // 编辑器内预览读取草稿版本（需登录鉴权），与公开预览页（/screen-preview/$id，匿名读取已发布版本）区分
+    window.open(`/screen-editor-preview/${id}`, '_blank');
   }, [id]);
 
   /** 导出当前项目为 JSON 文件，由浏览器直接触发下载 */

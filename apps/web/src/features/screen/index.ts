@@ -3,3 +3,4 @@ export * from './hooks';
 export { ScreenListPage } from './components/screen-list-page';
 export { ScreenEditor } from './components/screen-editor';
 export { ScreenPreview } from './components/screen-preview';
+export { EditorPreviewScreen } from './components/editor-preview-screen';

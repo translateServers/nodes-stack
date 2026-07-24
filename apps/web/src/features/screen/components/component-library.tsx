@@ -21,41 +21,26 @@ const RECENT_LIMIT = 5;
 // 静态常量，避免每次 render 重新计算
 const CATEGORIES = [...new Set(COMPONENT_DEFINITIONS.map((d) => d.category))];
 
-/**
- * 拖拽 / 点击创建后记录最近使用。
- * 使用 useCallback 包装避免每次 render 创建新闭包；调用方按需使用。
- */
-function useRecordUsage() {
-  return useCallback((type: string) => {
-    recordComponentUsage(type);
-  }, []);
-}
-
 export function ComponentLibrary() {
   const [keyword, setKeyword] = useState('');
   const [recent, setRecent] = useState<RecentComponentEntry[]>([]);
 
-  // 初次挂载与窗口聚焦时刷新最近使用（localStorage 可能在其他 tab 更新）
+  // 初次挂载、窗口聚焦、组件成功新增到画布时刷新最近使用
   useEffect(() => {
     const refresh = () => setRecent(getRecentComponents(RECENT_LIMIT));
     refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    window.addEventListener('recent-components:updated', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('recent-components:updated', refresh);
+    };
   }, []);
 
-  const recordUsage = useRecordUsage();
-
-  const handleDragStart = useCallback(
-    (e: React.DragEvent, type: string) => {
-      e.dataTransfer.setData('component-type', type);
-      e.dataTransfer.effectAllowed = 'copy';
-      // 拖拽创建时记录使用（drop 成功才入画布，此处乐观记录避免 drop 失败时漏记；
-      // 即使失败也只是最近使用多一条，不影响功能）
-      recordUsage(type);
-      setRecent(getRecentComponents(RECENT_LIMIT));
-    },
-    [recordUsage],
-  );
+  const handleDragStart = useCallback((e: React.DragEvent, type: string) => {
+    e.dataTransfer.setData('component-type', type);
+    e.dataTransfer.effectAllowed = 'copy';
+  }, []);
 
   // 按名称 / 类型 / keywords 过滤（大小写不敏感）
   const filtered = useMemo(() => searchComponentDefinitions(keyword), [keyword]);
@@ -225,6 +210,8 @@ export function useCanvasDrop() {
       const instance = createComponentInstance(type, x, y, maxZ + 1, project.components);
       if (instance) {
         addComponent(instance);
+        // 组件成功新增到画布后才记录最近使用
+        recordComponentUsage(type);
       }
     },
     [project, addComponent, canvasScale],

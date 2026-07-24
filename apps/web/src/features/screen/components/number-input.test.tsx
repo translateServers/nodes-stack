@@ -345,4 +345,67 @@ describe('NumberInput', () => {
       expect(input.value).toBe('30');
     });
   });
+
+  describe('precision 显示精度', () => {
+    it('整数 value 保留 precision=2 时显示为整数（去尾零）', () => {
+      render(<NumberInput value={100} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('100');
+    });
+
+    it('一位小数 value 保留 precision=2 时只显示一位（去尾零）', () => {
+      render(<NumberInput value={100.5} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('100.5');
+    });
+
+    it('长尾小数 value 按 precision=2 四舍五入', () => {
+      render(<NumberInput value={100.567} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('100.57');
+    });
+
+    it('四舍五入进位到整数（100.999 → 101）', () => {
+      render(<NumberInput value={100.999} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('101');
+    });
+
+    it('未传 precision 时按原 String(value) 显示', () => {
+      render(<NumberInput value={100.56789} onChange={vi.fn()} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('100.56789');
+    });
+
+    it('precision=0 等同未传 precision', () => {
+      render(<NumberInput value={100.567} onChange={vi.fn()} precision={0} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('100.567');
+    });
+
+    it('聚焦时 draft 使用格式化值，避免视觉抖动', () => {
+      render(<NumberInput value={100.567} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      // 聚焦前显示 100.57
+      expect(input.value).toBe('100.57');
+      fireEvent.focus(input);
+      // 聚焦后 draft 仍是 100.57，不暴露原始长尾
+      expect(input.value).toBe('100.57');
+    });
+
+    it('编辑态保留用户输入，不进行格式化', () => {
+      render(<NumberInput value={100.567} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      fireEvent.focus(input);
+      // 用户输入完整精度
+      fireEvent.change(input, { target: { value: '100.56789' } });
+      expect(input.value).toBe('100.56789');
+    });
+
+    it('NaN value 回退到 String(value)', () => {
+      render(<NumberInput value={Number.NaN} onChange={vi.fn()} precision={2} />);
+      const input = screen.getByRole<HTMLInputElement>('textbox');
+      expect(input.value).toBe('NaN');
+    });
+  });
 });

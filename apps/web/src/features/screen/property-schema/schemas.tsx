@@ -22,21 +22,33 @@ const POSITION_SECTION: PropertySchema[number] = {
   collapsible: true,
   defaultOpen: true,
   fields: [
-    { kind: 'field', control: 'number', label: 'X', path: 'position.x' },
-    { kind: 'field', control: 'number', label: 'Y', path: 'position.y' },
+    {
+      kind: 'field',
+      control: 'number',
+      label: 'X',
+      path: 'position.x',
+      controlProps: { precision: 2 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: 'Y',
+      path: 'position.y',
+      controlProps: { precision: 2 },
+    },
     {
       kind: 'field',
       control: 'number',
       label: '宽',
       path: 'position.width',
-      controlProps: { min: 1 },
+      controlProps: { min: 1, precision: 2 },
     },
     {
       kind: 'field',
       control: 'number',
       label: '高',
       path: 'position.height',
-      controlProps: { min: 1 },
+      controlProps: { min: 1, precision: 2 },
     },
     {
       kind: 'field',

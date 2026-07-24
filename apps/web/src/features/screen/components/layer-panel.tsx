@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,20 @@ import {
   type LayerCommandContext,
   type LayerCommandStore,
 } from '../lib/layer-commands';
+
+/**
+ * 虚拟滚动相关常量。
+ *
+ * - VIRTUALIZATION_THRESHOLD：扁平行数超过此阈值时启用虚拟滚动。
+ *   阈值以下保持现有渲染路径（dnd-kit 拖拽全功能），避免引入复杂协同；
+ *   阈值以上启用虚拟滚动并禁用拖拽排序，由右键菜单命令（置顶/上移/下移/置底）替代。
+ * - ROW_ESTIMATE_SIZE：行高估算值（顶层组件与子组件 ~36px，分组行 ~44px，统一估算 40px）。
+ *   实际高度通过 measureElement 动态测量修正。
+ * - ROW_OVERSCAN：视口外预渲染行数，平衡滚动流畅度与 DOM 数量。
+ */
+const VIRTUALIZATION_THRESHOLD = 50;
+const ROW_ESTIMATE_SIZE = 40;
+const ROW_OVERSCAN = 8;
 
 /**
  * 可拖拽图层行包装器（Task 3.23）。
@@ -133,6 +148,36 @@ function buildLayerTree(components: ScreenComponent[]): LayerNode[] {
   });
 
   return nodes;
+}
+
+/**
+ * 扁平化图层行：用于虚拟滚动。
+ *
+ * - component 行：携带 depth（0=顶层，1=分组内子组件）
+ * - group 行：携带分组节点（含 children 与 label），子组件作为独立的扁平行紧随其后
+ *
+ * 折叠的分组不展开子组件行。
+ */
+type FlatLayerRow =
+  | { kind: 'component'; key: string; comp: ScreenComponent; depth: number }
+  | { kind: 'group'; key: string; node: Extract<LayerNode, { kind: 'group' }> };
+
+/** 将树结构扁平化为虚拟滚动所需的行数组 */
+function flattenLayerTree(tree: LayerNode[], collapsed: Set<string>): FlatLayerRow[] {
+  const rows: FlatLayerRow[] = [];
+  for (const node of tree) {
+    if (node.kind === 'component') {
+      rows.push({ kind: 'component', key: node.comp.id, comp: node.comp, depth: 0 });
+      continue;
+    }
+    rows.push({ kind: 'group', key: node.groupId, node });
+    if (!collapsed.has(node.groupId)) {
+      for (const child of node.children) {
+        rows.push({ kind: 'component', key: child.id, comp: child, depth: 1 });
+      }
+    }
+  }
+  return rows;
 }
 
 /**
@@ -284,6 +329,19 @@ export function LayerPanel() {
         .map((n) => n.comp.id),
     [tree],
   );
+
+  // 虚拟滚动：当扁平行数超过阈值时启用，仅渲染视口内 + overscan 的行。
+  // 阈值以下保持原有 dnd-kit 拖拽全功能渲染路径；阈值以上禁用拖拽排序
+  // （由右键菜单的置顶/上移/下移/置底命令替代），换取大列表下的渲染性能。
+  const flatRows = useMemo(() => flattenLayerTree(tree, collapsed), [tree, collapsed]);
+  const enableVirtualization = flatRows.length > VIRTUALIZATION_THRESHOLD;
+  const scrollParentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: enableVirtualization ? flatRows.length : 0,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => ROW_ESTIMATE_SIZE,
+    overscan: ROW_OVERSCAN,
+  });
   // 顶层组件按 zIndex 降序（与 buildLayerTree 内部排序一致），供命令描述符计算"上移/下移一层"
   const topLevelOrdered = useMemo<readonly ScreenComponent[]>(
     () =>
@@ -377,28 +435,6 @@ export function LayerPanel() {
   };
 
   /**
-   * 双击组件行：进入该组件所属的分组（设置 activeGroupId + 选中该组件）。
-   * 顶层组件双击：仅选中该组件，退出任何活动分组。
-   */
-  const handleComponentDoubleClick = (comp: ScreenComponent) => {
-    if (comp.parentId) {
-      const gid = comp.parentId;
-      setActiveGroupId(gid);
-      // 确保分组在面板中展开，便于看到双击的组件
-      setCollapsed((prev) => {
-        if (!prev.has(gid)) return prev;
-        const next = new Set(prev);
-        next.delete(gid);
-        return next;
-      });
-    } else {
-      // 顶层组件双击：退出活动分组
-      if (activeGroupId !== null) setActiveGroupId(null);
-    }
-    selectComponent(comp.id);
-  };
-
-  /**
    * 右键组件行（Phase 2 Slice A）：实现"右键未选中行 → 先选中该行再弹菜单"的行业惯例。
    * - 若目标组件不在当前选区：单选该组件（避免误对其他组件批量操作）
    * - 若已在选区：保留选区不变（支持多选右键批量操作）
@@ -411,7 +447,6 @@ export function LayerPanel() {
 
   /**
    * 点击分组行：选中整个分组（所有子组件）。
-   * 双击分组行：进入该分组（setActiveGroupId + 选中全部子组件）。
    */
   const handleGroupClick = (e: React.MouseEvent, groupId: string, children: ScreenComponent[]) => {
     if (e.ctrlKey || e.metaKey) {
@@ -428,18 +463,6 @@ export function LayerPanel() {
     }
     // 普通单击：选中整组，但不改变活动分组状态（用户可能正在编辑某分组）
     selectComponents(children.map((c) => c.id));
-  };
-
-  const handleGroupDoubleClick = (groupId: string, children: ScreenComponent[]) => {
-    setActiveGroupId(groupId);
-    selectComponents(children.map((c) => c.id));
-    // 自动展开此分组
-    setCollapsed((prev) => {
-      if (!prev.has(groupId)) return prev;
-      const next = new Set(prev);
-      next.delete(groupId);
-      return next;
-    });
   };
 
   /**
@@ -535,7 +558,6 @@ export function LayerPanel() {
         }`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
         onClick={(e) => handleComponentClick(e, comp)}
-        onDoubleClick={() => handleComponentDoubleClick(comp)}
         onContextMenu={() => handleComponentContextMenu(comp)}
       >
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
@@ -647,8 +669,8 @@ export function LayerPanel() {
     );
   };
 
-  /** 渲染分组行（虚拟节点）+ 子组件 */
-  const renderGroup = (node: Extract<LayerNode, { kind: 'group' }>) => {
+  /** 渲染分组头行（仅分组头，不含子组件；子组件由调用方单独渲染） */
+  const renderGroupHeader = (node: Extract<LayerNode, { kind: 'group' }>) => {
     const { groupId, label, children } = node;
     const isCollapsed = collapsed.has(groupId);
     const allHidden = children.every((c) => c.status.hidden);
@@ -671,7 +693,6 @@ export function LayerPanel() {
         }`}
         style={{ paddingLeft: isActiveGroup ? `${10}px` : `${12}px` }}
         onClick={(e) => handleGroupClick(e, groupId, children)}
-        onDoubleClick={() => handleGroupDoubleClick(groupId, children)}
         onContextMenu={() => handleGroupContextMenu(children)}
       >
         <button
@@ -682,7 +703,6 @@ export function LayerPanel() {
             e.stopPropagation();
             toggleGroupCollapse(groupId);
           }}
-          onDoubleClick={(e) => e.stopPropagation()}
         >
           <ChevronRight
             className={`size-3.5 text-muted-foreground transition-transform ${
@@ -743,14 +763,8 @@ export function LayerPanel() {
       </div>
     );
 
-    return [
-      // Phase 2 Slice A：分组行同样用 ContextMenu 包裹，命令描述符的 when=enbled 已适配分组场景
-      <LayerRowMenu key={groupId} ctx={buildGroupCtx(groupId, children)}>
-        {groupRow}
-      </LayerRowMenu>,
-      // 子组件：仅在展开时渲染
-      ...(!isCollapsed ? children.map((c) => renderComponent(c, 1)) : []),
-    ];
+    // Phase 2 Slice A：分组行同样用 ContextMenu 包裹，命令描述符的 when/enabled 已适配分组场景
+    return <LayerRowMenu ctx={buildGroupCtx(groupId, children)}>{groupRow}</LayerRowMenu>;
   };
 
   return (
@@ -811,23 +825,73 @@ export function LayerPanel() {
             正在编辑分组内部 — 按 Esc 退出
           </div>
         )}
-        <div className="flex-1 overflow-y-auto">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={topLevelSortableIds} strategy={verticalListSortingStrategy}>
-              {tree.map((node) => {
-                if (node.kind === 'group') return renderGroup(node);
+        <div ref={scrollParentRef} className="flex-1 overflow-y-auto">
+          {enableVirtualization ? (
+            // 虚拟滚动路径：仅渲染视口内 + overscan 的行，禁用 dnd-kit 拖拽排序。
+            // 外层相对定位容器高度 = virtualizer 总尺寸，保持滚动条与实际内容一致；
+            // 每个虚拟行绝对定位，通过 transform: translateY 偏移到目标位置。
+            // 顶层组件行（depth=0）由外层 div 提供 data-testid/data-component-id，
+            // 与非虚拟化路径下 SortableLayerRow 的属性保持一致，便于 E2E/单元测试定位。
+            <div
+              style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
+              data-testid="layer-virtual-list"
+            >
+              {rowVirtualizer.getVirtualItems().map((vi) => {
+                const row = flatRows[vi.index];
+                const isTopComponent = row.kind === 'component' && row.depth === 0;
                 return (
-                  <SortableLayerRow key={node.comp.id} id={node.comp.id}>
-                    {renderComponent(node.comp, 0)}
-                  </SortableLayerRow>
+                  <div
+                    key={row.key}
+                    data-index={vi.index}
+                    ref={(el: HTMLElement | null) => {
+                      // jsdom 等环境无 ResizeObserver 时跳过测量，依赖 estimateSize 估算
+                      if (el && typeof ResizeObserver !== 'undefined') {
+                        rowVirtualizer.measureElement(el);
+                      }
+                    }}
+                    data-testid={isTopComponent ? 'layer-row' : undefined}
+                    data-component-id={isTopComponent ? row.comp.id : undefined}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${vi.start}px)`,
+                    }}
+                  >
+                    {row.kind === 'component'
+                      ? renderComponent(row.comp, row.depth)
+                      : renderGroupHeader(row.node)}
+                  </div>
                 );
               })}
-            </SortableContext>
-          </DndContext>
+            </div>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={topLevelSortableIds} strategy={verticalListSortingStrategy}>
+                {tree.map((node) => {
+                  if (node.kind === 'group') {
+                    return (
+                      <Fragment key={node.groupId}>
+                        {renderGroupHeader(node)}
+                        {!collapsed.has(node.groupId) &&
+                          node.children.map((c) => renderComponent(c, 1))}
+                      </Fragment>
+                    );
+                  }
+                  return (
+                    <SortableLayerRow key={node.comp.id} id={node.comp.id}>
+                      {renderComponent(node.comp, 0)}
+                    </SortableLayerRow>
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
+          )}
         </div>
       </div>
     </TooltipProvider>

@@ -41,6 +41,15 @@ export interface NumberInputProps {
    * 用于属性面板切换选中对象/字段时重置编辑上下文，避免把上一对象的草稿带入下一对象。
    */
   syncKey?: string;
+  /**
+   * 显示精度（可选）：仅影响非编辑态的显示字符串，不修改实际 value。
+   * 例如 precision=2 时：
+   * - 100 → "100"（去掉无意义尾零）
+   * - 100.5 → "100.5"
+   * - 100.567 → "100.57"（四舍五入到 2 位）
+   * 编辑态始终显示用户原始输入，不进行格式化。
+   */
+  precision?: number;
 }
 
 /** 将数值钳制到 [min, max] 区间 */
@@ -49,6 +58,24 @@ function clamp(value: number, min?: number, max?: number): number {
   if (min !== undefined && v < min) v = min;
   if (max !== undefined && v > max) v = max;
   return v;
+}
+
+/**
+ * 按精度格式化数值为显示字符串，自动去掉无意义尾零。
+ *
+ * - 不传 precision 或 precision<=0：直接 String(value)
+ * - precision=2：100 → "100"，100.5 → "100.5"，100.567 → "100.57"
+ *
+ * 加 Number.EPSILON 缓解 1.005 类四舍五入问题；
+ * 非 finite 值（NaN/Infinity）回退到 String(value)。
+ */
+function formatValue(value: number, precision?: number): string {
+  if (precision === undefined || precision <= 0 || !Number.isFinite(value)) {
+    return String(value);
+  }
+  const factor = 10 ** precision;
+  const rounded = Math.round((value + Number.EPSILON) * factor) / factor;
+  return String(rounded);
 }
 
 /**
@@ -74,6 +101,7 @@ export function NumberInput({
   disabled,
   className,
   syncKey,
+  precision,
 }: NumberInputProps) {
   // draft !== null 时表示用户正在编辑（input 显示 draft）；null 时显示 value
   const [draft, setDraft] = useState<string | null>(null);
@@ -95,7 +123,7 @@ export function NumberInput({
     }
   }, [value, syncKey]);
 
-  const displayValue = draft ?? String(value);
+  const displayValue = draft ?? formatValue(value, precision);
 
   const commit = () => {
     if (draft === null) return;
@@ -159,8 +187,9 @@ export function NumberInput({
       onFocus={(e) => {
         // 进入编辑态前重置跳过标记，防止上一次未消费的标记误伤本次 blur
         skipNextBlurCommitRef.current = false;
-        // 进入编辑态：把 draft 设为当前 value 的字符串形式，便于用户全选替换
-        setDraft(String(value));
+        // 进入编辑态：把 draft 设为格式化后的字符串，便于用户全选替换
+        // 避免聚焦瞬间从 "100.57" 跳到 "100.567" 的视觉抖动
+        setDraft(formatValue(value, precision));
         // 自动全选，符合 PS 数值输入习惯
         e.currentTarget.select();
       }}

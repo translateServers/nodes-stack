@@ -99,9 +99,11 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
   const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
   const guidesVisible = useScreenEditorStore((s) => s.guides.visible);
+  const eventsEnabled = useScreenEditorStore((s) => s.eventsEnabled);
 
   const toggleSnap = useScreenEditorStore((s) => s.toggleSnap);
   const toggleGuidesVisibility = useScreenEditorStore((s) => s.toggleGuidesVisibility);
+  const toggleEvents = useScreenEditorStore((s) => s.toggleEvents);
 
   const dimension = useDimensionStore((s) => s.dimension);
 
@@ -167,6 +169,12 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
             tooltip="参考线显示"
             active={guidesVisible}
             onClick={toggleGuidesVisibility}
+          />
+          <StatusBarToggle
+            label="Event"
+            tooltip="画布元素事件（蓝图 componentClick 派发）"
+            active={eventsEnabled}
+            onClick={toggleEvents}
           />
           <Divider />
           <DropdownMenu>

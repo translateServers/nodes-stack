@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ScreenProject, ScreenComponent, CanvasConfig, EventBlueprint } from '@nebula/shared';
+import { loadPreferences, savePreference, type PreferenceValues } from '../lib/preferences-persist';
 
 /**
  * 历史栈条目：组件数组 + 画布配置 + 事件蓝图的三重快照（任务 5.1）。
@@ -41,7 +42,7 @@ interface ScreenEditorData {
   clipboard: ScreenComponent[] | null;
   /** 粘贴次数计数器，用于累加偏移避免重叠 */
   pasteCount: number;
-  /** 吸附开关：控制 Moveable 的 snappable 行为（会话级，不持久化） */
+  /** 吸附开关：控制 Moveable 的 snappable 行为（持久化到 localStorage） */
   snapEnabled: boolean;
   /**
    * 当前进入的分组 ID（"编辑模式"下选中的组）。
@@ -66,6 +67,15 @@ interface ScreenEditorData {
    * 默认 10，常见取值 4/5/8/10/20。
    */
   gridSize: number;
+  /**
+   * 画布元素事件开关：开启后编辑器画布中元素点击会派发蓝图 componentClick 事件，
+   * 用于在编辑器内即时预览交互效果，无需切换到预览页（持久化到 localStorage）。
+   * - false（默认）：编辑器画布仅响应选中/拖拽/缩放等编辑操作，不触发蓝图事件
+   * - true：接入蓝图运行时，组件 onClick 派发到蓝图触发器（与公开预览一致）
+   * 注意：开启后仍保留 Moveable 的编辑能力（拖拽/缩放/旋转），但单击未选中的组件
+   * 会同时触发蓝图事件与选中，需要权衡使用场景。
+   */
+  eventsEnabled: boolean;
   /**
    * UI 可见性开关：控制工具栏 / 侧边栏 / 属性面板等编辑器 UI 的显隐（会话级，不持久化）。
    * 用于 Tab 快捷键切换"全屏画布预览"模式（与 Photoshop 的 Tab 行为一致）。
@@ -197,6 +207,8 @@ interface ScreenEditorActions {
   ungroupSelected: () => void;
   /** 切换吸附开关 */
   toggleSnap: () => void;
+  /** 切换画布元素事件开关（蓝图 componentClick 事件派发） */
+  toggleEvents: () => void;
   /** 设置智能对齐线开关（接受显式 value，便于未来接入设置面板） */
   setSmartGuidesEnabled: (value: boolean) => void;
   /** 设置网格吸附开关（接受显式 value，便于未来接入设置面板） */
@@ -215,21 +227,33 @@ export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
 
 const HISTORY_LIMIT = 50;
 
+/**
+ * 从 localStorage 加载持久化偏好作为初始值。
+ * snapEnabled / guidesVisible / eventsEnabled 持久化，其他字段保持会话级默认值。
+ */
+const persistedPreferences: PreferenceValues = loadPreferences();
+
 const initialData: ScreenEditorData = {
   project: null,
   selectedComponentIds: [],
   canvasScale: 1,
   canvasOffset: { x: 0, y: 0 },
   showBorderGuides: false,
-  guides: { vertical: [], horizontal: [], visible: true, locked: false },
+  guides: {
+    vertical: [],
+    horizontal: [],
+    visible: persistedPreferences.guidesVisible,
+    locked: false,
+  },
   history: { past: [], future: [] },
   clipboard: null,
   pasteCount: 0,
-  snapEnabled: true,
+  snapEnabled: persistedPreferences.snapEnabled,
   activeGroupId: null,
   smartGuidesEnabled: true,
   gridEnabled: false,
   gridSize: 10,
+  eventsEnabled: persistedPreferences.eventsEnabled,
   uiVisible: true,
   screenMode: 'standard',
   isDirty: false,
@@ -849,9 +873,11 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
 
       toggleGuidesVisibility: () => {
         set(
-          (state: ScreenEditorState) => ({
-            guides: { ...state.guides, visible: !state.guides.visible },
-          }),
+          (state: ScreenEditorState) => {
+            const nextVisible = !state.guides.visible;
+            savePreference('guidesVisible', nextVisible);
+            return { guides: { ...state.guides, visible: nextVisible } };
+          },
           false,
           'toggleGuidesVisibility',
         );
@@ -1144,9 +1170,25 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
 
       toggleSnap: () => {
         set(
-          (state: ScreenEditorState) => ({ snapEnabled: !state.snapEnabled }),
+          (state: ScreenEditorState) => {
+            const next = !state.snapEnabled;
+            savePreference('snapEnabled', next);
+            return { snapEnabled: next };
+          },
           false,
           'toggleSnap',
+        );
+      },
+
+      toggleEvents: () => {
+        set(
+          (state: ScreenEditorState) => {
+            const next = !state.eventsEnabled;
+            savePreference('eventsEnabled', next);
+            return { eventsEnabled: next };
+          },
+          false,
+          'toggleEvents',
         );
       },
 

@@ -13,6 +13,18 @@ import type { EditorTool } from '../hooks/tool-registry';
 import { TOOL_REGISTRY, getToolById } from '../hooks/tool-registry';
 
 /**
+ * 共享修饰键 ref：测试用例通过 modifierRefs.shiftRef.current / altRef.current
+ * 切换 Shift/Alt 状态，模拟 PS 风格拖拽过程中按键按下/松开。
+ * 用 vi.hoisted 声明，保证 vi.mock 工厂提升时能引用到同一份对象。
+ */
+const modifierRefs = vi.hoisted(() => ({
+  spaceRef: { current: false },
+  shiftRef: { current: false },
+  altRef: { current: false },
+  ctrlRef: { current: false },
+}));
+
+/**
  * ScreenCanvas 交互测试（任务 2.3 ~ 13.8）
  *
  * 测试策略：
@@ -200,11 +212,11 @@ vi.mock('../stores/editor-store', () => ({
 
 vi.mock('../hooks/use-modifier-keys', () => ({
   useModifierKeys: () => ({
-    spaceRef: { current: false },
-    shiftRef: { current: false },
-    spaceHeld: false,
-    shiftHeld: false,
-    altHeld: false,
+    ...modifierRefs,
+    spaceHeld: modifierRefs.spaceRef.current,
+    shiftHeld: modifierRefs.shiftRef.current,
+    altHeld: modifierRefs.altRef.current,
+    ctrlHeld: modifierRefs.ctrlRef.current,
   }),
 }));
 
@@ -1548,6 +1560,9 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     store = setupStore();
     vi.useFakeTimers();
     moveableDragStartSpy.mockClear();
+    // 重置共享修饰键状态，避免上个测试的 Shift/Alt 残留
+    modifierRefs.shiftRef.current = false;
+    modifierRefs.altRef.current = false;
   });
 
   afterEach(() => {
@@ -1678,6 +1693,172 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
     expect(store.updateComponent).toHaveBeenCalledWith('c1', {
       position: { x: 130, y: 160, width: 200, height: 150 },
+    });
+  });
+
+  it('onResizeEnd：Alt 中心变换提交位置以中心点为原点（修复跳变 bug）', () => {
+    // 组件 c1 初始：x=100, y=100, w=200, h=150，中心点 (200, 175)
+    // Alt+拖控制点缩放到 100×100：期望提交 x=150, y=125（中心点仍为 200,175）
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    const startEvent = { target, datas: {}, inputEvent: { altKey: false } };
+
+    // PS 风格：Alt 状态从 ref 实时读取，而非 inputEvent.altKey
+    modifierRefs.altRef.current = true;
+
+    capturedMoveable!.onResizeStart!(startEvent);
+
+    const datas = startEvent.datas as {
+      origX: number;
+      origY: number;
+      origW: number;
+      origH: number;
+    };
+    expect(datas.origX).toBe(100);
+    expect(datas.origY).toBe(100);
+    expect(datas.origW).toBe(200);
+    expect(datas.origH).toBe(150);
+
+    capturedMoveable!.onResizeEnd!({
+      ...startEvent,
+      isDrag: true,
+      lastEvent: {
+        width: 100,
+        height: 100,
+        drag: { beforeTranslate: [50, 50] },
+        isDrag: true,
+      },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    // 关键断言：x/y 必须按中心变换公式计算，不能用 beforeTranslate=[50,50]
+    expect(store.updateComponent).toHaveBeenCalledWith('c1', {
+      position: { x: 150, y: 125, width: 100, height: 100 },
+    });
+  });
+
+  it('onResizeEnd：非 Alt 普通缩放提交用 Moveable beforeTranslate', () => {
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    const startEvent = { target, datas: {}, inputEvent: { altKey: false } };
+
+    capturedMoveable!.onResizeStart!(startEvent);
+
+    capturedMoveable!.onResizeEnd!({
+      ...startEvent,
+      isDrag: true,
+      lastEvent: {
+        width: 120,
+        height: 80,
+        drag: { beforeTranslate: [30, 40] },
+        isDrag: true,
+      },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).toHaveBeenCalledWith('c1', {
+      position: { x: 30, y: 40, width: 120, height: 80 },
+    });
+  });
+
+  it('PS 风格即时切换：拖拽中按住/松开 Alt 立即切换中心变换模式', () => {
+    // 场景：用户开始拖控制点（无 Alt）→ 中途按下 Alt → 松手时仍按住 Alt
+    // 期望：onResize 在 Alt 按下后用中心变换公式，onResizeEnd 用 Alt 状态提交
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    const startEvent = { target, datas: {}, inputEvent: { altKey: false } };
+
+    // 开始时无 Alt
+    modifierRefs.altRef.current = false;
+    capturedMoveable!.onResizeStart!(startEvent);
+
+    // 第一次 onResize：无 Alt，用 beforeTranslate
+    capturedMoveable!.onResize!({
+      ...startEvent,
+      width: 120,
+      height: 100,
+      direction: [1, 0],
+      drag: { beforeTranslate: [30, 0] },
+    });
+    expect(target.style.transform).toContain('translate(30px');
+
+    // 中途按下 Alt：下一次 onResize 立即切换为中心变换
+    modifierRefs.altRef.current = true;
+    capturedMoveable!.onResize!({
+      ...startEvent,
+      width: 100,
+      height: 100,
+      direction: [1, 0],
+      drag: { beforeTranslate: [50, 0] },
+    });
+    // 中心变换：tx = origX + (origW - w) / 2 = 100 + (200-100)/2 = 150
+    expect(target.style.transform).toContain('translate(150px');
+
+    // 松手时 Alt 仍按住：按中心变换提交
+    capturedMoveable!.onResizeEnd!({
+      ...startEvent,
+      isDrag: true,
+      lastEvent: {
+        width: 100,
+        height: 100,
+        drag: { beforeTranslate: [50, 0] },
+        isDrag: true,
+      },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).toHaveBeenCalledWith('c1', {
+      position: { x: 150, y: 125, width: 100, height: 100 },
+    });
+  });
+
+  it('PS 风格即时切换：拖拽中松开 Alt 立即切回普通缩放', () => {
+    // 场景：用户按住 Alt 开始拖控制点 → 中途松开 Alt → 松手时无 Alt
+    // 期望：onResizeEnd 用无 Alt 状态，按 beforeTranslate 提交
+    const { dispatchInteraction } = renderSelectCanvas();
+    const target = makeComponentTarget();
+    const startEvent = { target, datas: {}, inputEvent: { altKey: false } };
+
+    // 开始时按住 Alt
+    modifierRefs.altRef.current = true;
+    capturedMoveable!.onResizeStart!(startEvent);
+
+    // onResize：Alt 按住，中心变换
+    capturedMoveable!.onResize!({
+      ...startEvent,
+      width: 100,
+      height: 100,
+      direction: [1, 0],
+      drag: { beforeTranslate: [50, 0] },
+    });
+    expect(target.style.transform).toContain('translate(150px');
+
+    // 中途松开 Alt：下一次 onResize 立即切回 beforeTranslate
+    modifierRefs.altRef.current = false;
+    capturedMoveable!.onResize!({
+      ...startEvent,
+      width: 100,
+      height: 100,
+      direction: [1, 0],
+      drag: { beforeTranslate: [40, 0] },
+    });
+    expect(target.style.transform).toContain('translate(40px');
+
+    // 松手时无 Alt：按 beforeTranslate 提交
+    capturedMoveable!.onResizeEnd!({
+      ...startEvent,
+      isDrag: true,
+      lastEvent: {
+        width: 100,
+        height: 100,
+        drag: { beforeTranslate: [40, 0] },
+        isDrag: true,
+      },
+    });
+
+    expect(dispatchInteraction).toHaveBeenCalledWith('pointer-up');
+    expect(store.updateComponent).toHaveBeenCalledWith('c1', {
+      position: { x: 40, y: 0, width: 100, height: 100 },
     });
   });
 

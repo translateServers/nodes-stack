@@ -78,9 +78,13 @@ export function recordComponentUsage(type: string, now: number = Date.now()): vo
       trimmed[entry.type] = entry;
     }
     safeWrite(trimmed);
-    return;
+  } else {
+    safeWrite(map);
   }
-  safeWrite(map);
+  // 派发自定义事件，让监听方（如 ComponentLibrary）刷新最近使用列表
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('recent-components:updated'));
+  }
 }
 
 /**
