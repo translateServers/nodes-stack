@@ -78,7 +78,4 @@
 
 ## 关联目录
 
-- `.trae/archive/` — 已归档过程文档
-- `.trae/rules/project_rules.md` — AI 专用开发规则（与 `conventions/` 对应）
-- `.trae/skills/` — IDE skill 离线副本，由 skill 系统自动管理
 - `AGENTS.md` — AI agent 指导，含项目结构与常用命令

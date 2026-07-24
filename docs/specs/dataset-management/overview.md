@@ -31,7 +31,7 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | 跨组件复用 | 同一份数据集配置可被多个组件引用，避免重复填写 URL/SQL（解决 Light Chaser 的痛点） |
 | 前后端分离代理 | 后端代理外部请求，解决 CORS、统一鉴权、可加缓存 |
 | 图形化字段映射 | 降低非开发人员门槛（Light Chaser 需写 JS filter） |
-| 安全沙箱 | filter 函数沙箱化执行，避免 `eval` 的 XSS 风险 |
+| 执行安全 | filter 采用 JSONata 声明式表达式，杜绝 eval/XSS 与沙箱逃逸 |
 | Mock 与调试 | 内置 Mock 机制，不依赖真实数据源即可调试 |
 | 与现有架构兼容 | 复用现有 `dataSource` 判别联合、`chart-data-parser` 管线、蓝图运行时抽象 |
 
@@ -56,7 +56,7 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
                           ▼
 ┌─────────────────────────────────────────────────────────┐
 │  数据集 (Dataset)                                        │
-│  ─ 命名 + 描述 + 类型(static|api|sql|dataset-ref)        │
+│  ─ 命名 + 描述 + 类型(static|api|sql|websocket)          │
 │  ─ 查询定义: SQL 语句 / API 路径+方法+参数                │
 │  ─ 数据形态契约: dataPath / 字段映射 / filter             │
 │  ─ 缓存策略 / 刷新策略                                    │
@@ -94,7 +94,7 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | 字段映射 | 无（写 JS filter） | 无（写 JS filter） | **图形化 + filter 双层** |
 | 后端代理 | 有（Java 后端执行 SQL） | 无（前端直连） | **有（统一代理 + 缓存）** |
 | Mock | 无 | 有（`/mock/*` 端点） | **有（数据集内置 mock 配置）** |
-| filter 安全 | eval（不安全） | `javascript:` 前缀（不安全） | **沙箱化（`new Function` + 受限作用域）** |
+| filter 安全 | eval（不安全） | `javascript:` 前缀（不安全） | **JSONata 表达式引擎（无 eval，图灵不完备）** |
 | 实时推送 | Pro 版独有 | 无 | 路线图第二阶段 |
 
 ## 5. 与现有架构的兼容性
@@ -107,7 +107,7 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | `bar-chart-config-sections.tsx`（属性面板） | RadioGroup 新增 dataset 选项 + 新增 DatasetConfigForm section |
 | `property-schema/types.ts`（属性 Tab） | `PropertyTabId` 已有 `'data'` tab，直接挂载 |
 | 蓝图运行时 `RuntimeDeps` | `refreshDataSource` / `getComponentData` 抽象不变，dataset 实现替换 deps |
-| `request-api-mask.ts`（敏感信息脱敏） | 复用脱敏逻辑到数据集日志 |
+| `request-api-mask.ts`（敏感信息脱敏） | 脱敏函数下沉 `packages/shared` 后复用到数据集日志（键名识别已在 shared） |
 | `data-source-migration.ts`（数据迁移） | 不强制迁移，提供"提取为数据集"的主动操作 |
 
 详细集成点清单见 [testing-roadmap.md](./testing-roadmap.md)。

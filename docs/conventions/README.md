@@ -4,7 +4,7 @@
 
 ## 核心定位
 
-conventions 是**编码前的必读规范**。与 `.trae/rules/project_rules.md` 的关系：`project_rules.md` 是 AI 专用规则（机器读），本目录是人类协作者规范（人读），两者内容对应但本目录可包含更多解释与示例。
+conventions 是**编码前的必读规范**，所有开发者都要遵守的约定与标准，本目录包含更多解释与示例。
 
 ## 文档清单
 
@@ -21,7 +21,6 @@ conventions 是**编码前的必读规范**。与 `.trae/rules/project_rules.md`
 
 | 来源文件 | 内容 | 对应 conventions 文档 |
 |---|---|---|
-| `.trae/rules/project_rules.md` | TypeScript/ESLint/Biome/测试/工作流规范 | coding-standards.md |
 | `AGENTS.md` | 项目结构、常用命令、AI agent 指导 | architecture/system-overview.md + development-guide.md |
 | `packages/eslint-config/` | 共享 ESLint 配置（类型感知规则） | coding-standards.md 第 1 节 |
 | `biome.json` | Biome 格式化与基础 lint 配置 | coding-standards.md 第 1 节 |

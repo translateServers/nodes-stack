@@ -13,8 +13,11 @@
 | `dataset.schema.ts` | Zod 校验：类型分支、字段必填、SQL select 校验、URL 合法性 |
 | `DatasetExecutor` 各实现 | 静态返回 / API 代理 / SQL 执行 / 错误分类 |
 | `DatasetCacheService` | 命中/失效/TTL/标签失效 |
-| `DatasetFilterService` | 沙箱执行/超时/异常降级/模板库 |
+| `DatasetFilterService` | JSONata 求值/语法错误/超时兜底/异常降级/模板库 |
 | `DatasetMockService` | static / faker / echo 三种生成器 |
+| `ApiExecutor` SSRF 防护 | 内网 IP 拦截/重定向复核/协议白名单/响应大小上限 |
+| `DatasetReference` 引用索引 | 项目保存时重建/删除与归档前校验/引用数聚合 |
+| execute 匿名访问 | 仅已发布项目可执行/草稿与归档拒绝/独立限流 |
 | `useDatasetSource` hook | 参数解析/请求/缓存/竞态/错误态 |
 | `chart-data-parser` 复用 | 现有测试不变，新增 dataset 数据源测试用例 |
 | 蓝图运行时 | `refreshDataSource` 对 dataset 类型的处理 |
@@ -47,7 +50,9 @@
 | Dataset Module（CRUD + execute + test） | nestjs-server |
 | StaticExecutor + ApiExecutor | nestjs-server |
 | DatasetCacheService（内存 LRU） | nestjs-server |
-| DatasetFilterService（沙箱） | nestjs-server |
+| DatasetFilterService（JSONata 表达式） | nestjs-server |
+| DatasetReference 引用索引（项目保存时重建） | nestjs-server |
+| ApiExecutor SSRF 防护 + 独立限流 | nestjs-server |
 | 业务码扩展 | packages/shared |
 | 前端 features/dataset 模块 | apps/web |
 | 管理页（列表 + 编辑） | apps/web |
@@ -76,8 +81,9 @@
 | 预览页批量执行 | 一次请求加载多数据集 |
 | 后端推送更新 | WS 推送数据集变更到引用组件 |
 | 数据集版本管理 | 配置变更历史 |
-| 数据集权限 | 项目级 / 全局级共享 |
-| filter 模板库 | 常见转换模板 |
+| 项目级权限模型 | ScreenProject ownership + 成员表 + 权限 Guard（独立前置能力），落地后收紧连接/数据集权限 |
+| JS filter（可选） | isolated-vm 隔离执行，安全评估后启用 |
+| filter 模板库 | 常见 JSONata 转换模板 |
 | 数据 schema 推断 | 从响应自动推断字段类型 |
 
 ## 3. 关键风险与对策
@@ -85,10 +91,12 @@
 | 风险 | 对策 |
 |---|---|
 | 后端代理引入性能瓶颈 | 缓存 + 超时 + 连接池复用 + 监控 |
-| filter 沙箱逃逸 | `new Function` + 受限 context + 超时 + 服务端执行 |
-| SQL 注入 | 参数化查询 + 强制 select + 只读账号 |
+| SSRF（后端代理被滥用探测内网） | 内网 IP 拦截 + 重定向复核 + 协议/域名白名单 + 响应上限（security-decisions §2.4） |
+| 匿名 execute 滥用 | 仅已发布项目 + 独立限流 + 资源配额（security-decisions §7.5） |
+| filter 注入/死循环 | JSONata 声明式表达式（图灵不完备、无 I/O）+ 服务端求值 + 超时兜底 |
+| SQL 注入 | 参数化查询 + 强制 select + 禁止多语句 + 只读账号 |
 | 凭证泄露 | AES+RSA 传输 + 加密存储 + 不回显 |
-| 数据集被引用后删除 | 删除前校验引用数，软删除（status=archived）保留 30 天 |
+| 数据集被引用后删除 | DatasetReference 引用校验 + 软删除（status=archived）保留 30 天后定时清理 |
 | 缓存一致性 | 数据集更新主动失效 + TTL 兜底 + 标签批量失效 |
 | 现有项目兼容 | 不强制迁移，用户主动提取为数据集 |
 | 大屏性能（多数据集并发） | 预览页批量执行 + 限流 + 优先级调度 |
@@ -103,7 +111,8 @@
 | `apps/web/src/features/screen/components/bar-chart-config-sections.tsx` | RadioGroup 新增 dataset 选项 + 新增 DatasetConfigForm section |
 | `apps/web/src/features/screen/property-schema/types.ts` | `PropertyTabId` 已有 'data' tab，直接挂载 |
 | `apps/web/src/features/screen/blueprint/runtime/executor.ts` | `refreshDataSource` / `getComponentData` 抽象不变，dataset 实现替换 deps |
-| `apps/web/src/features/screen/blueprint/lib/request-api-mask.ts` | 复用敏感 header 脱敏逻辑到数据集日志 |
+| `apps/web/src/features/screen/blueprint/lib/request-api-mask.ts` | 脱敏函数下沉到 `packages/shared`（键名识别已在 shared），后端执行日志复用 |
+| `apps/nestjs-server/src/modules/screen/screen.service.ts` | 项目保存时同步重建 `DatasetReference` 引用索引 |
 | `packages/shared/src/types/api.types.ts` `BizCode` | 新增 80xxx 段 |
 | `apps/web/src/api/core/endpoints.ts` | 新增 dataset + connection 端点 |
 | `apps/web/src/config/navigation.ts` | 新增菜单项 |

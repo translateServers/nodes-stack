@@ -28,7 +28,6 @@ nebula/
 │   ├── eslint-config/        共享 ESLint 配置（@nebula/eslint-config）
 │   └── typescript-config/    共享 TS 配置预设（@nebula/typescript-config）
 ├── docs/                     项目文档（本目录）
-├── .trae/                    AI agent 规则、skill、归档
 ├── turbo.json                Turborepo 任务管道
 ├── pnpm-workspace.yaml       workspace 声明
 └── package.json              根级 scripts
@@ -245,4 +244,3 @@ pnpm prisma studio                        # 可视化管理
 | [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md) | 蓝图运行时架构 |
 | [development-guide.md](./development-guide.md) | 开发指南（新增组件/模块/API） |
 | `AGENTS.md` | AI agent 指导，含项目结构与常用命令 |
-| `.trae/rules/project_rules.md` | AI 专用开发规则 |

@@ -20,7 +20,7 @@ dataset/
 │  ├─ api.executor.ts           // HTTP 代理请求
 │  ├─ sql.executor.ts           // 数据库查询
 │  └─ websocket.executor.ts     // WS 长连接管理(第二阶段)
-├─ dataset-filter.service.ts    // filter 沙箱执行
+├─ dataset-filter.service.ts    // filter 表达式求值（JSONata）
 ├─ dataset-mock.service.ts      // Mock 数据生成
 └─ dto/
    ├─ create-dataset.dto.ts
@@ -63,20 +63,27 @@ interface DatasetExecutor<TConfig> {
 | DELETE | `/api/dataset/:id` | 删除（软删除，归档） |
 | POST | `/api/dataset/:id/execute` | **执行数据集**（body: `{ params, useMock }`） |
 | POST | `/api/dataset/:id/test` | 测试执行（不缓存，返回原始 + 解析后结果） |
-| POST | `/api/dataset/batch` | 批量执行（用于预览页一次加载多数据集） |
-| GET | `/api/connection` | 连接列表 |
-| POST | `/api/connection` | 创建连接 |
-| PATCH | `/api/connection/:id` | 更新连接 |
-| DELETE | `/api/connection/:id` | 删除连接 |
-| POST | `/api/connection/:id/test` | 测试连接 |
+| POST | `/api/dataset/batch` | 批量执行（**第三阶段**，预览页一次加载多数据集） |
+| GET | `/api/datasource-connection` | 连接列表 |
+| GET | `/api/datasource-connection/:id` | 连接详情 |
+| POST | `/api/datasource-connection` | 创建连接 |
+| PATCH | `/api/datasource-connection/:id` | 更新连接 |
+| DELETE | `/api/datasource-connection/:id` | 删除连接 |
+| POST | `/api/datasource-connection/:id/test` | 测试连接 |
+
+> 端点命名采用完整业务语义 `datasource-connection`（与现有 `/roles`、`/screen` 风格一致），避免与数据库连接等概念混淆。
 
 ### 2.1 鉴权与权限
 
-- 所有端点接入现有 nestjs-server RBAC 中间件
-- 数据集 CRUD 需项目编辑权限
-- 数据源连接管理需项目管理员权限（因含敏感凭证）
-- 预览页执行数据集需项目查看权限
-- `execute` 端点公开到预览页路由，但需校验项目访问权限
+> 现状核查：现有后端仅有 `JwtAuthGuard` + `ThrottlerGuard`，**无项目级 RBAC**，`ScreenProject` 无 owner/成员字段；`/screen/:id/preview` 为 `@Public()` 匿名公开。详见 [security-decisions.md](./security-decisions.md) §7.3 / §7.5。
+
+**第一阶段（MVP）**：
+
+- 数据集 / 连接的 CRUD 与 test 端点：登录用户（JWT），与现有 screen 模块一致
+- `execute` / `batch` 端点：匿名可访问（跟随 preview 语义），但仅允许执行**已发布项目**的数据集，配独立限流 + SSRF 防护 + 资源配额（security-decisions §7.5）
+- 连接凭证的加密与脱敏不受权限阶段影响，始终按 security-decisions §7.1 / §7.4 执行
+
+**后续阶段**：项目级权限模型（ownership + 成员表 + 权限 Guard）作为独立前置能力落地后收紧：连接管理 = 项目管理员、数据集 CRUD = 项目编辑、预览执行 = 项目查看。
 
 ## 3. 前端 Feature 模块
 
@@ -101,7 +108,7 @@ dataset/
 │  ├─ sql-config-form.tsx
 │  ├─ connection-selector.tsx   // 连接下拉选择
 │  ├─ field-mapping-editor.tsx  // 图形化字段映射
-│  ├─ filter-editor.tsx         // filter 代码编辑器(Monaco)
+│  ├─ filter-editor.tsx         // filter 表达式编辑器(Monaco，新依赖)
 │  ├─ refresh-config-form.tsx
 │  ├─ mock-config-form.tsx
 │  ├─ dataset-test-panel.tsx    // 测试结果展示(原始 + 解析后)
@@ -126,7 +133,7 @@ screen/components/dataset-config-section.tsx  // 属性面板 data tab 的新 se
 
 - `apps/web/src/routes/_app.dataset.tsx`：数据集列表页
 - `apps/web/src/routes/_app.dataset.$id.tsx`：数据集编辑页
-- `apps/web/src/routes/_app.connection.tsx`：数据源连接管理页
+- `apps/web/src/routes/_app.datasource-connection.tsx`：数据源连接管理页
 
 ### 4.2 导航菜单
 
@@ -135,7 +142,7 @@ screen/components/dataset-config-section.tsx  // 属性面板 data tab 的新 se
 ```
 数据集管理
 ├─ 数据集        → /dataset
-└─ 数据源连接    → /connection
+└─ 数据源连接    → /datasource-connection
 ```
 
 ## 5. 数据流设计
@@ -152,12 +159,12 @@ screen/components/dataset-config-section.tsx  // 属性面板 data tab 的新 se
   ↓ 查 Dataset 实体 + 关联 Connection
   ↓ 按 type 选 Executor
   │  ├─ static: 直接返回 staticData
-  │  ├─ api: 后端代理 HTTP 请求(应用 connection.baseUrl + auth + 公共 header)
+  │  ├─ api: 后端代理 HTTP 请求(SSRF 防护 + connection.baseUrl + auth + 公共 header)
   │  ├─ sql: 后端执行 SQL(强制 select,参数化查询)
   │  └─ websocket: 第二阶段
   ↓ 缓存命中检查(若 enabled 且未过期,直接返回缓存)
   ↓ 执行获取原始数据
-  ↓ filter 沙箱执行(DatasetFilterService)
+  ↓ filter 表达式求值(DatasetFilterService, JSONata)
   ↓ dataPath 提取 + 字段映射(shape 契约)
   ↓ 返回 { status, raw, parsed, meta: { fromCache, durationMs } }
 [前端 useDatasetSource]
@@ -209,4 +216,6 @@ ScreenPreview 加载项目
 - 可记录请求日志、监控告警
 - 现有 `api` 数据源保留前端直连（向后兼容），仅 `dataset` 类型走后端
 
-**实现**：后端 `ApiExecutor` 使用 Node.js 的 `undici` 或 `axios`，超时控制（默认 10s），错误分类（network / http / timeout / parse）复用现有 `ApiRequestError` 设计。
+**实现**：后端 `ApiExecutor` 使用 Node.js 的 `undici` 或 `axios`，超时控制（默认 10s），错误分类（network / http / timeout / parse）复用现有 `ApiRequestError` 设计。目标主机做 SSRF 校验（内网 IP 拦截 / 重定向复核 / 协议白名单），响应上限 5MB，详见 security-decisions §2.4。
+
+**阶段说明**：Connection Module 属第二阶段。第一阶段 api 数据集的 `connectionId` 不启用，`path` 必须为完整 URL，鉴权与公共 header 在数据集自身 `config.headers` 内配置。

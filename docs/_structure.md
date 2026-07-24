@@ -104,7 +104,7 @@ docs/
 **回答**：写代码/API/测试/文档时遵循什么约定？**开发必读，编码前先看这里。**
 
 **内容**：
-- 编码规范（TypeScript/React/NestJS 约定，从 `.trae/rules/project_rules.md` 沉淀）
+- 编码规范（TypeScript/React/NestJS 约定）
 - API 设计规范（命名、响应格式、错误码、BizCode 段位分配）
 - Schema 规范（Zod 使用约定、discriminatedUnion 模式、判别联合扩展约定）
 - UI/UX 规范（shadcn/ui 使用边界、canvas 渲染 vs 编辑器外壳的组件选型）
@@ -114,7 +114,7 @@ docs/
 
 **归属判断**：文档是"所有开发者都要遵守的约定" → 放这里。
 
-**对开发的价值**：**编码前的必读规范**，保证代码一致性。与 `.trae/rules/project_rules.md` 的关系：`project_rules.md` 是 AI 专用规则（机器读），本目录是人类协作者规范（人读），两者内容对应但本目录可包含更多解释与示例。
+**对开发的价值**：**编码前的必读规范**，保证代码一致性。本目录包含更多解释与示例，是供所有开发者阅读的人类协作规范。
 
 **受众**：所有开发者。
 

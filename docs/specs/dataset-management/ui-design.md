@@ -59,7 +59,7 @@
 │ ─ 数据形态 ─            │ 执行信息:                  │
 │ dataPath: [data.list]   │ 耗时: 234ms  缓存: 命中    │
 │ 字段映射: [图形化]      │ 状态: 成功                  │
-│ filter:   [代码编辑器]  │                            │
+│ filter:   [表达式编辑器] │                            │
 │                         │                            │
 │ ─ 刷新策略 ─            │                            │
 │ 间隔: [30] [秒 ▼]       │                            │
@@ -200,5 +200,5 @@
 
 - **shadcn/ui**：管理页与编辑器内表单均使用 shadcn/ui（遵循项目硬约束：编辑器外壳 UI 必须用 shadcn/ui）
 - **Schema 驱动渲染**：数据集表单按 `config` 判别联合动态渲染
-- **Monaco 编辑器**：filter / SQL / JSON 编辑使用 Monaco，与 Light Chaser 风格一致
+- **Monaco 编辑器**（新依赖 `monaco-editor`，需显式引入并配置 Vite worker）：SQL / JSON / filter 表达式编辑使用 Monaco；MVP 阶段可降级为 textarea + Zod 校验，Monaco 随 SQL 编辑器（第二阶段）引入
 - **响应式布局**：管理页支持窄屏适配，编辑器内表单嵌入属性面板宽度
