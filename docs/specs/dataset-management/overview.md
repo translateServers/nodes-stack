@@ -110,4 +110,4 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | `request-api-mask.ts`（敏感信息脱敏） | 复用脱敏逻辑到数据集日志 |
 | `data-source-migration.ts`（数据迁移） | 不强制迁移，提供"提取为数据集"的主动操作 |
 
-详细集成点清单见 [06-testing-roadmap.md](./06-testing-roadmap.md)。
+详细集成点清单见 [testing-roadmap.md](./testing-roadmap.md)。

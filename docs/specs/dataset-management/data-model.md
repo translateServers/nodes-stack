@@ -127,13 +127,13 @@ DataSourceConfigSchema = z.discriminatedUnion('type', [
     // 保留 dataPath / fieldMapping 公共字段以兼容管线
   }
 ])
+```
 
 ParamBinding = {
   source: 'component-prop' | 'component-data' | 'url-param' | 'static' | 'trigger'
   path: string        // source 路径,如 "props.value" / "url.id"
   defaultValue?: unknown
 }
-```
 
 ### 3.1 兼容性约定
 

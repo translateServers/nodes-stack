@@ -56,7 +56,7 @@
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
 | [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-24） | 大屏编辑器功能规格（现状基线） |
-| [dataset-management-spec/](./dataset-management-spec/README.md) | 设计中（2026-07-24） | 数据集管理设计规格（待迁移到 specs/） |
+| [dataset-management/](./specs/dataset-management/README.md) | 设计中（2026-07-24） | 数据集管理设计规格（独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter） |
 
 ## 文档与开发流程
 
@@ -82,9 +82,3 @@
 - `.trae/rules/project_rules.md` — AI 专用开发规则（与 `conventions/` 对应）
 - `.trae/skills/` — IDE skill 离线副本，由 skill 系统自动管理
 - `AGENTS.md` — AI agent 指导，含项目结构与常用命令
-
-## 待办：文档迁移
-
-以下目录建议从 docs 根目录迁移到对应层（详见 [_structure.md](./_structure.md) 第 8 节）：
-
-- [ ] `dataset-management-spec/` → `specs/dataset-management/`

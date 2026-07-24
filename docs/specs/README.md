@@ -11,7 +11,7 @@ specs 是本文档体系中**最重要的开发依据**。每个 spec 必须包�
 | 功能 | 索引 | 状态 | 说明 |
 | --- | --- | --- | --- |
 | 大屏编辑器 | [screen-editor/](./screen-editor/README.md) | 生效中（2026-07-24） | 已实现功能的现状描述：画布/组件/工具/属性面板/图层/数据层/历史栈/快捷键/蓝图/预览/保存发布 |
-| 数据集管理 | [dataset-management-spec/](../dataset-management-spec/README.md) | 设计中（2026-07-24） | 独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter（待迁移到本目录下为 `dataset-management/`） |
+| 数据集管理 | [dataset-management/](./dataset-management/README.md) | 设计中（2026-07-24） | 独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter |
 | 事件蓝图 | _待创建_ | — | 蓝图节点编辑器规格（触发器/动作/条件/运行时）。架构层已有 [blueprint-runtime-architecture.md](../architecture/blueprint-runtime-architecture.md)，规格层待补充用户视角功能边界 |
 | 数据源管理 | _待创建_ | — | 现有 static/api 数据源 + 字段映射 + 逻辑层规格 |
 | 用户与权限 | _待创建_ | — | RBAC 权限体系规格 |

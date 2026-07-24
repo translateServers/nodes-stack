@@ -230,14 +230,7 @@ docs/
 
 ## 8. 现有文档迁移指引
 
-| 现有位置 | 新位置 | 说明 |
-|---|---|---|
-| `screen-designer-panels-architecture.md` | `architecture/screen-designer-panels.md` | 面板系统架构属于架构层 |
-| `blueprint-canvas-integration-gaps.md` | `analysis/blueprint-canvas-gaps.md` | 缺口分析属于分析层 |
-| `canvas-drag-optimization-plan.md` | `plans/canvas-drag-optimization.md` | 执行计划属于计划层 |
-| `dataset-management-spec/` | `specs/dataset-management/` | 功能规格属于规格层 |
-
-> 迁移为建议，可按需执行。迁移时更新文档内的相对链接。
+> 当前无待迁移文档。新增文档请直接归入对应层（参见第 3 节归属判断），迁移时更新文档内的相对链接。
 
 ## 9. 新增文档流程
 

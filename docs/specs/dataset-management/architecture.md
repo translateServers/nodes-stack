@@ -114,8 +114,6 @@ screen/components/dataset-config-section.tsx  // 属性面板 data tab 的新 se
 
 ### 3.1 UI 组件规范
 
-遵循 `docs/screen-designer-panels-architecture.md` 的方法论：
-
 - **注册表驱动**：数据集类型注册表（类似 `COMPONENT_DEFINITIONS`），新增类型 = 追加一条描述
 - **Schema 驱动渲染**：数据集表单按 `config` 判别联合动态渲染，简单字段声明式，复杂编辑器（filter / 字段映射）保留自定义渲染器作为逃生舱
 - **shadcn/ui 一致性**：管理页与编辑器内表单均使用 shadcn/ui（遵循项目硬约束）

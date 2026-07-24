@@ -6,9 +6,7 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [canvas-drag-optimization.md](../canvas-drag-optimization-plan.md) | 待执行（2026-07-22） | 画布拖拽性能优化方案（transform 定位 + Moveable 内置 snappable） |
-
-> 注：`canvas-drag-optimization-plan.md` 目前在 docs 根目录，建议迁移到本目录并重命名为 `canvas-drag-optimization.md`。
+| _待创建_ | — | — |
 
 ## 归属规则
 

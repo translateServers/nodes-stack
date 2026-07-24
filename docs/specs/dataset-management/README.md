@@ -1,4 +1,4 @@
-# 大屏设计器 · 数据集管理规格索引
+# 数据集管理功能规格
 
 > 状态：设计中
 > 最近更新：2026-07-24
@@ -17,12 +17,12 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [01-overview.md](./01-overview.md) | 设计完成 | 设计目标、原则、核心概念、与 Light Chaser / GoView 的差异定位 |
-| [02-data-model.md](./02-data-model.md) | 设计完成 | 共享 Schema、数据源连接 Schema、DataSourceConfig 扩展、Prisma 模型、业务码 |
-| [03-architecture.md](./03-architecture.md) | 设计完成 | 后端模块、API 端点、前端 Feature 模块、路由与导航、数据流设计 |
-| [04-ui-design.md](./04-ui-design.md) | 设计完成 | 管理页（列表/编辑）、图形化字段映射、编辑器内集成、连接管理页 |
-| [05-security-decisions.md](./05-security-decisions.md) | 设计完成 | 关键技术决策（沙箱/代理/SQL/缓存/Mock/迁移）、安全与权限 |
-| [06-testing-roadmap.md](./06-testing-roadmap.md) | 设计完成 | 测试策略、实施路线图、风险与对策、与现有系统集成点清单 |
+| [overview.md](./overview.md) | 设计完成 | 设计目标、原则、核心概念、与 Light Chaser / GoView 的差异定位 |
+| [data-model.md](./data-model.md) | 设计完成 | 共享 Schema、数据源连接 Schema、DataSourceConfig 扩展、Prisma 模型、业务码 |
+| [architecture.md](./architecture.md) | 设计完成 | 后端模块、API 端点、前端 Feature 模块、路由与导航、数据流设计 |
+| [ui-design.md](./ui-design.md) | 设计完成 | 管理页（列表/编辑）、图形化字段映射、编辑器内集成、连接管理页 |
+| [security-decisions.md](./security-decisions.md) | 设计完成 | 关键技术决策（沙箱/代理/SQL/缓存/Mock/迁移）、安全与权限 |
+| [testing-roadmap.md](./testing-roadmap.md) | 设计完成 | 测试策略、实施路线图、风险与对策、与现有系统集成点清单 |
 
 ## 调研依据
 
@@ -32,6 +32,4 @@
 
 ## 关联文档
 
-- `docs/screen-designer-panels-architecture.md`：面板系统架构，数据集属性分区遵循注册表驱动与 Schema 驱动渲染
-- `docs/blueprint-canvas-integration-gaps.md`：蓝图运行时抽象（RuntimeDeps），数据集实现需复用 `refreshDataSource` / `getComponentData`
 - `packages/shared/src/schemas/screen.schema.ts`：现有 `DataSourceConfigSchema`，本规格在其上扩展 `'dataset'` 分支

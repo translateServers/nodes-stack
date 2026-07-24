@@ -400,4 +400,3 @@ parseResult = useChartData(effectiveDataSource, logic, apiRawData)
 - [蓝图运行时架构](./blueprint-runtime-architecture.md)
 - [编码规范](../conventions/coding-standards.md)
 - [开发指南](./development-guide.md)
-- [面板系统架构](../screen-designer-panels-architecture.md)（旧文档，待迁移到本目录）

@@ -6,9 +6,7 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [blueprint-canvas-gaps.md](../blueprint-canvas-integration-gaps.md) | 进行中 | 事件蓝图与画布/组件割裂分析，含两项待办（缺口 A：P0；缺口 B：P2） |
-
-> 注：`blueprint-canvas-integration-gaps.md` 目前在 docs 根目录，建议迁移到本目录并重命名为 `blueprint-canvas-gaps.md`。
+| _待创建_ | — | — |
 
 ## 归属规则
 

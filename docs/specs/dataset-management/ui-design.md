@@ -149,7 +149,7 @@
 
 ### 4.1 参数绑定来源
 
-参考 [02-data-model.md](./02-data-model.md) 的 `ParamBinding.source` 定义：
+参考 [data-model.md](./data-model.md) 的 `ParamBinding.source` 定义：
 
 | source | 说明 | 示例 |
 |---|---|---|
@@ -199,6 +199,6 @@
 ## 6. UI 规范遵循
 
 - **shadcn/ui**：管理页与编辑器内表单均使用 shadcn/ui（遵循项目硬约束：编辑器外壳 UI 必须用 shadcn/ui）
-- **Schema 驱动渲染**：数据集表单按 `config` 判别联合动态渲染，遵循面板系统架构方法论
+- **Schema 驱动渲染**：数据集表单按 `config` 判别联合动态渲染
 - **Monaco 编辑器**：filter / SQL / JSON 编辑使用 Monaco，与 Light Chaser 风格一致
 - **响应式布局**：管理页支持窄屏适配，编辑器内表单嵌入属性面板宽度
