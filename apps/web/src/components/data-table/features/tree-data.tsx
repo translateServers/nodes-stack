@@ -37,13 +37,16 @@ export function TreeExpandButton<TData>({ row }: { row: Row<TData> }) {
  * @param indentSize 每层缩进像素，默认 20
  */
 export function wrapWithTreeExpand<TData>(
-  column: ColumnDef<TData, unknown>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  column: ColumnDef<TData, any>,
   indentSize = 20,
-): ColumnDef<TData, unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): ColumnDef<TData, any> {
   const originalCell = column.cell;
   return {
     ...column,
-    cell: (ctx: CellContext<TData, unknown>) => (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    cell: (ctx: CellContext<TData, any>) => (
       <div className="flex items-center" style={{ paddingLeft: `${ctx.row.depth * indentSize}px` }}>
         {ctx.row.depth > 0 && (
           <div

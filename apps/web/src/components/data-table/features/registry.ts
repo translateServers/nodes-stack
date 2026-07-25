@@ -67,8 +67,10 @@ export function mergeFeatureTableOptions<TData>(
 export function mergeFeatureColumnEnhancers<TData>(
   features: DataTableFeature<TData>[],
   ctx: FeatureContext<TData>,
-): ColumnDef<TData, unknown>[] {
-  const enhancers: ColumnDef<TData, unknown>[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): ColumnDef<TData, any>[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const enhancers: ColumnDef<TData, any>[] = [];
 
   for (const feature of features) {
     if (feature.columnEnhancers) {

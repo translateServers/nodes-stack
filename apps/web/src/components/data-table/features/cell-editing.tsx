@@ -6,9 +6,11 @@ import type { DataTableColumnMeta, DataTableFeature } from '../types';
 /** EditableCell 组件 props */
 interface EditableCellProps<TData> {
   /** 单元格上下文 */
-  ctx: CellContext<TData, unknown>;
-  /** 原始 cell 渲染函数 */
-  originalCell?: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctx: CellContext<TData, any>;
+  /** 原始 cell 渲染函数（来自 ColumnDef.cell，类型为 ColumnDefTemplate） */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  originalCell?: ColumnDef<TData, any>['cell'];
   /** 编辑器类型 */
   editorType: EditorType;
   /** 校验函数 */
@@ -45,9 +47,7 @@ export function EditableCell<TData>({
         }}
         className="cursor-text"
       >
-        {originalCell
-          ? flexRender(originalCell as ColumnDef<TData>['cell'], ctx)
-          : toDisplayString(ctx.getValue())}
+        {originalCell ? flexRender(originalCell, ctx) : toDisplayString(ctx.getValue())}
       </div>
     );
   }
@@ -77,9 +77,12 @@ export function EditableCell<TData>({
     setIsEditing(false);
   };
 
+  // 将 any 类型的 getValue() 显式收窄为 unknown，避免 no-unsafe-assignment
+  const currentValue: unknown = ctx.getValue();
+
   return (
     <div className="relative">
-      <Editor value={ctx.getValue()} onCommit={handleCommit} onCancel={handleCancel} />
+      <Editor value={currentValue} onCommit={handleCommit} onCancel={handleCancel} />
       {error && (
         <div className="absolute left-0 top-full z-30 mt-0.5 rounded bg-destructive px-1.5 py-0.5 text-xs text-destructive-foreground shadow-md">
           {error}
@@ -94,9 +97,11 @@ export function EditableCell<TData>({
  * 仅对 column.meta.editable === true 的列启用编辑。
  */
 export function createEditableColumns<TData>(
-  columns: ColumnDef<TData, unknown>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  columns: ColumnDef<TData, any>[],
   onCellEdit?: (row: TData, columnId: string, newValue: unknown) => void | Promise<void>,
-): ColumnDef<TData, unknown>[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): ColumnDef<TData, any>[] {
   if (!onCellEdit) return columns;
 
   return columns.map((col) => {
@@ -108,7 +113,8 @@ export function createEditableColumns<TData>(
 
     return {
       ...col,
-      cell: (ctx: CellContext<TData, unknown>): ReactNode => (
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      cell: (ctx: CellContext<TData, any>): ReactNode => (
         <EditableCell
           ctx={ctx}
           originalCell={originalCell}

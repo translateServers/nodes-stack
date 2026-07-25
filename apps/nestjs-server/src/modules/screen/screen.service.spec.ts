@@ -2,6 +2,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import dayjs from 'dayjs';
 import { ScreenService } from '@/modules/screen/screen.service';
 import { PrismaService } from '@/prisma/prisma.service';
+import { DatasetReferenceService } from '@/modules/dataset/dataset-reference.service';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import type {
@@ -40,6 +41,13 @@ const mockPrismaService = {
   },
 };
 
+const mockDatasetReferenceService = {
+  rebuildReferences: jest.fn<Promise<void>, [string, unknown[]]>(),
+  countReferences: jest.fn<Promise<number>, [string]>(),
+  countReferencesBatch: jest.fn<Promise<Map<string, number>>, [string[]]>(),
+  checkReferencesBeforeDelete: jest.fn<Promise<void>, [string]>(),
+};
+
 const defaultCanvas = {
   width: 1920,
   height: 1080,
@@ -68,7 +76,11 @@ describe('ScreenService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ScreenService, { provide: PrismaService, useValue: mockPrismaService }],
+      providers: [
+        ScreenService,
+        { provide: PrismaService, useValue: mockPrismaService },
+        { provide: DatasetReferenceService, useValue: mockDatasetReferenceService },
+      ],
     }).compile();
 
     service = module.get<ScreenService>(ScreenService);

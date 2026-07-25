@@ -50,6 +50,7 @@
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
 | [coding-standards.md](./conventions/coding-standards.md) | 生效中（2026-07-24） | 编码规范总集（编码前必读） |
+| [frontend-backend-contract.md](./conventions/frontend-backend-contract.md) | 生效中（2026-07-25） | 前后端对接契约方案（轻量落地）。新功能开发前必读 |
 
 ### 功能规格
 

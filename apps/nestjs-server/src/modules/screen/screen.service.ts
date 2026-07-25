@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { isSensitiveHeaderKey } from '@nebula/shared';
 import { PrismaService } from '@/prisma/prisma.service';
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
+import { DatasetReferenceService } from '@/modules/dataset/dataset-reference.service';
 import type {
   CreateScreenProjectDto,
   UpdateScreenProjectDto,
@@ -30,7 +31,12 @@ interface ScreenProjectEntity {
 
 @Injectable()
 export class ScreenService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ScreenService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private datasetReferenceService: DatasetReferenceService,
+  ) {}
 
   async createProject(dto: CreateScreenProjectDto): Promise<ScreenProjectResponse> {
     const existing = await this.prisma.screenProject.findUnique({

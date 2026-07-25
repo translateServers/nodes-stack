@@ -18,9 +18,12 @@ import { Route as AppUsersRouteImport } from './routes/_app.users'
 import { Route as AppRolesRouteImport } from './routes/_app.roles'
 import { Route as AppMenusRouteImport } from './routes/_app.menus'
 import { Route as AppDictRouteImport } from './routes/_app.dict'
+import { Route as AppDatasourceConnectionRouteImport } from './routes/_app.datasource-connection'
 import { Route as AppDataTablePlaygroundRouteImport } from './routes/_app.data-table-playground'
 import { Route as AppScreenIndexRouteImport } from './routes/_app.screen.index'
+import { Route as AppDatasetIndexRouteImport } from './routes/_app.dataset.index'
 import { Route as AppScreenIdRouteImport } from './routes/_app.screen.$id'
+import { Route as AppDatasetIdRouteImport } from './routes/_app.dataset.$id'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -66,6 +69,11 @@ const AppDictRoute = AppDictRouteImport.update({
   path: '/dict',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDatasourceConnectionRoute = AppDatasourceConnectionRouteImport.update({
+  id: '/datasource-connection',
+  path: '/datasource-connection',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDataTablePlaygroundRoute = AppDataTablePlaygroundRouteImport.update({
   id: '/data-table-playground',
   path: '/data-table-playground',
@@ -76,9 +84,19 @@ const AppScreenIndexRoute = AppScreenIndexRouteImport.update({
   path: '/screen/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDatasetIndexRoute = AppDatasetIndexRouteImport.update({
+  id: '/dataset/',
+  path: '/dataset/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppScreenIdRoute = AppScreenIdRouteImport.update({
   id: '/screen/$id',
   path: '/screen/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDatasetIdRoute = AppDatasetIdRouteImport.update({
+  id: '/dataset/$id',
+  path: '/dataset/$id',
   getParentRoute: () => AppRoute,
 } as any)
 
@@ -86,18 +104,22 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/data-table-playground': typeof AppDataTablePlaygroundRoute
+  '/datasource-connection': typeof AppDatasourceConnectionRoute
   '/dict': typeof AppDictRoute
   '/menus': typeof AppMenusRoute
   '/roles': typeof AppRolesRoute
   '/users': typeof AppUsersRoute
   '/screen-editor-preview/$id': typeof ScreenEditorPreviewIdRoute
   '/screen-preview/$id': typeof ScreenPreviewIdRoute
+  '/dataset/$id': typeof AppDatasetIdRoute
   '/screen/$id': typeof AppScreenIdRoute
+  '/dataset/': typeof AppDatasetIndexRoute
   '/screen/': typeof AppScreenIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/data-table-playground': typeof AppDataTablePlaygroundRoute
+  '/datasource-connection': typeof AppDatasourceConnectionRoute
   '/dict': typeof AppDictRoute
   '/menus': typeof AppMenusRoute
   '/roles': typeof AppRolesRoute
@@ -105,7 +127,9 @@ export interface FileRoutesByTo {
   '/screen-editor-preview/$id': typeof ScreenEditorPreviewIdRoute
   '/screen-preview/$id': typeof ScreenPreviewIdRoute
   '/': typeof AppIndexRoute
+  '/dataset/$id': typeof AppDatasetIdRoute
   '/screen/$id': typeof AppScreenIdRoute
+  '/dataset': typeof AppDatasetIndexRoute
   '/screen': typeof AppScreenIndexRoute
 }
 export interface FileRoutesById {
@@ -113,6 +137,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/data-table-playground': typeof AppDataTablePlaygroundRoute
+  '/_app/datasource-connection': typeof AppDatasourceConnectionRoute
   '/_app/dict': typeof AppDictRoute
   '/_app/menus': typeof AppMenusRoute
   '/_app/roles': typeof AppRolesRoute
@@ -120,7 +145,9 @@ export interface FileRoutesById {
   '/screen-editor-preview/$id': typeof ScreenEditorPreviewIdRoute
   '/screen-preview/$id': typeof ScreenPreviewIdRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/dataset/$id': typeof AppDatasetIdRoute
   '/_app/screen/$id': typeof AppScreenIdRoute
+  '/_app/dataset/': typeof AppDatasetIndexRoute
   '/_app/screen/': typeof AppScreenIndexRoute
 }
 export interface FileRouteTypes {
@@ -129,18 +156,22 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/data-table-playground'
+    | '/datasource-connection'
     | '/dict'
     | '/menus'
     | '/roles'
     | '/users'
     | '/screen-editor-preview/$id'
     | '/screen-preview/$id'
+    | '/dataset/$id'
     | '/screen/$id'
+    | '/dataset/'
     | '/screen/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/data-table-playground'
+    | '/datasource-connection'
     | '/dict'
     | '/menus'
     | '/roles'
@@ -148,13 +179,16 @@ export interface FileRouteTypes {
     | '/screen-editor-preview/$id'
     | '/screen-preview/$id'
     | '/'
+    | '/dataset/$id'
     | '/screen/$id'
+    | '/dataset'
     | '/screen'
   id:
     | '__root__'
     | '/_app'
     | '/login'
     | '/_app/data-table-playground'
+    | '/_app/datasource-connection'
     | '/_app/dict'
     | '/_app/menus'
     | '/_app/roles'
@@ -162,7 +196,9 @@ export interface FileRouteTypes {
     | '/screen-editor-preview/$id'
     | '/screen-preview/$id'
     | '/_app/'
+    | '/_app/dataset/$id'
     | '/_app/screen/$id'
+    | '/_app/dataset/'
     | '/_app/screen/'
   fileRoutesById: FileRoutesById
 }
@@ -238,6 +274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDictRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/datasource-connection': {
+      id: '/_app/datasource-connection'
+      path: '/datasource-connection'
+      fullPath: '/datasource-connection'
+      preLoaderRoute: typeof AppDatasourceConnectionRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/data-table-playground': {
       id: '/_app/data-table-playground'
       path: '/data-table-playground'
@@ -252,6 +295,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScreenIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/dataset/': {
+      id: '/_app/dataset/'
+      path: '/dataset'
+      fullPath: '/dataset/'
+      preLoaderRoute: typeof AppDatasetIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/screen/$id': {
       id: '/_app/screen/$id'
       path: '/screen/$id'
@@ -259,28 +309,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScreenIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/dataset/$id': {
+      id: '/_app/dataset/$id'
+      path: '/dataset/$id'
+      fullPath: '/dataset/$id'
+      preLoaderRoute: typeof AppDatasetIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppDataTablePlaygroundRoute: typeof AppDataTablePlaygroundRoute
+  AppDatasourceConnectionRoute: typeof AppDatasourceConnectionRoute
   AppDictRoute: typeof AppDictRoute
   AppMenusRoute: typeof AppMenusRoute
   AppRolesRoute: typeof AppRolesRoute
   AppUsersRoute: typeof AppUsersRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppDatasetIdRoute: typeof AppDatasetIdRoute
   AppScreenIdRoute: typeof AppScreenIdRoute
+  AppDatasetIndexRoute: typeof AppDatasetIndexRoute
   AppScreenIndexRoute: typeof AppScreenIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppDataTablePlaygroundRoute: AppDataTablePlaygroundRoute,
+  AppDatasourceConnectionRoute: AppDatasourceConnectionRoute,
   AppDictRoute: AppDictRoute,
   AppMenusRoute: AppMenusRoute,
   AppRolesRoute: AppRolesRoute,
   AppUsersRoute: AppUsersRoute,
   AppIndexRoute: AppIndexRoute,
+  AppDatasetIdRoute: AppDatasetIdRoute,
   AppScreenIdRoute: AppScreenIdRoute,
+  AppDatasetIndexRoute: AppDatasetIndexRoute,
   AppScreenIndexRoute: AppScreenIndexRoute,
 }
 

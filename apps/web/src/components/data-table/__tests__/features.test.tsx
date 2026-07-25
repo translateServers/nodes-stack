@@ -28,7 +28,8 @@ const mockData: TestData[] = [
   { id: '3', name: 'Charlie', age: 35, city: '广州' },
 ];
 
-const columns: ColumnDef<TestData, unknown>[] = [
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const columns: ColumnDef<TestData, any>[] = [
   { accessorKey: 'name', header: 'Name' },
   { accessorKey: 'age', header: 'Age' },
   { accessorKey: 'city', header: 'City' },
@@ -82,7 +83,8 @@ describe('DataTable 新增特性', () => {
 
     it('should create editable columns', () => {
       const onCellEdit = vi.fn();
-      const editableColumns: ColumnDef<TestData, unknown>[] = [
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const editableColumns: ColumnDef<TestData, any>[] = [
         {
           accessorKey: 'name',
           header: 'Name',
@@ -149,7 +151,8 @@ describe('DataTable 新增特性', () => {
 
   describe('树形数据', () => {
     it('should wrap column with tree expand', () => {
-      const col: ColumnDef<TestData, unknown> = { accessorKey: 'name', header: 'Name' };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const col: ColumnDef<TestData, any> = { accessorKey: 'name', header: 'Name' };
       const wrapped = wrapWithTreeExpand(col);
       expect(wrapped.cell).toBeDefined();
       expect('accessorKey' in wrapped ? wrapped.accessorKey : undefined).toBe('name');

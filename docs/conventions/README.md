@@ -12,6 +12,7 @@ conventions 是**编码前的必读规范**，所有开发者都要遵守的约�
 | --- | --- | --- |
 | [_structure.md](../_structure.md) | 生效中（2026-07-24） | 文档编写规范（格式、元信息、命名） |
 | [coding-standards.md](./coding-standards.md) | 生效中（2026-07-24） | 编码规范总集。代码质量三件套、TypeScript 配置、UI 组件选型边界、React Flow 约定、数据层约定、状态管理、工具系统、画布交互、后端编码、前端 API 客户端、测试约定、提交规范、路由与导航 |
+| [frontend-backend-contract.md](./frontend-backend-contract.md) | 生效中（2026-07-25） | 前后端对接契约方案（轻量落地）。契约先行 + 双向验证，解决独立开发对接失败问题。**新功能开发前必读** |
 | _待创建_ | — | API 设计规范（命名、响应格式、错误码、BizCode 段位分配）— 已在 coding-standards.md 第 9-10 节覆盖，可独立细化 |
 | _待创建_ | — | 测试规范（何时写测试、覆盖率、命名、mock 约定）— 已在 coding-standards.md 第 11 节覆盖，可独立细化 |
 
@@ -27,7 +28,7 @@ conventions 是**编码前的必读规范**，所有开发者都要遵守的约�
 
 ## 关键约定速查
 
-以下约定已在项目中执行，详见 [coding-standards.md](./coding-standards.md)：
+以下约定已在项目中执行，详见 [coding-standards.md](./coding-standards.md) 与 [frontend-backend-contract.md](./frontend-backend-contract.md)：
 
 - **Biome 负责格式化**与基础 lint，ESLint 负责 TypeScript 类型感知规则，ESLint 不启用 `prettier/prettier`
 - **编辑器外壳**必须用 shadcn/ui，**Canvas 渲染组件**禁止用 shadcn/ui
@@ -40,6 +41,8 @@ conventions 是**编码前的必读规范**，所有开发者都要遵守的约�
 - 后端统一用 Zod + nestjs-zod，禁用 class-validator
 - 后端响应由 `TransformInterceptor` 自动包装，不要手动包装
 - 前端 API 用 `meta.responseSchema` 做 Zod 运行时校验，401 统一交拦截器处理
+- **前后端 API 契约的单一数据源**是 `packages/shared/src/contracts/*.contract.ts`，后端 DTO 不再 `.and()` 私自扩展字段
+- **端点 phase 标记**决定本期实现范围，phase=1 的端点必须冒烟测试通过才能对接
 
 ## 归属规则
 

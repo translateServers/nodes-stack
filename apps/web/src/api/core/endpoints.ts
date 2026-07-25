@@ -19,4 +19,9 @@ export const ENDPOINTS = {
   dict: '/dict',
   files: '/files',
   screen: '/screen',
+  // 数据集管理（见 docs/specs/dataset-management/architecture.md §2）
+  // 路径前缀，动态 ID 与子动作（execute/test/batch）通过模板字符串拼接，
+  // 与 screen 端点风格一致（如 `${ENDPOINTS.dataset}/${id}/execute`）
+  dataset: '/dataset',
+  datasourceConnection: '/datasource-connection',
 } as const;

@@ -205,7 +205,9 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
 
     // 行选择：添加选择列
     if (enableRowSelection) {
-      const selectionColumn: ColumnDef<TData, unknown> = {
+      // 与 TanStack Table 官方 TableOptions.columns 类型对齐使用 any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const selectionColumn: ColumnDef<TData, any> = {
         id: 'selection',
         header: ({ table }) => <DataTableCheckbox table={table} />,
         cell: ({ row }) => <DataTableCheckbox row={row} />,

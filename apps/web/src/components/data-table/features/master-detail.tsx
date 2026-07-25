@@ -7,7 +7,8 @@ import type { DataTableFeature } from '../types';
  * 主从展开按钮列定义。
  * 点击展开/折叠按钮，显示/隐藏展开行内容（通过 renderExpandedRow 插槽渲染）。
  */
-export function createExpandButtonColumn<TData>(): ColumnDef<TData, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createExpandButtonColumn<TData>(): ColumnDef<TData, any> {
   return {
     id: 'master-detail-expand',
     header: () => null,

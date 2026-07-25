@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { DateTimeStringSchema } from './datetime.schema.js';
 import { EventBlueprintSchema } from './blueprint.schema.js';
+import { FieldMappingSchema } from './field-mapping.schema.js';
+import { RefreshStrategySchema } from './dataset.schema.js';
 
 // ===== 枚举 =====
 
@@ -10,7 +12,7 @@ export type ScreenProjectStatus = z.infer<typeof ScreenProjectStatusSchema>;
 export const ScaleModeSchema = z.enum(['fit', 'full', 'width', 'height', 'none']);
 export type ScaleMode = z.infer<typeof ScaleModeSchema>;
 
-export const DataSourceTypeSchema = z.enum(['static', 'api']);
+export const DataSourceTypeSchema = z.enum(['static', 'api', 'dataset']);
 export type DataSourceType = z.infer<typeof DataSourceTypeSchema>;
 
 export const ComponentCategorySchema = z.enum([
@@ -85,36 +87,11 @@ export type ApiDataSourceConfig = z.infer<typeof ApiDataSourceConfigSchema>;
 /**
  * 字段映射：将数据源字段映射到图表需要的维度和数值。
  * 未配置时按默认推断规则：name → 维度、value → 数值。
+ *
+ * Schema 定义已抽离到 `field-mapping.schema.ts`（避免与 `dataset.schema.ts` 循环依赖），
+ * 由 barrel `schemas/index.ts` 统一 re-export。
  */
-export const FieldMappingSchema = z.object({
-  dimension: z.string().min(1).describe('维度字段名（对应图表 x 轴/名称）'),
-  value: z.string().min(1).describe('数值字段名（对应图表 y 轴/值）'),
-});
-export type FieldMapping = z.infer<typeof FieldMappingSchema>;
-
-const DataSourceCommonSchema = z.object({
-  dataPath: z
-    .string()
-    .optional()
-    .describe('数据路径（点分隔，如 "data.list"），用于从嵌套响应中提取目标数组'),
-  fieldMapping: FieldMappingSchema.optional().describe(
-    '字段映射，未配置时按 name→维度、value→数值默认推断',
-  ),
-});
-
-export const DataSourceConfigSchema = z.discriminatedUnion('type', [
-  DataSourceCommonSchema.extend({
-    type: z.literal('static'),
-    staticData: z.unknown().describe('静态数据'),
-    apiConfig: ApiDataSourceConfigSchema.optional().describe('切换类型时保留的 API 配置'),
-  }),
-  DataSourceCommonSchema.extend({
-    type: z.literal('api'),
-    staticData: z.unknown().optional().describe('切换类型时保留的静态数据'),
-    apiConfig: ApiDataSourceConfigSchema.describe('API 数据源配置'),
-  }),
-]);
-export type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
+// FieldMappingSchema 在本文件内通过顶部 import 引入，供下方 DataSourceCommonSchema 使用。
 
 // ===== 逻辑层 =====
 
@@ -127,6 +104,76 @@ export const LogicConfigSchema = z.object({
   limit: z.number().int().positive().optional().describe('条数限制（正整数）'),
 });
 export type LogicConfig = z.infer<typeof LogicConfigSchema>;
+
+// ===== 组件数据源绑定 → 数据集引用 =====
+
+/**
+ * 参数绑定来源（见 data-model §3.2）
+ *
+ * 用于组件 dataSource.type === 'dataset' 时的 paramBindings：
+ * 把组件上下文变量（props / data / url / 静态值 / 蓝图触发器）绑到数据集执行参数。
+ */
+export const ParamBindingSourceSchema = z.enum([
+  'component-prop',
+  'component-data',
+  'url-param',
+  'static',
+  'trigger',
+]);
+export type ParamBindingSource = z.infer<typeof ParamBindingSourceSchema>;
+
+export const ParamBindingSchema = z.object({
+  source: ParamBindingSourceSchema.describe('参数来源'),
+  path: z.string().min(1).describe('source 路径，如 "props.value" / "url.id"'),
+  defaultValue: z.unknown().optional().describe('参数缺失时的默认值'),
+});
+export type ParamBinding = z.infer<typeof ParamBindingSchema>;
+
+const DataSourceCommonSchema = z.object({
+  dataPath: z
+    .string()
+    .optional()
+    .describe('数据路径（点分隔，如 "data.list"），用于从嵌套响应中提取目标数组'),
+  fieldMapping: FieldMappingSchema.optional().describe(
+    '字段映射，未配置时按 name→维度、value→数值默认推断',
+  ),
+});
+
+/**
+ * 组件数据源配置（判别联合）
+ *
+ * - `static` / `api`：现有内联数据源，浏览器直连（向后兼容）
+ * - `dataset`：引用独立数据集实体，走后端代理（见 dataset-management spec）
+ *
+ * 切换类型时保留其他分支的配置（staticData / apiConfig），便于回切（见 data-model §3.1）。
+ * dataset 分支的 overrideFieldMapping / overrideLogic / overrideRefresh 为空时使用数据集默认配置。
+ */
+export const DataSourceConfigSchema = z.discriminatedUnion('type', [
+  DataSourceCommonSchema.extend({
+    type: z.literal('static'),
+    staticData: z.unknown().describe('静态数据'),
+    apiConfig: ApiDataSourceConfigSchema.optional().describe('切换类型时保留的 API 配置'),
+  }),
+  DataSourceCommonSchema.extend({
+    type: z.literal('api'),
+    staticData: z.unknown().optional().describe('切换类型时保留的静态数据'),
+    apiConfig: ApiDataSourceConfigSchema.describe('API 数据源配置'),
+  }),
+  DataSourceCommonSchema.extend({
+    type: z.literal('dataset'),
+    staticData: z.unknown().optional().describe('切换类型时保留的静态数据'),
+    apiConfig: ApiDataSourceConfigSchema.optional().describe('切换类型时保留的 API 配置'),
+    datasetId: z.string().min(1).describe('引用的数据集 ID'),
+    paramBindings: z
+      .record(z.string(), ParamBindingSchema)
+      .optional()
+      .describe('参数绑定：把组件上下文变量绑到数据集参数'),
+    overrideFieldMapping: FieldMappingSchema.optional().describe('覆盖数据集默认字段映射'),
+    overrideLogic: LogicConfigSchema.optional().describe('覆盖数据集默认逻辑层'),
+    overrideRefresh: RefreshStrategySchema.optional().describe('覆盖数据集默认刷新策略'),
+  }),
+]);
+export type DataSourceConfig = z.infer<typeof DataSourceConfigSchema>;
 
 // ===== 交互层 =====
 

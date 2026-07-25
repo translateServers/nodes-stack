@@ -13,5 +13,8 @@ export * as DateTimeSchemas from './schemas/datetime.schema.js';
 export * as PaginatedSchemas from './schemas/paginated.schema.js';
 export * from './schemas/index.js';
 
+export * as Contracts from './contracts/index.js';
+export * from './contracts/index.js';
+
 export * from './errors/index.js';
 export * from './utils/index.js';

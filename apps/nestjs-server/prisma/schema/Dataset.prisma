@@ -1,0 +1,71 @@
+// 数据集管理 Prisma 模型
+// 设计依据：docs/specs/dataset-management/data-model.md §4 / §4.2
+//
+// 项目约定：
+// - JSON 字段用 String 存储序列化字符串（与 ScreenProject.canvas/components 一致），
+//   应用层负责序列化/反序列化
+// - @default(uuid()) + 蛇形表名 @@map（与现有模型一致）
+// - 凭证字段（连接 config 内的 password / authConfig）由 service 层加密后写入，
+//   Prisma 层不感知加密细节
+
+model Dataset {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     ScreenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  type        String // static|api|sql|websocket
+  category    String?
+  tags        String? // JSON 字符串：string[]
+  config      String // JSON 字符串：按 type 分支（StaticDatasetConfig / ApiDatasetConfig / ...）
+  shape       String? // JSON 字符串：{ dataPath, fieldMapping, filter }
+  refresh     String? // JSON 字符串：{ interval, intervalUnit, stopOnHidden }
+  cache       String? // JSON 字符串：{ enabled, ttl, tags }
+  mock        String? // JSON 字符串：{ enabled, generator, data, template }
+  status      String   @default("active") // active|archived
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  references DatasetReference[]
+
+  @@unique([projectId, name])
+  @@index([projectId, status])
+  @@map("datasets")
+}
+
+model DataSourceConnection {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     ScreenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  type        String // mysql|postgres|http-api
+  description String?
+  config      String // JSON 字符串：连接配置（密码字段加密后存储）
+  status      String   @default("active")
+  lastTestedAt  DateTime?
+  lastTestResult String? // success|fail，不记录错误详情（防信息泄露）
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId, status])
+  @@map("datasource_connections")
+}
+
+// 数据集引用索引（见 data-model §4.2）
+// 组件对 datasetId 的引用埋在 ScreenProject.components JSON 内，
+// 此表用于引用数聚合查询与删除/归档前校验，O(1) 查询性能
+model DatasetReference {
+  id          String @id @default(uuid())
+  datasetId   String
+  dataset     Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     ScreenProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  componentId String
+
+  @@unique([datasetId, projectId, componentId])
+  @@index([projectId])
+  @@map("dataset_references")
+}

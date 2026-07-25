@@ -11,6 +11,11 @@ model ScreenProject {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // 数据集管理 back-relation（见 Dataset.prisma）
+  datasets           Dataset[]
+  connections        DataSourceConnection[]
+  datasetReferences  DatasetReference[]
+
   @@index([name])
   @@map("screen_projects")
 }

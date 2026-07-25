@@ -222,7 +222,15 @@ function DictValueForm({
           remark: dictValue.remark ?? '',
           sort: dictValue.sort,
         }
-      : { code: '', label: '', value: '', color: '', remark: '', sort: 0, dictTypeId },
+      : {
+          code: '',
+          label: '',
+          value: '',
+          color: '',
+          remark: '',
+          sort: 0,
+          dictTypeId,
+        },
   });
 
   const handleSubmit = form.handleSubmit(async (data) => {

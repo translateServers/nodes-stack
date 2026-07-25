@@ -6,6 +6,8 @@ import {
   FileText,
   FlaskConical,
   Monitor,
+  Database,
+  Plug,
 } from 'lucide-react';
 
 export interface NavItem {
@@ -41,6 +43,13 @@ export const menuGroups: NavGroup[] = [
     label: '设计工具',
     items: [{ text: '大屏设计器', icon: Monitor, path: '/screen' }],
   },
+  {
+    label: '数据集管理',
+    items: [
+      { text: '数据集', icon: Database, path: '/dataset' },
+      { text: '数据源连接', icon: Plug, path: '/datasource-connection' },
+    ],
+  },
 ];
 
 export const pathLabels: Record<string, string> = {
@@ -51,4 +60,6 @@ export const pathLabels: Record<string, string> = {
   '/dict': '字典管理',
   '/data-table-playground': '表格 Playground',
   '/screen': '大屏设计器',
+  '/dataset': '数据集管理',
+  '/datasource-connection': '数据源连接',
 };

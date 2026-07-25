@@ -47,7 +47,9 @@ interface CapturedMoveableProps {
   onDragStart?: (e: unknown) => boolean | void;
   onDrag?: (e: unknown) => void;
   onResizeStart?: (e: unknown) => boolean | void;
+  onResize?: (e: unknown) => void;
   onRotateStart?: (e: unknown) => boolean | void;
+  onRotate?: (e: unknown) => void;
   onDragGroupStart?: (e: unknown) => boolean | void;
   onDragGroup?: (e: unknown) => void;
   onResizeGroupStart?: (e: unknown) => boolean | void;

@@ -36,6 +36,20 @@ export const BizMessage: Record<number, string> = {
   [BizCode.SCREEN_NAME_EXISTS]: '大屏项目名称已存在',
   [BizCode.SCREEN_PUBLISH_FAILED]: '大屏发布失败',
   [BizCode.SCREEN_SAVE_CONFLICT]: '项目已被其他会话修改，请重新加载后再保存',
+
+  // 数据集模块（见 docs/specs/dataset-management/data-model.md §5）
+  [BizCode.DATASET_NOT_FOUND]: '数据集不存在',
+  [BizCode.DATASET_NAME_EXISTS]: '数据集名称已存在',
+  [BizCode.DATASET_CONNECTION_FAILED]: '数据集连接失败',
+  [BizCode.DATASET_EXECUTION_FAILED]: '数据集执行失败',
+  [BizCode.DATASET_SQL_INVALID]: 'SQL 校验失败（必须 select 开头且禁止多语句）',
+  [BizCode.DATASET_MOCK_DISABLED]: '数据集 Mock 未启用',
+  [BizCode.DATASET_TYPE_NOT_SUPPORTED]: '数据集类型当前阶段未支持',
+
+  // 数据源连接模块
+  [BizCode.CONNECTION_NOT_FOUND]: '数据源连接不存在',
+  [BizCode.CONNECTION_NAME_EXISTS]: '数据源连接名称已存在',
+  [BizCode.CONNECTION_TEST_FAILED]: '数据源连接测试失败',
 };
 
 // 业务异常类

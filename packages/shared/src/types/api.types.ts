@@ -51,6 +51,20 @@ export const BizCode = {
   SCREEN_NAME_EXISTS: 70002,
   SCREEN_PUBLISH_FAILED: 70003,
   SCREEN_SAVE_CONFLICT: 70004,
+
+  // 数据集模块 (80xxx，见 docs/specs/dataset-management/data-model.md §5)
+  DATASET_NOT_FOUND: 80001,
+  DATASET_NAME_EXISTS: 80002,
+  DATASET_CONNECTION_FAILED: 80003,
+  DATASET_EXECUTION_FAILED: 80004,
+  DATASET_SQL_INVALID: 80005,
+  DATASET_MOCK_DISABLED: 80006,
+  DATASET_TYPE_NOT_SUPPORTED: 80007,
+
+  // 数据源连接模块 (801xx)
+  CONNECTION_NOT_FOUND: 80101,
+  CONNECTION_NAME_EXISTS: 80102,
+  CONNECTION_TEST_FAILED: 80103,
 } as const;
 
 export type BizCodeValue = (typeof BizCode)[keyof typeof BizCode];
@@ -176,6 +190,20 @@ const BIZ_CODE_TO_HTTP_STATUS: Record<BizCodeValue, number> = {
   [BizCode.SCREEN_NAME_EXISTS]: 409,
   [BizCode.SCREEN_PUBLISH_FAILED]: 400,
   [BizCode.SCREEN_SAVE_CONFLICT]: 409,
+
+  // 数据集模块（见 docs/specs/dataset-management/data-model.md §5.1）
+  [BizCode.DATASET_NOT_FOUND]: 404,
+  [BizCode.DATASET_NAME_EXISTS]: 409,
+  [BizCode.DATASET_CONNECTION_FAILED]: 502,
+  [BizCode.DATASET_EXECUTION_FAILED]: 500,
+  [BizCode.DATASET_SQL_INVALID]: 400,
+  [BizCode.DATASET_MOCK_DISABLED]: 400,
+  [BizCode.DATASET_TYPE_NOT_SUPPORTED]: 501,
+
+  // 数据源连接模块
+  [BizCode.CONNECTION_NOT_FOUND]: 404,
+  [BizCode.CONNECTION_NAME_EXISTS]: 409,
+  [BizCode.CONNECTION_TEST_FAILED]: 502,
 };
 
 /**

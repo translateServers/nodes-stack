@@ -1,10 +1,11 @@
 /**
- * bar-chart 四层配置分组（阶段 2 任务 4.1-4.5、5.2）
+ * bar-chart 四层配置分组（阶段 2 任务 4.1-4.5、5.2 + 数据集集成）
  *
  * 按"数据、逻辑、视觉、交互"四层组织 bar-chart 的属性面板配置：
- * - 数据层（datasource-section）：数据源类型切换（静态/API）；静态数据编辑
+ * - 数据层（datasource-section）：数据源类型切换（静态/API/数据集）；静态数据编辑
  *   （共享 Schema + 结构校验，替代原 props.data 裸 JSON textarea）与字段映射下拉（4.2/4.3）；
  *   API 配置表单（5.2：URL、查询参数、请求头、刷新间隔，共享 Schema 校验）；
+ *   数据集配置表单（dataset-config-section：数据集选择 + 参数绑定 + 测试）；
  *   首次提交遗留组件时经 buildDataSourceMigration 一次性迁移 props.data
  * - 逻辑层（logic-section）：排序字段、排序方向、条数限制（4.4）
  * - 视觉层（visual-section）：标题与既有样式编辑（行为不回退）
@@ -40,6 +41,7 @@ import { extractDataByPath } from '../lib/chart-data-parser';
 import { buildUrlWithParams, API_REQUEST_TIMEOUT_MS } from '../hooks/use-api-data-source';
 import { StyleFields, TextInput, textareaClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
+import { DatasetConfigForm } from './dataset-config-section';
 
 interface SectionProps {
   component: ScreenComponent;
@@ -796,17 +798,25 @@ function ApiConfigForm({
   );
 }
 
+type DataSourceType = 'static' | 'api' | 'dataset';
+
+function getEffectiveType(dataSource: ScreenComponent['dataSource']): DataSourceType {
+  if (dataSource?.type === 'api') return 'api';
+  if (dataSource?.type === 'dataset') return 'dataset';
+  return 'static';
+}
+
 function DataSourceSection({ component, onUpdate }: SectionProps) {
-  const effectiveType = component.dataSource?.type === 'api' ? 'api' : 'static';
+  const effectiveType = getEffectiveType(component.dataSource);
   // 类型切换为草稿态：只切换展示的表单，应用/取消后经 onSettled 落定；
   // 切换类型本身不写入组件，不产生历史
-  const [draftType, setDraftType] = useState<'static' | 'api' | null>(null);
+  const [draftType, setDraftType] = useState<DataSourceType | null>(null);
   const shownType = draftType ?? effectiveType;
   // API 请求测试响应样本（任务 5.4：供字段映射推断可选字段）
   const [apiSample, setApiSample] = useState<unknown>(null);
 
   const handleTypeChange = (value: string) => {
-    const next = value === 'api' ? 'api' : 'static';
+    const next = (['static', 'api', 'dataset'] as const).find((t) => t === value) ?? 'static';
     setDraftType(next === effectiveType ? null : next);
   };
 
@@ -830,14 +840,21 @@ function DataSourceSection({ component, onUpdate }: SectionProps) {
             API
           </label>
         </div>
+        <div className="flex items-center gap-1.5">
+          <RadioGroupItem value="dataset" aria-label="数据集" id="datasource-type-dataset" />
+          <label htmlFor="datasource-type-dataset" className="text-xs text-foreground">
+            数据集
+          </label>
+        </div>
       </RadioGroup>
-      {shownType === 'static' ? (
+      {shownType === 'static' && (
         <StaticDataForm
           component={component}
           onUpdate={onUpdate}
           onSettled={() => setDraftType(null)}
         />
-      ) : (
+      )}
+      {shownType === 'api' && (
         <ApiConfigForm
           key={`${component.id}:${component.dataSource?.type ?? 'none'}:${serializeApiConfig(component.dataSource?.apiConfig)}`}
           component={component}
@@ -846,7 +863,19 @@ function DataSourceSection({ component, onUpdate }: SectionProps) {
           onSampleReceived={setApiSample}
         />
       )}
-      <FieldMappingControls component={component} onUpdate={onUpdate} apiSample={apiSample} />
+      {shownType === 'dataset' && (
+        <DatasetConfigForm
+          key={`${component.id}:${component.dataSource?.type ?? 'none'}:${
+            component.dataSource?.type === 'dataset' ? component.dataSource.datasetId : ''
+          }`}
+          component={component}
+          onUpdate={onUpdate}
+          onSettled={() => setDraftType(null)}
+        />
+      )}
+      {shownType !== 'dataset' && (
+        <FieldMappingControls component={component} onUpdate={onUpdate} apiSample={apiSample} />
+      )}
     </PanelSection>
   );
 }

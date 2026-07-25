@@ -72,3 +72,69 @@ pnpm biome:fix        # Biome 安全自动修复（格式化用这个）
 - 日常代码生成不强制运行 `pnpm typecheck` 和 `pnpm lint`，仅当用户明确要求时才运行
 - 如果验证失败，必须修复后再输出
 - 当用户说"快速实现"或"不用管类型"时，可临时放宽类型检查，但仍遵守 Biome 格式
+
+## 按需查询文档
+
+任务开始前先读 [docs/README.md](./docs/README.md) 获取全局索引，再按任务类型定位到对应层。
+
+### 任务类型 → 文档层路由
+
+| 任务类型 | 优先层 | 关键文档 |
+| --- | --- | --- |
+| 新人入职 / 理解全局 | `architecture/` | [system-overview.md](./docs/architecture/system-overview.md) |
+| 新增大屏组件 / 模块 / API | `architecture/` + `specs/<feature>/` | [development-guide.md](./docs/architecture/development-guide.md) + 对应 feature 子目录 |
+| 编码前查规范 | `conventions/` | [coding-standards.md](./docs/conventions/coding-standards.md) |
+| 前后端对接 / 契约问题 | `conventions/` | [frontend-backend-contract.md](./docs/conventions/frontend-backend-contract.md) |
+| 实现某功能 | `specs/<feature>/` | 看对应 feature 的 README.md |
+| 理解"为什么这样设计" | `decisions/` | ADR（`ADR-NNNN-*.md`） |
+| 查现状缺口 / 调研 | `analysis/` | 缺口分析、技术调研 |
+| 跟踪落地进度 | `plans/` | 执行计划 |
+| 产品方向 / 功能定义 | `product/` | 产品文档（_待创建_） |
+
+### 关键文档速查
+
+| 文档 | 何时读 |
+| --- | --- |
+| [docs/_structure.md](./docs/_structure.md) | 不确定文档归属哪一层时 |
+| [docs/conventions/coding-standards.md](./docs/conventions/coding-standards.md) | 编码前必读 |
+| [docs/conventions/frontend-backend-contract.md](./docs/conventions/frontend-backend-contract.md) | 前后端对接前必读 |
+| [docs/architecture/system-overview.md](./docs/architecture/system-overview.md) | 新人第一篇 |
+| [docs/architecture/development-guide.md](./docs/architecture/development-guide.md) | 新增功能时按 step 操作 |
+| [packages/shared/src/contracts/](./packages/shared/src/contracts/) | 前后端 API 契约单一数据源 |
+
+### 检索技巧
+
+| 工具 | 用途 | 示例 |
+| --- | --- | --- |
+| `Read` | 读已知路径的文档全文 | `Read docs/conventions/frontend-backend-contract.md` |
+| `Glob` | 按文件名模式查找 | pattern=`docs/**/*.md` |
+| `Grep` | 跨文档关键词检索 | pattern=`projectId`, path=`c:\worker\nebula\docs` |
+| `Grep` | 查代码中的契约引用 | pattern=`DATASET_CONTRACT`, path=`c:\worker\nebula` |
+
+### 按需深入的标准流程
+
+1. 读 `docs/README.md` 看七层架构与重点文档清单
+2. 按任务类型定位到对应层（参考上表）
+3. 读该层 `README.md` 看具体文档清单与状态
+4. 用 Grep 在 `docs/` 下检索关键词，定位到具体段落
+5. 找到目标文档后用 Read 读全文
+6. 注意文档顶部元信息：`状态`（生效中 / 设计中 / 已归档）+ `最近更新` 判断时效性
+
+### 文档状态约定
+
+| 状态 | 含义 | 处理 |
+| --- | --- | --- |
+| 草稿 | 内容不完整 | 不应作为实现依据 |
+| 设计中 | 逐步完善 | 可参考，但要确认细节 |
+| 评审中 | 等待反馈 | 暂不修改 |
+| 生效中 | 正式依据 | **可直接据此实现** |
+| 已归档 | 过期 / 被替代 | 仅作历史参考，找新文档替代 |
+
+### 修改文档的流程
+
+1. 判断文档归属哪一层（参考 `docs/_structure.md` 第 3 节）
+2. 在对应层目录下修改文件
+3. 更新文档顶部「最近更新」日期
+4. 同步更新该层 `README.md` 索引
+5. 重要文档变更同步更新 `docs/README.md`
+

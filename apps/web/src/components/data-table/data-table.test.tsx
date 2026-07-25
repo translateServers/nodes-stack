@@ -26,7 +26,8 @@ const mockData: TestData[] = [
   { id: '11', name: 'Kate', email: 'kate@test.com', age: 26 },
 ];
 
-const columns: ColumnDef<TestData, unknown>[] = [
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const columns: ColumnDef<TestData, any>[] = [
   { accessorKey: 'name', header: 'Name' },
   { accessorKey: 'email', header: 'Email' },
   { accessorKey: 'age', header: 'Age' },

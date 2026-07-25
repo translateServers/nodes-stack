@@ -53,7 +53,10 @@ export interface DataTableFeature<TData> {
   /** 注入 TanStack Table options */
   tableOptions?: (ctx: FeatureContext<TData>) => Partial<TableOptions<TData>>;
   /** 注入列定义增强（如选择列、拖拽手柄列等） */
-  columnEnhancers?: (ctx: FeatureContext<TData>) => ColumnDef<TData, unknown>[];
+  // TValue 使用 any 与 @tanstack/react-table 官方 TableOptions.columns 类型对齐，
+  // 避免调用方传入 ColumnDef<TData, string> 等具体类型时丢失 cell 函数的 TValue 信息。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  columnEnhancers?: (ctx: FeatureContext<TData>) => ColumnDef<TData, any>[];
   /** 注入渲染插槽 */
   renderSlots?: Partial<DataTableSlots<TData>>;
   /** 状态初始化 */
@@ -93,7 +96,10 @@ export interface DataTableProps<TData> {
   /** 表格数据 */
   data: TData[];
   /** 列定义 */
-  columns: ColumnDef<TData, unknown>[];
+  // TValue 使用 any 与 @tanstack/react-table 官方 TableOptions.columns 类型对齐，
+  // 避免调用方传入 ColumnDef<TData, string> 等具体类型时丢失 cell 函数的 TValue 信息。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  columns: ColumnDef<TData, any>[];
   /** 行 ID 提取函数，默认为 (row) => row.id */
   getRowId?: (row: TData) => string;
   /** 是否加载中 */

@@ -1,19 +1,36 @@
 import { useMemo } from 'react';
-import type { DataSourceConfig } from '@nebula/shared';
+import type { DataSourceConfig, RefreshIntervalUnit } from '@nebula/shared';
 import type { RendererComponentProps } from '../renderer';
 import { useChartData } from '../../hooks/use-chart-data';
 import { useApiDataSource } from '../../hooks/use-api-data-source';
+import { useDatasetSource } from '../../hooks/use-dataset-source';
+
+/** 将刷新策略的 interval + unit 转换为秒数 */
+function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
+  switch (unit) {
+    case 'second':
+      return interval;
+    case 'minute':
+      return interval * 60;
+    case 'hour':
+      return interval * 3600;
+    default:
+      return interval;
+  }
+}
 
 /**
- * bar-chart renderer（阶段 2 任务 3.2/3.3/5.5 改造 + 事件蓝图 3.4 接入）
+ * bar-chart renderer（阶段 2 任务 3.2/3.3/5.5 改造 + 事件蓝图 3.4 接入 + 数据集集成）
  *
  * 数据来自数据层解析结果（useChartData）：
  * - 有数据层配置时，数据层为唯一生效数据源，遗留 props.data 不再生效
  * - 无数据层配置时，回退读取遗留 props.data（任务 3.3 兼容语义；
  *   首次通过数据层 UI 提交后 props.data 被一次性迁移清除）
  * - API 数据源：经 useApiDataSource 发起 GET 请求，响应数据传入 useChartData 解析（5.5）
+ * - 数据集数据源：经 useDatasetSource 调用后端 /dataset/:id/execute，
+ *   后端返回 parsed（已应用 shape.dataPath + fieldMapping + filter）传入 useChartData
  * - apiRawDataOverride（任务 3.4）：预览页蓝图 refreshDataSource 动作完成后写入的覆盖数据，
- *   优先于 useApiDataSource state；编辑器场景下为 undefined，行为不变
+ *   优先于 hook state；编辑器场景下为 undefined，行为不变
  * 标题与颜色仍取视觉层 props/style，渲染行为不回退。
  * 交互层 interaction.tooltipOnHover 开启时，悬停柱条经 SVG <title> 展示名称与数值
  * （任务 4.5，默认关闭，关闭时视觉与既有行为一致）。
@@ -37,19 +54,42 @@ export function BarChartComponent({
   const apiConfig = effectiveDataSource?.type === 'api' ? effectiveDataSource.apiConfig : undefined;
   const apiState = useApiDataSource(apiConfig);
 
-  // 任务 3.4：优先使用 override（refreshDataSource 完成后写入），否则回退 useApiDataSource state
-  const apiRawData =
-    apiRawDataOverride !== undefined
-      ? apiRawDataOverride
-      : apiState.status === 'success'
-        ? apiState.data
-        : undefined;
+  // 数据集数据源请求（仅 type='dataset' 时启用，编辑态默认 useMock=true）
+  const isDatasetType = effectiveDataSource?.type === 'dataset';
+  const datasetId = isDatasetType ? effectiveDataSource.datasetId : undefined;
+  const datasetParamBindings = isDatasetType ? effectiveDataSource.paramBindings : undefined;
+  const datasetRefreshSeconds = useMemo(() => {
+    if (!isDatasetType) return undefined;
+    const override = effectiveDataSource.overrideRefresh;
+    if (override !== undefined && override.interval > 0) {
+      return toSeconds(override.interval, override.intervalUnit);
+    }
+    return undefined;
+  }, [effectiveDataSource, isDatasetType]);
+  const datasetState = useDatasetSource({
+    datasetId,
+    paramBindings: datasetParamBindings,
+    bindingContext: { componentProps: props },
+    useMock: true,
+    refreshIntervalSeconds: datasetRefreshSeconds,
+  });
+
+  // 任务 3.4：优先使用 override（refreshDataSource 完成后写入），否则回退 hook state
+  const hookRawData = isDatasetType
+    ? datasetState.status === 'success'
+      ? datasetState.data
+      : undefined
+    : apiState.status === 'success'
+      ? apiState.data
+      : undefined;
+  const apiRawData = apiRawDataOverride !== undefined ? apiRawDataOverride : hookRawData;
   const parseResult = useChartData(effectiveDataSource, logic, apiRawData);
   const title = (props.title as string) ?? '';
 
-  // API 请求进行中：加载态（6.x 统一三态契约前的简化展示）
+  // 请求进行中：加载态（6.x 统一三态契约前的简化展示）
   // 注意：override 存在时不显示加载态（数据已就绪）
-  if (apiRawDataOverride === undefined && apiState.status === 'loading') {
+  const activeState = isDatasetType ? datasetState : apiState;
+  if (apiRawDataOverride === undefined && activeState.status === 'loading') {
     return (
       <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
         加载中…
@@ -57,11 +97,11 @@ export function BarChartComponent({
     );
   }
 
-  // API 请求失败：错误态（override 存在时不显示错误态）
-  if (apiRawDataOverride === undefined && apiState.status === 'error') {
+  // 请求失败：错误态（override 存在时不显示错误态）
+  if (apiRawDataOverride === undefined && activeState.status === 'error') {
     return (
       <div className="flex h-full w-full items-center justify-center px-2 text-center text-sm text-red-400">
-        {apiState.error.message}
+        {activeState.error.message}
       </div>
     );
   }

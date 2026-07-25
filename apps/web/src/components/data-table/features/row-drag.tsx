@@ -3,7 +3,8 @@ import { GripVertical } from 'lucide-react';
 import type { DataTableFeature } from '../types';
 
 /** 行拖拽手柄列定义 */
-export function createDragHandleColumn<TData>(): ColumnDef<TData, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createDragHandleColumn<TData>(): ColumnDef<TData, any> {
   return {
     id: 'drag-handle',
     header: () => null,
