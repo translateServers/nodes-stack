@@ -126,6 +126,7 @@ Light Chaser 与 GoView 调试强依赖真实数据源，无 Mock 能力。
 
 - 编辑器内组件数据源为 `dataset` 时，编辑态默认 `useMock: true`（可在配置中切换）
 - 预览态默认 `useMock: false`，可在预览页工具栏切换
+- `useMock` 参数独立覆盖 `mock.enabled`，调用时传 `useMock: true` 即使用 Mock 数据，无论 `mock.enabled` 是否为 true
 
 ## 6. 与现有数据源迁移的兼容
 
@@ -146,7 +147,7 @@ Light Chaser 与 GoView 调试强依赖真实数据源，无 Mock 能力。
 
 ### 7.1 数据源连接凭证保护
 
-- 密码字段前端用 AES+RSA 双重加密传输（参考 Light Chaser）
+- 密码字段前端用 AES+RSA 双重加密传输（参考 Light Chaser）：前端用 RSA 公钥加密随机 AES 密钥，后端用 RSA 私钥解密 AES 密钥再解密 payload
 - 后端用项目级密钥加密存储，不回显明文
 - 编辑连接时密码字段为空，留空表示不修改
 - `lastTestResult` 仅记录成功/失败，不记录错误详情（防信息泄露）
@@ -195,5 +196,5 @@ Light Chaser 与 GoView 调试强依赖真实数据源，无 Mock 能力。
 | `jsonata` | 后端 | 一 | filter 表达式求值 |
 | `@nestjs/schedule` | 后端 | 一 | 归档数据集 30 天定时清理（见 data-model §4.1） |
 | `@faker-js/faker` | 后端 | 二 | Mock `faker-template` 生成器 |
-| `monaco-editor` | 前端 | 一/二 | SQL / JSON / 表达式编辑器（MVP 可降级 textarea，见 ui-design §6） |
+| `monaco-editor` | 前端 | 阶段一可选用 textarea 降级，阶段二正式引入 Monaco | SQL / JSON / 表达式编辑器（见 ui-design §6） |
 | `isolated-vm` | 后端 | 三（可选） | JS filter 真隔离执行，仅在启用 JS filter 时引入 |

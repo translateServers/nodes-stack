@@ -81,7 +81,7 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | `static` | 静态 JSON 数据，直接存储在数据集实体内 | 现有 + Light Chaser |
 | `api` | HTTP 接口请求（GET/POST/PUT/PATCH/DELETE），走后端代理 | 现有 API 类型提升 |
 | `sql` | 数据库 SQL 查询，关联数据源连接 | Light Chaser |
-| `websocket` | WebSocket 长连接（路线图第二阶段） | Light Chaser Pro |
+| `websocket` | WebSocket 长连接（路线图第三阶段） | Light Chaser Pro |
 
 > **不做** `dataset-ref`（数据集引用数据集），避免循环依赖与权限穿透问题。
 
@@ -95,7 +95,7 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | 后端代理 | 有（Java 后端执行 SQL） | 无（前端直连） | **有（统一代理 + 缓存）** |
 | Mock | 无 | 有（`/mock/*` 端点） | **有（数据集内置 mock 配置）** |
 | filter 安全 | eval（不安全） | `javascript:` 前缀（不安全） | **JSONata 表达式引擎（无 eval，图灵不完备）** |
-| 实时推送 | Pro 版独有 | 无 | 路线图第二阶段 |
+| 实时推送 | Pro 版独有 | 无 | 路线图第三阶段 |
 
 ## 5. 与现有架构的兼容性
 

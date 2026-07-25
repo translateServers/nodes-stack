@@ -108,7 +108,7 @@
 
 ### 3.3 交互状态机
 
-11 状态 × 20 事件的转换表：
+11 状态 × 21 事件的转换表：
 
 - 状态：idle / hovering / marquee-selecting / dragging / resizing / rotating / panning / zooming / text-editing / context-menu-open / creating
 - `transition` 是纯函数，便于单测
@@ -203,6 +203,8 @@
 
 错误原因：not-an-array / path-not-found / path-not-array / missing-dimension-field / missing-value-field / invalid-value-type
 
+> `path-not-array` 当前未实际发出，仅为类型层预留。
+
 错误信息面向用户可读，不泄露原始数据全文。
 
 ### 6.4 API 数据源
@@ -254,7 +256,7 @@
 
 ### 9.1 规模
 
-约 60+ 条目，8 个 category：file / edit / view / component / align / help / tool / ui。
+约 70+ 条目，8 个 category：file / edit / view / component / align / help / tool / ui。
 
 ### 9.2 防冲突方法论
 
@@ -327,7 +329,7 @@
 ## 13. 已知限制
 
 - 无 200+ 节点性能验证
-- 无浏览器级 E2E 测试（模拟调试/双向联动/condition/requestApi）
+- 浏览器级 E2E 测试覆盖有限（仅 pageLoad），模拟调试/双向联动/condition/requestApi 等场景待补充
 - 术语未完全统一
 - 数据源加载中时组件操作未覆盖 E2E
 

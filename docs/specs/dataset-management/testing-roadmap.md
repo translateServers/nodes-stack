@@ -21,6 +21,10 @@
 | `useDatasetSource` hook | 参数解析/请求/缓存/竞态/错误态 |
 | `chart-data-parser` 复用 | 现有测试不变，新增 dataset 数据源测试用例 |
 | 蓝图运行时 | `refreshDataSource` 对 dataset 类型的处理 |
+| `BizMessage` 扩展 | 验证 `getBizMessage(80001)` 等新增 80xxx 段码返回正确默认消息，不回退到"未知错误" |
+| `mock` 字段 `superRefine` 联动校验 | `generator='static'` 时 `data` 必填、`generator='faker-template'` 时 `template` 必填 |
+| 80007 错误码路径 | 执行 `websocket` 类型返回 `DATASET_TYPE_NOT_SUPPORTED`（80007） |
+| `api` 配置 `connectionId` 阶段行为 | 第一阶段无 Connection 时 `path` 必须为完整 URL 的校验 |
 
 ### 1.2 集成测试
 
@@ -53,7 +57,7 @@
 | DatasetFilterService（JSONata 表达式） | nestjs-server |
 | DatasetReference 引用索引（项目保存时重建） | nestjs-server |
 | ApiExecutor SSRF 防护 + 独立限流 | nestjs-server |
-| 业务码扩展 | packages/shared |
+| 业务码扩展（`BizCode` + `BIZ_CODE_TO_HTTP_STATUS` + `BizMessage` 三处） | packages/shared |
 | 前端 features/dataset 模块 | apps/web |
 | 管理页（列表 + 编辑） | apps/web |
 | 编辑器内 dataset-config-section | apps/web |

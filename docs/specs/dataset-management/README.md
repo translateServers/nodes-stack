@@ -33,3 +33,8 @@
 ## 关联文档
 
 - `packages/shared/src/schemas/screen.schema.ts`：现有 `DataSourceConfigSchema`，本规格在其上扩展 `'dataset'` 分支
+- `packages/shared/src/types/api.types.ts`：`BizCode` 与 `BIZ_CODE_TO_HTTP_STATUS`，本规格扩展 80xxx 段
+- `packages/shared/src/errors/index.ts`：`BizMessage` 映射，本规格同步扩展 80xxx 段默认消息
+- `apps/nestjs-server/src/modules/screen/screen.service.ts`：`updateProject` 方法，DatasetReference 索引重建集成点
+- `apps/web/src/api/core/endpoints.ts`：`ENDPOINTS` 对象，新增 `dataset` / `connection` 键
+- `apps/web/src/config/navigation.ts`：`menuGroups`，新增数据集管理菜单组

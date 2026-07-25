@@ -91,7 +91,7 @@ export function LineComponent({ props, style }: RendererComponentProps) {
 }
 ```
 
-**契约**：实现 `RendererComponentProps`，接收 `props / style / dataSource / logic / interaction / apiRawDataOverride?`。
+**契约**：实现 `RendererComponentProps`，接收 `props / style / dataSource / logic / interaction / apiRawDataOverride?`。确保 `defaultProps` 中声明 `stroke` 与 `strokeWidth` 字段。
 
 **关键约束**（见 [coding-standards.md](../conventions/coding-standards.md) 第 3 节）：
 - Canvas 渲染组件**禁止用 shadcn/ui**
@@ -333,6 +333,8 @@ export const ENDPOINTS = {
   notifications: '/notifications',
 } as const;
 ```
+
+如需分组可参照现有 `auth: { ... }` 嵌套结构。
 
 ### 4.3 第 2 步：TanStack Query hook
 

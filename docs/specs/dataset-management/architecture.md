@@ -19,7 +19,7 @@ dataset/
 │  ├─ static.executor.ts        // 静态数据直接返回
 │  ├─ api.executor.ts           // HTTP 代理请求
 │  ├─ sql.executor.ts           // 数据库查询
-│  └─ websocket.executor.ts     // WS 长连接管理(第二阶段)
+│  └─ websocket.executor.ts     // WS 长连接管理(第三阶段)
 ├─ dataset-filter.service.ts    // filter 表达式求值（JSONata）
 ├─ dataset-mock.service.ts      // Mock 数据生成
 └─ dto/
@@ -54,24 +54,26 @@ interface DatasetExecutor<TConfig> {
 
 在 `apps/web/src/api/core/endpoints.ts` 中新增 `dataset` 与 `connection` 端点：
 
+> 路径不含 `API_BASE_URL` 前缀（`/api/v1`），完整 URL 为 `/api/v1` + 下表路径。
+
 | 方法 | 路径 | 功能 |
 |---|---|---|
-| GET | `/api/dataset` | 列表（按 projectId 过滤） |
-| GET | `/api/dataset/:id` | 详情 |
-| POST | `/api/dataset` | 创建 |
-| PATCH | `/api/dataset/:id` | 更新 |
-| DELETE | `/api/dataset/:id` | 删除（软删除，归档） |
-| POST | `/api/dataset/:id/execute` | **执行数据集**（body: `{ params, useMock }`） |
-| POST | `/api/dataset/:id/test` | 测试执行（不缓存，返回原始 + 解析后结果） |
-| POST | `/api/dataset/batch` | 批量执行（**第三阶段**，预览页一次加载多数据集） |
-| GET | `/api/datasource-connection` | 连接列表 |
-| GET | `/api/datasource-connection/:id` | 连接详情 |
-| POST | `/api/datasource-connection` | 创建连接 |
-| PATCH | `/api/datasource-connection/:id` | 更新连接 |
-| DELETE | `/api/datasource-connection/:id` | 删除连接 |
-| POST | `/api/datasource-connection/:id/test` | 测试连接 |
+| GET | `/dataset` | 列表（按 projectId 过滤） |
+| GET | `/dataset/:id` | 详情 |
+| POST | `/dataset` | 创建 |
+| PATCH | `/dataset/:id` | 更新 |
+| DELETE | `/dataset/:id` | 删除（软删除，归档） |
+| POST | `/dataset/:id/execute` | **执行数据集**（body: `{ params, useMock }`） |
+| POST | `/dataset/:id/test` | 测试执行（不缓存，返回原始 + 解析后结果） |
+| POST | `/dataset/batch` | 批量执行（**第三阶段**，预览页一次加载多数据集） |
+| GET | `/datasource-connection` | 连接列表 |
+| GET | `/datasource-connection/:id` | 连接详情 |
+| POST | `/datasource-connection` | 创建连接 |
+| PATCH | `/datasource-connection/:id` | 更新连接 |
+| DELETE | `/datasource-connection/:id` | 删除连接 |
+| POST | `/datasource-connection/:id/test` | 测试连接 |
 
-> 端点命名采用完整业务语义 `datasource-connection`（与现有 `/roles`、`/screen` 风格一致），避免与数据库连接等概念混淆。
+> 端点命名采用完整业务语义 `datasource-connection`（为避免与未来"组件连接"等概念混淆，此端点采用完整名；现有端点如 `/roles`、`/screen` 为短名）。
 
 ### 2.1 鉴权与权限
 
@@ -161,7 +163,7 @@ screen/components/dataset-config-section.tsx  // 属性面板 data tab 的新 se
   │  ├─ static: 直接返回 staticData
   │  ├─ api: 后端代理 HTTP 请求(SSRF 防护 + connection.baseUrl + auth + 公共 header)
   │  ├─ sql: 后端执行 SQL(强制 select,参数化查询)
-  │  └─ websocket: 第二阶段
+  │  └─ websocket: 第三阶段
   ↓ 缓存命中检查(若 enabled 且未过期,直接返回缓存)
   ↓ 执行获取原始数据
   ↓ filter 表达式求值(DatasetFilterService, JSONata)
@@ -198,7 +200,7 @@ ScreenPreview 加载项目
   ↓ POST /api/dataset/batch { ids, params }  // 一次批量拉取
   ↓ 分发到各组件的 apiRawDataOverride
   ↓ 各组件按自身 refresh 策略启动轮询(走 /execute 端点)
-[WebSocket 推送(第二阶段)]
+[WebSocket 推送(第三阶段)]
   ↓ 后端 WS 推送数据集更新事件
   ↓ 前端按 datasetId 路由到引用组件
 ```

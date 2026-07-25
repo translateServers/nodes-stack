@@ -80,8 +80,8 @@ nebula/
 | 参数校验 | nestjs-zod + Zod（**禁用 class-validator**） | — |
 | 鉴权 | Passport + JWT + bcryptjs | — |
 | 验证码 | svg-captcha | — |
-| 缓存 | @nestjs/cache-manager + keyv | — |
-| Redis | redis + @keyv/redis | — |
+| 缓存 | @nestjs/cache-manager + keyv | 3.1.2 + 5.6.0 |
+| Redis | redis + @keyv/redis | 6.0.0 + 5.1.6 |
 | 日志 | nest-winston + winston-daily-rotate-file | — |
 | API 文档 | @nestjs/swagger + swagger-ui-express | — |
 | 限流 | @nestjs/throttler | — |
@@ -144,7 +144,7 @@ nebula/
 
 Prisma 多文件 schema（Prisma 7 特性）：根 `schema.prisma` 仅含 generator/datasource，业务模型拆到 `prisma/schema/*.prisma`。
 
-7 个模型：
+8 个模型（7 个 Prisma schema 文件）：
 
 | 模型 | 表名 | 说明 |
 |---|---|---|

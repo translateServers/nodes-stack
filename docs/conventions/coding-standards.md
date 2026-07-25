@@ -1,55 +1,47 @@
 # 编码规范
 
 > 状态：生效中
-> 最近更新：2026-07-24
-> 定位：所有开发者编码前必读。涵盖代码风格、技术选型边界、命名约定、测试约定
+> 最近更新：2026-07-25
+> 定位：所有开发者（含 AI）编码前必读。仅记录"必须做/不能做"的约束、隐式约定与陷阱警示，工具自动处理的细节不重复。
 
 ## 1. 代码质量三件套
 
 ```
 日常开发
    ├─ Biome（格式 + 基础 lint + import 组织）── pre-commit 自动触发
-   │     └─ simple-git-hooks + lint-staged（仅暂存文件）
    ├─ ESLint 9 + typescript-eslint（类型感知规则）── pnpm lint 手动触发
    └─ TypeScript 6 strict ── pnpm typecheck 手动触发
 ```
 
 ### 1.1 分工原则
 
-- **Biome**：格式化、基础 lint、import 组织。**唯一负责格式化的工具**，ESLint 不启用 `prettier/prettier` 规则
-- **ESLint**：TypeScript 类型感知规则（`no-floating-promises` / `no-unsafe-member-access` / `no-misused-promises` / `no-base-to-string` / `no-unsafe-argument` / `no-unsafe-call`）
+- **Biome**：唯一负责格式化的工具，ESLint 不启用 `prettier/prettier`
+- **ESLint**：TypeScript 类型感知规则
+  - 显式配置：`no-explicit-any` / `no-floating-promises` / `no-unsafe-argument` / `no-unsafe-call`
+  - `recommendedTypeChecked` 默认启用：`no-unsafe-member-access` / `no-misused-promises` / `no-base-to-string`
 - **TypeScript**：strict 模式类型检查
 
 ### 1.2 关键原则
 
 > **Biome 通过 ≠ 质量过关**。提交前必须确保 `pnpm typecheck` 与 `pnpm lint` 通过。
 
-### 1.3 Biome 配置要点
+### 1.3 禁止项
 
-- 单引号、分号结尾、2 空格缩进、行宽 100、尾随逗号 `all`
-- 箭头函数参数始终加括号
-- `unsafeParameterDecoratorsEnabled: true`（支持 NestJS 装饰器参数）
-- `css.parser.tailwindDirectives: true`
-
-### 1.4 禁止项
-
-- `@ts-ignore` / `@ts-nocheck`
-- `as any`、隐式 `any`
+- `@ts-ignore` / `@ts-nocheck` / `as any` / 隐式 `any`
 - `ignoreDeprecations: "6.0"`（必须用 `paths` 替代 `baseUrl`）
 
-## 2. TypeScript 配置
+### 1.4 禁止引入的依赖
 
-### 2.1 预设体系
+> ⚠️ AI 陷阱：AI 倾向于安装"流行库"，但本项目已选定技术栈，禁止引入以下依赖。
 
-`@nebula/typescript-config` 提供三套预设：
-
-| 预设 | 适用 | 特性 |
+| 禁止引入 | 替代方案 | 原因 |
 |---|---|---|
-| `base.json` | 所有包 | target ES2023 / module NodeNext / strict / strictNullChecks / noImplicitAny |
-| `nestjs.json` | 后端 | 继承 base + experimentalDecorators + emitDecoratorMetadata + types `["node","jest"]` |
-| `react.json` | 前端 | 继承 base + lib `["ES2023","DOM","DOM.Iterable"]` + jsx react-jsx + noEmit |
+| `prettier` | Biome | 项目唯一格式化工具为 Biome |
+| `class-validator` | Zod + nestjs-zod | 后端校验统一用 Zod |
+| `lodash`（全量包） | `lodash-es` 或具体函数 | 全量包体积过大，按需引入 |
+| `moment` | `date-fns` | moment 已进入维护模式 |
 
-### 2.2 路径别名
+## 2. 路径别名
 
 | 包 | 别名 |
 |---|---|
@@ -58,7 +50,7 @@
 
 ## 3. UI 组件选型边界
 
-> 这是最容易踩坑的规范，务必区分清楚。
+> ⚠️ AI 陷阱：AI 常在大屏组件中误用 shadcn/ui，导致样式冲突。判断方法：组件会被渲染到画布上 → 用原生 HTML/SVG。
 
 ### 3.1 编辑器外壳 — 必须用 shadcn/ui
 
@@ -82,6 +74,8 @@
 
 ## 4. React Flow 约定
 
+> ⚠️ AI 陷阱：AI 写新节点常漏 Handle id="in"，导致边无法连接但不报错。
+
 ### 4.1 Handle ID
 
 - **目标 Handle 必须有 `id="in"`**，与模板生成的 edges（`targetHandle: 'in'`）匹配
@@ -92,6 +86,8 @@
 `@xyflow/react/dist/style.css` 必须在使用 React Flow 的文件中导入（如 `blueprint-sheet.tsx`），否则节点/边/Handle 渲染异常（黑块）。
 
 ## 5. 数据层约定
+
+> ⚠️ AI 陷阱：AI 新增数据源类型常修改既有分支，应添加新分支。
 
 ### 5.1 判别联合模式
 
@@ -129,9 +125,15 @@ type DataSourceConfig =
 3. `applyLogicConfig` — 排序 + 限制
 4. `parseChartData` — 统一入口，返回判别联合 `ParseResult`
 
-`ParseResult` 错误信息**面向用户可读**，不泄露原始数据全文。
+`ParseResult` 错误原因共 6 种：`not-an-array` / `path-not-found` / `path-not-array` / `missing-dimension-field` / `missing-value-field` / `invalid-value-type`。
+
+> 注：`path-not-array` 当前未实际发出，仅为类型层预留（`parseChartData` 在路径不存在时统一返回 `path-not-found`，在结果非数组时返回 `not-an-array`）。
+
+错误信息**面向用户可读**，不泄露原始数据全文。
 
 ## 6. 状态管理约定
+
+> ⚠️ AI 陷阱：AI 常直接 mutate state，必须用 `buildNestedUpdate` 构造不可变更新。
 
 ### 6.1 Zustand 使用
 
@@ -144,8 +146,8 @@ type DataSourceConfig =
 - 历史栈快照包含 `components + canvas + blueprint` 三者，共享同一时间线
 - 容量上限 50
 - 高频操作（如蓝图节点拖拽）用手势模式合并为一次历史提交：
-  - `beginGesture` 记录 baseline，期间更新不入栈
-  - `endGesture` 有净变化时补一条历史（快照取 baseline）
+  - `beginBlueprintGesture` 记录 baseline，期间更新不入栈
+  - `endBlueprintGesture` 有净变化时补一条历史（快照取 baseline）
 
 ### 6.3 不可变更新
 
@@ -157,6 +159,8 @@ buildNestedUpdate(source, 'position.x', 100)
 ```
 
 ## 7. 工具系统约定
+
+> ⚠️ AI 陷阱：AI 常硬编码 `moveableDraggable = true`，应通过 `TOOL_REGISTRY` capabilities 派生。
 
 ### 7.1 所有权边界
 
@@ -191,12 +195,23 @@ Moveable/Selecto 的启用状态完全由 `TOOL_REGISTRY` 的 capabilities 派�
 
 ## 8. 画布交互约定
 
+> ⚠️ AI 陷阱：AI 常用 `left/top` 定位组件，必须用 `transform: translate()`。
+
 ### 8.1 Canvas Drag Optimization
 
 - 组件定位用 `transform: translate()`，**不用** `left/top`（GPU 合成层避免布局重排）
 - store 层 `position.x/y` 语义不变，由 `resolveComponentContainerStyle` 转 transform
 - 拖拽用 `e.beforeTranslate` 替代 DOM 回读（无精度损失）
 - 用 `composeComponentTransform` 合并 transform 链，**不要**字符串拼接
+
+```ts
+// ❌ 错误：触发布局重排
+style.left = `${x}px`;
+style.top = `${y}px`;
+
+// ✅ 正确：GPU 合成层
+style.transform = `translate(${x}px, ${y}px)`;
+```
 
 ### 8.2 rAF 节流
 
@@ -220,6 +235,8 @@ Moveable/Selecto 的启用状态完全由 `TOOL_REGISTRY` 的 capabilities 派�
 
 ## 9. 后端编码约定
 
+> ⚠️ AI 陷阱：AI 常引入 `class-validator`，应统一用 Zod + nestjs-zod。
+
 ### 9.1 校验方案
 
 - **统一用 Zod + nestjs-zod**，**禁用 class-validator**
@@ -235,6 +252,8 @@ Moveable/Selecto 的启用状态完全由 `TOOL_REGISTRY` 的 capabilities 派�
 ```
 
 **不要**手动包装响应，直接返回 `data`。
+
+`data` 字段仅在 `data !== undefined && data !== null` 时才携带，否则省略（如 DELETE 等无返回数据的操作）。falsy 但非 null/undefined 的值（`0` / `''` / `false` / `[]` / `{}`）仍保留 `data` 字段。
 
 ### 9.3 鉴权
 
@@ -270,16 +289,19 @@ modules/<feature>/
 
 ## 10. 前端 API 客户端约定
 
+> ⚠️ AI 陷阱：AI 常在业务代码手动处理 401，应统一交给拦截器。
+
 ### 10.1 端点配置
 
 `api/core/endpoints.ts` 用 `as const` 对象按模块组织端点常量，**不要**散落字符串。
 
 ### 10.2 响应校验
 
-`http.ts` 支持通过 `meta.responseSchema` 在响应拦截器做 Zod 运行时校验：
+`http.ts` 的 `get` / `post` 接受 Zod schema 作为参数，内部自动构造 `meta.responseSchema` 在响应拦截器做运行时校验：
 
 ```ts
-get('/users', { meta: { responseSchema: UserSchema } })
+get('/users', UserSchema)
+// 内部等价于 http.get('/users', { meta: { responseSchema: UserSchema } })
 // 返回校验后数据，类型自动推导
 ```
 
@@ -301,19 +323,7 @@ get('/users', { meta: { responseSchema: UserSchema } })
 - 默认 query：`retry` 对 `UNAUTHORIZED` 不重试，其他最多 2 次；`staleTime: 30s`；`refetchOnWindowFocus: false`
 - 默认 mutation：`retry: 0`
 
-## 11. 测试约定
-
-### 11.1 测试框架
-
-| 层 | 框架 |
-|---|---|
-| 前端单测 | Vitest + Testing Library + jsdom |
-| 后端单测 | Jest 30 + ts-jest |
-| 后端 E2E | Jest + supertest |
-| 前端 E2E | Playwright |
-| shared 单测 | Vitest |
-
-### 11.2 测试目标
+## 11. 测试目标
 
 > **测试业务约束与安全边界，不测框架能力。**
 
@@ -322,50 +332,21 @@ get('/users', { meta: { responseSchema: UserSchema } })
 - 状态机转换表必须有单测（`transition` 是纯函数）
 - 编译器（`compileBlueprint`）必须有单测，覆盖环、深度截断、诊断分级
 
-### 11.3 测试文件位置
+## 12. 必须复用的工具函数
 
-**测试与源码同目录**：`*.test.ts(x)` 紧邻源码。
+> ⚠️ AI 陷阱：AI 倾向于自己实现而非复用既有工具函数，导致重复代码。
 
-### 11.4 后端覆盖率阈值
+| 场景 | 必须复用 | 位置 |
+|---|---|---|
+| 属性面板字段写入 | `buildNestedUpdate` | `property-schema/path-utils.ts` |
+| 组件定位样式 | `resolveComponentContainerStyle` / `composeComponentTransform` | `registry/component-container-style.ts` |
+| 高频回调节流 | `createRafThrottler` | `lib/raf-throttle.ts` |
+| 数据解析管线 | `parseChartData` / `extractDataByPath` / `mapFieldsToChartData` / `applyLogicConfig` | `lib/chart-data-parser.ts` |
+| 工具能力查询 | `getToolById` / `hasCapability` | `hooks/tool-registry.ts` |
+| 组件定义查询 | `getDefinitionByType` / `getDefinitionsByCategory` / `searchComponentDefinitions` / `createComponentInstance` | `registry/index.ts` |
+| 属性 Schema 查询 | `getSchemaForComponentType` | `property-schema/schemas.tsx` |
 
-Jest 覆盖率阈值 80%（branches/functions/lines/statements）。
-
-### 11.5 质量门禁
-
-提交前必须通过：
-
-```bash
-pnpm typecheck    # TypeScript 类型检查
-pnpm lint         # ESLint 类型感知规则
-pnpm biome:check  # Biome 格式 + 基础 lint
-pnpm test         # 单元测试
-```
-
-## 12. 提交规范
-
-### 12.1 提交消息
-
-遵循 Conventional Commits：
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-type：`feat` / `fix` / `refactor` / `test` / `docs` / `chore` / `perf` / `style` / `ci`
-
-### 12.2 pre-commit 钩子
-
-`simple-git-hooks` + `lint-staged`，仅对暂存文件运行 Biome。
-
-### 12.3 禁止项
-
-- 不要用 `git add -A` 或 `git add .`，按文件名添加
-- 不要提交 `.env` / `credentials.json` 等敏感文件
-- 不要提交 `routeTree.gen.ts` 的手动修改（自动生成）
+新增工具函数前，先检查上述清单是否已有现成实现。
 
 ## 13. 路由与导航约定
 
@@ -379,25 +360,7 @@ type：`feat` / `fix` / `refactor` / `test` / `docs` / `chore` / `perf` / `style
 
 在 `apps/web/src/config/navigation.ts` 的 `menuGroups` 同步添加导航项（项目规则要求）。
 
-## 14. 文档约定
-
-### 14.1 文档元信息
-
-每个文档顶部必须包含：
-
-```markdown
-# 文档标题
-
-> 状态：<草稿 | 设计中 | 评审中 | 生效中 | 已归档>
-> 最近更新：YYYY-MM-DD
-> 定位：一句话说明本文档的职责
-```
-
-### 14.2 文档分层
-
-详见 [_structure.md](../_structure.md)。
-
-## 15. 关联文档
+## 14. 关联文档
 
 - [系统总览](../architecture/system-overview.md)
 - [大屏设计器架构](../architecture/screen-editor-architecture.md)

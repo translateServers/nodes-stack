@@ -54,7 +54,7 @@ features/screen/
 
 ### 技术选型
 
-**Zustand + devtools middleware**。开发模式下通过 `window.__screenEditorStore` 暴露给 Playwright E2E。
+**Zustand + devtools middleware**。开发模式下在 `editor-store.ts` 中通过 `window.__screenEditorStore` 暴露给 Playwright E2E。
 
 ### State Shape 核心字段
 
@@ -193,7 +193,7 @@ selectoSelectByClick = activeCapabilities.canSelect
 | 状态机 | 职责 | 实现位置 |
 |---|---|---|
 | **工具状态机** | activeTool/currentTool + 临时切换栈（按住 Space 临时抓手） | `hooks/use-tool-state-machine.ts` |
-| **交互状态机** | 11 状态 × 20 事件的转换表（idle/dragging/resizing/rotating/panning/...） | `hooks/use-interaction-state-machine.ts` |
+| **交互状态机** | 11 状态 × 21 事件的转换表（idle/dragging/resizing/rotating/panning/...） | `hooks/use-interaction-state-machine.ts` |
 
 两者独立演进，通过 `useEditorSession` 组合为单一入口下发到画布/工具栏/状态栏/快捷键。
 

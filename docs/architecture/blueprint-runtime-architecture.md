@@ -25,7 +25,7 @@ blueprint/
 │   └── types.ts           CompileResult / CompiledRule / Diagnostic
 ├── runtime/               执行器
 │   ├── types.ts           TriggerEventType / RuntimeDeps / ActionResult
-│   ├── executor.ts        executeRule / executeAction / triggerAndCompile
+│   ├── executor.ts        executeRule / executeAction / triggerAndExecute
 │   ├── matcher.ts         规则匹配
 │   ├── plan.ts            执行计划展开（MAX_TRIGGER_DEPTH）
 │   └── use-blueprint-preview-runtime.ts  预览集成 hook
@@ -38,12 +38,13 @@ blueprint/
 │   └── comment-node.tsx
 ├── edges/                 连线
 ├── panels/                属性面板
-│   ├── node-config-panel/
-│   ├── condition-builder/  条件表达式构建器
-│   ├── search-panel/
-│   ├── problems-panel/     编译诊断
-│   ├── execution-log-panel/ 执行日志
-│   └── ...
+│   ├── node-config-panel.tsx
+│   ├── condition-builder.tsx  条件表达式构建器
+│   ├── search-panel.tsx
+│   ├── problems-panel.tsx     编译诊断
+│   ├── execution-log-panel.tsx 执行日志
+│   ├── align-distribute-toolbar.tsx
+│   └── viewport-toolbar.tsx
 ├── hooks/                 蓝图编辑器内部 hooks
 │   ├── use-blueprint-drag.ts
 │   ├── use-blueprint-selection.ts
@@ -170,9 +171,12 @@ CompiledRule = {
 }
 
 Diagnostic = {
-  nodeId: string
   level: 'error' | 'warning' | 'info'
+  code: DiagnosticCode       // 必填，文档原遗漏
   message: string
+  nodeId?: string            // 实际可选，文档原说必填
+  edgeId?: string            // 文档原遗漏
+  fieldPath?: string[]       // 文档原遗漏
 }
 ```
 
@@ -192,12 +196,12 @@ Diagnostic = {
 interface RuntimeDeps {
   applyVisibility(componentId, visible): void
   getVisibility(componentId): boolean
-  openUrl(url): void
+  openUrl(url: string, target: '_blank' | '_self'): void
   scrollToComponent(componentId): void
   refreshDataSource(componentId): Promise<void>
   hasComponent(componentId): boolean
   logWarning(message): void
-  requestApi(config): Promise<unknown>
+  requestApi(params: RequestApiRuntimeParams): Promise<RequestApiRuntimeResult>
   getComponentValue(componentId, path): unknown
   getComponentData(componentId): unknown
 }
@@ -229,10 +233,10 @@ executeRule(rule, event, deps): RuleExecutionLog
 | `refreshDataSource` | 复用取消协议刷新 | 写 apiRawDataOverride |
 | `requestApi` | HTTP 请求 + 模板插值 + 超时取消 | 仅副作用，不写回数据源 |
 
-### triggerAndCompile — 触发并执行
+### triggerAndExecute — 触发并执行
 
 ```ts
-triggerAndCompile(rules, event, deps)
+triggerAndExecute(rules, event, deps)
 ```
 
 `collectRules` 匹配所有触发器对应的规则，顺序执行。
@@ -296,9 +300,9 @@ useBlueprintPreviewRuntime(blueprint, components)
 
 `lib/request-api-mask.ts` 对 `requestApi` 动作的日志脱敏：
 
+- 用户通过 `secretHeaderKeys` 显式声明需要脱敏的 header 键名（大小写不敏感）；默认为空数组，不自动识别任何 header
 - `secretHeaderKeys` 声明的 header 替换为 `***`
-- 默认识别 authorization / cookie / x-api-key 等敏感 header
-- 前后端共用脱敏规则（在 `@nebula/shared` 中实现）
+- 脱敏逻辑在前端 `apps/web/src/features/screen/blueprint/lib/request-api-mask.ts` 实现；schema 中的 `secretHeaderKeys` 字段在 `@nebula/shared` 中定义
 
 ## 12. 关键架构亮点
 

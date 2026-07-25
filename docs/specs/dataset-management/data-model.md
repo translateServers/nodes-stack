@@ -56,7 +56,7 @@ DatasetSchema
 ├─ mock: Mock 配置
 │  ├─ enabled: boolean
 │  ├─ generator: 'static'|'faker-template'|'echo-params'
-│  └─ data?: unknown                // static mock 数据
+│  ├─ data?: unknown                // static mock 数据
 │  └─ template?: string             // faker 模板表达式
 │
 ├─ status: 'active'|'archived'
@@ -237,7 +237,19 @@ model DatasetReference {
 
 ## 5. 业务码扩展
 
-在 `packages/shared/src/types/api.types.ts` 的 `BizCode` 中新增 80xxx 段。注意现有 `BizCode` 是 `as const` 对象字面量（非 enum），新增条目须**同步扩展 `BIZ_CODE_TO_HTTP_STATUS` 映射**，否则 `getHttpStatus` 回退 500：
+新增 80xxx 段数据集业务码，需同步扩展三处：
+
+1. `packages/shared/src/types/api.types.ts` 的 `BizCode` 对象：新增 80xxx 段常量
+2. `packages/shared/src/types/api.types.ts` 的 `BIZ_CODE_TO_HTTP_STATUS` 映射：新增 80xxx 段到 HTTP 状态码的映射
+3. `packages/shared/src/errors/index.ts` 的 `BizMessage` 映射：新增 80xxx 段默认消息（否则 `getBizMessage(80001)` 回退到"未知错误"）
+
+> 现有 `BizCode` 是 `as const` 对象字面量（非 enum），新增条目须**同步扩展 `BIZ_CODE_TO_HTTP_STATUS` 映射**，否则 `getHttpStatus` 回退 500；同理须**同步扩展 `BizMessage` 映射**，否则 `getBizMessage` 回退到"未知错误"。
+
+段位分配：
+
+| 段位 | 模块 |
+|---|---|
+| 80xxx | 数据集 |
 
 ```
 // 数据集相关 (80xxx)
