@@ -1,7 +1,7 @@
 # 数据集管理 · 概述与核心概念
 
 > 状态：设计完成
-> 最近更新：2026-07-24
+> 最近更新：2026-07-25
 > 定位：阐明数据集管理的设计目标、原则与核心概念，作为后续章节的总纲
 
 ## 1. 现状定位
@@ -109,5 +109,6 @@ Nebula 当前数据层能力（位于 `packages/shared/src/schemas/screen.schema
 | 蓝图运行时 `RuntimeDeps` | `refreshDataSource` / `getComponentData` 抽象不变，dataset 实现替换 deps |
 | `request-api-mask.ts`（敏感信息脱敏） | 脱敏函数下沉 `packages/shared` 后复用到数据集日志（键名识别已在 shared） |
 | `data-source-migration.ts`（数据迁移） | 不强制迁移，提供"提取为数据集"的主动操作 |
+| `frontend-backend-contract.md`（对接契约方案） | 数据集管理是契约方案首批落地参考；schema 收拢到 shared，端点元数据集中在 `contracts/dataset.contract.ts` |
 
 详细集成点清单见 [testing-roadmap.md](./testing-roadmap.md)。

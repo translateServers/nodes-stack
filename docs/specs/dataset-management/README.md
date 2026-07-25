@@ -1,7 +1,7 @@
 # 数据集管理功能规格
 
-> 状态：设计中
-> 最近更新：2026-07-24
+> 状态：实施中（第一阶段 MVP 已完成，文档修订中对齐契约）
+> 最近更新：2026-07-25
 > 定位：为大屏设计器引入独立可复用的数据集实体，替代当前组件内联的 `static` / `api` 数据源配置。本目录是设计规格，不含实现代码。
 
 ## 设计目标速览
@@ -38,3 +38,5 @@
 - `apps/nestjs-server/src/modules/screen/screen.service.ts`：`updateProject` 方法，DatasetReference 索引重建集成点
 - `apps/web/src/api/core/endpoints.ts`：`ENDPOINTS` 对象，新增 `dataset` / `connection` 键
 - `apps/web/src/config/navigation.ts`：`menuGroups`，新增数据集管理菜单组
+- `docs/conventions/frontend-backend-contract.md`：前后端对接契约方案（轻量落地），数据集管理是其首批落地参考
+- `packages/shared/src/contracts/dataset.contract.ts`：API 端点契约注册表（端点元数据 + Schema 绑定的单一数据源）

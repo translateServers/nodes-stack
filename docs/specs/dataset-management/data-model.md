@@ -1,7 +1,7 @@
 # 数据集管理 · 数据模型设计
 
 > 状态：设计完成
-> 最近更新：2026-07-24
+> 最近更新：2026-07-25
 > 定位：定义数据集、数据源连接、组件绑定的 Schema 与持久化模型，是前后端契约的依据
 
 ## 1. 数据集 Schema
@@ -74,6 +74,24 @@ DatasetSchema
 - **`mock` 配置**：内置 Mock，编辑态默认启用；解决 Light Chaser 调试强依赖真实数据源的问题
 - **`mock` 字段联动校验**：`generator = 'static'` 时 `data` 必填，`generator = 'faker-template'` 时 `template` 必填（Zod `superRefine` 实现）
 - **`websocket` 分阶段启用**：type 枚举保留 `websocket` 以避免后续存量数据迁移；执行端按阶段实现，未启用阶段调用 execute 返回 `DATASET_TYPE_NOT_SUPPORTED`（80007，见 §5）
+
+### 1.2 契约 schema 引用
+
+数据集的实体、请求、响应 Zod schema 全部在 `packages/shared/src/schemas/dataset.schema.ts` 中定义，是前后端契约的单一数据源：
+
+| Schema | 用途 |
+|---|---|
+| `DatasetSchema` | 实体（不含 API 层字段） |
+| `CreateDatasetSchema` | 创建请求体（不含 projectId，由 contract 扩展） |
+| `CreateDatasetRequestSchema` | 创建请求体（含可选 projectId，**前后端 API 契约**） |
+| `ListDatasetQuerySchema` | 列表查询参数（含可选 projectId/status/type） |
+| `DatasetResponseSchema` | 响应（含可选 projectId） |
+| `UpdateDatasetSchema` | 更新请求体（partial 风格） |
+| `ExecuteDatasetParamsSchema` / `DatasetExecuteResultSchema` / `TestDatasetResultSchema` | 执行相关 |
+| `BatchExecuteDatasetParamsSchema` / `BatchExecuteDatasetResultSchema` | 批量执行相关 |
+| `DatasetReferenceCountSchema` | 引用计数响应 |
+
+端点元数据（路径/方法/参数位置）绑定在 `packages/shared/src/contracts/dataset.contract.ts`，详见 [frontend-backend-contract.md](../../conventions/frontend-backend-contract.md)。
 
 ## 2. 数据源连接 Schema
 
@@ -213,6 +231,17 @@ model DataSourceConnection {
 - **软删除与清理**：`status = 'archived'` 表示归档；归档后引用组件显示警告；归档满 30 天由定时任务（`@nestjs/schedule` Cron）物理删除。归档/删除前校验引用数（见 §4.2），存在引用时需用户确认
 - **唯一约束**：`projectId + name` 唯一，避免重名冲突
 
+**projectId 传递与缺失行为**（前后端契约）：
+
+| 场景 | 传递方式 | 必填性 | 缺失行为 |
+|---|---|---|---|
+| 创建数据集（POST /dataset） | body | 可选 | 后端 service 层回退到数据库第一个项目作为默认 projectId |
+| 创建连接（POST /datasource-connection） | body | 可选 | 同上 |
+| 列表查询（GET /dataset / GET /datasource-connection） | query string | 可选 | 未传时返回所有项目的数据集/连接 |
+| 响应 | body | 可选 | 前端 Zod strip 模式忽略；shared `DatasetResponseSchema.projectId` 标记为 optional |
+
+> 设计依据：[frontend-backend-contract.md](../../conventions/frontend-backend-contract.md) §8「跨层字段处理规则」
+
 ### 4.2 引用追踪（引用数的实现机制）
 
 组件对 `datasetId` 的引用埋在 `ScreenProject.components` JSON 字符串内部，无法靠外键发现。新增引用索引表：
@@ -242,6 +271,8 @@ model DatasetReference {
 1. `packages/shared/src/types/api.types.ts` 的 `BizCode` 对象：新增 80xxx 段常量
 2. `packages/shared/src/types/api.types.ts` 的 `BIZ_CODE_TO_HTTP_STATUS` 映射：新增 80xxx 段到 HTTP 状态码的映射
 3. `packages/shared/src/errors/index.ts` 的 `BizMessage` 映射：新增 80xxx 段默认消息（否则 `getBizMessage(80001)` 回退到"未知错误"）
+
+> **特别提醒**：`BizMessage` 映射必须扩展。若遗漏，`getBizMessage(80001)` 会回退到"未知错误"，给前端错误展示和用户排查带来困扰。这是常见遗漏点，PR review 时必须检查。
 
 > 现有 `BizCode` 是 `as const` 对象字面量（非 enum），新增条目须**同步扩展 `BIZ_CODE_TO_HTTP_STATUS` 映射**，否则 `getHttpStatus` 回退 500；同理须**同步扩展 `BizMessage` 映射**，否则 `getBizMessage` 回退到"未知错误"。
 
@@ -284,10 +315,19 @@ CONNECTION_TEST_FAILED: 80103
 
 ## 6. 字段映射复用
 
-`FieldMapping` 复用现有 `screen.schema.ts` 中的定义：
+`FieldMapping` 抽离到独立文件 `packages/shared/src/schemas/field-mapping.schema.ts`，打破 `screen.schema.ts` 与 `dataset.schema.ts` 之间的循环依赖：
 
-```
-{ dimension: string; value: string }  // 默认推断：name→维度、value→数值
+```typescript
+// packages/shared/src/schemas/field-mapping.schema.ts
+export const FieldMappingSchema = z.object({
+  dimension: z.string().min(1).describe('维度字段名（对应图表 x 轴/名称）'),
+  value: z.string().min(1).describe('数值字段名（对应图表 y 轴/值）'),
+});
 ```
 
-数据集的 `shape.fieldMapping` 与组件绑定的 `overrideFieldMapping` 共用此类型，保证管线一致。
+复用方：
+- `screen.schema.ts` 的 `DataSourceConfigSchema` 各分支共用此 schema（`fieldMapping` 公共字段）
+- `dataset.schema.ts` 的 `DatasetShapeSchema.fieldMapping` 复用此 schema
+- 组件绑定的 `overrideFieldMapping` 同样复用
+
+> 抽离动机：未抽离前 `screen.schema.ts` ↔ `dataset.schema.ts` 存在循环依赖（screen 引用 dataset 的字段类型，dataset 引用 screen 的 FieldMapping），编译报错。抽离到独立文件后两个 schema 都从 field-mapping.schema.ts 引用，循环打破。

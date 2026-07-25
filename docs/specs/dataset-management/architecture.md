@@ -1,7 +1,7 @@
 # 数据集管理 · 模块架构与数据流
 
 > 状态：设计完成
-> 最近更新：2026-07-24
+> 最近更新：2026-07-25
 > 定位：定义后端模块、前端 Feature 模块、API 端点与数据流路径
 
 ## 1. 后端模块划分
@@ -56,22 +56,23 @@ interface DatasetExecutor<TConfig> {
 
 > 路径不含 `API_BASE_URL` 前缀（`/api/v1`），完整 URL 为 `/api/v1` + 下表路径。
 
-| 方法 | 路径 | 功能 |
-|---|---|---|
-| GET | `/dataset` | 列表（按 projectId 过滤） |
-| GET | `/dataset/:id` | 详情 |
-| POST | `/dataset` | 创建 |
-| PATCH | `/dataset/:id` | 更新 |
-| DELETE | `/dataset/:id` | 删除（软删除，归档） |
-| POST | `/dataset/:id/execute` | **执行数据集**（body: `{ params, useMock }`） |
-| POST | `/dataset/:id/test` | 测试执行（不缓存，返回原始 + 解析后结果） |
-| POST | `/dataset/batch` | 批量执行（**第三阶段**，预览页一次加载多数据集） |
-| GET | `/datasource-connection` | 连接列表 |
-| GET | `/datasource-connection/:id` | 连接详情 |
-| POST | `/datasource-connection` | 创建连接 |
-| PATCH | `/datasource-connection/:id` | 更新连接 |
-| DELETE | `/datasource-connection/:id` | 删除连接 |
-| POST | `/datasource-connection/:id/test` | 测试连接 |
+| 方法 | 路径 | 参数位置 | 必填性 | 缺失行为 | 功能·阶段 |
+|---|---|---|---|---|---|
+| GET | `/dataset` | query: projectId?, status?, type? | 全部可选 | 未传 projectId 时返回所有项目的数据集 | 数据集列表 · 第一阶段 |
+| GET | `/dataset/:id` | path: id | id 必填 | 404 | 数据集详情 · 第一阶段 |
+| POST | `/dataset` | body: CreateDatasetRequestSchema | body 必填，projectId 可选 | projectId 未传时后端回退到默认项目 | 创建数据集 · 第一阶段 |
+| PATCH | `/dataset/:id` | path: id; body: UpdateDatasetSchema | 均必填 | 404 | 更新数据集 · 第一阶段 |
+| DELETE | `/dataset/:id` | path: id | id 必填 | 404 | 删除数据集（软删除） · 第一阶段 |
+| POST | `/dataset/:id/execute` | path: id; body: ExecuteDatasetParamsSchema | 均必填 | 404 | 执行数据集（@Public 匿名可访问） · 第一阶段 |
+| POST | `/dataset/:id/test` | path: id; body: ExecuteDatasetParamsSchema | 均必填 | 404 | 测试执行 · 第一阶段 |
+| POST | `/dataset/batch` | body: BatchExecuteDatasetParamsSchema | body 必填 | 400 | 批量执行数据集 · 第一阶段 |
+| GET | `/dataset/:id/references` | path: id | id 必填 | 404 | 获取引用数 · 第一阶段 |
+| GET | `/datasource-connection` | query: projectId?, status?, type? | 全部可选 | 未传 projectId 时返回所有项目的连接 | 连接列表 · 第一阶段 |
+| GET | `/datasource-connection/:id` | path: id | id 必填 | 404 | 连接详情 · 第一阶段 |
+| POST | `/datasource-connection` | body: CreateDataSourceConnectionRequestSchema | body 必填，projectId 可选 | projectId 未传时后端回退到默认项目 | 创建连接 · 第一阶段 |
+| PATCH | `/datasource-connection/:id` | path: id; body: UpdateDataSourceConnectionSchema | 均必填 | 404 | 更新连接 · 第一阶段 |
+| DELETE | `/datasource-connection/:id` | path: id | id 必填 | 404 | 删除连接 · 第一阶段 |
+| POST | `/datasource-connection/:id/test` | path: id | id 必填 | 404 | 测试连接 · 第一阶段 |
 
 > 端点命名采用完整业务语义 `datasource-connection`（为避免与未来"组件连接"等概念混淆，此端点采用完整名；现有端点如 `/roles`、`/screen` 为短名）。
 
@@ -86,6 +87,18 @@ interface DatasetExecutor<TConfig> {
 - 连接凭证的加密与脱敏不受权限阶段影响，始终按 security-decisions §7.1 / §7.4 执行
 
 **后续阶段**：项目级权限模型（ownership + 成员表 + 权限 Guard）作为独立前置能力落地后收紧：连接管理 = 项目管理员、数据集 CRUD = 项目编辑、预览执行 = 项目查看。
+
+> 前后端对接的契约细节（schema 收拢、端点注册表、对接前冒烟测试）见 [frontend-backend-contract.md](../../conventions/frontend-backend-contract.md)。
+
+### 2.2 契约单一数据源
+
+本节端点表的路径、方法、参数位置、Schema 引用均以 `packages/shared/src/contracts/dataset.contract.ts` 为契约单一数据源：
+
+- 前端 api.ts 从 `DATASET_CONTRACT.endpoints.xxx` 读 path / method / schema
+- 后端 controller 装饰器与 contract 保持一致（人工对齐 + 冒烟测试校验）
+- `phase=1` 的端点必须实现，对接前由发起对接的一方跑最小冒烟测试覆盖
+
+设计依据：[frontend-backend-contract.md](../../conventions/frontend-backend-contract.md) §3「轻量方案的三层产物」
 
 ## 3. 前端 Feature 模块
 
@@ -220,4 +233,26 @@ ScreenPreview 加载项目
 
 **实现**：后端 `ApiExecutor` 使用 Node.js 的 `undici` 或 `axios`，超时控制（默认 10s），错误分类（network / http / timeout / parse）复用现有 `ApiRequestError` 设计。目标主机做 SSRF 校验（内网 IP 拦截 / 重定向复核 / 协议白名单），响应上限 5MB，详见 security-decisions §2.4。
 
-**阶段说明**：Connection Module 属第二阶段。第一阶段 api 数据集的 `connectionId` 不启用，`path` 必须为完整 URL，鉴权与公共 header 在数据集自身 `config.headers` 内配置。
+## 6. 前后端契约对齐
+
+本规格的 API 端点契约由 `packages/shared/src/contracts/dataset.contract.ts` 集中声明，前后端共同消费：
+
+### 6.1 契约注册表
+
+- 路径：`packages/shared/src/contracts/dataset.contract.ts`
+- 导出：`DATASET_CONTRACT` 常量，含 `phase` 与 `endpoints` 字段
+- 端点 key 列表（`phase=1`）：参考 `PHASE_1_ENDPOINTS` 常量
+
+### 6.2 阶段标记规则
+
+- `phase=1`：本期必须实现（架构 §2 表格中标注「第一阶段」的端点）
+- `phase=2/3`：未来阶段，前端按 schema 调用会 404（如 SQL 执行、WebSocket）
+
+### 6.3 对接前验证流程
+
+1. 前后端独立开发完成后，由发起对接的一方跑最小冒烟测试
+2. 覆盖所有 `phase=1` 端点（共 15 个）
+3. 每个端点返回 2xx + Schema 校验通过
+4. 任一失败即对接失败，必须修复后重试
+
+详见 [frontend-backend-contract.md](../../conventions/frontend-backend-contract.md) §4「开发流程」。
