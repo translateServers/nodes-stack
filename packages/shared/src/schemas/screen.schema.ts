@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { DateTimeStringSchema } from './datetime.schema.js';
-import { EventBlueprintSchema } from './blueprint.schema.js';
+import {
+  EventBlueprintSchema,
+  EventBlueprintV2Schema,
+  type EventBlueprint,
+  type EventBlueprintV2,
+} from './blueprint.schema.js';
 import { FieldMappingSchema } from './field-mapping.schema.js';
 import { RefreshStrategySchema } from './dataset.schema.js';
 import { GlobalVariableSchema } from './global-variable.schema.js';
@@ -303,14 +308,30 @@ export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 
 // ===== 顶层项目 =====
 
+/**
+ * 蓝图字段联合类型：V1（trigger/action 节点模型）或 V2（组件即节点模型）。
+ *
+ * - 持久化层同时接受 V1 与 V2：旧项目加载时自动迁移为 V2（见 editor-store.loadProject）
+ * - 加载后编辑器内存中始终为 V2，保存时按 V2 持久化
+ * - V1 schema 保留仅为兼容历史快照与服务器旧数据
+ *
+ * 使用 discriminatedUnion 以 `version` 作为判别字段，便于 TypeScript 类型收窄与 ESLint 类型感知规则解析。
+ * 显式声明 BlueprintField 类型，避免 z.infer 在 ESLint 类型感知规则下退化为 any。
+ */
+export const BlueprintFieldSchema = z.discriminatedUnion('version', [
+  EventBlueprintSchema,
+  EventBlueprintV2Schema,
+]);
+export type BlueprintField = EventBlueprint | EventBlueprintV2;
+
 export const ScreenProjectSchema = z.object({
   id: z.string().describe('项目唯一标识'),
   name: z.string().min(1).describe('项目名称'),
   description: z.string().nullable().optional().describe('项目描述'),
   canvas: CanvasConfigSchema.describe('画布配置'),
   components: z.array(ScreenComponentSchema).describe('组件实例列表'),
-  blueprint: EventBlueprintSchema.optional().describe(
-    '交互层：项目级事件蓝图（跨组件触发与动作编排），与组件级 interaction 字段互不替代',
+  blueprint: BlueprintFieldSchema.optional().describe(
+    '交互层：项目级事件蓝图（V1 trigger/action 模型 或 V2 组件即节点模型）；编辑器加载时自动迁移为 V2',
   ),
   globalVariables: z
     .array(GlobalVariableSchema)
@@ -337,8 +358,8 @@ export const UpdateScreenProjectSchema = z.object({
   description: z.string().optional().describe('项目描述'),
   canvas: CanvasConfigSchema.optional().describe('画布配置'),
   components: z.array(ScreenComponentSchema).optional().describe('组件实例列表'),
-  blueprint: EventBlueprintSchema.optional().describe(
-    '事件蓝图（可选；缺省表示不修改，不会为未编辑蓝图的项目凭空写入）',
+  blueprint: BlueprintFieldSchema.optional().describe(
+    '事件蓝图（V1 或 V2；可选，缺省表示不修改，不会为未编辑蓝图的项目凭空写入）',
   ),
   globalVariables: z
     .array(GlobalVariableSchema)

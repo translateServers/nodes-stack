@@ -21,8 +21,11 @@ import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
 import { CanvasSettingsDialog } from './canvas-settings-dialog';
 import { ImportDialog } from './import-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
-import { BlueprintSheet } from '../blueprint/sheet';
-import { compileBlueprint, type Diagnostic } from '../blueprint/compiler';
+import { BlueprintSheetV2 } from '../blueprint/sheet';
+import { compileBlueprint } from '../blueprint/compiler';
+import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
+import type { BaseDiagnostic } from '../blueprint/hooks';
+import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import { useCanvasFlash } from '../hooks/use-canvas-flash';
 import { CanvasFlashOverlay } from './canvas-flash-overlay';
 import { CodeEditorSheet } from './code-editor-sheet';
@@ -67,7 +70,7 @@ export function ScreenEditor() {
   const [showCodeEditor, setShowCodeEditor] = useState(false);
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
-  const [publishDiagnostics, setPublishDiagnostics] = useState<Diagnostic[]>([]);
+  const [publishDiagnostics, setPublishDiagnostics] = useState<BaseDiagnostic[]>([]);
   // 任务 9.1：蓝图→画布闪烁高亮联动
   const { flashingComponentId, flashComponent } = useCanvasFlash();
   // 任务 9.2：画布→蓝图过滤联动（选中单个组件时传给 BlueprintSheet 过滤视图）
@@ -317,10 +320,14 @@ export function ScreenEditor() {
       return;
     }
     // 任务 5.3：发布前编译蓝图，存在 error 级诊断时弹出确认对话框
+    // 编辑器加载时已自动迁移 V1 → V2（见 editor-store.loadProject），此处按版本分发
     const blueprint = storeProject.blueprint;
     if (blueprint) {
       const componentIds = new Set(storeProject.components.map((c) => c.id));
-      const { diagnostics } = compileBlueprint(blueprint, { componentIds });
+      const diagnostics =
+        blueprint.version === EVENT_BLUEPRINT_VERSION_V2
+          ? compileBlueprintV2(blueprint, { componentIds }).diagnostics
+          : compileBlueprint(blueprint, { componentIds }).diagnostics;
       const errors = diagnostics.filter((d) => d.level === 'error');
       if (errors.length > 0) {
         setPublishDiagnostics(errors);
@@ -519,7 +526,7 @@ export function ScreenEditor() {
         onOpenChange={setShowSnapshotManager}
         projectId={storeProject?.id}
       />
-      <BlueprintSheet
+      <BlueprintSheetV2
         open={showEventBlueprint || blueprintSheetOpen}
         onOpenChange={(next) => {
           // 任一来源关闭都同步：React state 关闭工具栏入口，store API 关闭 QuickEventEditor 入口
@@ -527,7 +534,7 @@ export function ScreenEditor() {
           if (!next) closeBlueprintSheet();
         }}
         onLocateComponent={flashComponent}
-        // 仅传 QuickEventEditor 的显式 focusComponentId；普通选中态由 BlueprintSheet
+        // 仅传 QuickEventEditor 的显式 focusComponentId；普通选中态由 BlueprintSheetV2
         // 内部订阅 selectedComponentIds 自动派生，避免 ScreenEditor 重新渲染
         filterComponentId={blueprintFocusComponentId}
         onSave={handleSave}

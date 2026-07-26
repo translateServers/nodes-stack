@@ -8,8 +8,9 @@
  * - Ctrl+/：打开快捷键帮助面板
  * - Esc 分层：关闭搜索面板 -> 取消连线 -> 取消选择 -> 关闭弹层
  *
- * Delete/Backspace 和 Ctrl+A 由 ReactFlow 内置处理，
+ * Delete/Backspace：由 ReactFlow deleteKeyCode=['Backspace','Delete'] 内置处理，
  * 通过 onNodesChange/onEdgesChange 同步到 blueprint store。
+ * Ctrl+A：由本 hook 处理（ReactFlow 无内置全选；表单聚焦时让位原生全选）。
  *
  * 使用 capture 阶段监听，在 ReactFlow 内部处理之前拦截，
  * 防止 Esc 在关闭弹层的同时也触发 ReactFlow 的取消选择。
@@ -18,6 +19,7 @@
 import { useEffect, useRef } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { useScreenEditorStore } from '../../stores/editor-store';
+import { isFormElementFocused } from '../../hooks/use-modifier-keys';
 
 interface UseBlueprintShortcutsOptions {
   onClose: () => void;
@@ -38,6 +40,8 @@ interface UseBlueprintShortcutsOptions {
   onFitView?: () => void;
   /** 显示快捷键帮助（缺口 2：Ctrl+/ 接管） */
   onShowHelp?: () => void;
+  /** 全选节点与边（Ctrl+A，ReactFlow 无内置全选） */
+  onSelectAll?: () => void;
 }
 
 export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): void {
@@ -96,6 +100,14 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
       if (isCtrl && e.key === '/') {
         e.preventDefault();
         opts.onShowHelp?.();
+        return;
+      }
+
+      // Ctrl+A：全选节点与边（ReactFlow 无内置全选；表单聚焦时让位原生全选）
+      if (isCtrl && (e.key === 'a' || e.key === 'A')) {
+        if (isFormElementFocused()) return;
+        e.preventDefault();
+        opts.onSelectAll?.();
         return;
       }
 

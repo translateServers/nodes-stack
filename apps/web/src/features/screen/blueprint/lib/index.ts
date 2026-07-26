@@ -64,6 +64,7 @@ export {
 
 export {
   interpolateActionConfig,
+  interpolateApiDataSourceConfig,
   interpolateTemplate,
 } from './template-interpolation';
 export type { TemplateContext } from './template-interpolation';

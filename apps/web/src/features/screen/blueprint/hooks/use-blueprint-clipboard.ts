@@ -23,6 +23,7 @@ import {
   type BlueprintEdge,
 } from '@nebula/shared';
 import { isFormElementFocused } from '../../hooks/use-modifier-keys';
+import { EXEC_EDGE_MARKER_END } from '../edges';
 import { toast } from 'sonner';
 
 const PASTE_OFFSET = 20;
@@ -114,6 +115,7 @@ function toRFEdges(edges: BlueprintEdge[]): Edge[] {
     sourceHandle: e.sourceHandle,
     target: e.target,
     targetHandle: e.targetHandle,
+    markerEnd: EXEC_EDGE_MARKER_END,
     data: {},
   }));
 }

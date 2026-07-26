@@ -19,11 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import type { Diagnostic } from '../blueprint/compiler';
+import type { BaseDiagnostic } from '../blueprint/hooks/blueprint-diagnostic-context';
 
 interface PublishConfirmDialogProps {
   open: boolean;
-  diagnostics: Diagnostic[];
+  diagnostics: BaseDiagnostic[];
   onConfirm: () => void;
   onCancel: () => void;
 }

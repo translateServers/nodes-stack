@@ -31,3 +31,5 @@ export { ConditionBuilder, needsValue } from './condition-builder';
 export type { ConditionBuilderProps } from './condition-builder';
 export { NodeConfigPanel } from './node-config-panel';
 export type { NodeConfigPanelProps } from './node-config-panel';
+export { V2NodeConfigPanel } from './node-config-panel-v2';
+export type { V2NodeConfigPanelProps, V2NodeConfigChange } from './node-config-panel-v2';

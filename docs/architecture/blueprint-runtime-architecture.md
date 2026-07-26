@@ -1,7 +1,7 @@
 # 蓝图运行时架构
 
 > 状态：生效中
-> 最近更新：2026-07-24
+> 最近更新：2026-07-26
 > 定位：事件蓝图子系统的架构说明。读完应能理解触发器/动作/条件如何编排，编译器与执行器如何协作
 
 ## 1. 定位与边界
@@ -296,7 +296,48 @@ useBlueprintPreviewRuntime(blueprint, components)
 - **蓝图 → 画布**：`flashComponent` 闪烁高亮目标组件
 - **画布 → 蓝图**：`filterComponentId` 过滤显示与该组件相关的节点
 
-## 11. 敏感信息脱敏
+## 11. 右侧面板派生视图
+
+蓝图数据除了在 `BlueprintSheet` 全屏编辑器中编辑外，还在右侧属性面板的 events tab 提供**派生视图**，让用户无需打开蓝图抽屉即可快速查看与编辑当前选中组件相关的事件规则。
+
+### 11.1 QuickEventEditor 派生
+
+`apps/web/src/features/screen/components/quick-event-editor.tsx` 从 `ScreenProject.blueprint` 派生当前选中组件相关的事件规则：
+
+- **派生数据源**：`project.blueprint`（项目级，与组件实例解耦），通过 `useScreenEditorStore((s) => s.project)` 读取
+- **过滤语义**：与 `compiler/filter-by-component.ts` 一致——`trigger.config.componentId === componentId`（componentClick / componentHover / dataLoaded / dataError）与 `action.config.targetComponentId === componentId`（setVisibility / scrollToComponent / refreshDataSource）。实现上独立，因 QuickEventEditor 需要扩展支持 componentHover / dataLoaded / dataError 触发器，并通过 BFS 收集下游 action 链与上游 trigger 来源
+- **派生纯函数**：`deriveTriggerRules` / `deriveActionRules` / `findDownstreamActions` / `findUpstreamTrigger`（均带 visited 防环）
+
+### 11.2 写操作走 editor-store 统一历史栈
+
+所有增删通过 `editor-store` 的 `updateBlueprint(nextBlueprint)` 写入：
+
+- `updateBlueprint` 内部走 `withHistory` 高阶函数，推入三重快照（components + canvas + blueprint），与组件/画布操作共享同一时间线，支持 `Ctrl/Cmd+Z` 撤销
+- 蓝图手势期间（`beginBlueprintGesture` / `endBlueprintGesture`）高频更新合并为一次历史，QuickEventEditor 的离散增删不进入手势模式，每次操作都立即入栈
+
+### 11.3 「打开事件蓝图」联动
+
+顶部「打开事件蓝图」按钮调用 `editor-store.openBlueprintSheet({ focusComponentId: componentId })`：
+
+- `openBlueprintSheet` 是 `editor-store` 提供的入口（无需依赖 React state 拉起，便于跨组件触发）
+- Sheet 打开后自动应用 `focusComponentId` 过滤模式（复用 §10 的 `filterComponentId` 机制），只展示与该组件相关的节点
+
+### 11.4 全局变量插值
+
+`@nebula/shared` 的 `GlobalVariableSchema` 定义项目级全局变量，存储于 `ScreenProject.globalVariables`。三种类型：
+
+- `static`：静态值
+- `api`：按 `refreshInterval`（毫秒）定时拉取
+- `computed`：表达式（当前预留）
+
+**插值语法**：`{{globalVars.<name>}}`，在两处生效：
+
+1. **数据源参数**：组件 `DataSourceConfig` 的 `apiConfig.url` / `apiConfig.headers` 等字符串字段
+2. **蓝图模板**：动作执行前的 `interpolateActionConfig` 阶段（与 `{{trigger.value}}` / `{{event.componentId}}` 同一插值管线，见 [§6 模板插值](#6-模板插值)）
+
+**管理入口**：`apps/web/src/features/screen/components/global-variables-panel.tsx` 在右侧属性面板「未选中组件」分支下渲染，提供 `addGlobalVariable` / `updateGlobalVariable` / `removeGlobalVariable` 三个 action，均走历史栈。详见 [大屏设计器架构 - 未选中组件时的入口](./screen-editor-architecture.md#未选中组件时的入口)。
+
+## 12. 敏感信息脱敏
 
 `lib/request-api-mask.ts` 对 `requestApi` 动作的日志脱敏：
 
@@ -304,17 +345,18 @@ useBlueprintPreviewRuntime(blueprint, components)
 - `secretHeaderKeys` 声明的 header 替换为 `***`
 - 脱敏逻辑在前端 `apps/web/src/features/screen/blueprint/lib/request-api-mask.ts` 实现；schema 中的 `secretHeaderKeys` 字段在 `@nebula/shared` 中定义
 
-## 12. 关键架构亮点
+## 13. 关键架构亮点
 
 1. **纯函数编译器**：图 → 规则集 + 诊断，编译产物可单测，不依赖运行时
 2. **薄执行器 + 依赖注入**：RuntimeDeps 外置所有副作用，可测试可隔离
 3. **诊断分级**：error 级触发器在预览运行时排除，避免运行时崩溃
 4. **环检测**：含环的 trigger 不产出规则，环中节点不产 orphan 诊断
-5. **模板插值统一入口**：动作执行前统一插值，支持 trigger/event 上下文
+5. **模板插值统一入口**：动作执行前统一插值，支持 trigger/event/globalVars 上下文
 6. **沙盒运行时**：编辑器内可调试，注入 mock deps 不产生真实副作用
 7. **编辑器与预览解耦**：编辑器画布不触发蓝图，预览页才完整接入
+8. **右侧面板派生视图**：QuickEventEditor 从 blueprint 派生当前组件相关规则，写操作复用统一历史栈，无需打开 Sheet 即可快速编辑
 
-## 13. 扩展指南
+## 14. 扩展指南
 
 | 我想... | 看哪里 |
 |---|---|
@@ -323,8 +365,10 @@ useBlueprintPreviewRuntime(blueprint, components)
 | 新增条件求值数据源 | `ConditionValueSource` + `runtime/executor.ts` 的 `resolveConditionSource` |
 | 改模板插值语法 | `lib/template-interpolation.ts` |
 | 加蓝图模板 | `templates/template-definitions.ts` |
+| 改 QuickEventEditor 派生规则 | `components/quick-event-editor.tsx` 的 `deriveTriggerRules` / `deriveActionRules` |
+| 加全局变量类型 | `@nebula/shared` 的 `GlobalVariableSchema` + `components/global-variables-panel.tsx` |
 
-## 14. 关联文档
+## 15. 关联文档
 
 - [系统总览](./system-overview.md)
 - [大屏设计器架构](./screen-editor-architecture.md)

@@ -329,3 +329,279 @@ export const BlueprintClipboardSchema = z.object({
   edges: z.array(BlueprintEdgeSchema),
 });
 export type BlueprintClipboard = z.infer<typeof BlueprintClipboardSchema>;
+
+// ===== V2 事件蓝图（组件即节点模型） =====
+
+/**
+ * V2 事件蓝图 Schema（组件即节点模型）
+ *
+ * V2 采用"组件即节点"模型：
+ * - 组件节点（component）同时承担触发与动作角色，事件输出与动作输入均挂在组件节点上
+ * - 全局节点是组件节点的子类型（componentId === 'global'），承载页面级触发与全局动作
+ * - 条件节点、延时节点、注释节点保留独立 kind
+ * - 边的 sourceHandle / targetHandle 改为语义化格式（evt:* / act:* / out / then / else / in）
+ *
+ * V1 schema 保留供迁移使用，不修改任何 V1 导出。
+ */
+
+/** V2 蓝图结构版本号 */
+export const EVENT_BLUEPRINT_VERSION_V2 = 2;
+
+/** 全局节点 componentId 固定值 */
+export const GLOBAL_COMPONENT_ID = 'global';
+
+// ===== V2 全局节点配置 =====
+
+/**
+ * 全局 navigate 节点配置
+ *
+ * 复用 V1 ActionNavigateConfigSchema 字段结构与 URL 协议白名单校验
+ * （不含 type 字段，改用 globalType 判别）。
+ */
+export const GlobalNavigateConfigSchema = z
+  .object({
+    globalType: z.literal('navigate'),
+    url: z.string().describe('目标 URL（空字符串视为未配置，由编译器诊断）'),
+    target: z.enum(['_blank', '_self']).default('_blank').describe('打开方式'),
+  })
+  .superRefine((config, context) => {
+    if (config.url.length > 0 && !isAllowedNavigateUrl(config.url)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message: '仅允许 http/https 协议的链接',
+      });
+    }
+  });
+export type GlobalNavigateConfig = z.infer<typeof GlobalNavigateConfigSchema>;
+
+/**
+ * 全局 requestApi 节点配置
+ *
+ * 复用 V1 ActionRequestApiConfigSchema 字段定义与校验逻辑
+ * （不含 type 字段，改用 globalType 判别）。
+ * 保留 URL 协议白名单校验、HTTP 方法白名单、超时范围与脱敏键名。
+ */
+export const GlobalRequestApiConfigSchema = z
+  .object({
+    globalType: z.literal('requestApi'),
+    method: z.enum(REQUEST_API_METHOD_SCHEMA_ENUM).describe('HTTP 方法'),
+    url: z.string().describe('请求 URL（必须 http/https）'),
+    headers: z.record(z.string(), z.string()).default({}).describe('请求头（键值对）'),
+    body: z.string().default('').describe('请求体（POST/PUT/PATCH 使用；GET/DELETE 忽略）'),
+    secretHeaderKeys: z.array(z.string()).default([]).describe('需要脱敏的 header 键名列表'),
+    timeoutMs: z.number().int().positive().max(300_000).default(10_000).describe('请求超时毫秒'),
+  })
+  .superRefine((config, ctx) => {
+    if (config.url.length > 0 && !isAllowedNavigateUrl(config.url)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['url'],
+        message: '仅允许 http/https 协议的请求 URL',
+      });
+    }
+  });
+export type GlobalRequestApiConfig = z.infer<typeof GlobalRequestApiConfigSchema>;
+
+/**
+ * 全局 scrollTo 节点配置
+ *
+ * 复用 V1 ActionScrollToComponentConfigSchema 字段结构
+ * （不含 type 字段，改用 globalType 判别）。
+ */
+export const GlobalScrollToConfigSchema = z.object({
+  globalType: z.literal('scrollTo'),
+  targetComponentId: z.string().describe('目标组件 ID（空字符串视为未配置，由编译器诊断）'),
+});
+export type GlobalScrollToConfig = z.infer<typeof GlobalScrollToConfigSchema>;
+
+/**
+ * 全局节点配置判别联合（按 globalType 判别）
+ *
+ * 仅包含需要配置的全局节点类型（navigate / requestApi / scrollTo）。
+ * pageLoad 全局节点无配置字段，config 为 undefined。
+ */
+export const GlobalNodeConfigSchema = z.discriminatedUnion('globalType', [
+  GlobalNavigateConfigSchema,
+  GlobalRequestApiConfigSchema,
+  GlobalScrollToConfigSchema,
+]);
+export type GlobalNodeConfig = z.infer<typeof GlobalNodeConfigSchema>;
+
+// ===== V2 节点 Schema =====
+
+/**
+ * 组件节点（V2 核心节点类型）
+ *
+ * - 普通组件节点：componentId 为组件 ID，无 globalType，无 config
+ *   （事件与动作锚点从组件注册表派生）
+ * - 全局节点：componentId 固定为 'global'，globalType 标识子类型，
+ *   config 为对应全局配置（pageLoad 除外，pageLoad 无 config）
+ *
+ * superRefine 校验：
+ * - 全局节点 componentId 必须为 'global'
+ * - navigate/requestApi/scrollTo 全局节点必须提供 config 且 globalType 一致
+ * - pageLoad 全局节点不应有 config
+ * - 普通组件节点不应有 globalType / config
+ */
+export const ComponentNodeSchema = BlueprintNodeBaseSchema.extend({
+  kind: z.literal('component'),
+  componentId: z.string().describe('组件 ID；全局节点固定为 "global"'),
+  globalType: z
+    .enum(['pageLoad', 'navigate', 'requestApi', 'scrollTo'])
+    .optional()
+    .describe('全局节点子类型；普通组件节点缺省'),
+  config: GlobalNodeConfigSchema.optional().describe(
+    '全局节点配置；pageLoad 与普通组件节点无 config',
+  ),
+}).superRefine((node, ctx) => {
+  const { globalType, config } = node;
+  if (globalType !== undefined) {
+    if (node.componentId !== GLOBAL_COMPONENT_ID) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['componentId'],
+        message: '全局节点的 componentId 必须为 "global"',
+      });
+    }
+    if (globalType === 'pageLoad') {
+      if (config !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['config'],
+          message: 'pageLoad 全局节点不应有 config',
+        });
+      }
+    } else if (config === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['config'],
+        message: `${globalType} 全局节点必须提供 config`,
+      });
+    } else if (config.globalType !== globalType) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['globalType'],
+        message: 'globalType 与 config.globalType 不一致',
+      });
+    }
+  } else if (config !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['config'],
+      message: '普通组件节点不应有 config',
+    });
+  }
+});
+export type ComponentNode = z.infer<typeof ComponentNodeSchema>;
+
+/**
+ * 延时节点（V2 新增）
+ *
+ * delayMs 范围：0 ~ 60000ms（含边界），由 superRefine 显式报错。
+ */
+export const DelayNodeSchema = BlueprintNodeBaseSchema.extend({
+  kind: z.literal('delay'),
+  config: z.object({
+    delayMs: z.number().int().describe('延时时长（毫秒），范围 0 ~ 60000'),
+  }),
+}).superRefine((node, ctx) => {
+  const { delayMs } = node.config;
+  if (delayMs < 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['config', 'delayMs'],
+      message: '延时不得为负数',
+    });
+  }
+  if (delayMs > 60_000) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['config', 'delayMs'],
+      message: '延时不得超过 60000ms（60 秒）',
+    });
+  }
+});
+export type DelayNode = z.infer<typeof DelayNodeSchema>;
+
+/**
+ * 条件节点（V2）
+ *
+ * 复用 V1 ConditionNodeConfigSchema（含 type: 'condition' + expression）。
+ * 保留 V1 设计：输入 'in'，输出 'then' / 'else'。
+ */
+export const ConditionNodeV2Schema = BlueprintNodeBaseSchema.extend({
+  kind: z.literal('condition'),
+  config: ConditionNodeConfigSchema,
+});
+export type ConditionNodeV2 = z.infer<typeof ConditionNodeV2Schema>;
+
+/**
+ * 注释节点（V2）
+ *
+ * 复用 V1 CommentNodeConfigSchema。注释节点不参与执行流。
+ */
+export const CommentNodeV2Schema = BlueprintNodeBaseSchema.extend({
+  kind: z.literal('comment'),
+  config: CommentNodeConfigSchema,
+});
+export type CommentNodeV2 = z.infer<typeof CommentNodeV2Schema>;
+
+/** V2 节点判别联合（按 kind 判别） */
+export const BlueprintNodeV2Schema = z.discriminatedUnion('kind', [
+  ComponentNodeSchema,
+  ConditionNodeV2Schema,
+  DelayNodeSchema,
+  CommentNodeV2Schema,
+]);
+export type BlueprintNodeV2 = z.infer<typeof BlueprintNodeV2Schema>;
+
+// ===== V2 边 Schema =====
+
+/**
+ * V2 执行流边
+ *
+ * sourceHandle / targetHandle 改为语义化格式：
+ * - 组件事件输出：'evt:{eventId}'（如 'evt:click'）
+ * - 组件动作输入：'act:{actionId}'（如 'act:show'）
+ * - 逻辑节点输出：'out' / 'then' / 'else'
+ * - 逻辑节点输入：'in'
+ *
+ * Schema 仅校验结构；引脚与节点 kind 的匹配由编译器诊断。
+ */
+export const BlueprintEdgeV2Schema = z.object({
+  id: z.string().min(1).describe('边唯一标识'),
+  source: z.string().min(1).describe('源节点 ID'),
+  sourceHandle: z.string().min(1).describe('源引脚标识（evt:* / out / then / else）'),
+  target: z.string().min(1).describe('目标节点 ID'),
+  targetHandle: z.string().min(1).describe('目标引脚标识（act:* / in）'),
+});
+export type BlueprintEdgeV2 = z.infer<typeof BlueprintEdgeV2Schema>;
+
+// ===== V2 蓝图顶层结构 =====
+
+/**
+ * V2 事件蓝图顶层结构
+ *
+ * 采用"组件即节点"模型，version 固定为 2。
+ */
+export const EventBlueprintV2Schema = z.object({
+  version: z.literal(EVENT_BLUEPRINT_VERSION_V2).describe('蓝图结构版本 V2'),
+  nodes: z.array(BlueprintNodeV2Schema).describe('节点列表'),
+  edges: z.array(BlueprintEdgeV2Schema).describe('执行流边列表'),
+});
+export type EventBlueprintV2 = z.infer<typeof EventBlueprintV2Schema>;
+
+// ===== V2 跨项目剪贴板载荷 =====
+
+/**
+ * V2 跨项目剪贴板载荷
+ *
+ * 复用 V1 BLUEPRINT_CLIPBOARD_KIND 标识，节点与边采用 V2 schema。
+ */
+export const BlueprintClipboardV2Schema = z.object({
+  kind: z.literal(BLUEPRINT_CLIPBOARD_KIND),
+  nodes: z.array(BlueprintNodeV2Schema),
+  edges: z.array(BlueprintEdgeV2Schema),
+});
+export type BlueprintClipboardV2 = z.infer<typeof BlueprintClipboardV2Schema>;

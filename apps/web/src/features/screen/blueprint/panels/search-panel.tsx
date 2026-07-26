@@ -130,6 +130,12 @@ interface SearchPanelProps {
   mode: SearchPanelMode;
   /** 连线松手场景下的待完成连线（mode=connect 时有值） */
   pendingConnection?: PendingConnection;
+  /**
+   * 可选的节点选项列表（默认 NODE_OPTIONS）。
+   * connect 模式下调用方可过滤为仅含输入引脚的节点（action/condition），
+   * 避免用户选中无法连线的目标类型。
+   */
+  options?: readonly NodeOption[];
   /** 选择节点回调 */
   onInsert: (option: NodeOption) => void;
   /** 关闭回调（Esc 或点击外部） */
@@ -157,6 +163,7 @@ export function SearchPanel({
   position,
   mode,
   pendingConnection,
+  options = NODE_OPTIONS,
   onInsert,
   onClose,
 }: SearchPanelProps): JSX.Element {
@@ -175,7 +182,7 @@ export function SearchPanel({
     setActiveIndex(0);
   }, [query]);
 
-  const filtered = useMemo(() => filterOptions(NODE_OPTIONS, query), [query]);
+  const filtered = useMemo(() => filterOptions(options, query), [options, query]);
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     switch (event.key) {

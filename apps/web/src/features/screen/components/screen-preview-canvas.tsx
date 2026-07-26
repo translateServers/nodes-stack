@@ -1,6 +1,10 @@
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 import { resolveComponentContainerStyle } from '../registry/component-container-style';
-import { BlueprintPreviewProvider, useBlueprintPreviewRuntime } from '../blueprint/runtime';
+import {
+  BlueprintEventProvider,
+  BlueprintPreviewProvider,
+  useBlueprintPreviewRuntime,
+} from '../blueprint/runtime';
 import { PreviewComponentRenderer } from './preview-component-renderer';
 import { buildFilterString } from './screen-canvas';
 
@@ -68,46 +72,57 @@ interface PreviewCanvasProps {
 export function PreviewCanvas({ project }: PreviewCanvasProps) {
   const { canvas, components, blueprint } = project;
   const scale = fitScale(canvas.width, canvas.height, canvas.scaleMode);
-  const { contextValue, onComponentClick } = useBlueprintPreviewRuntime(blueprint, components);
+  const { contextValue, onComponentClick, onComponentEvent } = useBlueprintPreviewRuntime(
+    blueprint,
+    components,
+  );
 
   return (
     <BlueprintPreviewProvider value={contextValue}>
-      <div className="flex h-screen w-screen items-center justify-center overflow-hidden bg-black">
-        <div
-          style={{
-            width: canvas.width,
-            height: canvas.height,
-            transform: `scale(${scale})`,
-            transformOrigin: 'center center',
-            backgroundColor: canvas.backgroundColor,
-            backgroundImage: canvas.backgroundImage ? `url(${canvas.backgroundImage})` : undefined,
-            backgroundSize: 'cover',
-            position: 'relative',
-          }}
-        >
-          {components
-            .filter((c) => isComponentVisible(c, contextValue.visibilityOverrides))
-            .sort((a, b) => a.zIndex - b.zIndex)
-            .map((component) => (
-              <div
-                key={component.id}
-                style={{
-                  ...resolveComponentContainerStyle(component),
-                  // Task 6：组件 CSS 滤镜在预览/发布模式下同样生效
-                  filter: buildFilterString(component.style.filter) || undefined,
-                }}
-                data-preview-component-id={component.id}
-                onClick={(e) => {
-                  // 阻止冒泡到父容器（避免画布空白处点击触发组件事件）
-                  e.stopPropagation();
-                  onComponentClick(component.id);
-                }}
-              >
-                <PreviewComponentRenderer component={component} />
-              </div>
-            ))}
+      <BlueprintEventProvider value={onComponentEvent}>
+        <div className="flex h-screen w-screen items-center justify-center overflow-hidden bg-black">
+          <div
+            style={{
+              width: canvas.width,
+              height: canvas.height,
+              transform: `scale(${scale})`,
+              transformOrigin: 'center center',
+              backgroundColor: canvas.backgroundColor,
+              backgroundImage: canvas.backgroundImage
+                ? `url(${canvas.backgroundImage})`
+                : undefined,
+              backgroundSize: 'cover',
+              position: 'relative',
+            }}
+          >
+            {components
+              .filter((c) => isComponentVisible(c, contextValue.visibilityOverrides))
+              .sort((a, b) => a.zIndex - b.zIndex)
+              .map((component) => (
+                <div
+                  key={component.id}
+                  style={{
+                    ...resolveComponentContainerStyle(component),
+                    // Task 6：组件 CSS 滤镜在预览/发布模式下同样生效
+                    filter: buildFilterString(component.style.filter) || undefined,
+                  }}
+                  data-preview-component-id={component.id}
+                  onClick={(e) => {
+                    // 阻止冒泡到父容器（避免画布空白处点击触发组件事件）
+                    e.stopPropagation();
+                    onComponentClick(component.id);
+                  }}
+                  onMouseEnter={() => {
+                    // V2 任务 7.2：派发 hover 事件（V2 蓝图匹配 evt:hover 锚点）
+                    onComponentEvent(component.id, 'hover');
+                  }}
+                >
+                  <PreviewComponentRenderer component={component} />
+                </div>
+              ))}
+          </div>
         </div>
-      </div>
+      </BlueprintEventProvider>
     </BlueprintPreviewProvider>
   );
 }

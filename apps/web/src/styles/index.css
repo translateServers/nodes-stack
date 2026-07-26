@@ -190,3 +190,58 @@
     transition: none;
   }
 }
+
+/* ============================================================
+ * V2 任务 5.3：蓝图锚点磁吸高亮
+ *
+ * 连线拖拽时，鼠标 20px 范围内最近的兼容目标 handle 添加此类，
+ * 视觉提示用户"松手将吸附到此锚点"。
+ * 使用 box-shadow 而非 ring-* utility，避免与 Tailwind 层级冲突。
+ * ============================================================ */
+.react-flow__handle.blueprint-anchor-snap-target {
+  box-shadow:
+    0 0 0 2px rgb(59 130 246 / 0.9),
+    0 0 8px 2px rgb(59 130 246 / 0.5);
+  background-color: rgb(96 165 250) !important;
+  transition: box-shadow 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__handle.blueprint-anchor-snap-target {
+    transition: none;
+  }
+}
+
+/* ============================================================
+ * 事件蓝图 ReactFlow 主题化覆盖
+ *
+ * 问题：@xyflow/react/dist/style.css 通过 `.react-flow.dark` 选择器切换暗色模式，
+ * 但项目用 shadcn 的 `.dark` 类（挂在 <html> 上）切换主题，两者不匹配。
+ * 导致蓝图中的 Controls / MiniMap mask / Attribution 在暗色模式下仍使用
+ * 亮色默认值（白底 #fefefe），与暗色背景视觉冲突。
+ *
+ * 解决：在 :root 中用项目 CSS 变量覆盖 react-flow 的 --xy-* 变量。
+ * 由于 var(--card) 等变量在 .dark 下值不同（项目已定义），
+ * 只需在 :root 映射一次，会自动跟随主题切换。
+ *
+ * 注意：MiniMap 的背景色已通过 <MiniMap className="!bg-background"> 主题化，
+ * 这里只补充 mask 和 node 颜色。
+ *
+ * 设计依据：参考 docs/conventions/coding-standards.md「UI 组件选型边界」
+ * ============================================================ */
+:root {
+  /* Controls 按钮 */
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--accent);
+  --xy-controls-button-color: var(--card-foreground);
+  --xy-controls-button-color-hover: var(--accent-foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-controls-box-shadow: 0 0 2px 1px color-mix(in oklch, var(--foreground) 8%, transparent);
+
+  /* MiniMap mask（视图外的遮罩区域）和节点缩略色 */
+  --xy-minimap-mask-background-color: color-mix(in oklch, var(--foreground) 12%, transparent);
+  --xy-minimap-node-background-color: var(--primary);
+
+  /* Attribution（右下角 React Flow 水印） */
+  --xy-attribution-background-color: color-mix(in oklch, var(--foreground) 5%, transparent);
+}

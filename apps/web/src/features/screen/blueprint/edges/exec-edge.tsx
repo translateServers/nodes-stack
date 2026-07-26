@@ -14,14 +14,28 @@
  */
 
 import type { JSX } from 'react';
-import type { Edge, EdgeProps } from '@xyflow/react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
+import type { Edge, EdgeMarker, EdgeProps } from '@xyflow/react';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath, MarkerType } from '@xyflow/react';
 
 /** 执行流边 data（M2 模拟调试时通过 data 注入 animated 标志） */
 export interface ExecEdgeData extends Record<string, unknown> {
   /** 是否在模拟调试中（启用流动虚线动画） */
   animated?: boolean;
 }
+
+/**
+ * 执行流边统一方向箭头（创建/转换边时赋给 edge.markerEnd）。
+ *
+ * ReactFlow 会扫描所有边的 markerEnd 并自动渲染 SVG marker defs，
+ * 自定义边组件内通过 markerEnd prop 接收处理后的 url 引用。
+ * 颜色与默认描边 slate-400（#94a3b8）保持一致。
+ */
+export const EXEC_EDGE_MARKER_END: EdgeMarker = {
+  type: MarkerType.ArrowClosed,
+  width: 16,
+  height: 16,
+  color: '#94a3b8',
+};
 
 /** React Flow 执行流边类型实例 */
 export type ExecEdge = Edge<ExecEdgeData, 'exec'>;

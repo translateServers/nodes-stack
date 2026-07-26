@@ -11,10 +11,11 @@
  *   → updateBlueprint 内部 pushHistory 推入 1 条历史快照（修改前状态）
  *
  * 本测试通过真实 editor-store + 纯函数验证，不依赖 ReactFlow mock。
+ * 使用 V2 蓝图（与编辑器内存一致，loadProject 不再触发迁移）。
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { CanvasConfig, EventBlueprint, ScreenProject } from '@nebula/shared';
+import type { CanvasConfig, EventBlueprintV2, ScreenProject } from '@nebula/shared';
 
 import { useScreenEditorStore } from '../../stores/editor-store';
 import {
@@ -34,7 +35,7 @@ function makeMockCanvas(overrides: Partial<CanvasConfig> = {}): CanvasConfig {
   };
 }
 
-function makeProject(blueprint: EventBlueprint): ScreenProject {
+function makeProject(blueprint: EventBlueprintV2): ScreenProject {
   return {
     id: 'proj-1',
     name: 'project-proj-1',
@@ -49,30 +50,30 @@ function makeProject(blueprint: EventBlueprint): ScreenProject {
   } as unknown as ScreenProject;
 }
 
-/** 创建 3 个不对齐且不等距分布的节点 blueprint */
-function makeUnalignedBlueprint(): EventBlueprint {
+/** 创建 3 个不对齐且不等距分布的 V2 组件节点 blueprint */
+function makeUnalignedBlueprint(): EventBlueprintV2 {
   return {
-    version: 1,
+    version: 2,
     nodes: [
       {
-        id: 'trigger-1',
-        kind: 'trigger',
+        id: 'comp-1',
+        kind: 'component',
         position: { x: 0, y: 0 },
-        config: { type: 'pageLoad' },
+        componentId: 'c1',
       },
       {
-        id: 'action-1',
-        kind: 'action',
+        id: 'comp-2',
+        kind: 'component',
         position: { x: 100, y: 50 },
-        config: { type: 'setVisibility', targetComponentId: '', visible: 'show' },
+        componentId: 'c2',
       },
-      // action-2 的中心 X 为 300（与 trigger-1 中心 50、action-1 中心 150 形成不等距分布）
-      // 中心 Y 为 150（与 trigger-1 中心 40、action-1 中心 90 形成不等距分布）
+      // comp-3 的中心 X 为 300（与 comp-1 中心 50、comp-2 中心 150 形成不等距分布）
+      // 中心 Y 为 150（与 comp-1 中心 40、comp-2 中心 90 形成不等距分布）
       {
-        id: 'action-2',
-        kind: 'action',
+        id: 'comp-3',
+        kind: 'component',
         position: { x: 250, y: 110 },
-        config: { type: 'navigate', url: 'https://example.com', target: '_blank' },
+        componentId: 'c3',
       },
     ],
     edges: [],
@@ -80,7 +81,7 @@ function makeUnalignedBlueprint(): EventBlueprint {
 }
 
 /** 将 blueprint.nodes 转换为 AlignNode 输入（全部选中） */
-function toAlignNodes(blueprint: EventBlueprint, width = 100, height = 80): AlignNode[] {
+function toAlignNodes(blueprint: EventBlueprintV2, width = 100, height = 80): AlignNode[] {
   return blueprint.nodes.map((n) => ({
     id: n.id,
     position: { x: n.position.x, y: n.position.y },
@@ -114,7 +115,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       // 将结果应用到 blueprint nodes（保留 config / kind）
       const nextNodes = applyResultToBlueprintNodes(blueprint.nodes, result.items);
 
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: nextNodes,
       };
@@ -137,7 +138,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       const result = alignNodes(alignNodesInput, 'center-h');
       expect(result.hasChange).toBe(true);
 
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
       };
@@ -154,7 +155,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       const result = alignNodes(alignNodesInput, 'right');
       expect(result.hasChange).toBe(true);
 
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
       };
@@ -173,7 +174,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       const result = alignNodes(alignNodesInput, 'top');
       expect(result.hasChange).toBe(true);
 
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
       };
@@ -191,7 +192,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
 
       const alignNodesInput = toAlignNodes(blueprint);
       const result = alignNodes(alignNodesInput, 'left');
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
       };
@@ -212,20 +213,20 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
   describe('对齐无变化 → 不入栈', () => {
     it('所有节点已左对齐时：alignNodes(left) hasChange=false，不调用 updateBlueprint', () => {
       // 所有节点 x=0（已对齐）
-      const blueprint: EventBlueprint = {
-        version: 1,
+      const blueprint: EventBlueprintV2 = {
+        version: 2,
         nodes: [
           {
             id: 'a',
-            kind: 'trigger',
+            kind: 'component',
             position: { x: 0, y: 0 },
-            config: { type: 'pageLoad' },
+            componentId: 'ca',
           },
           {
             id: 'b',
-            kind: 'action',
+            kind: 'component',
             position: { x: 0, y: 100 },
-            config: { type: 'setVisibility', targetComponentId: '', visible: 'show' },
+            componentId: 'cb',
           },
         ],
         edges: [],
@@ -238,7 +239,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
 
       // 模拟 handleAlign 守卫：hasChange=false 时不调用 updateBlueprint
       if (result.hasChange) {
-        const nextBlueprint: EventBlueprint = {
+        const nextBlueprint: EventBlueprintV2 = {
           ...blueprint,
           nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
         };
@@ -259,7 +260,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       const result = distributeNodes(alignNodesInput, 'horizontal');
       expect(result.hasChange).toBe(true);
 
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
       };
@@ -278,7 +279,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       const result = distributeNodes(alignNodesInput, 'vertical');
       expect(result.hasChange).toBe(true);
 
-      const nextBlueprint: EventBlueprint = {
+      const nextBlueprint: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
       };
@@ -290,20 +291,20 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
 
   describe('分布无变化 → 不入栈', () => {
     it('节点数 < 3：分布 hasChange=false，不调用 updateBlueprint', () => {
-      const blueprint: EventBlueprint = {
-        version: 1,
+      const blueprint: EventBlueprintV2 = {
+        version: 2,
         nodes: [
           {
             id: 'a',
-            kind: 'trigger',
+            kind: 'component',
             position: { x: 0, y: 0 },
-            config: { type: 'pageLoad' },
+            componentId: 'ca',
           },
           {
             id: 'b',
-            kind: 'action',
+            kind: 'component',
             position: { x: 100, y: 0 },
-            config: { type: 'setVisibility', targetComponentId: '', visible: 'show' },
+            componentId: 'cb',
           },
         ],
         edges: [],
@@ -315,7 +316,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
       expect(result.hasChange).toBe(false);
 
       if (result.hasChange) {
-        const nextBlueprint: EventBlueprint = {
+        const nextBlueprint: EventBlueprintV2 = {
           ...blueprint,
           nodes: applyResultToBlueprintNodes(blueprint.nodes, result.items),
         };
@@ -333,7 +334,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
 
       // 第一次：左对齐
       const result1 = alignNodes(toAlignNodes(blueprint), 'left');
-      const blueprintAfterFirst: EventBlueprint = {
+      const blueprintAfterFirst: EventBlueprintV2 = {
         ...blueprint,
         nodes: applyResultToBlueprintNodes(blueprint.nodes, result1.items),
       };
@@ -341,7 +342,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
 
       // 第二次：顶对齐（基于第一次结果）
       const result2 = alignNodes(toAlignNodes(blueprintAfterFirst), 'top');
-      const blueprintAfterSecond: EventBlueprint = {
+      const blueprintAfterSecond: EventBlueprintV2 = {
         ...blueprintAfterFirst,
         nodes: applyResultToBlueprintNodes(blueprintAfterFirst.nodes, result2.items),
       };
@@ -364,7 +365,7 @@ describe('对齐分布与历史栈集成（任务 9.4）', () => {
 /**
  * 将 AlignResult.items 应用到 blueprint.nodes 数组（保留 config / kind 字段）。
  *
- * 注：blueprint.nodes 中的元素是判别联合（trigger/condition/action/comment），
+ * 注：blueprint.nodes 中的元素是判别联合（component/condition/delay/comment），
  * applyAlignResultToNodes 的泛型约束是 { id, position }，可直接复用。
  */
 function applyResultToBlueprintNodes<T extends { id: string; position: { x: number; y: number } }>(

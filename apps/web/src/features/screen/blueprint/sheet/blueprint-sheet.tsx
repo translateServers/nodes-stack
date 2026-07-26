@@ -31,17 +31,20 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
+  SelectionMode,
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeMouseHandler,
   type EdgeTypes,
   type Node,
   type NodeMouseHandler,
   type NodeTypes,
   type OnConnect,
+  type OnConnectEnd,
   type OnEdgesChange,
   type OnNodeDrag,
   type OnNodesChange,
@@ -57,10 +60,11 @@ import type {
   CommentNodeConfig,
   ConditionNodeConfig,
 } from '@nebula/shared';
+import { EVENT_BLUEPRINT_VERSION } from '@nebula/shared';
 
 import { useScreenEditorStore } from '../../stores/editor-store';
 import { ActionNode, CommentNode, ConditionNode, TriggerNode } from '../nodes';
-import { ExecEdge } from '../edges';
+import { ExecEdge, EXEC_EDGE_MARKER_END } from '../edges';
 import { ViewportToolbar } from '../panels/viewport-toolbar';
 import { AlignDistributeToolbar } from '../panels/align-distribute-toolbar';
 import {
@@ -72,7 +76,12 @@ import {
   BlueprintDiagnosticMapProvider,
   buildDiagnosticMap,
 } from '../hooks';
-import { SearchPanel, type NodeOption, type PendingConnection } from '../panels/search-panel';
+import {
+  SearchPanel,
+  NODE_OPTIONS,
+  type NodeOption,
+  type PendingConnection,
+} from '../panels/search-panel';
 import { ProblemsPanel, ExecutionLogPanel } from '../panels';
 import { NodeConfigPanel, type NodeConfigPanelProps } from '../panels/node-config-panel';
 import { EmptyBlueprintState } from '../templates';
@@ -93,6 +102,14 @@ import {
   type AlignNode,
   type DistributeMode,
 } from '../lib/align-distribute';
+import {
+  INPUT_PINS,
+  isConnectionValid,
+  type ConnectionCandidate,
+  type NodeIndex,
+  type PinId,
+} from '../lib/pin-compatibility';
+import { BlueprintContextMenu, type BlueprintContextMenuMode } from './blueprint-context-menu';
 
 // ===== ReactFlow 类型映射 =====
 
@@ -313,6 +330,7 @@ function blueprintEdgeToRFEdge(blueprintEdge: EventBlueprint['edges'][number]): 
     sourceHandle: blueprintEdge.sourceHandle,
     target: blueprintEdge.target,
     targetHandle: blueprintEdge.targetHandle,
+    markerEnd: EXEC_EDGE_MARKER_END,
     data: {},
   };
 }
@@ -327,6 +345,31 @@ function rfEdgeToBlueprintEdge(edge: Edge): EventBlueprint['edges'][number] {
     sourceHandle: edge.sourceHandle ?? 'out',
     target: edge.target,
     targetHandle: edge.targetHandle ?? 'in',
+  };
+}
+
+/** 基于当前 RF 状态构建引脚兼容判定输入（NodeIndex + 既有蓝图边） */
+function buildConnectionContext(
+  rfNodes: Node[],
+  rfEdges: Edge[],
+): { nodeIndex: NodeIndex; bpEdges: EventBlueprint['edges'] } {
+  const bpNodes = rfNodes.map(rfNodeToBlueprintNode);
+  const nodeIndex: NodeIndex = new Map(bpNodes.map((n) => [n.id, n]));
+  return { nodeIndex, bpEdges: rfEdges.map(rfEdgeToBlueprintEdge) };
+}
+
+/** 将 RF Connection/Edge 归一化为引脚兼容判定候选 */
+function toConnectionCandidate(conn: {
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}): ConnectionCandidate {
+  return {
+    sourceNodeId: conn.source,
+    sourceHandle: (conn.sourceHandle ?? 'out') as PinId,
+    targetNodeId: conn.target,
+    targetHandle: (conn.targetHandle ?? 'in') as PinId,
   };
 }
 
@@ -398,7 +441,17 @@ interface BlueprintSheetProps {
   onOpenChange: (open: boolean) => void;
   /** 蓝图->画布高亮联动：点击节点时调用，由 screen-editor 注入 flashComponent */
   onLocateComponent?: (componentId: string) => void;
-  /** 画布->蓝图过滤联动：当前选中组件 id（null 表示不过滤） */
+  /**
+   * 画布->蓝图过滤联动：当前选中组件 id（null 表示不过滤）。
+   *
+   * 优化（2026-07-26）：若调用方未显式传入（undefined），组件内部会通过
+   * useScreenEditorStore 订阅 selectedComponentIds 自动派生。
+   * 这样 ScreenEditor 不必为 BlueprintSheet 而订阅 selectedComponentIds，
+   * 避免选中变化时 ScreenEditor 重渲染导致整个外壳（左/右面板、画布、上下文菜单）
+   * 一起重渲染，从而消除控制框延迟。
+   *
+   * 调用方仍可显式传入优先级更高的值（如 QuickEventEditor 的 focusComponentId）。
+   */
   filterComponentId?: string | null;
   /** 保存项目回调（缺口 1：Ctrl+S 接管） */
   onSave?: () => void;
@@ -420,6 +473,18 @@ export function BlueprintSheet({
   onSave,
   onShowHelp,
 }: BlueprintSheetProps): JSX.Element | null {
+  // 内部派生 filterComponentId（仅当调用方未显式传入时）。
+  // 在 Sheet 关闭时（open=false）提前 return null，订阅不会触发重渲染。
+  // 在 Sheet 打开后才订阅 selectedComponentIds，此时用户在 Sheet 内部交互，
+  // 选中变化由 Sheet 自身消化，不再回流到 ScreenEditor。
+  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  const effectiveFilterComponentId =
+    filterComponentId !== undefined
+      ? filterComponentId
+      : selectedComponentIds.length === 1
+        ? selectedComponentIds[0]
+        : null;
+
   if (!open) return null;
   return (
     <div
@@ -433,7 +498,7 @@ export function BlueprintSheet({
         <BlueprintSheetInner
           onOpenChange={onOpenChange}
           onLocateComponent={onLocateComponent}
-          filterComponentId={filterComponentId}
+          filterComponentId={effectiveFilterComponentId}
           onSave={onSave}
           onShowHelp={onShowHelp}
         />
@@ -469,7 +534,13 @@ function BlueprintSheetInner({
   const beginBlueprintGesture = useScreenEditorStore((s) => s.beginBlueprintGesture);
   const endBlueprintGesture = useScreenEditorStore((s) => s.endBlueprintGesture);
 
-  const blueprint = project?.blueprint;
+  // V1 蓝图窄化：本组件为 V1 编辑器，仅处理 version=1 的蓝图；
+  // V2 蓝图由 BlueprintSheetV2 处理。这里通过类型守卫将 BlueprintField 收敛为 EventBlueprint。
+  const projectBlueprint = project?.blueprint;
+  const blueprint =
+    projectBlueprint !== undefined && projectBlueprint.version === EVENT_BLUEPRINT_VERSION
+      ? projectBlueprint
+      : undefined;
   const components = project?.components ?? [];
 
   // 任务 9.2：画布选中组件 → 蓝图过滤联动
@@ -504,6 +575,12 @@ function BlueprintSheetInner({
     mode: 'create',
     position: { x: 0, y: 0 },
   });
+  // 空态引导关闭标记：用户点击"从空白开始"后置 true，避免空蓝图仍被空态遮罩死锁
+  const [emptyDismissed, setEmptyDismissed] = useState(false);
+  // 右键菜单模式：由 ReactFlow 的 node/edge/pane 右键处理器驱动
+  const [ctxMenuMode, setCtxMenuMode] = useState<BlueprintContextMenuMode>('pane');
+  // 空白处右键时的屏幕坐标（供"添加节点..."在右键位置呼出搜索面板）
+  const paneMenuPosRef = useRef({ x: 0, y: 0 });
 
   // ref 守卫：标记下一次 blueprint→nodes/edges 同步是内部触发，nodes/edges→blueprint 应跳过
   const skipNextBlueprintSync = useRef(false);
@@ -551,8 +628,30 @@ function BlueprintSheetInner({
     }
     // 预构建 component 查询 Map，批量转换避免每节点重复线性扫描（O(N×M) → O(N+M)）
     const componentMap = buildComponentMap(components);
-    setNodes(blueprint.nodes.map((n) => blueprintNodeToRFNode(n, componentMap)));
-    setEdges(blueprint.edges.map((e) => blueprintEdgeToRFEdge(e)));
+    // 合并 ephemeral 字段：blueprint 重建节点会丢失 selected / measured，
+    // 导致配置面板每次编辑后选中态闪烁、对齐面板丢失已测量尺寸。
+    // 按 id 从当前 RF 状态中继承这些纯 UI 态字段（不参与 blueprint 持久化）。
+    const prevNodeById = new Map(nodesRef.current.map((n) => [n.id, n]));
+    const prevEdgeById = new Map(edgesRef.current.map((e) => [e.id, e]));
+    setNodes(
+      blueprint.nodes.map((n: EventBlueprint['nodes'][number]) => {
+        const rfNode = blueprintNodeToRFNode(n, componentMap);
+        const prev = prevNodeById.get(rfNode.id);
+        if (prev) {
+          if (prev.selected) rfNode.selected = true;
+          if (prev.measured) rfNode.measured = prev.measured;
+        }
+        return rfNode;
+      }),
+    );
+    setEdges(
+      blueprint.edges.map((e: EventBlueprint['edges'][number]) => {
+        const rfEdge = blueprintEdgeToRFEdge(e);
+        const prev = prevEdgeById.get(rfEdge.id);
+        if (prev?.selected) rfEdge.selected = true;
+        return rfEdge;
+      }),
+    );
     initialized.current = true;
     // 仅在 blueprint 引用变化时同步；components 变化由 dangling 在渲染时重算
   }, [blueprint]);
@@ -585,27 +684,77 @@ function BlueprintSheetInner({
     setEdges((eds) => applyEdgeChanges(changes, eds));
   }, []);
 
-  const onConnect: OnConnect = useCallback((connection: Connection) => {
-    if (!connection.source || !connection.target) return;
-    const newEdge: Edge = {
-      id: generateEdgeId(),
-      type: 'exec',
-      source: connection.source,
-      sourceHandle: connection.sourceHandle ?? 'out',
-      target: connection.target,
-      targetHandle: connection.targetHandle ?? 'in',
-      data: {},
-    };
-    setEdges((eds) => addEdge(newEdge, eds));
-  }, []);
+  /**
+   * 引脚兼容判定（拖拽连线实时校验 + onConnect 兜底共用）。
+   *
+   * 规则见 lib/pin-compatibility.ts：comment 不参与执行流、不允许自环/重复边、
+   * 源必须是输出引脚、目标必须是输入引脚。
+   */
+  const checkConnection = useCallback(
+    (conn: {
+      source: string;
+      target: string;
+      sourceHandle?: string | null;
+      targetHandle?: string | null;
+    }): boolean => {
+      const { nodeIndex, bpEdges } = buildConnectionContext(nodesRef.current, edgesRef.current);
+      return isConnectionValid(toConnectionCandidate(conn), nodeIndex, bpEdges).valid;
+    },
+    [],
+  );
+
+  const onConnect: OnConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return;
+      // isValidConnection 已在拖拽期拦截非法连线，此处兜底（程序化 addEdge 等路径）
+      if (!checkConnection(connection)) return;
+      const newEdge: Edge = {
+        id: generateEdgeId(),
+        type: 'exec',
+        source: connection.source,
+        sourceHandle: connection.sourceHandle ?? 'out',
+        target: connection.target,
+        targetHandle: connection.targetHandle ?? 'in',
+        markerEnd: EXEC_EDGE_MARKER_END,
+        data: {},
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
+    [checkConnection],
+  );
 
   // 任务 5.4：追踪连线拖拽状态，供 Esc 分层判断
   const handleConnectStart = useCallback(() => {
     isConnectingRef.current = true;
   }, []);
 
-  const handleConnectEnd = useCallback(() => {
+  /**
+   * 连线松手：
+   * - 落在空白处（toNode=null）且从输出引脚拖出 → 呼出搜索面板（connect 模式），
+   *   选中节点类型后在松手位置插入新节点并自动完成连线
+   * - 其他情况仅复位连线中标记
+   */
+  const handleConnectEnd: OnConnectEnd = useCallback((event, connectionState) => {
     isConnectingRef.current = false;
+    if (connectionState.toNode) return;
+    const fromNode = connectionState.fromNode;
+    const fromHandle = connectionState.fromHandle;
+    if (!fromNode || !fromHandle || fromHandle.type !== 'source') return;
+
+    const { clientX, clientY } =
+      'changedTouches' in event
+        ? { clientX: event.changedTouches[0].clientX, clientY: event.changedTouches[0].clientY }
+        : { clientX: event.clientX, clientY: event.clientY };
+
+    setSearchPanelState({
+      visible: true,
+      mode: 'connect',
+      position: { x: clientX, y: clientY },
+      pendingConnection: {
+        sourceNodeId: fromNode.id,
+        sourceHandle: (fromHandle.id ?? 'out') as PendingConnection['sourceHandle'],
+      },
+    });
   }, []);
 
   // 拖拽吸附：仅更新本地 nodes（拖拽结束由 handleNodeDragStop 统一提交 blueprint）
@@ -649,6 +798,9 @@ function BlueprintSheetInner({
   // 视口控制
   const viewport = useBlueprintViewport();
 
+  // ReactFlow 实例（屏幕坐标 → 流程坐标转换、视口定位共用）
+  const reactFlowInstance = useReactFlow();
+
   // 首次挂载时恢复上次缓存的视口（避免每次打开都回到 {0,0,1}）
   useEffect(() => {
     viewport.restoreViewport();
@@ -675,29 +827,59 @@ function BlueprintSheetInner({
   }, []);
 
   // 搜索面板：插入节点
-  const handleInsertNode = useCallback((option: NodeOption) => {
-    const state = searchPanelStateRef.current;
-    const position = state.position;
-    const newNode = createNodeFromOption(option, position);
-    const rfNode = blueprintNodeToRFNode(newNode, buildComponentMap(componentsRef.current));
+  const handleInsertNode = useCallback(
+    (option: NodeOption) => {
+      const state = searchPanelStateRef.current;
+      // 面板位置是屏幕坐标（clientX/Y），必须转换为流程坐标，
+      // 否则缩放/平移后新节点会偏离点击位置
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: state.position.x,
+        y: state.position.y,
+      });
+      const newNode = createNodeFromOption(option, position);
+      const rfNode = blueprintNodeToRFNode(newNode, buildComponentMap(componentsRef.current));
 
-    setNodes((nds) => [...nds, rfNode]);
+      // 插入后单选新节点（配置面板立即就绪，符合"插入即配置"直觉）
+      setNodes((nds) => [
+        ...nds.map((n) => ({ ...n, selected: false })),
+        { ...rfNode, selected: true },
+      ]);
 
-    // connect 模式：自动连线（M1 预留，当前仅 create 模式触发）
-    if (state.mode === 'connect' && state.pendingConnection) {
-      const newEdge: Edge = {
-        id: generateEdgeId(),
-        type: 'exec',
-        source: state.pendingConnection.sourceNodeId,
-        sourceHandle: state.pendingConnection.sourceHandle,
-        target: rfNode.id,
-        targetHandle: 'in',
-        data: {},
-      };
-      setEdges((eds) => [...eds, newEdge]);
-    }
+      // connect 模式：校验引脚兼容后自动连线（无效则仅插入节点不连线）
+      if (state.mode === 'connect' && state.pendingConnection) {
+        const candidate: ConnectionCandidate = {
+          sourceNodeId: state.pendingConnection.sourceNodeId,
+          sourceHandle: state.pendingConnection.sourceHandle,
+          targetNodeId: rfNode.id,
+          targetHandle: 'in',
+        };
+        const { nodeIndex, bpEdges } = buildConnectionContext(nodesRef.current, edgesRef.current);
+        // NodeIndex 是 ReadonlyMap：构造时合并新节点，而非事后 set
+        const nextIndex: NodeIndex = new Map([...nodeIndex, [newNode.id, newNode]]);
+        if (isConnectionValid(candidate, nextIndex, bpEdges).valid) {
+          const newEdge: Edge = {
+            id: generateEdgeId(),
+            type: 'exec',
+            source: state.pendingConnection.sourceNodeId,
+            sourceHandle: state.pendingConnection.sourceHandle,
+            target: rfNode.id,
+            targetHandle: 'in',
+            markerEnd: EXEC_EDGE_MARKER_END,
+            data: {},
+          };
+          setEdges((eds) => [...eds, newEdge]);
+        }
+      }
 
-    setSearchPanelState((s) => ({ ...s, visible: false }));
+      setSearchPanelState((s) => ({ ...s, visible: false }));
+    },
+    [reactFlowInstance],
+  );
+
+  // 全选：Ctrl+A 与右键菜单"全选"共用
+  const handleSelectAll = useCallback(() => {
+    setNodes((nds) => nds.map((n) => ({ ...n, selected: true })));
+    setEdges((eds) => eds.map((ed) => ({ ...ed, selected: true })));
   }, []);
 
   // 任务 5.4：快捷键分层 -- Ctrl+Z/Shift+Z 走全局历史，Esc 分层
@@ -716,10 +898,11 @@ function BlueprintSheetInner({
     onZoomOut: () => void viewport.zoomOut(),
     onFitView: () => void viewport.fitView(),
     onShowHelp,
+    onSelectAll: handleSelectAll,
   });
 
-  // 任务 5.5：跨项目剪贴板 —— Ctrl+C/X/V/D
-  useBlueprintClipboard({ nodes, edges, setNodes, setEdges });
+  // 任务 5.5：跨项目剪贴板 —— Ctrl+C/X/V/D（返回值供右键菜单复用）
+  const blueprintClipboard = useBlueprintClipboard({ nodes, edges, setNodes, setEdges });
 
   // 任务 6.1：实时诊断订阅
   // P0 优化：useMemo 避免每次渲染创建新 Set 导致 useBlueprintDiagnostics 内部 useCallback 重建
@@ -731,7 +914,6 @@ function BlueprintSheetInner({
   const diagnosticMap = buildDiagnosticMap(diagnostics);
 
   // 任务 6.2：问题面板点击定位节点
-  const reactFlowInstance = useReactFlow();
   const locateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLocateNode = useCallback(
@@ -839,7 +1021,47 @@ function BlueprintSheetInner({
   const showConfigPanel = selectedNode !== null;
 
   // 配置变更回调：更新该节点的 data.config，由既有 useEffect[nodes,edges] 同步到 updateBlueprint
-  // P0 优化：通过 ref 读取 selectedNode/project，callback 依赖仅 updateBlueprint（稳定）
+  //
+  // 历史合并（与拖拽手势同语义）：
+  // 文本类输入（URL/注释/表达式值）每个键击都会触发 onChange，若每次 withHistory
+  // 会产生数十条历史。改为：首次变更开启蓝图手势（期间 updateBlueprint 为 transient
+  // 不入栈），停止输入 600ms 或切换选中节点/卸载时 endBlueprintGesture 补一条历史，
+  // undo 一次回到本次编辑会话之前。
+  const configGestureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const configGestureActiveRef = useRef(false);
+
+  const endConfigGesture = useCallback(() => {
+    if (configGestureTimerRef.current) {
+      clearTimeout(configGestureTimerRef.current);
+      configGestureTimerRef.current = null;
+    }
+    if (configGestureActiveRef.current) {
+      configGestureActiveRef.current = false;
+      endBlueprintGesture();
+    }
+  }, [endBlueprintGesture]);
+
+  // 切换选中节点时立即结算当前编辑手势（避免跨节点合并历史）
+  const selectedNodeId = selectedNode?.id ?? null;
+  const prevSelectedNodeIdRef = useRef(selectedNodeId);
+  useEffect(() => {
+    if (prevSelectedNodeIdRef.current !== selectedNodeId) {
+      prevSelectedNodeIdRef.current = selectedNodeId;
+      endConfigGesture();
+    }
+  }, [selectedNodeId, endConfigGesture]);
+
+  // 卸载兜底：Sheet 关闭时结算未完成的编辑手势
+  useEffect(() => {
+    return () => {
+      if (configGestureTimerRef.current) clearTimeout(configGestureTimerRef.current);
+      if (configGestureActiveRef.current) {
+        configGestureActiveRef.current = false;
+        endBlueprintGesture();
+      }
+    };
+  }, [endBlueprintGesture]);
+
   const handleConfigChange = useCallback(
     (
       next:
@@ -853,8 +1075,12 @@ function BlueprintSheetInner({
       setNodes((nds) =>
         nds.map((n) => (n.id === selected.id ? { ...n, data: { ...n.data, config: next } } : n)),
       );
-      // nodes/edges->blueprint useEffect 会在下一帧自动同步，updateBlueprint 内部有深比较守卫
-      // 但为避免 dragActive 误判（此处非拖拽），直接同步更新 blueprint
+      // 开启编辑手势（幂等：手势进行中重复 begin 为 no-op）
+      if (!configGestureActiveRef.current) {
+        configGestureActiveRef.current = true;
+        beginBlueprintGesture();
+      }
+      // 手势期间 updateBlueprint 为 transient：只更新数据与脏标记，不入历史栈
       if (projectRef.current) {
         const nextNodes = nodesRef.current.map((n) =>
           n.id === selected.id ? { ...n, data: { ...n.data, config: next } } : n,
@@ -867,12 +1093,81 @@ function BlueprintSheetInner({
         };
         updateBlueprint(nextBlueprint);
       }
+      // 停止输入 600ms 后结算手势，补一条历史
+      if (configGestureTimerRef.current) clearTimeout(configGestureTimerRef.current);
+      configGestureTimerRef.current = setTimeout(endConfigGesture, 600);
     },
-    [updateBlueprint],
+    [updateBlueprint, beginBlueprintGesture, endConfigGesture],
   );
 
   // 空蓝图空态
   const isEmpty = nodes.length === 0;
+
+  // ===== 右键菜单 =====
+
+  // 删除当前选中的节点与边（节点删除时级联删除关联边）
+  const handleDeleteSelected = useCallback(() => {
+    const selectedNodeIds = new Set(nodesRef.current.filter((n) => n.selected).map((n) => n.id));
+    const hasSelectedEdges = edgesRef.current.some((e) => e.selected);
+    if (selectedNodeIds.size === 0 && !hasSelectedEdges) return;
+    if (selectedNodeIds.size > 0) {
+      setNodes((nds) => nds.filter((n) => !selectedNodeIds.has(n.id)));
+    }
+    setEdges((eds) =>
+      eds.filter(
+        (e) => !e.selected && !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target),
+      ),
+    );
+  }, []);
+
+  // 节点右键：未选中则单选该节点（与主画布右键行为一致），切换菜单模式
+  const handleNodeContextMenu: NodeMouseHandler<Node> = useCallback((_event, node) => {
+    if (!node.selected) {
+      setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === node.id })));
+      setEdges((eds) => eds.map((ed) => ({ ...ed, selected: false })));
+    }
+    setCtxMenuMode('node');
+  }, []);
+
+  // 边右键：未选中则单选该边，切换菜单模式
+  const handleEdgeContextMenu: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
+    if (!edge.selected) {
+      setEdges((eds) => eds.map((ed) => ({ ...ed, selected: ed.id === edge.id })));
+      setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
+    }
+    setCtxMenuMode('edge');
+  }, []);
+
+  // 空白处右键：记录坐标（供"添加节点..."），切换菜单模式
+  const handlePaneContextMenu = useCallback((event: MouseEvent | ReactMouseEvent) => {
+    paneMenuPosRef.current = { x: event.clientX, y: event.clientY };
+    setCtxMenuMode('pane');
+  }, []);
+
+  // 右键菜单"添加节点..."：在右键位置呼出搜索面板（create 模式）
+  const handleAddNodeFromMenu = useCallback(() => {
+    setSearchPanelState({
+      visible: true,
+      mode: 'create',
+      position: { ...paneMenuPosRef.current },
+    });
+  }, []);
+
+  // 缩放到选区：无选中节点时退化为 fitView（由 fitViewToNodes 内部处理）
+  const handleFitViewToSelection = useCallback(() => {
+    const ids = nodesRef.current.filter((n) => n.selected).map((n) => n.id);
+    void viewport.fitViewToNodes(ids);
+  }, [viewport]);
+
+  // 搜索面板选项：connect 模式过滤为仅含输入引脚的节点（action/condition），
+  // trigger/comment 无输入引脚，选中也无法完成连线
+  const searchPanelOptions = useMemo(
+    () =>
+      searchPanelState.mode === 'connect'
+        ? NODE_OPTIONS.filter((o) => INPUT_PINS[o.kind].length > 0)
+        : NODE_OPTIONS,
+    [searchPanelState.mode],
+  );
 
   // 任务 8.2 + 9.2：链路高亮 + 过滤视图叠加
   // 先过滤（9.2），再叠加高亮 className（8.2）
@@ -973,7 +1268,7 @@ function BlueprintSheetInner({
             onZoomIn={() => void viewport.zoomIn()}
             onZoomOut={() => void viewport.zoomOut()}
             onFitView={() => void viewport.fitView()}
-            onFitViewToSelection={() => void viewport.fitViewToNodes([])}
+            onFitViewToSelection={handleFitViewToSelection}
             onReset={() => void viewport.resetViewport()}
           />
           <ToolbarButton
@@ -992,7 +1287,7 @@ function BlueprintSheetInner({
         data-testid="blueprint-canvas"
         onDoubleClick={handleDoubleClick}
       >
-        {isEmpty && !searchPanelState.visible && (
+        {isEmpty && !searchPanelState.visible && !emptyDismissed && (
           <div className="absolute inset-0 z-10 flex flex-col bg-background">
             <EmptyBlueprintState
               onInsertTemplate={(templateBlueprint) => {
@@ -1006,33 +1301,60 @@ function BlueprintSheetInner({
                 if (!project) return;
                 // 创建空蓝图状态（无节点无边）进入自由编排
                 updateBlueprint({ version: 1, nodes: [], edges: [] });
+                // 关闭空态遮罩：否则 blueprint 为空时 isEmpty 恒真，遮罩永不消失形成死局
+                setEmptyDismissed(true);
               }}
             />
           </div>
         )}
-        <ReactFlow
-          nodes={displayNodes}
-          edges={displayEdges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onConnectStart={handleConnectStart}
-          onConnectEnd={handleConnectEnd}
-          onNodeDragStart={handleNodeDragStart}
-          onNodeDragStop={handleNodeDragStop}
-          onNodeClick={handleNodeClick}
-          {...viewport.config}
-          onMoveEnd={viewport.onMoveEnd}
-          zoomOnDoubleClick={false}
-          className="bg-background"
-          data-testid="blueprint-reactflow"
+        <BlueprintContextMenu
+          mode={ctxMenuMode}
+          selectedNodeCount={selectedCount}
+          onCopy={() => void blueprintClipboard.copy()}
+          onCut={() => void blueprintClipboard.cut()}
+          onPaste={() => void blueprintClipboard.paste()}
+          onDuplicate={blueprintClipboard.duplicate}
+          onDeleteSelected={handleDeleteSelected}
+          onSelectAll={handleSelectAll}
+          onAlign={handleAlign}
+          onDistribute={handleDistribute}
+          onAddNode={handleAddNodeFromMenu}
+          onZoomIn={() => void viewport.zoomIn()}
+          onZoomOut={() => void viewport.zoomOut()}
+          onFitView={() => void viewport.fitView()}
+          onFitViewToSelection={handleFitViewToSelection}
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          <Controls showInteractive={false} />
-          <MiniMap pannable zoomable className="!bg-background" data-testid="blueprint-minimap" />
-        </ReactFlow>
+          <ReactFlow
+            nodes={displayNodes}
+            edges={displayEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onConnectStart={handleConnectStart}
+            onConnectEnd={handleConnectEnd}
+            onNodeDragStart={handleNodeDragStart}
+            onNodeDragStop={handleNodeDragStop}
+            onNodeClick={handleNodeClick}
+            isValidConnection={checkConnection}
+            onNodeContextMenu={handleNodeContextMenu}
+            onEdgeContextMenu={handleEdgeContextMenu}
+            onPaneContextMenu={handlePaneContextMenu}
+            selectionMode={SelectionMode.Partial}
+            // ReactFlow 默认仅 Backspace 删除；补齐 Delete 键（Windows 用户习惯）
+            deleteKeyCode={['Backspace', 'Delete']}
+            {...viewport.config}
+            onMoveEnd={viewport.onMoveEnd}
+            zoomOnDoubleClick={false}
+            className="bg-background"
+            data-testid="blueprint-reactflow"
+          >
+            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+            <Controls showInteractive={false} />
+            <MiniMap pannable zoomable className="!bg-background" data-testid="blueprint-minimap" />
+          </ReactFlow>
+        </BlueprintContextMenu>
 
         {/* 搜索面板 */}
         {searchPanelState.visible && (
@@ -1044,6 +1366,7 @@ function BlueprintSheetInner({
               position={searchPanelState.position}
               mode={searchPanelState.mode}
               pendingConnection={searchPanelState.pendingConnection}
+              options={searchPanelOptions}
               onInsert={handleInsertNode}
               onClose={() => setSearchPanelState((s) => ({ ...s, visible: false }))}
             />

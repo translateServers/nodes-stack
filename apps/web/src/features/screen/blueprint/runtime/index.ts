@@ -35,6 +35,11 @@ export type {
 export { getNodeLocateComponentId } from './get-node-locate-component.js';
 export { BlueprintPreviewProvider, useBlueprintPreview } from './blueprint-preview-context.js';
 export type { BlueprintPreviewContextValue } from './blueprint-preview-context.js';
+export {
+  BlueprintEventProvider,
+  useComponentEvent,
+} from './component-event-context.js';
+export type { ComponentEventCallback } from './component-event-context.js';
 
 export type {
   ActionResult,

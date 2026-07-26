@@ -1,8 +1,8 @@
 /**
- * buildValidatedTemplate 测试（任务 9.3）
+ * buildValidatedTemplate 测试（任务 9.3 / 任务 6.1 V2 重写）
  *
  * 验证点：
- * - 三个模板都通过 Schema 校验，返回 success
+ * - 四个模板都通过 V2 Schema 校验，返回 success
  * - success 结果包含正确的 blueprint
  * - 结果类型判别（success=true/false 互斥）
  * - 失败路径：未知 templateId 返回 failure（不抛异常）
@@ -14,16 +14,16 @@ import { describe, expect, it } from 'vitest';
 import { buildValidatedTemplate } from './build-validated-template';
 import { createTemplateBlueprint } from './create-template-blueprint';
 import type { BlueprintTemplateId } from './template-definitions';
-import type { EventBlueprint } from '@nebula/shared';
+import type { EventBlueprintV2 } from '@nebula/shared';
 
-describe('buildValidatedTemplate（任务 9.3）', () => {
-  describe('三个模板均通过 Schema 校验', () => {
+describe('buildValidatedTemplate（任务 6.1 V2）', () => {
+  describe('四个模板均通过 V2 Schema 校验', () => {
     it('click-navigate 通过校验', () => {
       const result = buildValidatedTemplate('click-navigate');
 
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.blueprint.version).toBe(1);
+        expect(result.blueprint.version).toBe(2);
         expect(result.blueprint.nodes).toHaveLength(2);
         expect(result.blueprint.edges).toHaveLength(1);
       }
@@ -48,6 +48,16 @@ describe('buildValidatedTemplate（任务 9.3）', () => {
         expect(result.blueprint.edges).toHaveLength(1);
       }
     });
+
+    it('click-delay-show 通过校验', () => {
+      const result = buildValidatedTemplate('click-delay-show');
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.blueprint.nodes).toHaveLength(3);
+        expect(result.blueprint.edges).toHaveLength(2);
+      }
+    });
   });
 
   describe('success 结果与 createTemplateBlueprint 内容一致', () => {
@@ -56,6 +66,7 @@ describe('buildValidatedTemplate（任务 9.3）', () => {
         'click-navigate',
         'click-toggle-visibility',
         'page-load-refresh',
+        'click-delay-show',
       ];
 
       for (const id of ids) {
@@ -94,7 +105,7 @@ describe('buildValidatedTemplate（任务 9.3）', () => {
 
       if (result.success) {
         // TypeScript 在 if 块内收窄为 TemplateBuildSuccess
-        const bp: EventBlueprint = result.blueprint;
+        const bp: EventBlueprintV2 = result.blueprint;
         expect(bp).toBeDefined();
       } else {
         // 不应进入此分支

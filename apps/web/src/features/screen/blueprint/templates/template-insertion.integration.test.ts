@@ -1,5 +1,5 @@
 /**
- * 模板插入与历史栈集成测试（任务 9.3）
+ * 模板插入与历史栈集成测试（任务 9.3 / 任务 6.1 V2 重写）
  *
  * 验证 spec 要求：
  * - 模板插入的节点经共享 Schema 校验并作为一条本地编辑历史入栈
@@ -38,8 +38,8 @@ function makeProject(id = 'proj-1'): ScreenProject {
     description: null,
     canvas: makeMockCanvas(),
     components: [],
-    // 空蓝图：用户首次打开 Sheet 看到空态
-    blueprint: { version: 1, nodes: [], edges: [] },
+    // 空蓝图：用户首次打开 Sheet 看到空态（V2，与编辑器内存一致）
+    blueprint: { version: 2, nodes: [], edges: [] },
     status: 'draft',
     thumbnail: null,
     createdAt: '2024-01-01 00:00:00',
@@ -51,9 +51,25 @@ const TEMPLATE_IDS: BlueprintTemplateId[] = [
   'click-navigate',
   'click-toggle-visibility',
   'page-load-refresh',
+  'click-delay-show',
 ];
 
-describe('模板插入与历史栈集成（任务 9.3）', () => {
+/**
+ * 各 V2 模板的预期节点数与边数（与 create-template-blueprint.ts 对齐）。
+ *
+ * - click-navigate：组件 A + 全局 navigate 节点 = 2 节点 / 1 边
+ * - click-toggle-visibility：组件 A + 组件 B = 2 节点 / 1 边
+ * - page-load-refresh：全局 pageLoad + 组件 B = 2 节点 / 1 边
+ * - click-delay-show：组件 A + delay + 组件 B = 3 节点 / 2 边
+ */
+const TEMPLATE_EXPECTED: Record<BlueprintTemplateId, { nodes: number; edges: number }> = {
+  'click-navigate': { nodes: 2, edges: 1 },
+  'click-toggle-visibility': { nodes: 2, edges: 1 },
+  'page-load-refresh': { nodes: 2, edges: 1 },
+  'click-delay-show': { nodes: 3, edges: 2 },
+};
+
+describe('模板插入与历史栈集成（任务 6.1 V2）', () => {
   beforeEach(() => {
     // 重置 store
     useScreenEditorStore.setState({
@@ -85,20 +101,21 @@ describe('模板插入与历史栈集成（任务 9.3）', () => {
         const past = useScreenEditorStore.getState().history.past;
         expect(past).toHaveLength(1);
 
-        // 4. 历史快照为修改前状态（空蓝图）
+        // 4. 历史快照为修改前状态（V2 空蓝图，loadProject 已归一化为 V2）
         const snapshot = past[0];
         expect(snapshot).toBeDefined();
         expect(snapshot?.blueprint).toEqual({
-          version: 1,
+          version: 2,
           nodes: [],
           edges: [],
         });
 
-        // 5. 当前 blueprint 已更新为模板内容
+        // 5. 当前 blueprint 已更新为模板内容（V2 模板的预期节点/边数）
+        const expected = TEMPLATE_EXPECTED[templateId];
         const current = useScreenEditorStore.getState().project?.blueprint;
         expect(current).toBeDefined();
-        expect(current?.nodes).toHaveLength(2);
-        expect(current?.edges).toHaveLength(1);
+        expect(current?.nodes).toHaveLength(expected.nodes);
+        expect(current?.edges).toHaveLength(expected.edges);
       });
     }
 
@@ -176,21 +193,22 @@ describe('模板插入与历史栈集成（任务 9.3）', () => {
       expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
 
       // 第二次插入（替换前一个模板的内容）
-      const r2 = buildValidatedTemplate('page-load-refresh');
+      const r2 = buildValidatedTemplate('click-delay-show');
       if (r2.success) {
         useScreenEditorStore.getState().updateBlueprint(r2.blueprint);
       }
       expect(useScreenEditorStore.getState().history.past).toHaveLength(2);
 
-      // undo 一次：回到第一个模板的内容
+      // undo 一次：回到第一个模板的内容（click-navigate，2 节点）
       useScreenEditorStore.getState().undo();
       const afterFirstUndo = useScreenEditorStore.getState().project?.blueprint;
       expect(afterFirstUndo?.nodes).toHaveLength(2);
-      // 第一个模板是 click-navigate（trigger.componentClick）
-      const trigger1 = afterFirstUndo?.nodes[0];
-      expect(trigger1?.kind).toBe('trigger');
-      if (trigger1?.kind === 'trigger') {
-        expect(trigger1.config.type).toBe('componentClick');
+      // click-navigate 第一个节点是组件节点 A（kind=component，componentId=''）
+      const node1 = afterFirstUndo?.nodes[0];
+      expect(node1?.kind).toBe('component');
+      if (node1?.kind === 'component') {
+        expect(node1.componentId).toBe('');
+        expect(node1.globalType).toBeUndefined();
       }
 
       // undo 第二次：回到空蓝图

@@ -692,17 +692,18 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     } as unknown as ScreenComponent;
   }
 
-  /** 创建最小可用的 EventBlueprint mock */
-  function makeBlueprint(
-    version = 1,
-    nodes: unknown[] = [],
-    edges: unknown[] = [],
-  ): EventBlueprint {
+  /** 创建最小可用的 EventBlueprint mock（V2 格式，避免 loadProject 触发迁移） */
+  function makeBlueprint(nodes: unknown[] = [], edges: unknown[] = []): EventBlueprint {
     return {
-      version,
+      version: 2,
       nodes,
       edges,
     } as unknown as EventBlueprint;
+  }
+
+  /** 创建一个 V2 comment 节点 mock（含位置，便于模拟拖拽位移） */
+  function makeNode(id: string, x = 0, y = 0): unknown {
+    return { id, kind: 'comment', position: { x, y }, config: { text: '' } };
   }
 
   beforeEach(() => {
@@ -717,7 +718,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
 
   describe('历史快照携带 blueprint 三要素', () => {
     it('pushHistory 推入的快照包含 components/canvas/blueprint 三要素', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
 
       // withHistory 路径：触发 pushHistory 推入当前快照
@@ -729,7 +730,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
       expect(past[0]).toEqual({
         components: [],
         canvas: makeMockCanvas(),
-        blueprint: { version: 1, nodes: [{ id: 'n1' }], edges: [] },
+        blueprint: { version: 2, nodes: [makeNode('n1')], edges: [] },
       });
     });
 
@@ -754,7 +755,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
       useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
 
       // 修改蓝图（模拟添加节点）→ withHistory 推入 (1 组件 + 无 blueprint)
-      const blueprint2 = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
+      const blueprint2 = makeBlueprint([makeNode('n1'), makeNode('n2')]);
       withHistory(
         (partial: unknown) => {
           useScreenEditorStore.setState(partial as Partial<ScreenEditorState>);
@@ -788,7 +789,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     });
 
     it('redo 同时恢复 components、canvas 与 blueprint', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
 
       // 添加组件 → pushHistory 推入 (空组件 + blueprint)
@@ -819,7 +820,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     });
 
     it('undo 组件操作不会误回退 blueprint（蓝图与组件共享同一时间线）', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
 
       // 添加组件 → pushHistory 推入 (空组件 + blueprint)
@@ -836,7 +837,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     });
 
     it('undo 蓝图修改不会误回退 components 或 canvas', () => {
-      const blueprint1 = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint1 = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint1));
 
       // 1. 添加组件 → pushHistory 推入 (空组件 + 初始画布 + blueprint1)
@@ -845,7 +846,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
       useScreenEditorStore.getState().updateCanvas({ width: 1280 });
       // 3. 修改蓝图（模拟） → pushHistory 推入 (1 组件 + 1280 画布 + blueprint1)
       //    然后应用新蓝图 blueprint2
-      const blueprint2 = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
+      const blueprint2 = makeBlueprint([makeNode('n1'), makeNode('n2')]);
       // 通过 withHistory 制造一个含蓝图修改的历史条目
       withHistory(
         (partial: unknown) => {
@@ -896,7 +897,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     });
 
     it('旧快照（无 blueprint 字段）注入 future 后 redo 也能正确恢复', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
       useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
 
@@ -925,7 +926,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
 
   describe('容量限制与 loadProject 清空语义不变', () => {
     it('HISTORY_LIMIT 对 blueprint 同样生效（旧快照被丢弃）', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
 
       // 制造 51 次修改，使最早的快照被丢弃
@@ -943,7 +944,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     });
 
     it('loadProject 清空历史（含 blueprint 的历史也被清空）', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
       useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
@@ -957,7 +958,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
 
   describe('blueprint 在 future 快照中的同步语义', () => {
     it('undo 后 future 中保存的快照包含 blueprint', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }]);
+      const blueprint = makeBlueprint([makeNode('n1')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
       useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
 
@@ -971,7 +972,7 @@ describe('历史快照扩展为三要素（任务 5.1）', () => {
     });
 
     it('redo 时 future 快照的 blueprint 正确恢复', () => {
-      const blueprint = makeBlueprint(1, [{ id: 'n1' }, { id: 'n2' }]);
+      const blueprint = makeBlueprint([makeNode('n1'), makeNode('n2')]);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', blueprint));
       useScreenEditorStore.getState().addComponent(makeComponent('comp-1'));
 
@@ -1004,13 +1005,9 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
     } as unknown as ScreenProject;
   }
 
-  /** 创建最小可用的 EventBlueprint mock */
-  function makeBlueprint(
-    version = 1,
-    nodes: unknown[] = [],
-    edges: unknown[] = [],
-  ): EventBlueprint {
-    return { version, nodes, edges } as unknown as EventBlueprint;
+  /** 创建最小可用的 EventBlueprint mock（V2 格式，避免 loadProject 触发迁移） */
+  function makeBlueprint(nodes: unknown[] = [], edges: unknown[] = []): EventBlueprint {
+    return { version: 2, nodes, edges } as unknown as EventBlueprint;
   }
 
   /** 创建一个 comment 节点 mock（含位置，便于模拟拖拽位移） */
@@ -1031,18 +1028,18 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
 
   describe('各编辑路径单条历史', () => {
     it('节点增删、连线增删、参数修改均各产生一条历史', () => {
-      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint(1, [], [])));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint([], [])));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
 
       // 新增节点 → +1
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n1')], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1')], []));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
 
       // 参数修改（config 变化）→ +1
       useScreenEditorStore
         .getState()
         .updateBlueprint(
-          makeBlueprint(1, [{ ...(makeNode('n1') as object), config: { text: 'hi' } }], []),
+          makeBlueprint([{ ...(makeNode('n1') as object), config: { text: 'hi' } }], []),
         );
       expect(useScreenEditorStore.getState().history.past).toHaveLength(2);
 
@@ -1051,7 +1048,6 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
         .getState()
         .updateBlueprint(
           makeBlueprint(
-            1,
             [makeNode('n1'), makeNode('n2')],
             [{ id: 'e1', source: 'n1', sourceHandle: 'out', target: 'n2', targetHandle: 'in' }],
           ),
@@ -1059,21 +1055,21 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
       expect(useScreenEditorStore.getState().history.past).toHaveLength(3);
 
       // 删除节点 → +1
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n2')], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n2')], []));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(4);
     });
 
     it('每次编辑只产生一条历史，快照为修改前状态', () => {
-      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint(1, [], [])));
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n1')], []));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint([], [])));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1')], []));
 
       const past = useScreenEditorStore.getState().history.past;
       expect(past).toHaveLength(1);
       // 快照为修改前（空蓝图）
-      expect(past[0].blueprint).toEqual(makeBlueprint(1, [], []));
+      expect(past[0].blueprint).toEqual(makeBlueprint([], []));
       // 当前为修改后
       expect(useScreenEditorStore.getState().project?.blueprint).toEqual(
-        makeBlueprint(1, [makeNode('n1')], []),
+        makeBlueprint([makeNode('n1')], []),
       );
     });
   });
@@ -1082,24 +1078,18 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
     it('手势期间多次 updateBlueprint 只更新数据不入栈，结束手势补一条历史', () => {
       useScreenEditorStore
         .getState()
-        .loadProject(makeProject('proj-1', makeBlueprint(1, [makeNode('n1', 0, 0)], [])));
+        .loadProject(makeProject('proj-1', makeBlueprint([makeNode('n1', 0, 0)], [])));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
 
       useScreenEditorStore.getState().beginBlueprintGesture();
       // 拖拽过程：连续位置更新（模拟每帧）
-      useScreenEditorStore
-        .getState()
-        .updateBlueprint(makeBlueprint(1, [makeNode('n1', 10, 10)], []));
-      useScreenEditorStore
-        .getState()
-        .updateBlueprint(makeBlueprint(1, [makeNode('n1', 20, 20)], []));
-      useScreenEditorStore
-        .getState()
-        .updateBlueprint(makeBlueprint(1, [makeNode('n1', 30, 30)], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1', 10, 10)], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1', 20, 20)], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1', 30, 30)], []));
 
       // 手势期间：数据已更新到最新位置，但不产生历史；脏标记置位
       expect(useScreenEditorStore.getState().project?.blueprint).toEqual(
-        makeBlueprint(1, [makeNode('n1', 30, 30)], []),
+        makeBlueprint([makeNode('n1', 30, 30)], []),
       );
       expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
       expect(useScreenEditorStore.getState().isDirty).toBe(true);
@@ -1110,8 +1100,8 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
     });
 
     it('拖拽结束补入的历史快照为拖拽前状态，undo/redo 正确恢复', () => {
-      const before = makeBlueprint(1, [makeNode('n1', 0, 0)], []);
-      const after = makeBlueprint(1, [makeNode('n1', 50, 50)], []);
+      const before = makeBlueprint([makeNode('n1', 0, 0)], []);
+      const after = makeBlueprint([makeNode('n1', 50, 50)], []);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', before));
 
       useScreenEditorStore.getState().beginBlueprintGesture();
@@ -1129,15 +1119,13 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
     });
 
     it('手势期间无净变化时不补历史（拖拽后回到原位）', () => {
-      const bp = makeBlueprint(1, [makeNode('n1', 0, 0)], []);
+      const bp = makeBlueprint([makeNode('n1', 0, 0)], []);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', bp));
 
       useScreenEditorStore.getState().beginBlueprintGesture();
       // 拖出去又拖回来（净变化为 0）
-      useScreenEditorStore
-        .getState()
-        .updateBlueprint(makeBlueprint(1, [makeNode('n1', 20, 20)], []));
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n1', 0, 0)], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1', 20, 20)], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1', 0, 0)], []));
       useScreenEditorStore.getState().endBlueprintGesture();
 
       expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
@@ -1146,15 +1134,15 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
 
   describe('空提交跳过', () => {
     it('updateBlueprint 内容相同不入栈也不置脏', () => {
-      const bp = makeBlueprint(1, [makeNode('n1')], []);
+      const bp = makeBlueprint([makeNode('n1')], []);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', bp));
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n1')], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1')], []));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
       expect(useScreenEditorStore.getState().isDirty).toBe(false);
     });
 
     it('未 begin 直接 end 为空操作；begin 后立即 end（无更新）不产生历史', () => {
-      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint(1, [], [])));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint([], [])));
       // 未 begin 直接 end → 空操作
       useScreenEditorStore.getState().endBlueprintGesture();
       expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
@@ -1167,12 +1155,12 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
 
   describe('手势状态管理', () => {
     it('begin 幂等：重复 begin 不重置 baseline', () => {
-      const bp = makeBlueprint(1, [makeNode('n1', 0, 0)], []);
+      const bp = makeBlueprint([makeNode('n1', 0, 0)], []);
       useScreenEditorStore.getState().loadProject(makeProject('proj-1', bp));
       useScreenEditorStore.getState().beginBlueprintGesture();
       const baseline1 = useScreenEditorStore.getState().blueprintGesture.baseline;
       // 手势期间更新一次
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n1', 5, 5)], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1', 5, 5)], []));
       // 重复 begin 不应重置 baseline
       useScreenEditorStore.getState().beginBlueprintGesture();
       expect(useScreenEditorStore.getState().blueprintGesture.baseline).toEqual(baseline1);
@@ -1180,24 +1168,24 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
     });
 
     it('手势结束后 updateBlueprint 恢复正常入栈', () => {
-      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint(1, [], [])));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint([], [])));
       useScreenEditorStore.getState().beginBlueprintGesture();
-      useScreenEditorStore.getState().updateBlueprint(makeBlueprint(1, [makeNode('n1')], []));
+      useScreenEditorStore.getState().updateBlueprint(makeBlueprint([makeNode('n1')], []));
       useScreenEditorStore.getState().endBlueprintGesture();
       expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
 
       // 手势结束后再编辑 → 正常入栈
       useScreenEditorStore
         .getState()
-        .updateBlueprint(makeBlueprint(1, [makeNode('n1'), makeNode('n2')], []));
+        .updateBlueprint(makeBlueprint([makeNode('n1'), makeNode('n2')], []));
       expect(useScreenEditorStore.getState().history.past).toHaveLength(2);
     });
 
     it('loadProject 重置手势状态', () => {
-      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint(1, [], [])));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', makeBlueprint([], [])));
       useScreenEditorStore.getState().beginBlueprintGesture();
       expect(useScreenEditorStore.getState().blueprintGesture.active).toBe(true);
-      useScreenEditorStore.getState().loadProject(makeProject('proj-2', makeBlueprint(1, [], [])));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-2', makeBlueprint([], [])));
       expect(useScreenEditorStore.getState().blueprintGesture.active).toBe(false);
       expect(useScreenEditorStore.getState().blueprintGesture.baseline).toBeUndefined();
     });

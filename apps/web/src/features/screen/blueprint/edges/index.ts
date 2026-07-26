@@ -8,4 +8,4 @@
  * 引脚磁吸与兼容判定辅助位于 lib/pin-compatibility.ts。
  */
 
-export { ExecEdge } from './exec-edge';
+export { ExecEdge, EXEC_EDGE_MARKER_END } from './exec-edge';

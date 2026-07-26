@@ -1,8 +1,8 @@
 /**
- * TemplateGallery 组件测试（任务 9.3）
+ * TemplateGallery 组件测试（任务 9.3 / 任务 6.1 V2 重写）
  *
  * 验证点：
- * - 渲染三个模板卡片
+ * - 渲染四个模板卡片（含 click-delay-show 延时模板）
  * - 每个卡片包含名称与描述
  * - 点击卡片触发 onSelect，传入正确的 templateId
  * - 卡片有正确的 data-testid 与 data-template-id
@@ -13,17 +13,17 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { TemplateGallery } from './template-gallery';
 import { BLUEPRINT_TEMPLATES } from './template-definitions';
 
-describe('TemplateGallery（任务 9.3）', () => {
+describe('TemplateGallery（任务 6.1 V2）', () => {
   describe('渲染', () => {
-    it('渲染三个模板卡片', () => {
+    it('渲染四个模板卡片', () => {
       render(<TemplateGallery onSelect={vi.fn()} />);
 
       const gallery = screen.getByTestId('template-gallery');
       expect(gallery).toBeInTheDocument();
 
-      // 三个卡片（role=listitem 在 button 上）
+      // 四个卡片（role=listitem 在 button 上）
       const cards = screen.getAllByRole('listitem');
-      expect(cards).toHaveLength(3);
+      expect(cards).toHaveLength(4);
     });
 
     it('每个卡片显示模板名称', () => {
@@ -49,6 +49,7 @@ describe('TemplateGallery（任务 9.3）', () => {
       expect(cards[0]).toHaveAttribute('data-template-id', 'click-navigate');
       expect(cards[1]).toHaveAttribute('data-template-id', 'click-toggle-visibility');
       expect(cards[2]).toHaveAttribute('data-template-id', 'page-load-refresh');
+      expect(cards[3]).toHaveAttribute('data-template-id', 'click-delay-show');
     });
   });
 
@@ -79,6 +80,15 @@ describe('TemplateGallery（任务 9.3）', () => {
       fireEvent.click(screen.getByTestId('template-card-page-load-refresh'));
 
       expect(onSelect).toHaveBeenCalledWith('page-load-refresh');
+    });
+
+    it('点击 click-delay-show 卡片触发对应 onSelect', () => {
+      const onSelect = vi.fn();
+      render(<TemplateGallery onSelect={onSelect} />);
+
+      fireEvent.click(screen.getByTestId('template-card-click-delay-show'));
+
+      expect(onSelect).toHaveBeenCalledWith('click-delay-show');
     });
 
     it('点击不同卡片传入不同 templateId（不混淆）', () => {

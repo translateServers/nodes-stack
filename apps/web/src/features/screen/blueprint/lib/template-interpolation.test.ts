@@ -12,10 +12,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   interpolateActionConfig,
+  interpolateApiDataSourceConfig,
   interpolateTemplate,
   type TemplateContext,
 } from './template-interpolation.js';
-import type { BlueprintActionConfig } from '@nebula/shared';
+import type { ApiDataSourceConfig, BlueprintActionConfig } from '@nebula/shared';
 
 // ===== 公共上下文构造器 =====
 
@@ -306,5 +307,133 @@ describe('interpolateActionConfig — 动作配置插值', () => {
     const originalHeadersValue = config.headers.Authorization;
     interpolateActionConfig(config, makeContext());
     expect(config.headers.Authorization).toBe(originalHeadersValue);
+  });
+});
+
+// ===== interpolateTemplate — globalVars 全局变量插值（Task 8.4） =====
+
+describe('interpolateTemplate — globalVars 全局变量插值', () => {
+  it('{{globalVars.apiBaseUrl}}/data 正确替换为 https://api.example.com/data', () => {
+    const ctx: TemplateContext = {
+      globalVars: { apiBaseUrl: 'https://api.example.com' },
+    };
+    expect(interpolateTemplate('{{globalVars.apiBaseUrl}}/data', ctx)).toBe(
+      'https://api.example.com/data',
+    );
+  });
+
+  it('globalVars.number 值正确转换为字符串', () => {
+    const ctx: TemplateContext = { globalVars: { maxRetries: 3 } };
+    expect(interpolateTemplate('retries={{globalVars.maxRetries}}', ctx)).toBe('retries=3');
+  });
+
+  it('globalVars.boolean 值正确转换为字符串', () => {
+    const ctx: TemplateContext = { globalVars: { enabled: true } };
+    expect(interpolateTemplate('enabled={{globalVars.enabled}}', ctx)).toBe('enabled=true');
+  });
+
+  it('globalVars.object 值转换为 JSON 字符串', () => {
+    const ctx: TemplateContext = { globalVars: { theme: { primary: '#fff' } } };
+    expect(interpolateTemplate('{{globalVars.theme}}', ctx)).toBe('{"primary":"#fff"}');
+  });
+
+  it('未定义的 globalVars.xxx 替换为空字符串', () => {
+    const ctx: TemplateContext = { globalVars: { apiBaseUrl: 'https://a.com' } };
+    expect(interpolateTemplate('{{globalVars.missing}}/data', ctx)).toBe('/data');
+  });
+
+  it('globalVars 整体未提供时降级为空字符串', () => {
+    const ctx: TemplateContext = {};
+    expect(interpolateTemplate('{{globalVars.apiBaseUrl}}/data', ctx)).toBe('/data');
+  });
+
+  it('globalVars 与 trigger/event 占位符混合使用', () => {
+    const ctx: TemplateContext = {
+      trigger: { value: 'hello', data: {} },
+      event: { componentId: 'c1' },
+      globalVars: { apiBaseUrl: 'https://api.example.com' },
+    };
+    const template =
+      '{{globalVars.apiBaseUrl}}/items?comp={{event.componentId}}&q={{trigger.value}}';
+    expect(interpolateTemplate(template, ctx)).toBe(
+      'https://api.example.com/items?comp=c1&q=hello',
+    );
+  });
+});
+
+// ===== interpolateApiDataSourceConfig — 数据源 API 配置插值（Task 8.5） =====
+
+describe('interpolateApiDataSourceConfig — 数据源 API 配置插值', () => {
+  it('插值 url / headers / params 的字符串值', () => {
+    const config: ApiDataSourceConfig = {
+      url: '{{globalVars.apiBaseUrl}}/data',
+      method: 'GET',
+      headers: { Authorization: 'Bearer {{globalVars.token}}' },
+      params: {
+        comp: '{{globalVars.compId}}',
+        limit: 100,
+        nested: { a: 1 },
+      },
+      refreshInterval: 60,
+    };
+    const globalVars = {
+      apiBaseUrl: 'https://api.example.com',
+      token: 'abc123',
+      compId: 'c1',
+    };
+    const result = interpolateApiDataSourceConfig(config, globalVars);
+    expect(result).toEqual({
+      url: 'https://api.example.com/data',
+      method: 'GET',
+      headers: { Authorization: 'Bearer abc123' },
+      params: {
+        comp: 'c1',
+        limit: 100,
+        nested: { a: 1 },
+      },
+      refreshInterval: 60,
+    });
+  });
+
+  it('params 中非 string 值（number/object）原样保留', () => {
+    const config: ApiDataSourceConfig = {
+      url: 'https://a.com',
+      method: 'GET',
+      params: { count: 42, enabled: true, obj: { k: 'v' } },
+    };
+    const result = interpolateApiDataSourceConfig(config, { x: 'y' });
+    expect(result.params).toEqual({ count: 42, enabled: true, obj: { k: 'v' } });
+  });
+
+  it('未定义的 globalVars.xxx 降级为空字符串', () => {
+    const config: ApiDataSourceConfig = {
+      url: '{{globalVars.missing}}/data',
+      method: 'GET',
+    };
+    const result = interpolateApiDataSourceConfig(config, {});
+    expect(result.url).toBe('/data');
+  });
+
+  it('纯函数：不修改原配置对象', () => {
+    const config: ApiDataSourceConfig = {
+      url: '{{globalVars.apiBaseUrl}}/data',
+      method: 'GET',
+      headers: { Authorization: '{{globalVars.token}}' },
+    };
+    const original = { ...config, headers: { ...config.headers } };
+    interpolateApiDataSourceConfig(config, { apiBaseUrl: 'https://a.com', token: 't' });
+    expect(config.url).toBe(original.url);
+    expect(config.headers?.Authorization).toBe(original.headers?.Authorization);
+  });
+
+  it('无 headers / params 时仅插值 url', () => {
+    const config: ApiDataSourceConfig = {
+      url: '{{globalVars.apiBaseUrl}}/data',
+      method: 'GET',
+    };
+    const result = interpolateApiDataSourceConfig(config, { apiBaseUrl: 'https://a.com' });
+    expect(result.url).toBe('https://a.com/data');
+    expect(result.headers).toBeUndefined();
+    expect(result.params).toBeUndefined();
   });
 });

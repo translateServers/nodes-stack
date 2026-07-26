@@ -265,14 +265,16 @@ describe('useUpdateScreenProject', () => {
 
     it('任务 5.3：保存载荷包含 blueprint 字段', async () => {
       const store = useScreenEditorStore;
+      // V2 格式蓝图（global pageLoad 节点），避免 loadProject 触发 V1→V2 迁移
       const blueprint = {
-        version: 1 as const,
+        version: 2 as const,
         nodes: [
           {
-            id: 'trigger-1',
-            kind: 'trigger' as const,
+            id: 'v2-component-pageLoad',
+            kind: 'component' as const,
+            componentId: 'global',
+            globalType: 'pageLoad' as const,
             position: { x: 0, y: 0 },
-            config: { type: 'pageLoad' as const },
           },
         ],
         edges: [],

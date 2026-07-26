@@ -108,10 +108,15 @@ vi.mock('./snapshot-manager-dialog', () => ({
 
 vi.mock('../blueprint/sheet', () => ({
   BlueprintSheet: () => null,
+  BlueprintSheetV2: () => null,
 }));
 
 vi.mock('../blueprint/compiler', () => ({
   compileBlueprint: vi.fn(() => ({ rules: [], diagnostics: [] })),
+}));
+
+vi.mock('../blueprint/compiler/v2-compile', () => ({
+  compileBlueprintV2: vi.fn(() => ({ rules: [], diagnostics: [] })),
 }));
 
 vi.mock('./code-editor-sheet', () => ({
@@ -122,14 +127,15 @@ import { useParams } from '@tanstack/react-router';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { ScreenEditor } from './screen-editor';
 import { useScreenEditorStore } from '../stores/editor-store';
-import { compileBlueprint, type Diagnostic } from '../blueprint/compiler';
+import { type Diagnostic } from '../blueprint/compiler';
+import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
 import { toast } from 'sonner';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
 const mockUseScreenProject = useScreenProject as unknown as ReturnType<typeof vi.fn>;
 const mockUseUpdateScreenProject = useUpdateScreenProject as unknown as ReturnType<typeof vi.fn>;
 const mockUsePublishScreenProject = usePublishScreenProject as unknown as ReturnType<typeof vi.fn>;
-const mockCompileBlueprint = compileBlueprint as unknown as ReturnType<typeof vi.fn>;
+const mockCompileBlueprintV2 = compileBlueprintV2 as unknown as ReturnType<typeof vi.fn>;
 
 const BASELINE_UPDATED_AT = '2025-06-01 10:30:45';
 
@@ -918,7 +924,7 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
     mockUseScreenProject.mockReset();
     mockUseUpdateScreenProject.mockReset();
     mockUsePublishScreenProject.mockReset();
-    mockCompileBlueprint.mockReset();
+    mockCompileBlueprintV2.mockReset();
     capturedCallbacks = {};
 
     mockUseParams.mockReturnValue({ id: 'screen-1' });
@@ -930,13 +936,14 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
   });
 
   const validBlueprint = {
-    version: 1 as const,
+    version: 2 as const,
     nodes: [
       {
-        id: 'trigger-1',
-        kind: 'trigger' as const,
+        id: 'v2-component-pageLoad',
+        kind: 'component' as const,
+        componentId: 'global',
+        globalType: 'pageLoad' as const,
         position: { x: 0, y: 0 },
-        config: { type: 'pageLoad' as const },
       },
     ],
     edges: [],
@@ -953,7 +960,7 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
       message: '执行流存在循环：trigger-1 → action-1 → trigger-1',
       nodeId: 'trigger-1',
     };
-    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
+    mockCompileBlueprintV2.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
 
     render(<ScreenEditor />);
 
@@ -961,7 +968,7 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
 
     fireEvent.click(screen.getByText('发布'));
 
-    expect(mockCompileBlueprint).toHaveBeenCalledTimes(1);
+    expect(mockCompileBlueprintV2).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(screen.getByText('蓝图存在错误')).toBeInTheDocument();
     expect(screen.getByText(/1 个错误/)).toBeInTheDocument();
@@ -977,7 +984,7 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
     render(<ScreenEditor />);
     fireEvent.click(screen.getByText('发布'));
 
-    expect(mockCompileBlueprint).not.toHaveBeenCalled();
+    expect(mockCompileBlueprintV2).not.toHaveBeenCalled();
     expect(mockPublishMutate).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
@@ -999,12 +1006,12 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
       message: '孤立子图',
       nodeId: 'action-2',
     };
-    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [warningDiag, infoDiag] });
+    mockCompileBlueprintV2.mockReturnValue({ rules: [], diagnostics: [warningDiag, infoDiag] });
 
     render(<ScreenEditor />);
     fireEvent.click(screen.getByText('发布'));
 
-    expect(mockCompileBlueprint).toHaveBeenCalledTimes(1);
+    expect(mockCompileBlueprintV2).toHaveBeenCalledTimes(1);
     expect(mockPublishMutate).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
@@ -1020,7 +1027,7 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
       message: '动作缺少必填参数',
       nodeId: 'action-1',
     };
-    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
+    mockCompileBlueprintV2.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
 
     render(<ScreenEditor />);
     fireEvent.click(screen.getByText('发布'));
@@ -1045,7 +1052,7 @@ describe('ScreenEditor 发布蓝图诊断确认（任务 5.3）', () => {
       message: '循环引用',
       nodeId: 'trigger-1',
     };
-    mockCompileBlueprint.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
+    mockCompileBlueprintV2.mockReturnValue({ rules: [], diagnostics: [errorDiag] });
 
     render(<ScreenEditor />);
     fireEvent.click(screen.getByText('发布'));

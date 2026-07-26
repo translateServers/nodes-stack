@@ -5,8 +5,10 @@ import type {
   ScreenComponent,
   CanvasConfig,
   EventBlueprint,
+  EventBlueprintV2,
   GlobalVariable,
 } from '@nebula/shared';
+import { migrateBlueprintV1ToV2, EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import { loadPreferences, savePreference, type PreferenceValues } from '../lib/preferences-persist';
 
 /**
@@ -15,11 +17,14 @@ import { loadPreferences, savePreference, type PreferenceValues } from '../lib/p
  *
  * `blueprint` / `globalVariables` 为可选字段：旧快照（任务 5.1 / Task 8 前的历史栈）无此字段，
  * undo/redo 时按 undefined / [] 处理，向后兼容。
+ *
+ * 蓝图字段类型为 V1 | V2 联合：编辑器加载时自动迁移 V1 → V2，之后所有内存态与历史栈均为 V2。
+ * V1 仅在旧快照回放或服务器旧数据加载瞬间出现，下一次 updateBlueprint 即被覆盖为 V2。
  */
 interface HistoryEntry {
   components: ScreenComponent[];
   canvas: CanvasConfig;
-  blueprint?: EventBlueprint;
+  blueprint?: EventBlueprint | EventBlueprintV2;
   globalVariables?: GlobalVariable[];
 }
 
@@ -113,7 +118,7 @@ interface ScreenEditorData {
    *   使 undo 能回到手势前的状态。
    * 不进入历史栈本身，仅作运行时标记。
    */
-  blueprintGesture: { active: boolean; baseline: EventBlueprint | undefined };
+  blueprintGesture: { active: boolean; baseline: EventBlueprint | EventBlueprintV2 | undefined };
   /**
    * 事件蓝图 Sheet 开关（任务 4.7）：属性面板 QuickEventEditor「打开事件蓝图」按钮通过
    * `openBlueprintSheet` 入口打开 Sheet，无需依赖 React state 拉起，便于跨组件触发。
@@ -163,10 +168,11 @@ interface ScreenEditorActions {
   /**
    * 更新事件蓝图（任务 4.7/5.2）：写入 project.blueprint 并入历史栈。
    * - 传入 undefined 表示清除蓝图
+   * - 接受 V1 或 V2 蓝图：V1 会在内部自动迁移为 V2 后再写入（向后兼容旧调用方）
    * - 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
    * - 手势进行中（beginBlueprintGesture 后）只更新数据与脏标记，不入历史栈
    */
-  updateBlueprint: (blueprint: EventBlueprint | undefined) => void;
+  updateBlueprint: (blueprint: EventBlueprint | EventBlueprintV2 | undefined) => void;
   /**
    * 开始一次蓝图连续编辑手势（任务 5.2），如节点拖拽。
    * 手势期间的 `updateBlueprint` 调用合并为一次提交，避免每帧入栈。
@@ -389,15 +395,49 @@ export function withHistory(
   set((state: ScreenEditorState) => ({ ...updater(state), isDirty: true }), false, actionName);
 }
 
+/**
+ * 将传入蓝图归一化为 V2 格式（任务 8.1：项目加载时自动迁移）。
+ *
+ * - undefined → undefined（无蓝图）
+ * - V2 蓝图 → 原样返回
+ * - V1 蓝图 → 调用 migrateBlueprintV1ToV2 迁移；迁移失败（warnings 非空但蓝图仍可用）时
+ *   仍返回迁移结果，warnings 由调用方决定是否提示用户
+ *
+ * 设计为模块级纯函数，便于单测与复用。
+ */
+export function normalizeBlueprintToV2(blueprint: EventBlueprint | EventBlueprintV2 | undefined): {
+  blueprint: EventBlueprintV2 | undefined;
+  warnings: string[];
+} {
+  if (blueprint === undefined) return { blueprint: undefined, warnings: [] };
+  if (blueprint.version === EVENT_BLUEPRINT_VERSION_V2) {
+    return { blueprint, warnings: [] };
+  }
+  // V1 → V2 迁移
+  const result = migrateBlueprintV1ToV2(blueprint);
+  return {
+    blueprint: result.blueprint,
+    warnings: result.warnings.map((w) => w.message),
+  };
+}
+
 export const useScreenEditorStore = create<ScreenEditorState>()(
   devtools(
     (set, get) => ({
       ...initialData,
 
       loadProject: (project) => {
+        // 任务 8.1：项目加载时自动迁移 V1 蓝图 → V2，编辑器内存始终为 V2
+        // 迁移 warnings 当前静默处理（仅在控制台 debug），后续可在 UI 提示
+        const { blueprint: v2Blueprint, warnings } = normalizeBlueprintToV2(project.blueprint);
+        if (warnings.length > 0) {
+          console.debug('[blueprint] V1→V2 migration warnings:', warnings);
+        }
+        const normalizedProject: ScreenProject =
+          v2Blueprint === project.blueprint ? project : { ...project, blueprint: v2Blueprint };
         set(
           {
-            project,
+            project: normalizedProject,
             selectedComponentIds: [],
             history: { past: [], future: [] },
             isDirty: false,
@@ -560,14 +600,17 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       updateBlueprint: (blueprint) => {
         const { project, blueprintGesture } = get();
         if (!project) return;
+        // 任务 8.1：接受 V1 或 V2 蓝图，内部归一化为 V2 后再写入。
+        // 这样 V1 调用方（如旧版本快照回放、外部程序化插入）也能正常工作。
+        const { blueprint: v2Blueprint } = normalizeBlueprintToV2(blueprint);
         // 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
         // undefined === undefined 或同引用即无变化
-        if (project.blueprint === blueprint) return;
+        if (project.blueprint === v2Blueprint) return;
         // 深比较：内容相同也不入栈（避免空提交）
         if (
           project.blueprint &&
-          blueprint &&
-          JSON.stringify(project.blueprint) === JSON.stringify(blueprint)
+          v2Blueprint &&
+          JSON.stringify(project.blueprint) === JSON.stringify(v2Blueprint)
         ) {
           return;
         }
@@ -578,7 +621,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             (state) => {
               if (!state.project) return {};
               return {
-                project: { ...state.project, blueprint },
+                project: { ...state.project, blueprint: v2Blueprint },
                 isDirty: true,
               };
             },
@@ -592,7 +635,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
           return {
             project: {
               ...state.project,
-              blueprint,
+              blueprint: v2Blueprint,
             },
           };
         });
