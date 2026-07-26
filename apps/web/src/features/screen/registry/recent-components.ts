@@ -14,11 +14,19 @@
  * }
  * ```
  *
- * 读取时按 lastUsedAt 倒序取前 N 条（默认 5）。
+ * 读取时按 lastUsedAt 倒序取前 N 条（默认 8）。
  */
 
 const STORAGE_KEY = 'nebula:recent-components';
-const DEFAULT_LIMIT = 5;
+
+/**
+ * 「最近使用」分区默认展示条数。
+ *
+ * Task 9：从 5 调整为 8，以覆盖更大规模组件库的高频工作集。
+ * 调用方仍可通过 `getRecentComponents(limit)` 传入自定义上限。
+ */
+export const DEFAULT_RECENT_LIMIT = 8;
+
 const MAX_ENTRIES = 20;
 
 /** 单个组件的使用统计 */
@@ -90,10 +98,10 @@ export function recordComponentUsage(type: string, now: number = Date.now()): vo
 /**
  * 读取最近使用的组件 type 列表（按 lastUsedAt 倒序）。
  *
- * @param limit 返回条目数上限（默认 5）
+ * @param limit 返回条目数上限（默认 DEFAULT_RECENT_LIMIT = 8）
  * @returns 按最近使用倒序排列的 entry 数组
  */
-export function getRecentComponents(limit: number = DEFAULT_LIMIT): RecentComponentEntry[] {
+export function getRecentComponents(limit: number = DEFAULT_RECENT_LIMIT): RecentComponentEntry[] {
   const map = safeRead();
   return Object.values(map)
     .sort((a, b) => b.lastUsedAt - a.lastUsedAt)

@@ -10,13 +10,14 @@ import {
 
 describe('Component Registry', () => {
   describe('COMPONENT_DEFINITIONS', () => {
-    it('should contain text, bar-chart, rect, ellipse, image definitions', () => {
-      expect(COMPONENT_DEFINITIONS).toHaveLength(5);
+    it('should contain text, bar-chart, rect, ellipse, image, button definitions', () => {
+      expect(COMPONENT_DEFINITIONS).toHaveLength(6);
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'text')).toBeDefined();
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'bar-chart')).toBeDefined();
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'rect')).toBeDefined();
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'ellipse')).toBeDefined();
       expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'image')).toBeDefined();
+      expect(COMPONENT_DEFINITIONS.find((d) => d.type === 'button')).toBeDefined();
     });
 
     it('Phase 2 Slice C：所有定义带 keywords / description 元数据', () => {
@@ -181,6 +182,49 @@ describe('Component Registry', () => {
       expect(instance?.position.width).toBe(800);
       expect(instance?.position.height).toBe(600);
     });
+
+    // 按钮组件创建工厂
+    it('创建按钮组件实例使用默认尺寸、样式与 props', () => {
+      const instance = createComponentInstance('button', 100, 100, 1, []);
+      expect(instance).not.toBeNull();
+      expect(instance?.type).toBe('button');
+      expect(instance?.name).toBe('按钮');
+      expect(instance?.position).toEqual({ x: 100, y: 100, width: 120, height: 48 });
+      expect(instance?.props).toEqual({ text: '按钮' });
+      expect(instance?.style.backgroundColor).toBe('#3b82f6');
+      expect(instance?.style.color).toBe('#ffffff');
+      expect(instance?.style.fontSize).toBe(14);
+      expect(instance?.style.borderRadius).toBe(8);
+    });
+
+    it('按钮组件在 text 分类下', () => {
+      const buttonDef = getDefinitionByType('button');
+      expect(buttonDef?.category).toBe('text');
+    });
+
+    it('按钮组件可序列化（可保存和重新加载）', () => {
+      const instance = createComponentInstance('button', 10, 20, 5, []);
+      const serialized = JSON.stringify(instance);
+      const restored = JSON.parse(serialized) as NonNullable<typeof instance>;
+      expect(restored.type).toBe('button');
+      expect(restored.position).toEqual({ x: 10, y: 20, width: 120, height: 48 });
+      expect(restored.props.text).toBe('按钮');
+      expect(restored.zIndex).toBe(5);
+    });
+
+    it('customSize 选项覆盖按钮默认尺寸', () => {
+      const instance = createComponentInstance('button', 0, 0, 1, [], {
+        customSize: { width: 200, height: 60 },
+      });
+      expect(instance?.position.width).toBe(200);
+      expect(instance?.position.height).toBe(60);
+    });
+
+    it('同类型按钮自动递增命名', () => {
+      const existing = [createComponentInstance('button', 0, 0, 1, [])!];
+      const second = createComponentInstance('button', 0, 0, 2, existing);
+      expect(second?.name).toBe('按钮 2');
+    });
   });
 
   describe('getDefinitionsByCategory', () => {
@@ -210,6 +254,13 @@ describe('Component Registry', () => {
       const decorations = getDefinitionsByCategory('decoration');
       expect(decorations[0]?.type).toBe('rect');
       expect(decorations[1]?.type).toBe('ellipse');
+    });
+
+    it('text 分类包含文本与按钮（按 order 升序：text order=1 在前，button order=2 在后）', () => {
+      const texts = getDefinitionsByCategory('text');
+      expect(texts).toHaveLength(2);
+      expect(texts[0]?.type).toBe('text');
+      expect(texts[1]?.type).toBe('button');
     });
   });
 

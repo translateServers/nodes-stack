@@ -26,8 +26,16 @@
  * - V2 动态锚点模式（dynamicAnchors：传入 events[]/actions[] 数组自动派生 Handle）
  */
 
-import type { JSX, ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
+
+/**
+ * 动态锚点行高（px）。
+ *
+ * 每个锚点占一行，行高固定，Handle 通过测量锚点列表容器相对节点的偏移
+ * 加上行索引 × 行高 + 行高/2 计算出精确的像素位置，与对应行垂直居中对齐。
+ */
+const ANCHOR_ROW_HEIGHT = 24;
 
 /** 节点类型配色方案（V1 + V2 共用） */
 export type NodeColorScheme =
@@ -199,14 +207,36 @@ export function BaseNodeShell({
   const sourceAnchors = dynamicAnchors?.sourceAnchors ?? [];
   const targetAnchors = dynamicAnchors?.targetAnchors ?? [];
 
-  // 动态锚点布局：单锚点居中，多锚点垂直排列
-  // 计算每个锚点的 top 百分比，避免锚点之间过近（最小间距 20%）
-  const sourceAnchorsLayout = layoutAnchors(sourceAnchors.length);
-  const targetAnchorsLayout = layoutAnchors(targetAnchors.length);
+  // 行数：source 与 target 共享行，行数取较大值
+  // 行 0 = source[0] + target[0]，行 1 = source[1] + target[1]，...
+  // 这样每个 Handle 与同行标签垂直对齐，用户一眼可见"事件/动作 → 引脚"映射
+  const rowCount = Math.max(sourceAnchors.length, targetAnchors.length);
+
+  // 测量锚点列表容器相对节点顶部的偏移（px），用于计算 Handle 的 top 像素位置。
+  // useLayoutEffect 在 DOM 变更后同步执行，浏览器绘制前完成，避免闪烁。
+  // jsdom 中 getBoundingClientRect 全 0，anchorOffset=0，Handle 位置退化为
+  // idx * 24 + 12，测试据此断言。
+  const nodeRef = useRef<HTMLDivElement>(null);
+  const anchorListRef = useRef<HTMLDivElement>(null);
+  const [anchorOffset, setAnchorOffset] = useState(0);
+
+  useLayoutEffect(() => {
+    const nodeEl = nodeRef.current;
+    const anchorListEl = anchorListRef.current;
+    if (!nodeEl || !anchorListEl) return;
+    const nodeRect = nodeEl.getBoundingClientRect();
+    const anchorRect = anchorListEl.getBoundingClientRect();
+    setAnchorOffset(anchorRect.top - nodeRect.top);
+  }, [typeLabel, label, sourceAnchors.length, targetAnchors.length]);
+
+  /** 计算 idx 行 Handle 的 top（px），垂直居中于该行 */
+  const getHandleTop = (idx: number): number =>
+    anchorOffset + idx * ANCHOR_ROW_HEIGHT + ANCHOR_ROW_HEIGHT / 2;
 
   return (
     <div
-      className={`relative min-w-[180px] max-w-[280px] rounded-md border-2 ${scheme.bg} ${borderClass} ${locateClass} px-3 py-2 transition-colors`}
+      ref={nodeRef}
+      className={`relative min-w-[200px] max-w-[280px] rounded-lg border-2 ${scheme.bg} ${borderClass} ${locateClass} px-3 py-2 shadow-sm transition-colors`}
       data-testid="blueprint-node"
       data-node-id={nodeId}
       data-node-kind={colorScheme}
@@ -220,25 +250,26 @@ export function BaseNodeShell({
     >
       {useDynamicAnchors ? (
         <>
-          {/* 动态 source 锚点（左侧）：每个事件一个 Handle */}
-          {sourceAnchors.map((anchor, idx) => (
-            <Handle
-              key={anchor.id}
-              type="source"
-              position={Position.Left}
-              id={anchor.id}
-              style={{ top: `${sourceAnchorsLayout[idx]}%` }}
-              className={HANDLE_BASE_CLASS}
-            />
-          ))}
-          {/* 动态 target 锚点（右侧）：每个动作一个 Handle */}
+          {/* 动态 target 锚点（左侧）：每个动作一个 Handle，top 与对应行对齐。
+           * 动作（输入）放在左侧，事件（输出）放在右侧，数据流从左到右：源节点 → 目标节点。 */}
           {targetAnchors.map((anchor, idx) => (
             <Handle
               key={anchor.id}
               type="target"
+              position={Position.Left}
+              id={anchor.id}
+              style={{ top: `${getHandleTop(idx)}px` }}
+              className={HANDLE_BASE_CLASS}
+            />
+          ))}
+          {/* 动态 source 锚点（右侧）：每个事件一个 Handle，top 与对应行对齐 */}
+          {sourceAnchors.map((anchor, idx) => (
+            <Handle
+              key={anchor.id}
+              type="source"
               position={Position.Right}
               id={anchor.id}
-              style={{ top: `${targetAnchorsLayout[idx]}%` }}
+              style={{ top: `${getHandleTop(idx)}px` }}
               className={HANDLE_BASE_CLASS}
             />
           ))}
@@ -251,9 +282,10 @@ export function BaseNodeShell({
         </>
       )}
 
+      {/* 头部：图标 + 类型标签 + 节点名称 */}
       <div className="flex items-center gap-2">
         <div
-          className={`flex size-6 shrink-0 items-center justify-center rounded ${scheme.iconBg} ${scheme.text}`}
+          className={`flex size-6 shrink-0 items-center justify-center rounded-md ${scheme.iconBg} ${scheme.text}`}
         >
           {icon}
         </div>
@@ -261,41 +293,69 @@ export function BaseNodeShell({
           <span className={`text-[10px] font-medium uppercase tracking-wide ${scheme.text}`}>
             {typeLabel}
           </span>
-          <span className="truncate text-sm font-medium text-foreground" title={label}>
+          <span className="truncate text-sm font-semibold text-foreground" title={label}>
             {label}
           </span>
         </div>
       </div>
 
-      {/* 动态锚点的标签列表（仅在启用 dynamicAnchors 时显示） */}
-      {useDynamicAnchors && (sourceAnchors.length > 0 || targetAnchors.length > 0) && (
-        <div className="mt-2 space-y-1 border-t border-border/30 pt-2">
-          {sourceAnchors.length > 0 && (
-            <div className="flex flex-wrap gap-1" data-anchor-group="source">
-              {sourceAnchors.map((anchor) => (
-                <span
-                  key={anchor.id}
-                  className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
-                  data-anchor-id={anchor.id}
+      {/* 动态锚点行列表（仅在启用 dynamicAnchors 且有锚点时显示）。
+       * 布局：target（动作）在左、source（事件）在右，符合"左→右"数据流约定。
+       * 每行高度 = ANCHOR_ROW_HEIGHT，Handle 的 top 通过 getHandleTop(idx) 与该行垂直居中对齐。
+       *
+       * 视觉设计：
+       * - target（动作，左）：蓝色圆点 + 蓝色文字，圆点靠近左侧 Handle
+       * - source（事件，右）：绿色文字 + 绿色圆点，圆点靠近右侧 Handle
+       * - 去除 chip 背景，用纯圆点 + 文字保持简洁
+       * - 行间用 gap 分隔，避免拥挤
+       */}
+      {useDynamicAnchors && rowCount > 0 && (
+        <div className="mt-2 border-t border-border/30 pt-1.5">
+          <div ref={anchorListRef}>
+            {Array.from({ length: rowCount }).map((_, rowIdx) => {
+              const source = sourceAnchors[rowIdx];
+              const target = targetAnchors[rowIdx];
+              return (
+                <div
+                  key={rowIdx}
+                  className="flex items-center gap-2"
+                  style={{ height: `${ANCHOR_ROW_HEIGHT}px` }}
+                  data-anchor-row={rowIdx}
                 >
-                  {anchor.label}
-                </span>
-              ))}
-            </div>
-          )}
-          {targetAnchors.length > 0 && (
-            <div className="flex flex-wrap gap-1" data-anchor-group="target">
-              {targetAnchors.map((anchor) => (
-                <span
-                  key={anchor.id}
-                  className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-700 dark:bg-blue-500/20 dark:text-blue-300"
-                  data-anchor-id={anchor.id}
-                >
-                  {anchor.label}
-                </span>
-              ))}
-            </div>
-          )}
+                  {/* target（动作）标签：左侧，靠近左侧 Handle */}
+                  <div className="flex min-w-0 flex-1 items-center">
+                    {target && (
+                      <div
+                        className="flex min-w-0 items-center gap-1.5"
+                        data-anchor-id={target.id}
+                        data-anchor-side="target"
+                      >
+                        <span className="size-1.5 shrink-0 rounded-full bg-blue-500 dark:bg-blue-400" />
+                        <span className="truncate text-xs font-medium text-blue-700 dark:text-blue-300">
+                          {target.label}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {/* source（事件）标签：右侧，靠近右侧 Handle */}
+                  <div className="flex min-w-0 flex-1 items-center justify-end">
+                    {source && (
+                      <div
+                        className="flex min-w-0 items-center gap-1.5"
+                        data-anchor-id={source.id}
+                        data-anchor-side="source"
+                      >
+                        <span className="truncate text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          {source.label}
+                        </span>
+                        <span className="size-1.5 shrink-0 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -324,31 +384,4 @@ export function BaseNodeShell({
       )}
     </div>
   );
-}
-
-/**
- * 计算 N 个锚点的垂直位置（百分比）。
- *
- * - 1 个锚点：居中（50%）
- * - 2 个锚点：30% / 70%
- * - 3 个锚点：25% / 50% / 75%
- * - 4+ 个锚点：均匀分布，首尾保留 15% / 85% 边距
- *
- * 返回的百分比数组顺序与锚点列表一致。
- */
-function layoutAnchors(count: number): number[] {
-  if (count <= 0) return [];
-  if (count === 1) return [50];
-  if (count === 2) return [30, 70];
-  if (count === 3) return [25, 50, 75];
-
-  // 4+ 锚点：均匀分布在 [15, 85] 区间内
-  const result: number[] = [];
-  const start = 15;
-  const end = 85;
-  const step = (end - start) / (count - 1);
-  for (let i = 0; i < count; i++) {
-    result.push(Math.round(start + step * i));
-  }
-  return result;
 }

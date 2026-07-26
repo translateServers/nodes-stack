@@ -13,6 +13,9 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import { Image } from 'lucide-react';
+import { mergeActions, mergeEvents } from '../component-events-actions';
+import type { ComponentModule } from '../types';
 
 interface ImageComponentProps {
   props: Record<string, unknown>;
@@ -49,3 +52,24 @@ export function ImageComponent({ props, style }: ImageComponentProps) {
     />
   );
 }
+
+const imageModule: ComponentModule = {
+  definition: {
+    type: 'image',
+    name: '图片',
+    category: 'media',
+    icon: 'Image',
+    keywords: ['图片', '图像', 'image', 'img', '照片', 'picture', 'logo'],
+    description: '图片组件，支持 src / alt 与圆角裁剪',
+    defaultProps: { src: '', alt: '' },
+    defaultSize: { width: 320, height: 240 },
+    defaultStyle: {},
+    order: 1,
+    events: mergeEvents(),
+    actions: mergeActions(),
+  },
+  renderer: ImageComponent,
+  icon: Image,
+};
+
+export default imageModule;

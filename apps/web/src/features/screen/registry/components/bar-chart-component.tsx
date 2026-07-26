@@ -1,9 +1,19 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { DataSourceConfig, RefreshIntervalUnit } from '@nebula/shared';
+import { BarChart3 } from 'lucide-react';
 import type { RendererComponentProps } from '../renderer';
+import {
+  DATASOURCE_ACTIONS,
+  DATASOURCE_EVENTS,
+  mergeActions,
+  mergeEvents,
+} from '../component-events-actions';
+import type { ComponentModule } from '../types';
+import { BAR_CHART_SCHEMA } from '../../property-schema/schemas';
 import { useChartData } from '../../hooks/use-chart-data';
 import { useApiDataSource } from '../../hooks/use-api-data-source';
 import { useDatasetSource } from '../../hooks/use-dataset-source';
+import { useComponentEvent } from '../../blueprint/runtime/component-event-context';
 
 /** 将刷新策略的 interval + unit 转换为秒数 */
 function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
@@ -36,6 +46,7 @@ function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
  * （任务 4.5，默认关闭，关闭时视觉与既有行为一致）。
  */
 export function BarChartComponent({
+  componentId,
   props,
   style,
   dataSource,
@@ -43,6 +54,9 @@ export function BarChartComponent({
   interaction,
   apiRawDataOverride,
 }: RendererComponentProps) {
+  // 事件蓝图修复：读取组件事件回调（编辑态返回 null，自动短路）
+  const emitEvent = useComponentEvent();
+
   // 任务 3.3：无数据层配置时回退遗留 props.data；有数据层时数据层唯一生效
   const effectiveDataSource = useMemo<DataSourceConfig | undefined>(() => {
     if (dataSource !== undefined) return dataSource;
@@ -76,6 +90,31 @@ export function BarChartComponent({
     useMock: true,
     refreshIntervalSeconds: datasetRefreshSeconds,
   });
+
+  // 事件蓝图修复：API 数据源状态变化时派发 dataLoaded / dataError
+  // - 仅在 apiRawDataOverride === undefined 时派发（避免 override 与 hook state 双重触发）
+  // - 仅在 emitEvent 非 null 时派发（编辑态短路）
+  // - 每次 status 变为 success/error 都派发（含定时刷新的重复 success）
+  useEffect(() => {
+    if (apiRawDataOverride !== undefined) return;
+    if (emitEvent === null) return;
+    if (apiState.status === 'success') {
+      emitEvent(componentId, 'dataLoaded');
+    } else if (apiState.status === 'error') {
+      emitEvent(componentId, 'dataError');
+    }
+  }, [componentId, apiState.status, apiRawDataOverride, emitEvent]);
+
+  // 事件蓝图修复：数据集数据源状态变化时派发 dataLoaded / dataError
+  useEffect(() => {
+    if (apiRawDataOverride !== undefined) return;
+    if (emitEvent === null) return;
+    if (datasetState.status === 'success') {
+      emitEvent(componentId, 'dataLoaded');
+    } else if (datasetState.status === 'error') {
+      emitEvent(componentId, 'dataError');
+    }
+  }, [componentId, datasetState.status, apiRawDataOverride, emitEvent]);
 
   // 任务 3.4：优先使用 override（refreshDataSource 完成后写入），否则回退 hook state
   const hookRawData = isDatasetType
@@ -187,3 +226,33 @@ export function BarChartComponent({
     </svg>
   );
 }
+
+const barChartModule: ComponentModule = {
+  definition: {
+    type: 'bar-chart',
+    name: '柱状图',
+    category: 'chart',
+    icon: 'BarChart3',
+    keywords: ['柱状图', '图表', 'chart', 'bar', '数据图', '可视化', '统计图'],
+    description: '柱状图，支持静态数据 / API 数据源、字段映射与排序',
+    defaultProps: {
+      title: '柱状图',
+      data: [
+        { name: 'A', value: 120 },
+        { name: 'B', value: 200 },
+        { name: 'C', value: 150 },
+        { name: 'D', value: 80 },
+        { name: 'E', value: 170 },
+      ],
+    },
+    defaultSize: { width: 400, height: 300 },
+    order: 1,
+    events: mergeEvents(DATASOURCE_EVENTS),
+    actions: mergeActions(DATASOURCE_ACTIONS),
+  },
+  renderer: BarChartComponent,
+  schema: BAR_CHART_SCHEMA,
+  icon: BarChart3,
+};
+
+export default barChartModule;

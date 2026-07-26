@@ -6,11 +6,8 @@ import type {
   LogicConfig,
   ScreenComponent,
 } from '@nebula/shared';
-import { TextComponent } from './components/text-component';
-import { BarChartComponent } from './components/bar-chart-component';
-import { RectComponent } from './components/rect-component';
-import { EllipseComponent } from './components/ellipse-component';
-import { ImageComponent } from './components/image-component';
+import './registered-components';
+import { getAllModules } from './registry';
 
 interface ComponentRendererProps {
   component: ScreenComponent;
@@ -28,8 +25,14 @@ interface ComponentRendererProps {
  *
  * 除 props/style 外，透传四层配置中渲染链路需要的
  * dataSource / logic / interaction；非图表组件忽略即可。
+ *
+ * componentId（事件蓝图修复）：组件运行时身份标识，供组件通过
+ * useComponentEvent() 派发 dataLoaded / dataError / click 等事件。
+ * 由 ComponentRenderer 从 component.id 取值并透传，所有 renderer 接收
+ * 但不强制消费。
  */
 export interface RendererComponentProps {
+  componentId: string;
   props: Record<string, unknown>;
   style: ComponentStyle;
   dataSource?: DataSourceConfig;
@@ -42,15 +45,23 @@ export interface RendererComponentProps {
   apiRawDataOverride?: unknown;
 }
 
-const RENDERERS: Record<string, React.ComponentType<RendererComponentProps>> = {
-  text: TextComponent,
-  'bar-chart': BarChartComponent,
-  // 任务 6.2：矩形与椭圆组件 renderer
-  rect: RectComponent,
-  ellipse: EllipseComponent,
-  // 任务 7.2：图片组件 renderer
-  image: ImageComponent,
-};
+/**
+ * 从注册中心派生 RENDERERS：遍历所有已注册 module，type → renderer。
+ *
+ * 改造前为手写 map（新增组件需手动同步），改造后由 registry 自动派生。
+ * 顶部 `import './registered-components'` 确保遍历前 registry 已填充。
+ *
+ * 类型断言说明：ComponentModule.renderer 声明为最小子集 `ComponentType<{props, style}>`，
+ * 实际多数组件接收更多 optional 字段（dataSource / logic / interaction / apiRawDataOverride），
+ * 由于这些字段在 RendererComponentProps 中均为 optional，运行时调用安全。
+ */
+const RENDERERS: Record<string, React.ComponentType<RendererComponentProps>> = (() => {
+  const map: Record<string, React.ComponentType<RendererComponentProps>> = {};
+  for (const mod of getAllModules()) {
+    map[mod.definition.type] = mod.renderer as React.ComponentType<RendererComponentProps>;
+  }
+  return map;
+})();
 
 /**
  * Memo 化的组件渲染器。
@@ -71,6 +82,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({
   }
   return (
     <Renderer
+      componentId={component.id}
       props={component.props}
       style={component.style}
       dataSource={component.dataSource}

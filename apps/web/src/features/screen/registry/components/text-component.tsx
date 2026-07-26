@@ -1,4 +1,8 @@
 import type { ComponentStyle } from '@nebula/shared';
+import { Type } from 'lucide-react';
+import { mergeActions, mergeEvents } from '../component-events-actions';
+import type { ComponentModule } from '../types';
+import { TEXT_SCHEMA } from '../../property-schema/schemas';
 
 interface TextComponentProps {
   props: Record<string, unknown>;
@@ -31,3 +35,25 @@ export function TextComponent({ props, style }: TextComponentProps) {
     </div>
   );
 }
+
+const textModule: ComponentModule = {
+  definition: {
+    type: 'text',
+    name: '文本',
+    category: 'text',
+    icon: 'Type',
+    keywords: ['文本', '文字', 'text', 'title', '标题', '段落'],
+    description: '可编辑的文本段落，支持字号、字色、对齐等样式',
+    defaultProps: { content: '请输入文本' },
+    defaultSize: { width: 200, height: 60 },
+    defaultStyle: { color: '#ffffff', fontSize: 14 },
+    order: 1,
+    events: mergeEvents(),
+    actions: mergeActions(),
+  },
+  renderer: TextComponent,
+  schema: TEXT_SCHEMA,
+  icon: Type,
+};
+
+export default textModule;

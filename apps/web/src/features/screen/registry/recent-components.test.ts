@@ -98,12 +98,12 @@ describe('registry · recent-components', () => {
       expect(recent.map((r) => r.type)).toEqual(['c', 'b']);
     });
 
-    it('默认 limit = 5', () => {
+    it('默认 limit = DEFAULT_RECENT_LIMIT（8）', () => {
       for (let i = 0; i < 10; i++) {
         recordComponentUsage(`type-${i}`, 1000 + i);
       }
       const recent = getRecentComponents();
-      expect(recent).toHaveLength(5);
+      expect(recent).toHaveLength(8);
     });
   });
 

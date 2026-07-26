@@ -8,6 +8,9 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import { Square } from 'lucide-react';
+import { mergeActions, mergeEvents } from '../component-events-actions';
+import type { ComponentModule } from '../types';
 
 interface RectComponentProps {
   props: Record<string, unknown>;
@@ -29,3 +32,29 @@ export function RectComponent({ style }: RectComponentProps) {
     />
   );
 }
+
+const rectModule: ComponentModule = {
+  definition: {
+    type: 'rect',
+    name: '矩形',
+    category: 'decoration',
+    icon: 'Square',
+    keywords: ['矩形', '方形', 'rect', 'rectangle', '框', '色块'],
+    description: '矩形装饰元素，支持背景色 / 边框 / 圆角',
+    defaultProps: {},
+    defaultSize: { width: 200, height: 120 },
+    defaultStyle: {
+      backgroundColor: '#3b82f6',
+      borderWidth: 0,
+      borderColor: '#1e40af',
+      borderRadius: 0,
+    },
+    order: 1,
+    events: mergeEvents(),
+    actions: mergeActions(),
+  },
+  renderer: RectComponent,
+  icon: Square,
+};
+
+export default rectModule;

@@ -196,6 +196,38 @@ export function useBlueprintPreviewRuntime(
     });
   }, [isEnabled]);
 
+  // ===== V1 interval 触发器调度（任务 5）=====
+  // V2 蓝图不支持 interval 触发器（globalType enum 不包含 interval），仅在 V1 模式下启用。
+  // 规则集变化时（依赖变化）自动清理重建，避免浮动定时器与内存泄漏。
+  useEffect(() => {
+    if (!isEnabled) return;
+    // V2 蓝图不建立 interval 调度
+    if (v1CompiledRules.length === 0 || v2CompiledRules.length > 0) return;
+    const intervalRules = v1CompiledRules.filter((rule) => rule.triggerConfig.type === 'interval');
+    if (intervalRules.length === 0) return;
+    const intervalIds: ReturnType<typeof setInterval>[] = [];
+    for (const rule of intervalRules) {
+      const triggerConfig = rule.triggerConfig;
+      if (triggerConfig.type !== 'interval') continue;
+      const intervalMs = triggerConfig.intervalMs;
+      const id = setInterval((): void => {
+        const run = async (): Promise<void> => {
+          await triggerAndExecute(v1RulesRef.current, { kind: 'interval' }, depsRef.current);
+        };
+        void run().catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(`[blueprint-preview] interval execution failed: ${message}`);
+        });
+      }, intervalMs);
+      intervalIds.push(id);
+    }
+    return (): void => {
+      for (const id of intervalIds) {
+        clearInterval(id);
+      }
+    };
+  }, [isEnabled, v1CompiledRules, v2CompiledRules]);
+
   // ===== V1 onComponentClick =====
   const onComponentClick = useCallback(
     (componentId: string): void => {

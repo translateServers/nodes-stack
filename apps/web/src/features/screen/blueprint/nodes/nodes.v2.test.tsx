@@ -230,15 +230,28 @@ describe('ComponentNode 渲染', () => {
     expect(targetIds).toContain('act:refreshData');
   });
 
-  it('锚点标签在节点正文显示', () => {
+  it('锚点标签在节点正文以行列表显示（与 Handle 对齐）', () => {
     const data = makeComponentData({ componentType: 'text' });
-    render(<ComponentNode {...makeComponentProps('c1', data, false)} />);
+    const { container } = render(<ComponentNode {...makeComponentProps('c1', data, false)} />);
 
     // text 组件派生默认事件/动作
     expect(screen.getByText('点击')).toBeInTheDocument();
     expect(screen.getByText('悬停')).toBeInTheDocument();
     expect(screen.getByText('显示')).toBeInTheDocument();
     expect(screen.getByText('隐藏')).toBeInTheDocument();
+
+    // 锚点行容器存在，且每行高度固定为 24px
+    const rows = container.querySelectorAll('[data-anchor-row]');
+    expect(rows.length).toBe(3); // max(2 events, 3 actions) = 3 行
+    expect(rows[0]?.getAttribute('style')).toContain('height: 24px');
+
+    // source 标签带 data-anchor-side="source"
+    const sourceLabels = container.querySelectorAll('[data-anchor-side="source"]');
+    expect(sourceLabels.length).toBe(2); // 点击 / 悬停
+
+    // target 标签带 data-anchor-side="target"
+    const targetLabels = container.querySelectorAll('[data-anchor-side="target"]');
+    expect(targetLabels.length).toBe(3); // 显示 / 隐藏 / 切换显隐
   });
 
   it('使用 emerald 配色', () => {
@@ -475,38 +488,44 @@ describe('V2 节点选中态与边框优先级', () => {
   });
 });
 
-// ===== 动态锚点布局 =====
+// ===== 动态锚点布局（行对齐） =====
 
 describe('动态锚点布局', () => {
-  it('单锚点居中（top: 50%）', () => {
+  it('单锚点：Handle top 居中于第 0 行（anchorOffset + 12px）', () => {
     const data = makeGlobalData('pageLoad'); // 仅 1 个 source 锚点
     const { container } = render(<GlobalNode {...makeGlobalProps('g1', data, false)} />);
 
     const handles = container.querySelectorAll('[data-testid="rf-handle"]');
     expect(handles).toHaveLength(1);
-    expect(handles[0]?.getAttribute('style')).toContain('top: 50%');
+    // jsdom 中 getBoundingClientRect 全 0 → anchorOffset=0
+    // Handle top = 0 + 0 * 24 + 12 = 12px
+    expect(handles[0]?.getAttribute('style')).toContain('top: 12px');
   });
 
-  it('多锚点垂直分布（bar-chart 3 事件 + 4 动作）', () => {
+  it('多锚点：source 与 target 同行对齐，top 按行索引递增', () => {
     const data = makeComponentData({ componentType: 'bar-chart' });
     const { container } = render(<ComponentNode {...makeComponentProps('c1', data, false)} />);
 
     const handles = container.querySelectorAll('[data-testid="rf-handle"]');
-    expect(handles).toHaveLength(7);
+    expect(handles).toHaveLength(7); // 3 source + 4 target
 
-    // 3 个 source 锚点：25% / 50% / 75%
+    // 3 个 source 锚点：行 0 / 1 / 2 → top = 12 / 36 / 60 px
     const sourceTops = Array.from(handles)
       .filter((h) => h.getAttribute('data-handle-type') === 'source')
       .map((h) => h.getAttribute('style'));
-    expect(sourceTops.some((s) => s?.includes('top: 25%'))).toBe(true);
-    expect(sourceTops.some((s) => s?.includes('top: 50%'))).toBe(true);
-    expect(sourceTops.some((s) => s?.includes('top: 75%'))).toBe(true);
+    expect(sourceTops.some((s) => s?.includes('top: 12px'))).toBe(true);
+    expect(sourceTops.some((s) => s?.includes('top: 36px'))).toBe(true);
+    expect(sourceTops.some((s) => s?.includes('top: 60px'))).toBe(true);
 
-    // 4 个 target 锚点：均匀分布在 15% ~ 85%
+    // 4 个 target 锚点：行 0 / 1 / 2 / 3 → top = 12 / 36 / 60 / 84 px
     const targetTops = Array.from(handles)
       .filter((h) => h.getAttribute('data-handle-type') === 'target')
       .map((h) => h.getAttribute('style'));
-    expect(targetTops.some((s) => s?.includes('top: 15%'))).toBe(true);
-    expect(targetTops.some((s) => s?.includes('top: 85%'))).toBe(true);
+    expect(targetTops.some((s) => s?.includes('top: 12px'))).toBe(true);
+    expect(targetTops.some((s) => s?.includes('top: 84px'))).toBe(true);
+
+    // source[0] 与 target[0] 在同一行（top 相同 = 12px）
+    expect(sourceTops.some((s) => s?.includes('top: 12px'))).toBe(true);
+    expect(targetTops.some((s) => s?.includes('top: 12px'))).toBe(true);
   });
 });

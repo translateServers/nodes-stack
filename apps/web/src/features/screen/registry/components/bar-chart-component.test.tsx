@@ -18,11 +18,51 @@ import type {
 } from '@nebula/shared';
 import { BarChartComponent } from './bar-chart-component';
 
+/**
+ * 事件蓝图修复 Task 4：mock useComponentEvent 与 useDatasetSource
+ *
+ * - mockEmitEventRef.current：useComponentEvent 返回值
+ *   - null（默认/编辑态）：组件派发逻辑短路
+ *   - vi.fn()（预览态）：记录派发调用供断言
+ * - mockDatasetStateRef.current：useDatasetSource 返回值
+ *   - 默认 { status: 'idle' }：与真实 hook 在 datasetId 为空时行为一致，不影响既有测试
+ *   - 测试中可覆写为 success/error 以触发事件派发
+ */
+type DatasetStateMock =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: unknown }
+  | { status: 'error'; error: { reason: string; message: string } };
+
+const { mockEmitEventRef, mockDatasetStateRef } = vi.hoisted<{
+  mockEmitEventRef: {
+    current: ((componentId: string, eventId: string, payload?: unknown) => void) | null;
+  };
+  mockDatasetStateRef: { current: DatasetStateMock };
+}>(() => ({
+  mockEmitEventRef: {
+    current: null,
+  },
+  mockDatasetStateRef: {
+    current: { status: 'idle' },
+  },
+}));
+
+vi.mock('../../blueprint/runtime/component-event-context', () => ({
+  useComponentEvent: () => mockEmitEventRef.current,
+}));
+
+vi.mock('../../hooks/use-dataset-source', () => ({
+  useDatasetSource: () => mockDatasetStateRef.current,
+}));
+
 const SAMPLE_DATA = [
   { name: '一月', value: 30 },
   { name: '二月', value: 80 },
   { name: '三月', value: 45 },
 ];
+
+const TEST_COMPONENT_ID = 'test-bar-chart-component';
 
 function renderBarChart(overrides: {
   props?: Record<string, unknown>;
@@ -30,9 +70,11 @@ function renderBarChart(overrides: {
   dataSource?: DataSourceConfig;
   logic?: LogicConfig;
   interaction?: InteractionConfig;
+  componentId?: string;
 }) {
   return render(
     <BarChartComponent
+      componentId={overrides.componentId ?? TEST_COMPONENT_ID}
       props={overrides.props ?? {}}
       style={overrides.style ?? {}}
       dataSource={overrides.dataSource}
@@ -393,6 +435,7 @@ describe('BarChartComponent（三态统一契约，任务 6）', () => {
 
     rerender(
       <BarChartComponent
+        componentId={TEST_COMPONENT_ID}
         props={{}}
         style={{}}
         dataSource={{
@@ -460,5 +503,156 @@ describe('BarChartComponent（三态统一契约，任务 6）', () => {
     expect(container.textContent).not.toContain('加载中');
     expect(container.textContent).not.toContain('暂无数据');
     expect(container.querySelectorAll('rect')).toHaveLength(1);
+  });
+});
+
+describe('BarChartComponent（事件蓝图修复：数据源事件派发）', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+    // 重置 mock 引用为默认值（编辑态、idle 数据集）
+    mockEmitEventRef.current = null;
+    mockDatasetStateRef.current = { status: 'idle' };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('API 数据源加载成功时派发 (componentId, "dataLoaded")', async () => {
+    const emitSpy = vi.fn();
+    mockEmitEventRef.current = emitSpy;
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(SAMPLE_DATA),
+    });
+
+    renderBarChart({
+      dataSource: {
+        type: 'api',
+        apiConfig: { url: 'https://example.com/api/chart', method: 'GET' },
+      },
+    });
+
+    // 等待请求完成
+    await screen.findByText('一月');
+
+    // 验证派发了 dataLoaded 事件
+    expect(emitSpy).toHaveBeenCalledWith(TEST_COMPONENT_ID, 'dataLoaded');
+  });
+
+  it('API 数据源加载失败时派发 (componentId, "dataError")', async () => {
+    const emitSpy = vi.fn();
+    mockEmitEventRef.current = emitSpy;
+
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 });
+
+    renderBarChart({
+      dataSource: {
+        type: 'api',
+        apiConfig: { url: 'https://example.com/api/chart', method: 'GET' },
+      },
+    });
+
+    // 等待错误态展示
+    await screen.findByText(/500/);
+
+    // 验证派发了 dataError 事件
+    expect(emitSpy).toHaveBeenCalledWith(TEST_COMPONENT_ID, 'dataError');
+  });
+
+  it('数据集数据源加载成功时派发 (componentId, "dataLoaded")', () => {
+    const emitSpy = vi.fn();
+    mockEmitEventRef.current = emitSpy;
+    // 直接以 success 态挂载，模拟 useDatasetSource 状态变化到 success
+    mockDatasetStateRef.current = { status: 'success', data: SAMPLE_DATA };
+
+    renderBarChart({
+      dataSource: {
+        type: 'dataset',
+        datasetId: 'test-dataset',
+      },
+    });
+
+    // 验证派发了 dataLoaded 事件
+    expect(emitSpy).toHaveBeenCalledWith(TEST_COMPONENT_ID, 'dataLoaded');
+  });
+
+  it('数据集数据源加载失败时派发 (componentId, "dataError")', () => {
+    const emitSpy = vi.fn();
+    mockEmitEventRef.current = emitSpy;
+    mockDatasetStateRef.current = {
+      status: 'error',
+      error: { reason: 'http', message: '数据集执行失败' },
+    };
+
+    renderBarChart({
+      dataSource: {
+        type: 'dataset',
+        datasetId: 'test-dataset',
+      },
+    });
+
+    // 验证派发了 dataError 事件
+    expect(emitSpy).toHaveBeenCalledWith(TEST_COMPONENT_ID, 'dataError');
+  });
+
+  it('编辑态（useComponentEvent 返回 null）不派发任何事件', async () => {
+    // 编辑态：mockEmitEventRef.current = null（已在 beforeEach 重置）
+    const emitSpy = vi.fn();
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(SAMPLE_DATA),
+    });
+
+    renderBarChart({
+      dataSource: {
+        type: 'api',
+        apiConfig: { url: 'https://example.com/api/chart', method: 'GET' },
+      },
+    });
+
+    // 等待请求完成
+    await screen.findByText('一月');
+
+    // 验证未派发任何事件
+    expect(emitSpy).not.toHaveBeenCalled();
+  });
+
+  it('apiRawDataOverride 存在时不派发事件（避免 override 与 hook state 双重触发）', async () => {
+    const emitSpy = vi.fn();
+    mockEmitEventRef.current = emitSpy;
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(SAMPLE_DATA),
+    });
+
+    // 直接渲染组件并传入 apiRawDataOverride
+    render(
+      <BarChartComponent
+        componentId={TEST_COMPONENT_ID}
+        props={{}}
+        style={{}}
+        dataSource={{
+          type: 'api',
+          apiConfig: { url: 'https://example.com/api/chart', method: 'GET' },
+        }}
+        apiRawDataOverride={SAMPLE_DATA}
+      />,
+    );
+
+    // 等待可能的请求完成（不应触发派发）
+    await screen.findByText('一月');
+
+    // 验证未派发事件（override 存在时短路）
+    expect(emitSpy).not.toHaveBeenCalled();
   });
 });

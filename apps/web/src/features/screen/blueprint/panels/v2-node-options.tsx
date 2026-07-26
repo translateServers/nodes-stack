@@ -12,7 +12,18 @@
  */
 
 import type { JSX } from 'react';
-import { Clock, FileText, GitBranch, Globe, MessageSquare, Square } from 'lucide-react';
+import {
+  Boxes,
+  Clock,
+  FileText,
+  GitBranch,
+  MessageSquare,
+  MousePointerClick,
+  Navigation,
+  Send,
+  Square,
+  Type,
+} from 'lucide-react';
 import { GLOBAL_COMPONENT_ID, type ScreenComponent } from '@nebula/shared';
 
 /** V2 节点 kind */
@@ -66,7 +77,7 @@ export const V2_NODE_OPTIONS: readonly V2NodeOption[] = [
     group: 'global',
     label: '导航跳转',
     description: '跳转到指定 URL（仅 http/https）',
-    icon: <Globe className="size-4" />,
+    icon: <Navigation className="size-4" />,
   },
   {
     id: 'global.requestApi',
@@ -76,7 +87,7 @@ export const V2_NODE_OPTIONS: readonly V2NodeOption[] = [
     group: 'global',
     label: '请求接口',
     description: '发起 HTTP 请求',
-    icon: <Globe className="size-4" />,
+    icon: <Send className="size-4" />,
   },
   {
     id: 'global.scrollTo',
@@ -86,7 +97,7 @@ export const V2_NODE_OPTIONS: readonly V2NodeOption[] = [
     group: 'global',
     label: '滚动定位',
     description: '滚动到指定组件位置',
-    icon: <Globe className="size-4" />,
+    icon: <MousePointerClick className="size-4" />,
   },
   {
     id: 'condition',
@@ -118,6 +129,24 @@ export const V2_NODE_OPTIONS: readonly V2NodeOption[] = [
 ];
 
 /**
+ * 画布组件类型 → 图标的映射表。
+ *
+ * 仅对常见组件类型做语义化映射，未命中的类型回退到通用 Boxes 图标，
+ * 避免每个组件都用相同的 Square 图标导致视觉单调。
+ */
+const COMPONENT_TYPE_ICON_MAP: Record<string, JSX.Element> = {
+  'bar-chart': <Boxes className="size-4" />,
+  'line-chart': <Boxes className="size-4" />,
+  'pie-chart': <Boxes className="size-4" />,
+  table: <Boxes className="size-4" />,
+  text: <Type className="size-4" />,
+};
+
+function getComponentIcon(type: string): JSX.Element {
+  return COMPONENT_TYPE_ICON_MAP[type] ?? <Square className="size-4" />;
+}
+
+/**
  * 根据当前画布组件列表动态生成"画布组件"选项。
  *
  * - 排除全局组件（GLOBAL_COMPONENT_ID）
@@ -141,7 +170,7 @@ export function buildComponentOptions(components: readonly ScreenComponent[]): V
         componentId: c.id,
         label,
         description: `${c.type} 组件`,
-        icon: <Square className="size-4" />,
+        icon: getComponentIcon(c.type),
       };
     });
 }

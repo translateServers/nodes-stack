@@ -8,10 +8,15 @@
  * - 编辑器画布不执行蓝图：本 Hook 不在编辑器调用
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
-import type { EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
+import type {
+  EventBlueprint,
+  EventBlueprintV2,
+  ScreenComponent,
+  ScreenProject,
+} from '@nebula/shared';
 import { BlueprintPreviewProvider, useBlueprintPreview, useBlueprintPreviewRuntime } from './index';
 import { PreviewComponentRenderer } from '../../components/preview-component-renderer';
 
@@ -737,5 +742,167 @@ describe('useBlueprintPreviewRuntime - error 诊断触发器显式收口（任�
     await waitFor(() => {
       expect(result.current.contextValue.visibilityOverrides.get('comp-b')).toBe(false);
     });
+  });
+});
+
+describe('useBlueprintPreviewRuntime - V1 interval 触发器调度（任务 5-6）', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('interval 触发器按 intervalMs 触发 setVisibility 动作', async () => {
+    const component = makeComponent('comp-target');
+    const blueprint = makeBlueprint('t-interval', { type: 'interval', intervalMs: 100 }, 'a-hide', {
+      type: 'setVisibility',
+      targetComponentId: 'comp-target',
+      visible: 'hide',
+    });
+
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // 初始未触发任何动作
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBeUndefined();
+
+    // 推进 100ms 触发 interval tick
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(false);
+  });
+
+  it('interval 触发器按周期重复触发动作（toggle 验证多次 tick）', async () => {
+    const component = makeComponent('comp-target');
+    const blueprint = makeBlueprint(
+      't-interval',
+      { type: 'interval', intervalMs: 100 },
+      'a-toggle',
+      { type: 'setVisibility', targetComponentId: 'comp-target', visible: 'toggle' },
+    );
+
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // 第一次 tick：toggle (undefined → true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(true);
+
+    // 第二次 tick：toggle (true → false)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(false);
+
+    // 第三次 tick：toggle (false → true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(true);
+  });
+
+  it('组件卸载后 setInterval 被清理', () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+
+    const component = makeComponent('comp-target');
+    const blueprint = makeBlueprint('t-interval', { type: 'interval', intervalMs: 100 }, 'a-hide', {
+      type: 'setVisibility',
+      targetComponentId: 'comp-target',
+      visible: 'hide',
+    });
+
+    const { unmount } = renderHook(() => useBlueprintPreviewRuntime(blueprint, [component]));
+
+    // setInterval 应被调用一次，参数为 (callback, 100)
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 100);
+
+    // 卸载
+    unmount();
+
+    // clearInterval 应被调用以清理定时器
+    expect(clearIntervalSpy).toHaveBeenCalled();
+  });
+
+  it('卸载后推进时间不再触发动作', async () => {
+    const component = makeComponent('comp-target');
+    const blueprint = makeBlueprint(
+      't-interval',
+      { type: 'interval', intervalMs: 100 },
+      'a-toggle',
+      { type: 'setVisibility', targetComponentId: 'comp-target', visible: 'toggle' },
+    );
+
+    const { result, unmount } = renderHook(() =>
+      useBlueprintPreviewRuntime(blueprint, [component]),
+    );
+
+    // 第一次 tick：toggle (undefined → true)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(true);
+
+    // 卸载
+    unmount();
+
+    // 推进 1000ms，不应再有 toggle
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    // 仍是 true，未被切换
+    expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(true);
+  });
+
+  it('V2 蓝图不建立 interval 调度（V2 不支持）', () => {
+    const v2Blueprint: EventBlueprintV2 = {
+      version: 2,
+      nodes: [
+        {
+          id: 'g-page',
+          kind: 'component',
+          position: { x: 0, y: 0 },
+          componentId: 'global',
+          globalType: 'pageLoad',
+        },
+        {
+          id: 'c-target',
+          kind: 'component',
+          position: { x: 100, y: 0 },
+          componentId: 'comp-target',
+        },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: 'g-page',
+          sourceHandle: 'out',
+          target: 'c-target',
+          targetHandle: 'act:hide',
+        },
+      ],
+    };
+
+    const component = makeComponent('comp-target');
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+
+    renderHook(() => useBlueprintPreviewRuntime(v2Blueprint, [component]));
+
+    // V2 蓝图不应建立任何 setInterval
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+  });
+
+  it('isEnabled=false 时不建立 interval 调度', () => {
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+
+    // 无蓝图 → isEnabled=false
+    renderHook(() => useBlueprintPreviewRuntime(undefined, [makeComponent('comp-a')]));
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+// 触发 registered-components 副作用：注册全部组件后调用 buildPropertySchemas()
+// 填充 PROPERTY_SCHEMAS（schemas.tsx 不直接 import registered-components 以避免循环依赖）。
+import '../registry';
 import {
   BAR_CHART_SCHEMA,
   DEFAULT_SCHEMA,
@@ -554,9 +557,15 @@ describe('property-schema · schemas 注册表', () => {
   });
 
   describe('注册表完整性', () => {
-    it('PROPERTY_SCHEMAS 包含 text 和 bar-chart', () => {
+    it('PROPERTY_SCHEMAS 包含 text、bar-chart 和 button', () => {
       expect(PROPERTY_SCHEMAS.text).toBeDefined();
       expect(PROPERTY_SCHEMAS['bar-chart']).toBeDefined();
+      expect(PROPERTY_SCHEMAS.button).toBeDefined();
+    });
+
+    it('getSchemaForComponentType 对 button 返回 BUTTON_SCHEMA', () => {
+      const schema = getSchemaForComponentType('button');
+      expect(schema).toBe(PROPERTY_SCHEMAS.button);
     });
 
     it('所有 schema 的分区 id 唯一', () => {

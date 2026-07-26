@@ -1,5 +1,5 @@
 /**
- * 属性 Schema 注册表（Phase 2 Slice B）
+ * 属性 Schema 注册表（Phase 2 Slice B + Spec 驱动改造：组件库统一注册接口）
  *
  * 设计依据：`docs/screen-designer-panels-architecture.md` §4.3
  *
@@ -9,6 +9,17 @@
  * - 简单字段（位置/样式/文本属性）走声明式 DeclarativeField
  * - bar-chart 的数据/逻辑/视觉/交互四层作为 customRender 逃生舱原样挂载
  * - 不做大爆炸重写，面板壳与分区编排先 Schema 化，字段逐个收敛
+ *
+ * Spec 驱动改造后：
+ * - 各组件的 Schema 通过 ComponentModule.schema 字段注册到 registry
+ * - `PROPERTY_SCHEMAS` 改为派生自注册中心，不再手动维护静态 map
+ * - 因 schemas.tsx 被组件模块导入（取 TEXT_SCHEMA 等定义），
+ *   若直接 `import '../registry/registered-components'` 会形成循环依赖
+ *   （schemas.tsx → registered-components.ts → text-component.tsx → schemas.tsx），
+ *   此时 TEXT_SCHEMA 尚未定义，textModule.schema 会是 undefined。
+ * - 解决方式：schemas.tsx 仅 `import { getAllModules } from '../registry/registry'`
+ *   （registry.ts 无副作用，不会触发循环），由 registered-components.ts 在所有
+ *   组件注册完成后调用 `buildPropertySchemas()` 把注册中心的 schema 写入 PROPERTY_SCHEMAS。
  */
 
 import {
@@ -18,6 +29,7 @@ import {
   BarChartVisualSection,
 } from '../components/bar-chart-config-sections';
 import { QuickEventEditor } from '../components/quick-event-editor';
+import { getAllModules } from '../registry/registry';
 import type { PropertySchema, PropertyTabId } from './types';
 
 /** 位置与尺寸分区字段（多组件类型复用） */
@@ -529,13 +541,107 @@ const BAR_CHART_SCHEMA: PropertySchema = [
 ];
 
 /**
+ * 按钮属性分区（button 组件专用）。
+ *
+ * 仅承载按钮特有的文字字段；字号 / 字色 / 字重 / 背景色 / 圆角 / 边框等
+ * 通用样式字段复用 STYLE_SECTION，避免重复定义。
+ */
+const BUTTON_PROPS_SECTION: PropertySchema[number] = {
+  id: 'button-props',
+  title: '按钮属性',
+  tab: 'appearance',
+  collapsible: true,
+  defaultOpen: true,
+  fields: [
+    {
+      kind: 'field',
+      control: 'text',
+      label: '文字',
+      path: 'props.text',
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '字号',
+      path: 'style.fontSize',
+      defaultValue: 14,
+      controlProps: { min: 1 },
+    },
+    {
+      kind: 'field',
+      control: 'color',
+      label: '字色',
+      path: 'style.color',
+      defaultValue: '#ffffff',
+    },
+    {
+      kind: 'field',
+      control: 'select',
+      label: '字重',
+      path: 'style.fontWeight',
+      defaultValue: '500',
+      controlProps: { options: FONT_WEIGHT_OPTIONS },
+    },
+  ],
+};
+
+/**
+ * button 组件 Schema：位置尺寸 + 按钮属性 + 样式 + 变换 + 层级状态 + 数据占位 + 事件。
+ *
+ * 按钮不接数据源，但仍展示 data tab 头与空状态提示；events tab 由
+ * QuickEventEditor 处理。
+ */
+const BUTTON_DATA_EMPTY_SECTION = createEmptyTabPlaceholder(
+  'button-data-empty',
+  'data',
+  '该组件无数据源配置',
+  'empty-data-tab',
+);
+
+const BUTTON_SCHEMA: PropertySchema = [
+  POSITION_SECTION,
+  BUTTON_PROPS_SECTION,
+  STYLE_SECTION,
+  TRANSFORM_SECTION,
+  LAYER_STATUS_SECTION,
+  FILTER_SECTION,
+  BUTTON_DATA_EMPTY_SECTION,
+  EVENTS_SECTION,
+];
+
+/**
  * 全局 Schema 注册表：按组件 type 查找。
  * 未注册的类型回退到 DEFAULT_SCHEMA。
+ *
+ * Spec 驱动改造后：派生自注册中心（ComponentModule.schema 字段）。
+ *
+ * 此处先声明为空对象，由 `buildPropertySchemas()` 在所有组件注册完成后填充。
+ * 调用方约定：访问 `PROPERTY_SCHEMAS` 前，需确保已 `import '../registry'`
+ * （registry/index.ts 内部 `import './registered-components'` 触发注册，
+ * 并在注册完成后调用 `buildPropertySchemas()` 填充此对象）。
  */
-export const PROPERTY_SCHEMAS: Record<string, PropertySchema> = {
-  text: TEXT_SCHEMA,
-  'bar-chart': BAR_CHART_SCHEMA,
-};
+export const PROPERTY_SCHEMAS: Record<string, PropertySchema> = {};
+
+/**
+ * 从注册中心派生 PROPERTY_SCHEMAS。
+ *
+ * 遍历所有已注册的 ComponentModule，将 `module.schema` 写入 `PROPERTY_SCHEMAS[module.definition.type]`。
+ * 未注册 schema 的组件类型不写入，`getSchemaForComponentType` 会回退到 DEFAULT_SCHEMA。
+ *
+ * 由 registered-components.ts 在所有 `registerComponent` 调用完成后调用一次。
+ * 重复调用安全：会清空旧值并重新填充（用于测试场景重置注册表后重建）。
+ */
+export function buildPropertySchemas(): void {
+  // 清空旧值（支持重复调用，如测试中重置注册表后重建）
+  for (const key of Object.keys(PROPERTY_SCHEMAS)) {
+    delete PROPERTY_SCHEMAS[key];
+  }
+  for (const mod of getAllModules()) {
+    if (mod.schema !== undefined) {
+      PROPERTY_SCHEMAS[mod.definition.type] = mod.schema;
+    }
+  }
+}
 
 /**
  * 按组件类型查找 Schema。
@@ -548,6 +654,7 @@ export function getSchemaForComponentType(type: string): PropertySchema {
 /** 导出 Schema 与通用分区供外部引用 */
 export {
   BAR_CHART_SCHEMA,
+  BUTTON_SCHEMA,
   DEFAULT_SCHEMA,
   FILTER_SECTION,
   LAYER_STATUS_SECTION,

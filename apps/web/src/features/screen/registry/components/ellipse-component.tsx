@@ -8,6 +8,9 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import { Circle } from 'lucide-react';
+import { mergeActions, mergeEvents } from '../component-events-actions';
+import type { ComponentModule } from '../types';
 
 interface EllipseComponentProps {
   props: Record<string, unknown>;
@@ -30,3 +33,28 @@ export function EllipseComponent({ style }: EllipseComponentProps) {
     />
   );
 }
+
+const ellipseModule: ComponentModule = {
+  definition: {
+    type: 'ellipse',
+    name: '椭圆',
+    category: 'decoration',
+    icon: 'Circle',
+    keywords: ['椭圆', '圆形', '圆', 'ellipse', 'circle', '球'],
+    description: '椭圆装饰元素，常用于头像/标记位',
+    defaultProps: {},
+    defaultSize: { width: 200, height: 200 },
+    defaultStyle: {
+      backgroundColor: '#10b981',
+      borderWidth: 0,
+      borderColor: '#047857',
+    },
+    order: 2,
+    events: mergeEvents(),
+    actions: mergeActions(),
+  },
+  renderer: EllipseComponent,
+  icon: Circle,
+};
+
+export default ellipseModule;
