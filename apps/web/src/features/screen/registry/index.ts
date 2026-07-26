@@ -1,4 +1,11 @@
 import type { ComponentDefinition, ScreenComponent } from '@nebula/shared';
+import {
+  DATASOURCE_ACTIONS,
+  DATASOURCE_EVENTS,
+  __registerDefinitionLookup,
+  mergeActions,
+  mergeEvents,
+} from './component-events-actions';
 
 export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
   {
@@ -12,6 +19,8 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     defaultSize: { width: 200, height: 60 },
     defaultStyle: { color: '#ffffff', fontSize: 14 },
     order: 1,
+    events: mergeEvents(),
+    actions: mergeActions(),
   },
   {
     type: 'bar-chart',
@@ -32,6 +41,8 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     },
     defaultSize: { width: 400, height: 300 },
     order: 1,
+    events: mergeEvents(DATASOURCE_EVENTS),
+    actions: mergeActions(DATASOURCE_ACTIONS),
   },
   // 任务 6.2：矩形与椭圆组件定义
   {
@@ -50,6 +61,8 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
       borderRadius: 0,
     },
     order: 1,
+    events: mergeEvents(),
+    actions: mergeActions(),
   },
   {
     type: 'ellipse',
@@ -66,6 +79,8 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
       borderColor: '#047857',
     },
     order: 2,
+    events: mergeEvents(),
+    actions: mergeActions(),
   },
   // 任务 7.2：图片组件定义
   {
@@ -79,12 +94,18 @@ export const COMPONENT_DEFINITIONS: ComponentDefinition[] = [
     defaultSize: { width: 320, height: 240 },
     defaultStyle: {},
     order: 1,
+    events: mergeEvents(),
+    actions: mergeActions(),
   },
 ];
 
 export function getDefinitionByType(type: string): ComponentDefinition | undefined {
   return COMPONENT_DEFINITIONS.find((d) => d.type === type);
 }
+
+// 打破循环依赖：将 getDefinitionByType 注入 component-events-actions.ts，
+// 供 getComponentEvents/getComponentActions 在运行时调用。
+__registerDefinitionLookup(getDefinitionByType);
 
 /**
  * 创建组件实例的选项。
@@ -168,3 +189,15 @@ export const CATEGORY_LABELS: Record<string, string> = {
   table: '表格',
   container: '容器',
 };
+
+export {
+  DEFAULT_EVENTS,
+  DEFAULT_ACTIONS,
+  DATASOURCE_EVENTS,
+  DATASOURCE_ACTIONS,
+  CONTAINER_ACTIONS,
+  mergeEvents,
+  mergeActions,
+  getComponentEvents,
+  getComponentActions,
+} from './component-events-actions';

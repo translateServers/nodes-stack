@@ -31,7 +31,8 @@ describe('ShortcutsHelpDialog 任务 1.3：接入统一工具注册表', () => {
     render(<ShortcutsHelpDialog open={true} onOpenChange={vi.fn()} />);
     for (const entry of SHORTCUTS_REGISTRY) {
       if (entry.hidden) continue;
-      expect(screen.getByText(entry.description)).toBeInTheDocument();
+      // 画布与蓝图分区存在同名描述（如"保存项目"/"撤销"），用 getAllByText 断言至少一处渲染
+      expect(screen.getAllByText(entry.description).length).toBeGreaterThan(0);
     }
   });
 
@@ -88,7 +89,8 @@ describe('ShortcutsHelpDialog 任务 1.3：接入统一工具注册表', () => {
       SHORTCUTS_REGISTRY.filter((s) => !s.hidden).map((s) => s.category),
     );
     for (const cat of usedCategories) {
-      expect(screen.getByText(SHORTCUT_CATEGORY_LABELS[cat])).toBeInTheDocument();
+      // file/edit/view/help 等 category 在画布与蓝图分区都会出现，用 getAllByText 断言
+      expect(screen.getAllByText(SHORTCUT_CATEGORY_LABELS[cat]).length).toBeGreaterThan(0);
     }
   });
 

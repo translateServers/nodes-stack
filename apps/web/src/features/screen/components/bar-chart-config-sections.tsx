@@ -806,7 +806,7 @@ function getEffectiveType(dataSource: ScreenComponent['dataSource']): DataSource
   return 'static';
 }
 
-function DataSourceSection({ component, onUpdate }: SectionProps) {
+export function BarChartDataSourceSection({ component, onUpdate }: SectionProps) {
   const effectiveType = getEffectiveType(component.dataSource);
   // 类型切换为草稿态：只切换展示的表单，应用/取消后经 onSettled 落定；
   // 切换类型本身不写入组件，不产生历史
@@ -974,7 +974,7 @@ function LimitInput({
   );
 }
 
-function LogicSection({ component, onUpdate }: SectionProps) {
+export function BarChartLogicSection({ component, onUpdate }: SectionProps) {
   const logic = component.logic;
 
   const commitLogic = (next: LogicConfig) => {
@@ -1046,7 +1046,7 @@ function LogicSection({ component, onUpdate }: SectionProps) {
 
 // ===== 交互层分组（任务 4.5） =====
 
-function InteractionSection({ component, onUpdate }: SectionProps) {
+export function BarChartInteractionSection({ component, onUpdate }: SectionProps) {
   const tooltipOnHover = component.interaction?.tooltipOnHover ?? false;
 
   const handleCheckedChange = (checked: boolean) => {
@@ -1076,23 +1076,43 @@ function InteractionSection({ component, onUpdate }: SectionProps) {
   );
 }
 
+// ===== 视觉层分组（任务 4.1） =====
+
+/**
+ * bar-chart 视觉层：标题 + 既有样式编辑（StyleFields）。
+ *
+ * 独立导出以便 PropertySchema 的 customRender 按 tab 分布挂载。
+ * 行为与原四层分组中的视觉层完全一致，不回退既有能力。
+ */
+export function BarChartVisualSection({ component, onUpdate }: SectionProps) {
+  return (
+    <PanelSection title="视觉" collapsible testId="visual-section" contentClassName="space-y-2">
+      <TextInput
+        label="标题"
+        value={(component.props.title as string) ?? ''}
+        onChange={(v) => onUpdate({ props: { ...component.props, title: v } })}
+      />
+      {/* StyleFields 不自带标题（标题由 PanelSection 统一提供），此处无重复标题 */}
+      <StyleFields component={component} onUpdate={onUpdate} />
+    </PanelSection>
+  );
+}
+
 // ===== 四层分组入口（任务 4.1） =====
 
+/**
+ * bar-chart 四层配置分组入口（向后兼容）。
+ *
+ * Task 2 后 PropertySchema 按 tab 分布挂载 4 个独立子组件，
+ * 此入口仅用于旧测试与未迁移调用方，内部按数据/逻辑/视觉/交互顺序组合。
+ */
 export function BarChartConfigSections({ component, onUpdate }: SectionProps) {
   return (
     <>
-      <DataSourceSection component={component} onUpdate={onUpdate} />
-      <LogicSection component={component} onUpdate={onUpdate} />
-      <PanelSection title="视觉" collapsible testId="visual-section" contentClassName="space-y-2">
-        <TextInput
-          label="标题"
-          value={(component.props.title as string) ?? ''}
-          onChange={(v) => onUpdate({ props: { ...component.props, title: v } })}
-        />
-        {/* StyleFields 不自带标题（标题由 PanelSection 统一提供），此处无重复标题 */}
-        <StyleFields component={component} onUpdate={onUpdate} />
-      </PanelSection>
-      <InteractionSection component={component} onUpdate={onUpdate} />
+      <BarChartDataSourceSection component={component} onUpdate={onUpdate} />
+      <BarChartLogicSection component={component} onUpdate={onUpdate} />
+      <BarChartVisualSection component={component} onUpdate={onUpdate} />
+      <BarChartInteractionSection component={component} onUpdate={onUpdate} />
     </>
   );
 }

@@ -66,10 +66,13 @@ export function BarChartComponent({
     }
     return undefined;
   }, [effectiveDataSource, isDatasetType]);
+  // bindingContext 必须 memoize：内联对象每次渲染都是新引用，会导致
+  // useDatasetSource 的 effect 反复触发 setState({status:'idle'}) 形成无限渲染循环
+  const datasetBindingContext = useMemo(() => ({ componentProps: props }), [props]);
   const datasetState = useDatasetSource({
     datasetId,
     paramBindings: datasetParamBindings,
-    bindingContext: { componentProps: props },
+    bindingContext: datasetBindingContext,
     useMock: true,
     refreshIntervalSeconds: datasetRefreshSeconds,
   });

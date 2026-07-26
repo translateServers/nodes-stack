@@ -9,7 +9,7 @@
  * 高度 28px（h-7），bg-card + border-t，紧凑信息密度。
  */
 
-import { memo } from 'react';
+import { memo, useDeferredValue } from 'react';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
@@ -95,6 +95,12 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
     if (!id) return null;
     return s.project?.components.find((c) => c.id === id)?.name ?? null;
   });
+  // 性能优化（2026-07-26）：与 PropertyPanel/LayerPanel 一致，
+  // 用 useDeferredValue 把状态栏对选中态的响应降级为 transition。
+  // React 会先提交 Moveable 控制框的高优先级更新（store.targets），
+  // 等主线程空闲后再渲染状态栏的选中信息（通常 <50ms，不可感知）。
+  const deferredSelectedCount = useDeferredValue(selectedCount);
+  const deferredSelectedName = useDeferredValue(selectedComponentName);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
   const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
@@ -131,11 +137,11 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
           </span>
           <Divider />
           <span data-testid="selection-info">
-            {selectedCount === 0
+            {deferredSelectedCount === 0
               ? '未选中'
-              : selectedCount === 1
-                ? (selectedComponentName ?? '已选中 1 个')
-                : `已选中 ${selectedCount} 个组件`}
+              : deferredSelectedCount === 1
+                ? (deferredSelectedName ?? '已选中 1 个')
+                : `已选中 ${deferredSelectedCount} 个组件`}
           </span>
         </div>
 

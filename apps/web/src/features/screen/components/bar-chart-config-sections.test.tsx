@@ -599,6 +599,7 @@ describe('集成（真实 store）：静态数据提交入历史与迁移', () =
       description: null,
       canvas: { width: 1920, height: 1080, backgroundColor: '#000000', scaleMode: 'fit' },
       components,
+      globalVariables: [],
       status: 'draft',
       thumbnail: null,
       createdAt: '2025-06-01 10:00:00',

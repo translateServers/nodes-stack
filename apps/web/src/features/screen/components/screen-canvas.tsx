@@ -1,9 +1,9 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { create } from 'zustand';
-import Moveable from 'react-moveable';
+import type Moveable from 'react-moveable';
 import Selecto from 'react-selecto';
-import type { ScreenComponent } from '@nebula/shared';
+import type { ComponentStyle, ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useModifierKeys } from '../hooks/use-modifier-keys';
 import { BlueprintPreviewProvider, useBlueprintPreviewRuntime } from '../blueprint/runtime';
@@ -22,6 +22,7 @@ import { createRafThrottler, type RafThrottler } from '../lib/raf-throttle';
 import { SELECTO_ALLOWED_STATES } from '../hooks/use-interaction-state-machine';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
+import { MoveableContainer, type MoveableHandlers } from './moveable-container';
 
 interface DimensionInfo {
   x: number;
@@ -143,6 +144,29 @@ function trySetPointerCapture(target: EventTarget, pointerId: number): void {
   }
 }
 
+/**
+ * Task 6：将 ComponentStyle.filter 对象转换为 CSS filter 字符串。
+ *
+ * 规则：
+ * - filter 缺失或全部字段为默认值时返回空串（不应用 filter 样式）
+ * - 仅拼接非默认值字段，避免无意义的 `brightness(100%)` 噪声
+ * - blur 单位为 px，其余为 %
+ * - 默认值：hueRotate=0, saturate=100, brightness=100, contrast=100, blur=0, grayscale=0
+ *
+ * 与 resolveComponentContainerStyle 解耦：filter 不进入 transform 链，作为独立 CSS 属性应用。
+ */
+export function buildFilterString(filter: ComponentStyle['filter']): string {
+  if (!filter) return '';
+  const parts: string[] = [];
+  if (filter.hueRotate !== 0) parts.push(`hue-rotate(${filter.hueRotate}deg)`);
+  if (filter.saturate !== 100) parts.push(`saturate(${filter.saturate}%)`);
+  if (filter.brightness !== 100) parts.push(`brightness(${filter.brightness}%)`);
+  if (filter.contrast !== 100) parts.push(`contrast(${filter.contrast}%)`);
+  if (filter.blur !== 0) parts.push(`blur(${filter.blur}px)`);
+  if (filter.grayscale !== 0) parts.push(`grayscale(${filter.grayscale}%)`);
+  return parts.join(' ');
+}
+
 const initialDimension: DimensionInfo = {
   x: 0,
   y: 0,
@@ -152,25 +176,6 @@ const initialDimension: DimensionInfo = {
   visible: false,
   mode: undefined,
 };
-
-/**
- * H1 性能优化：Moveable 配置常量提升到模块级。
- *
- * react-moveable 内部对 snapDirections / elementSnapDirections / renderDirections
- * 做引用相等性检查决定是否重算吸附方向与渲染控制点。若在组件函数体内以对象/数组
- * 字面量传入，每次渲染都会产生新引用，触发 Moveable 内部全量重算。
- * 提升为模块级常量后引用稳定，仅初始化一次。
- */
-const SNAP_DIRECTIONS = {
-  top: true,
-  bottom: true,
-  left: true,
-  right: true,
-  center: true,
-  middle: true,
-};
-const ELEMENT_SNAP_DIRECTIONS = SNAP_DIRECTIONS;
-const RENDER_DIRECTIONS = ['n', 'nw', 'ne', 's', 'se', 'sw', 'e', 'w'];
 
 /**
  * 独立的 dimension 状态 store。
@@ -246,6 +251,8 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
   registerRef,
   onComponentClick,
 }: CanvasComponentWrapperProps) {
+  // Task 6：仅当 filter 非空字符串时应用，避免空 filter 覆盖其他样式
+  const filterString = buildFilterString(component.style.filter);
   return (
     <div
       ref={(el) => registerRef(component.id, el)}
@@ -253,6 +260,8 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
       className="absolute"
       style={{
         ...resolveComponentContainerStyle(component),
+        // Task 6：组件 CSS 滤镜（hue-rotate/saturate/brightness/contrast/blur/grayscale）
+        filter: filterString || undefined,
         // 编辑器专用叠加：未选中态下显示辅助边框；选中态由 Moveable 控制点接管
         outline: showBorderGuides && !selected ? '1px dashed rgba(147, 197, 253, 0.5)' : undefined,
       }}
@@ -451,20 +460,63 @@ export function ScreenCanvas({
   const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
 
   /**
+   * 同步根据组件 ID 列表查找对应的 DOM 元素数组。
+   *
+   * 用途：onSelectEnd 中 flushSync 内同步 setTargets，避免等待 useLayoutEffect
+   * 二次渲染导致 Moveable 的 target prop 晚一帧更新（抽帧根因）。
+   * 与下方 useLayoutEffect 中的派生逻辑保持一致。
+   */
+  const computeTargetsForIds = useCallback((ids: readonly string[]): HTMLElement[] => {
+    if (ids.length === 0) return [];
+    return ids
+      .map((id) => {
+        const refEl = componentRefs.current.get(id);
+        if (refEl) return refEl;
+        return (
+          contentRef.current?.querySelector<HTMLElement>(`[data-component-id="${id}"]`) ?? null
+        );
+      })
+      .filter((el): el is HTMLElement => el != null);
+  }, []);
+
+  /**
    * Moveable 的 target DOM 元素数组。
    *
-   * 使用 useState + useLayoutEffect 而非 useMemo：新组件被选中并挂载时
-   * （如 Alt+拖拽复制、粘贴、新建），ref 回调在 commit 阶段执行但 useMemo 在
-   * render 阶段已计算完毕拿不到新 DOM。useLayoutEffect 在所有 ref 回调执行后
-   * 同步运行，此时通过 componentRefs 或 querySelector 能拿到新挂载的 DOM。
+   * 拆分到独立 store 字段而非组件 useState 的原因：
+   * ScreenCanvas 是订阅 23+ store 字段的巨型函数组件，即使 flushSync 同步更新
+   * selectedComponentIds，ScreenCanvas 重渲染开销仍会让 Moveable 控制框显示有可感知延迟。
+   * 把 targets 移到 store 中：
+   * - flushSync(selectComponents + setTargets) 一次同步渲染就把 Moveable target 准备好
+   * - 后续 MoveableContainer 子组件可独立订阅 targets，渲染开销 <1ms
+   * 参考 light-chaser 的 DesignerMovable（observer + mobx 同步订阅）。
    *
-   * 性能优化：setTargets 返回 prev（引用相同）时 React 会 bail out 不重渲染，
-   * 所以"相同选中"场景不会触发额外渲染。仅在 target 真正变化时才重渲染。
+   * useLayoutEffect 仍保留作为非交互场景的兜底派生：
+   * - 属性面板修改位置时 project.components 引用变化但 DOM 引用不变
+   * - 外部 store 变更 selectedComponentIds（如快捷键、撤销重做）
+   * - 新组件挂载后 ref 注册延迟
    */
-  const [targets, setTargets] = useState<HTMLElement[]>([]);
+  const targets = useScreenEditorStore((s) => s.targets);
+  const setTargetsAction = useScreenEditorStore((s) => s.setTargets);
+  /**
+   * targets 的 mutable ref，用于 useLayoutEffect 中同步读取最新值做 bail out 判断，
+   * 避免调用 useScreenEditorStore.getState()（在测试中未被 mock）。
+   */
+  const targetsRef = useRef<HTMLElement[]>(targets);
+  targetsRef.current = targets;
+  /**
+   * 同步更新 targets store + ref。
+   * 包装 setTargetsAction 让所有调用点同步更新 ref，避免 useLayoutEffect bail out 失效。
+   */
+  const setTargets = useCallback(
+    (next: HTMLElement[]) => {
+      targetsRef.current = next;
+      setTargetsAction(next);
+    },
+    [setTargetsAction],
+  );
   useLayoutEffect(() => {
     if (selectedComponentIds.length === 0) {
-      setTargets((prev) => (prev.length === 0 ? prev : []));
+      setTargets([]);
       return;
     }
     const newTargets = selectedComponentIds
@@ -479,12 +531,12 @@ export function ScreenCanvas({
       })
       .filter((el): el is HTMLElement => el != null);
     // 引用相同时 bail out，避免无谓渲染
-    setTargets((prev) => {
-      if (prev.length === newTargets.length && prev.every((el, i) => el === newTargets[i])) {
-        return prev;
-      }
-      return newTargets;
-    });
+    const current = targetsRef.current;
+    if (current.length === newTargets.length && current.every((el, i) => el === newTargets[i])) {
+      return;
+    }
+    targetsRef.current = newTargets;
+    setTargets(newTargets);
   }, [selectedComponentIds, project?.components]);
 
   /**
@@ -1133,6 +1185,568 @@ export function ScreenCanvas({
       .filter((el): el is HTMLElement => el != null);
   }, [smartGuidesEnabled, visibleComponents, selectedIdSet]);
 
+  /**
+   * Moveable 事件 handlers：useMemo 稳定引用，传给 MoveableContainer。
+   *
+   * 关键优化（参考 light-chaser 的 DesignerMovable）：
+   * - 纯点击选中场景下 interactionState 不变（idle/hovering）、componentMap 不变
+   *   （无组件 CRUD），handlers 引用稳定 → MoveableContainer 跳过重渲染
+   * - 仅在手势开始（interactionState 变化）或组件数据变化（componentMap 重建）时
+   *   handlers 引用才更新
+   * - shiftRef / altRef / contentRef / gestureRafThrottlerRef 为 mutable ref，
+   *   引用恒定，不放入依赖（ESLint exhaustive-deps 对 ref 容忍）
+   *
+   * 依赖项仅 interactionState + componentMap + zustand action 引用：
+   * - interactionState：仲裁手势重入（onDragStart/onResizeStart 等读取）
+   * - componentMap：onDragEnd/onResizeEnd 等按 id 查找组件
+   * - dispatchInteraction / updateComponent / updateComponentsBatch /
+   *   duplicateSelectedToPosition / setDimension：zustand action，引用稳定
+   */
+  const handlers = useMemo<MoveableHandlers>(
+    () => ({
+      onDragStart: (e) => {
+        // 任务 12.1：拖拽由状态机仲裁，拒绝非法重入
+        if (
+          interactionState !== 'idle' &&
+          interactionState !== 'hovering' &&
+          interactionState !== 'marquee-selecting'
+        ) {
+          return false;
+        }
+        const id = getComponentIdFromTarget(e.target);
+        if (!id) return false;
+        const comp = componentMap.get(id);
+        if (comp?.status.locked) return false;
+        const datas = e.datas as unknown as DragDatas;
+        datas.id = id;
+        datas.startX = comp?.position.x ?? 0;
+        datas.startY = comp?.position.y ?? 0;
+        datas.origW = comp?.position.width ?? 0;
+        datas.origH = comp?.position.height ?? 0;
+        // Canvas Drag Optimization：记录组件原始 rotation/flip，
+        // 拖拽期间保持不变，用于 compose transform（translate 变化，rotate/flip 恒定）
+        datas.rotation = comp?.position.rotation ?? 0;
+        datas.flipX = comp?.style.flipX === true;
+        datas.flipY = comp?.style.flipY === true;
+        datas.isAltCopy = readAltKey(e.inputEvent);
+        datas.altCopyClone = null;
+        // Alt+拖拽复制（PS 风格）：按下 Alt 启动拖拽时立即克隆目标 DOM，
+        // 拖拽过程中移动克隆体（原件不动），松手时在克隆位置创建真实副本。
+        // cloneNode(true) 复制原 transform（translate + rotate + flip），
+        // 拖拽中 onDrag 会覆盖 transform 的 translate 部分。
+        if (datas.isAltCopy && contentRef.current) {
+          const clone = e.target.cloneNode(true) as HTMLElement;
+          clone.style.position = 'absolute';
+          clone.style.pointerEvents = 'none';
+          clone.style.userSelect = 'none';
+          clone.setAttribute('data-alt-copy-clone', 'true');
+          contentRef.current.appendChild(clone);
+          datas.altCopyClone = clone;
+        }
+        // 同步 W/H 到 dimension store，使拖拽过程中也显示尺寸
+        setDimension((d) => ({
+          ...d,
+          w: Math.round(comp?.position.width ?? 0),
+          h: Math.round(comp?.position.height ?? 0),
+        }));
+        // 任务 3.3：镜像拖拽开始到交互状态机
+        dispatchInteraction('start-drag');
+      },
+      onDrag: (e) => {
+        const datas = e.datas as unknown as DragDatas;
+        const target = e.target as HTMLElement;
+        // Canvas Drag Optimization：用 beforeTranslate 替代 left/top DOM 回读。
+        // beforeTranslate 是 Moveable 内部维护的累积位移，与 transform 的 translate 一一对应，
+        // 无精度损失；吸附由 Moveable 内置 snappable 完成，无需自定义 computeSnappedPosition。
+        const { beforeTranslate } = e;
+        const tx = beforeTranslate[0];
+        const ty = beforeTranslate[1];
+        const transform = composeComponentTransform(
+          tx,
+          ty,
+          datas.rotation,
+          datas.flipX,
+          datas.flipY,
+        );
+        // Alt+拖拽复制（PS 风格）：移动克隆体，原件不动
+        if (datas.isAltCopy && datas.altCopyClone) {
+          datas.altCopyClone.style.transform = transform;
+        } else {
+          target.style.transform = transform;
+        }
+        // rAF 节流仅保留 dimension store 更新（对齐线由 Moveable 内部渲染）
+        gestureRafThrottlerRef.current?.schedule(() => {
+          setDimension((d) => ({
+            ...d,
+            x: tx,
+            y: ty,
+            visible: true,
+          }));
+        });
+      },
+      onDragEnd: (e) => {
+        // 任务 13.8：手势结束必须无条件恢复交互状态机。
+        // 纯点击（零位移）时 Gesto isDrag 为 false，若早退会漏发 pointer-up，
+        // 状态机卡在 dragging，后续 Selecto onDragStart 仲裁拒绝一切交互
+        //（反复选中/取消数次后出现一次零位移点击即无法选中组件）。
+        dispatchInteraction('pointer-up');
+        // L1：丢弃挂起帧（最终值取自 e.lastEvent），防止延迟任务覆盖 visible:false
+        gestureRafThrottlerRef.current?.cancel();
+        const datas = e.datas as unknown as Partial<DragDatas>;
+        // Alt+拖拽复制：零位移或异常结束时也要清理克隆体
+        if (datas.isAltCopy && datas.altCopyClone) {
+          datas.altCopyClone.remove();
+          datas.altCopyClone = null;
+        }
+        if (!e.isDrag) return;
+        const id = datas.id;
+        if (!id) return;
+        const last = e.lastEvent as unknown as MoveableLastEvent | undefined;
+        if (!last) return;
+        // Alt+拖拽复制（PS 风格）：拖拽结束时在克隆体最终位置创建真实副本
+        if (datas.isAltCopy) {
+          duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
+        } else {
+          const comp = componentMap.get(id);
+          if (!comp) return;
+          updateComponent(id, {
+            position: {
+              ...comp.position,
+              x: last.beforeTranslate[0],
+              y: last.beforeTranslate[1],
+            },
+          });
+        }
+        setDimension((d) => ({ ...d, visible: false }));
+      },
+      onResizeStart: (e) => {
+        // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
+        if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+          return false;
+        }
+        const id = getComponentIdFromTarget(e.target);
+        if (!id) return false;
+        const comp = componentMap.get(id);
+        if (comp?.status.locked) return false;
+        const datas = e.datas as unknown as ResizeDatas;
+        datas.id = id;
+        datas.origW = comp?.position.width ?? 0;
+        datas.origH = comp?.position.height ?? 0;
+        datas.origX = comp?.position.x ?? 0;
+        datas.origY = comp?.position.y ?? 0;
+        // Canvas Drag Optimization：记录组件原始 rotation/flip，缩放期间保持不变
+        datas.rotation = comp?.position.rotation ?? 0;
+        datas.flipX = comp?.style.flipX === true;
+        datas.flipY = comp?.style.flipY === true;
+        // Shift/Alt 状态在 onResize 中实时从 ref 读取，支持 PS 风格中途按键切换
+        // 初始 mode 提示按当前修饰键状态
+        if (altRef.current) {
+          setDimension((d) => ({ ...d, mode: '中心变换' }));
+        }
+        // 任务 3.4：镜像缩放开始到交互状态机
+        dispatchInteraction('start-resize');
+      },
+      onResize: (e) => {
+        const datas = e.datas as unknown as ResizeDatas;
+        const target = e.target as HTMLElement;
+        const { origW, origH, origX, origY, rotation, flipX, flipY } = datas;
+        // PS 风格即时响应：每次 onResize 从 ref 实时读取 Shift/Alt 状态，
+        // 支持拖拽过程中按键按下/松开立即切换等比/中心变换模式
+        const keepRatio = shiftRef.current;
+        const isAltCenter = altRef.current;
+        // 尺寸计算 + DOM style 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
+        let w = e.width;
+        let h = e.height;
+        if (keepRatio && origW && origH) {
+          const ratio = origW / origH;
+          const [dx, dy] = e.direction;
+          if (dx !== 0 && dy !== 0) {
+            const newH = w / ratio;
+            const newW = h * ratio;
+            if (Math.abs(w - origW) > Math.abs(h - origH)) {
+              h = newH;
+            } else {
+              w = newW;
+            }
+          } else if (dx !== 0) {
+            h = w / ratio;
+          } else if (dy !== 0) {
+            w = h * ratio;
+          }
+        }
+        target.style.width = `${w}px`;
+        target.style.height = `${h}px`;
+        // Canvas Drag Optimization：用 beforeTranslate 替代 left/top。
+        // e.drag.beforeTranslate 是缩放过程中组件的新位置（Moveable 内部计算）。
+        let tx: number;
+        let ty: number;
+        if (isAltCenter) {
+          // 中心变换：translate = 原位置 + (origSize - newSize) / 2
+          tx = origX + (origW - w) / 2;
+          ty = origY + (origH - h) / 2;
+        } else if (e.drag) {
+          tx = e.drag.beforeTranslate[0];
+          ty = e.drag.beforeTranslate[1];
+        } else {
+          tx = origX;
+          ty = origY;
+        }
+        target.style.transform = composeComponentTransform(tx, ty, rotation, flipX, flipY);
+        // rAF 节流仅保留 React store 更新（尺寸提示 + mode 跟随 Alt 实时切换）
+        gestureRafThrottlerRef.current?.schedule(() => {
+          setDimension((d) => ({
+            ...d,
+            x: tx,
+            y: ty,
+            w: Math.round(w),
+            h: Math.round(h),
+            visible: true,
+            mode: isAltCenter ? '中心变换' : undefined,
+          }));
+        });
+      },
+      onResizeEnd: (e) => {
+        // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+        dispatchInteraction('pointer-up');
+        // L1：DOM style 已同步写入，本处理器可直接读取最终值；
+        // 挂起任务仅含 store 更新，丢弃防止覆盖下方的 visible:false
+        gestureRafThrottlerRef.current?.cancel();
+        if (!e.isDrag) return;
+        const datas = e.datas as unknown as Partial<ResizeDatas>;
+        const id = datas.id;
+        if (!id) return;
+        const comp = componentMap.get(id);
+        if (!comp) return;
+        const last = e.lastEvent as unknown as
+          | {
+              width: number;
+              height: number;
+              drag: { beforeTranslate: [number, number] };
+              isDrag: boolean;
+            }
+          | undefined;
+        if (!last) return;
+        // 中心变换提交：onResize 中计算的 tx/ty 只写入了 DOM，
+        // Moveable 内部的 drag.beforeTranslate 仍按非中心变换计算。
+        // 这里必须复用中心变换公式，否则松手后 store 位置与 DOM 不一致导致跳变。
+        // PS 风格：松手瞬间的 Alt 状态决定最终提交模式（与最后一次 onResize 一致）
+        const isAltCenter = altRef.current;
+        let tx: number;
+        let ty: number;
+        if (isAltCenter) {
+          const origX = datas.origX ?? 0;
+          const origY = datas.origY ?? 0;
+          const origW = datas.origW ?? 0;
+          const origH = datas.origH ?? 0;
+          tx = origX + (origW - last.width) / 2;
+          ty = origY + (origH - last.height) / 2;
+        } else {
+          tx = last.drag.beforeTranslate[0];
+          ty = last.drag.beforeTranslate[1];
+        }
+        updateComponent(id, {
+          position: {
+            ...comp.position,
+            x: tx,
+            y: ty,
+            width: last.width,
+            height: last.height,
+          },
+        });
+        setDimension((d) => ({ ...d, visible: false, mode: undefined }));
+      },
+      onRotateStart: (e) => {
+        // 任务 12.1：旋转由状态机仲裁，拒绝非法重入
+        if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+          return false;
+        }
+        const id = getComponentIdFromTarget(e.target);
+        if (!id) return false;
+        const comp = componentMap.get(id);
+        if (comp?.status.locked) return false;
+        const datas = e.datas as unknown as RotateDatas;
+        datas.id = id;
+        datas.snapRotate = shiftRef.current;
+        // Canvas Drag Optimization：记录组件原始位置/flip，旋转期间保持不变。
+        // translate 在旋转期间不变（旋转围绕组件中心，位置由 translate 决定）。
+        datas.origX = comp?.position.x ?? 0;
+        datas.origY = comp?.position.y ?? 0;
+        datas.flipX = comp?.style.flipX === true;
+        datas.flipY = comp?.style.flipY === true;
+        // 任务 3.4：镜像旋转开始到交互状态机
+        dispatchInteraction('start-rotate');
+      },
+      onRotate: (e) => {
+        const datas = e.datas as unknown as RotateDatas;
+        const target = e.target as HTMLElement;
+        const { snapRotate, origX, origY, flipX, flipY } = datas;
+        // 旋转角计算 + transform 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
+        let rotation = e.rotation;
+        if (snapRotate) {
+          rotation = Math.round(rotation / 15) * 15;
+        }
+        // Canvas Drag Optimization：用 composeComponentTransform 合并 translate + rotate + flip，
+        // 替代字符串拼接/正则替换，避免 translate 部分被意外覆盖。
+        target.style.transform = composeComponentTransform(origX, origY, rotation, flipX, flipY);
+        // rAF 节流仅保留 React store 更新（尺寸提示）
+        gestureRafThrottlerRef.current?.schedule(() => {
+          setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
+        });
+      },
+      onRotateEnd: (e) => {
+        // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+        dispatchInteraction('pointer-up');
+        // L1：DOM style 已同步写入，本处理器可直接读取最终值；
+        // 挂起任务仅含 store 更新，丢弃防止覆盖下方的 visible:false
+        gestureRafThrottlerRef.current?.cancel();
+        if (!e.isDrag) return;
+        const datas = e.datas as unknown as Partial<RotateDatas>;
+        const id = datas.id;
+        if (!id) return;
+        const comp = componentMap.get(id);
+        if (!comp) return;
+        const last = e.lastEvent as unknown as { rotation: number; isDrag: boolean } | undefined;
+        if (!last) return;
+        const rotation = datas.snapRotate
+          ? Math.round(last.rotation / 15) * 15
+          : Math.round(last.rotation);
+        updateComponent(id, {
+          position: { ...comp.position, rotation },
+        });
+        setDimension((d) => ({ ...d, visible: false }));
+      },
+      // --- Group target events ---
+      onDragGroupStart: (e) => {
+        // 任务 12.1：组拖拽由状态机仲裁，拒绝非法重入
+        // 允许 marquee-selecting：框选后未释放鼠标即可拖拽（与单组件拖拽行为一致）
+        if (
+          interactionState !== 'idle' &&
+          interactionState !== 'hovering' &&
+          interactionState !== 'marquee-selecting'
+        ) {
+          return false;
+        }
+        const ids: string[] = [];
+        const transforms: Array<{ rotation: number; flipX: boolean; flipY: boolean }> = [];
+        for (const t of e.targets) {
+          const id = getComponentIdFromTarget(t);
+          if (id) {
+            const comp = componentMap.get(id);
+            if (comp?.status.locked) return false;
+            ids.push(id);
+            // Canvas Drag Optimization：记录每个组件的 rotation/flip，
+            // 组拖拽期间保持不变，用于 compose transform
+            transforms.push({
+              rotation: comp?.position.rotation ?? 0,
+              flipX: comp?.style.flipX === true,
+              flipY: comp?.style.flipY === true,
+            });
+          }
+        }
+        const datas = e.datas as unknown as GroupDragDatas;
+        datas.ids = ids;
+        datas.transforms = transforms;
+        datas.isAltCopy = readAltKey(e.inputEvent);
+        datas.altCopyClones = [];
+        // Alt+组拖拽复制（PS 风格）：立即克隆所有选中组件 DOM，
+        // 拖拽过程中移动克隆体（原件不动），松手时创建真实副本。
+        // cloneNode(true) 复制原 transform，拖拽中 onDragGroup 覆盖 translate 部分。
+        if (datas.isAltCopy && contentRef.current) {
+          for (const t of e.targets) {
+            const clone = t.cloneNode(true) as HTMLElement;
+            clone.style.position = 'absolute';
+            clone.style.pointerEvents = 'none';
+            clone.style.userSelect = 'none';
+            clone.setAttribute('data-alt-copy-clone', 'true');
+            contentRef.current.appendChild(clone);
+            datas.altCopyClones.push(clone);
+          }
+        }
+        // 任务 3.3：镜像组拖拽开始到交互状态机
+        dispatchInteraction('start-drag');
+      },
+      onDragGroup: (e) => {
+        const datas = e.datas as unknown as GroupDragDatas;
+        // Canvas Drag Optimization：用 beforeTranslate + composeComponentTransform 替代 left/top。
+        // 每个 target 保留各自的 rotation/flip，仅 translate 跟随组拖拽变化。
+        if (datas.isAltCopy && datas.altCopyClones.length > 0) {
+          for (let i = 0; i < e.events.length && i < datas.altCopyClones.length; i++) {
+            const ev = e.events[i];
+            const clone = datas.altCopyClones[i];
+            const t = datas.transforms[i] ?? { rotation: 0, flipX: false, flipY: false };
+            const { beforeTranslate } = ev;
+            clone.style.transform = composeComponentTransform(
+              beforeTranslate[0],
+              beforeTranslate[1],
+              t.rotation,
+              t.flipX,
+              t.flipY,
+            );
+          }
+        } else {
+          for (let i = 0; i < e.events.length; i++) {
+            const ev = e.events[i];
+            const t = datas.transforms[i] ?? { rotation: 0, flipX: false, flipY: false };
+            const { beforeTranslate } = ev;
+            ev.target.style.transform = composeComponentTransform(
+              beforeTranslate[0],
+              beforeTranslate[1],
+              t.rotation,
+              t.flipX,
+              t.flipY,
+            );
+          }
+        }
+      },
+      onDragGroupEnd: (e) => {
+        // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+        dispatchInteraction('pointer-up');
+        const datas = e.datas as unknown as Partial<GroupDragDatas>;
+        // Alt+组拖拽复制：零位移或异常结束时也要清理克隆体
+        if (datas.isAltCopy && datas.altCopyClones && datas.altCopyClones.length > 0) {
+          for (const clone of datas.altCopyClones) {
+            clone.remove();
+          }
+          datas.altCopyClones = [];
+        }
+        if (!e.isDrag) return;
+        const ids = datas.ids;
+        if (!ids || ids.length === 0) return;
+        // Alt+组拖拽复制（PS 风格）：在克隆体最终位置创建真实副本
+        if (datas.isAltCopy) {
+          // 用第一个事件的 beforeTranslate 作为副本基准位置
+          const firstEvent = e.events[0];
+          const last = firstEvent?.lastEvent as unknown as
+            | { beforeTranslate: [number, number] }
+            | undefined;
+          if (!last) return;
+          duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
+        } else {
+          const updates = e.events
+            .map((ev) => {
+              const id = getComponentIdFromTarget(ev.target);
+              if (!id) return null;
+              const comp = componentMap.get(id);
+              if (!comp) return null;
+              const last = ev.lastEvent as unknown as
+                | { beforeTranslate: [number, number] }
+                | undefined;
+              if (!last) return null;
+              return {
+                id,
+                changes: {
+                  position: {
+                    ...comp.position,
+                    x: last.beforeTranslate[0],
+                    y: last.beforeTranslate[1],
+                  },
+                },
+              };
+            })
+            .filter((u): u is NonNullable<typeof u> => u != null);
+          // 防御性检查：若部分组件更新失败（如拖拽期间被删除），记录警告并仅更新有效组件
+          if (updates.length !== ids.length) {
+            console.warn(
+              `[ScreenCanvas] 组拖拽结束：期望更新 ${ids.length} 个组件，实际有效 ${updates.length} 个`,
+            );
+          }
+          if (updates.length > 0) {
+            updateComponentsBatch(updates);
+          }
+        }
+      },
+      onResizeGroupStart: (e) => {
+        // 任务 12.1：组缩放由状态机仲裁，拒绝非法重入
+        if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+          return false;
+        }
+        for (const t of e.targets) {
+          const id = getComponentIdFromTarget(t);
+          if (id) {
+            const comp = componentMap.get(id);
+            if (comp?.status.locked) return false;
+          }
+        }
+        // 任务 3.4：镜像组缩放开始到交互状态机
+        dispatchInteraction('start-resize');
+      },
+      onResizeGroup: (e) => {
+        for (const ev of e.events) {
+          const id = getComponentIdFromTarget(ev.target);
+          const comp = id ? componentMap.get(id) : undefined;
+          const rotation = comp?.position.rotation ?? 0;
+          const flipX = comp?.style.flipX === true;
+          const flipY = comp?.style.flipY === true;
+          ev.target.style.width = `${ev.width}px`;
+          ev.target.style.height = `${ev.height}px`;
+          // Canvas Drag Optimization：用 beforeTranslate 替代 left/top
+          if (ev.drag) {
+            const { beforeTranslate } = ev.drag;
+            ev.target.style.transform = composeComponentTransform(
+              beforeTranslate[0],
+              beforeTranslate[1],
+              rotation,
+              flipX,
+              flipY,
+            );
+          }
+        }
+      },
+      onResizeGroupEnd: (e) => {
+        // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
+        dispatchInteraction('pointer-up');
+        if (!e.isDrag) return;
+        const updates = e.events
+          .map((ev) => {
+            const id = getComponentIdFromTarget(ev.target);
+            if (!id) return null;
+            const comp = componentMap.get(id);
+            if (!comp) return null;
+            const last = ev.lastEvent as unknown as
+              | {
+                  width: number;
+                  height: number;
+                  drag: { beforeTranslate: [number, number] };
+                }
+              | undefined;
+            if (!last) return null;
+            return {
+              id,
+              changes: {
+                position: {
+                  ...comp.position,
+                  x: last.drag.beforeTranslate[0],
+                  y: last.drag.beforeTranslate[1],
+                  width: last.width,
+                  height: last.height,
+                },
+              },
+            };
+          })
+          .filter((u): u is NonNullable<typeof u> => u != null);
+        // 防御性检查：若部分组件更新失败（如缩放期间被删除），记录警告并仅更新有效组件
+        if (updates.length !== e.events.length) {
+          console.warn(
+            `[ScreenCanvas] 组缩放结束：期望更新 ${e.events.length} 个组件，实际有效 ${updates.length} 个`,
+          );
+        }
+        if (updates.length > 0) {
+          updateComponentsBatch(updates);
+        }
+      },
+      onChangeTargets: () => {},
+    }),
+    [
+      interactionState,
+      componentMap,
+      dispatchInteraction,
+      updateComponent,
+      updateComponentsBatch,
+      duplicateSelectedToPosition,
+      setDimension,
+    ],
+  );
+
   if (!project || !canvas) return null;
 
   const isGroupSelect = selectedComponentIds.length > 1;
@@ -1179,10 +1793,14 @@ export function ScreenCanvas({
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) {
                 // 点击空白画布：退出当前活动分组并清空选中
+                // 同步 setTargets([]) 让控制框立即隐藏，避免 useLayoutEffect 二次渲染延迟
                 if (activeGroupId !== null) {
                   setActiveGroupId(null);
                 }
-                clearSelection();
+                flushSync(() => {
+                  clearSelection();
+                  setTargets([]);
+                });
               }
             }}
           >
@@ -1229,577 +1847,21 @@ export function ScreenCanvas({
               })()}
           </div>
 
-          <Moveable
-            ref={moveableRef}
-            target={targets}
+          <MoveableContainer
+            moveableRef={moveableRef}
             container={contentRef.current}
             draggable={moveableDraggable}
             resizable={moveableResizable}
             rotatable={moveableRotatable}
-            // Canvas Drag Optimization：用 Moveable 内置 snappable 替代自定义 Smart Guides。
-            // snapEnabled 是状态栏总开关：关闭后所有吸附（组件间/标尺/网格）一律禁用。
-            // smartGuidesEnabled / gridEnabled / guidesVisible 仅控制各自吸附目标是否填充
-            //（见 elementGuidelines / verticalGuidelines / horizontalGuidelines memo），
-            // 不再参与 snappable 的 OR，否则关掉总开关时吸附仍会生效。
-            snappable={snapEnabled}
-            snapThreshold={5}
-            snapGap={false}
+            snapEnabled={snapEnabled}
             keepRatio={shiftHeld}
-            // 整数对齐：避免亚像素渲染抖动（transform 合成层下无布局重排，整数对齐更稳定）
-            throttleDrag={1}
-            throttleResize={1}
             throttleRotate={shiftHeld ? 15 : 0}
-            hideChildMoveableDefaultLines={isGroupSelect}
-            snapDirections={SNAP_DIRECTIONS}
-            elementSnapDirections={ELEMENT_SNAP_DIRECTIONS}
+            isGroupSelect={isGroupSelect}
             elementGuidelines={elementGuidelines}
             verticalGuidelines={verticalGuidelines}
             horizontalGuidelines={horizontalGuidelines}
-            isDisplaySnapDigit={true}
-            isDisplayInnerSnapDigit={true}
             zoom={1 / canvasScale}
-            origin={false}
-            renderDirections={RENDER_DIRECTIONS}
-            // --- Single target events ---
-            onDragStart={(e) => {
-              // 任务 12.1：拖拽由状态机仲裁，拒绝非法重入
-              if (
-                interactionState !== 'idle' &&
-                interactionState !== 'hovering' &&
-                interactionState !== 'marquee-selecting'
-              ) {
-                return false;
-              }
-              const id = getComponentIdFromTarget(e.target);
-              if (!id) return false;
-              const comp = componentMap.get(id);
-              if (comp?.status.locked) return false;
-              const datas = e.datas as unknown as DragDatas;
-              datas.id = id;
-              datas.startX = comp?.position.x ?? 0;
-              datas.startY = comp?.position.y ?? 0;
-              datas.origW = comp?.position.width ?? 0;
-              datas.origH = comp?.position.height ?? 0;
-              // Canvas Drag Optimization：记录组件原始 rotation/flip，
-              // 拖拽期间保持不变，用于 compose transform（translate 变化，rotate/flip 恒定）
-              datas.rotation = comp?.position.rotation ?? 0;
-              datas.flipX = comp?.style.flipX === true;
-              datas.flipY = comp?.style.flipY === true;
-              datas.isAltCopy = readAltKey(e.inputEvent);
-              datas.altCopyClone = null;
-              // Alt+拖拽复制（PS 风格）：按下 Alt 启动拖拽时立即克隆目标 DOM，
-              // 拖拽过程中移动克隆体（原件不动），松手时在克隆位置创建真实副本。
-              // cloneNode(true) 复制原 transform（translate + rotate + flip），
-              // 拖拽中 onDrag 会覆盖 transform 的 translate 部分。
-              if (datas.isAltCopy && contentRef.current) {
-                const clone = e.target.cloneNode(true) as HTMLElement;
-                clone.style.position = 'absolute';
-                clone.style.pointerEvents = 'none';
-                clone.style.userSelect = 'none';
-                clone.setAttribute('data-alt-copy-clone', 'true');
-                contentRef.current.appendChild(clone);
-                datas.altCopyClone = clone;
-              }
-              // 同步 W/H 到 dimension store，使拖拽过程中也显示尺寸
-              setDimension((d) => ({
-                ...d,
-                w: Math.round(comp?.position.width ?? 0),
-                h: Math.round(comp?.position.height ?? 0),
-              }));
-              // 任务 3.3：镜像拖拽开始到交互状态机
-              dispatchInteraction('start-drag');
-            }}
-            onDrag={(e) => {
-              const datas = e.datas as unknown as DragDatas;
-              const target = e.target as HTMLElement;
-              // Canvas Drag Optimization：用 beforeTranslate 替代 left/top DOM 回读。
-              // beforeTranslate 是 Moveable 内部维护的累积位移，与 transform 的 translate 一一对应，
-              // 无精度损失；吸附由 Moveable 内置 snappable 完成，无需自定义 computeSnappedPosition。
-              const { beforeTranslate } = e;
-              const tx = beforeTranslate[0];
-              const ty = beforeTranslate[1];
-              const transform = composeComponentTransform(
-                tx,
-                ty,
-                datas.rotation,
-                datas.flipX,
-                datas.flipY,
-              );
-              // Alt+拖拽复制（PS 风格）：移动克隆体，原件不动
-              if (datas.isAltCopy && datas.altCopyClone) {
-                datas.altCopyClone.style.transform = transform;
-              } else {
-                target.style.transform = transform;
-              }
-              // rAF 节流仅保留 dimension store 更新（对齐线由 Moveable 内部渲染）
-              gestureRafThrottlerRef.current?.schedule(() => {
-                setDimension((d) => ({
-                  ...d,
-                  x: tx,
-                  y: ty,
-                  visible: true,
-                }));
-              });
-            }}
-            onDragEnd={(e) => {
-              // 任务 13.8：手势结束必须无条件恢复交互状态机。
-              // 纯点击（零位移）时 Gesto isDrag 为 false，若早退会漏发 pointer-up，
-              // 状态机卡在 dragging，后续 Selecto onDragStart 仲裁拒绝一切交互
-              //（反复选中/取消数次后出现一次零位移点击即无法选中组件）。
-              dispatchInteraction('pointer-up');
-              // L1：丢弃挂起帧（最终值取自 e.lastEvent），防止延迟任务覆盖 visible:false
-              gestureRafThrottlerRef.current?.cancel();
-              const datas = e.datas as unknown as Partial<DragDatas>;
-              // Alt+拖拽复制：零位移或异常结束时也要清理克隆体
-              if (datas.isAltCopy && datas.altCopyClone) {
-                datas.altCopyClone.remove();
-                datas.altCopyClone = null;
-              }
-              if (!e.isDrag) return;
-              const id = datas.id;
-              if (!id) return;
-              const last = e.lastEvent as unknown as MoveableLastEvent | undefined;
-              if (!last) return;
-              // Alt+拖拽复制（PS 风格）：拖拽结束时在克隆体最终位置创建真实副本
-              if (datas.isAltCopy) {
-                duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
-              } else {
-                const comp = componentMap.get(id);
-                if (!comp) return;
-                updateComponent(id, {
-                  position: {
-                    ...comp.position,
-                    x: last.beforeTranslate[0],
-                    y: last.beforeTranslate[1],
-                  },
-                });
-              }
-              setDimension((d) => ({ ...d, visible: false }));
-            }}
-            onResizeStart={(e) => {
-              // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
-              if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
-                return false;
-              }
-              const id = getComponentIdFromTarget(e.target);
-              if (!id) return false;
-              const comp = componentMap.get(id);
-              if (comp?.status.locked) return false;
-              const datas = e.datas as unknown as ResizeDatas;
-              datas.id = id;
-              datas.origW = comp?.position.width ?? 0;
-              datas.origH = comp?.position.height ?? 0;
-              datas.origX = comp?.position.x ?? 0;
-              datas.origY = comp?.position.y ?? 0;
-              // Canvas Drag Optimization：记录组件原始 rotation/flip，缩放期间保持不变
-              datas.rotation = comp?.position.rotation ?? 0;
-              datas.flipX = comp?.style.flipX === true;
-              datas.flipY = comp?.style.flipY === true;
-              // Shift/Alt 状态在 onResize 中实时从 ref 读取，支持 PS 风格中途按键切换
-              // 初始 mode 提示按当前修饰键状态
-              if (altRef.current) {
-                setDimension((d) => ({ ...d, mode: '中心变换' }));
-              }
-              // 任务 3.4：镜像缩放开始到交互状态机
-              dispatchInteraction('start-resize');
-            }}
-            onResize={(e) => {
-              const datas = e.datas as unknown as ResizeDatas;
-              const target = e.target as HTMLElement;
-              const { origW, origH, origX, origY, rotation, flipX, flipY } = datas;
-              // PS 风格即时响应：每次 onResize 从 ref 实时读取 Shift/Alt 状态，
-              // 支持拖拽过程中按键按下/松开立即切换等比/中心变换模式
-              const keepRatio = shiftRef.current;
-              const isAltCenter = altRef.current;
-              // 尺寸计算 + DOM style 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
-              let w = e.width;
-              let h = e.height;
-              if (keepRatio && origW && origH) {
-                const ratio = origW / origH;
-                const [dx, dy] = e.direction;
-                if (dx !== 0 && dy !== 0) {
-                  const newH = w / ratio;
-                  const newW = h * ratio;
-                  if (Math.abs(w - origW) > Math.abs(h - origH)) {
-                    h = newH;
-                  } else {
-                    w = newW;
-                  }
-                } else if (dx !== 0) {
-                  h = w / ratio;
-                } else if (dy !== 0) {
-                  w = h * ratio;
-                }
-              }
-              target.style.width = `${w}px`;
-              target.style.height = `${h}px`;
-              // Canvas Drag Optimization：用 beforeTranslate 替代 left/top。
-              // e.drag.beforeTranslate 是缩放过程中组件的新位置（Moveable 内部计算）。
-              let tx: number;
-              let ty: number;
-              if (isAltCenter) {
-                // 中心变换：translate = 原位置 + (origSize - newSize) / 2
-                tx = origX + (origW - w) / 2;
-                ty = origY + (origH - h) / 2;
-              } else if (e.drag) {
-                tx = e.drag.beforeTranslate[0];
-                ty = e.drag.beforeTranslate[1];
-              } else {
-                tx = origX;
-                ty = origY;
-              }
-              target.style.transform = composeComponentTransform(tx, ty, rotation, flipX, flipY);
-              // rAF 节流仅保留 React store 更新（尺寸提示 + mode 跟随 Alt 实时切换）
-              gestureRafThrottlerRef.current?.schedule(() => {
-                setDimension((d) => ({
-                  ...d,
-                  x: tx,
-                  y: ty,
-                  w: Math.round(w),
-                  h: Math.round(h),
-                  visible: true,
-                  mode: isAltCenter ? '中心变换' : undefined,
-                }));
-              });
-            }}
-            onResizeEnd={(e) => {
-              // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
-              dispatchInteraction('pointer-up');
-              // L1：DOM style 已同步写入，本处理器可直接读取最终值；
-              // 挂起任务仅含 store 更新，丢弃防止覆盖下方的 visible:false
-              gestureRafThrottlerRef.current?.cancel();
-              if (!e.isDrag) return;
-              const datas = e.datas as unknown as Partial<ResizeDatas>;
-              const id = datas.id;
-              if (!id) return;
-              const comp = componentMap.get(id);
-              if (!comp) return;
-              const last = e.lastEvent as unknown as
-                | {
-                    width: number;
-                    height: number;
-                    drag: { beforeTranslate: [number, number] };
-                    isDrag: boolean;
-                  }
-                | undefined;
-              if (!last) return;
-              // 中心变换提交：onResize 中计算的 tx/ty 只写入了 DOM，
-              // Moveable 内部的 drag.beforeTranslate 仍按非中心变换计算。
-              // 这里必须复用中心变换公式，否则松手后 store 位置与 DOM 不一致导致跳变。
-              // PS 风格：松手瞬间的 Alt 状态决定最终提交模式（与最后一次 onResize 一致）
-              const isAltCenter = altRef.current;
-              let tx: number;
-              let ty: number;
-              if (isAltCenter) {
-                const origX = datas.origX ?? 0;
-                const origY = datas.origY ?? 0;
-                const origW = datas.origW ?? 0;
-                const origH = datas.origH ?? 0;
-                tx = origX + (origW - last.width) / 2;
-                ty = origY + (origH - last.height) / 2;
-              } else {
-                tx = last.drag.beforeTranslate[0];
-                ty = last.drag.beforeTranslate[1];
-              }
-              updateComponent(id, {
-                position: {
-                  ...comp.position,
-                  x: tx,
-                  y: ty,
-                  width: last.width,
-                  height: last.height,
-                },
-              });
-              setDimension((d) => ({ ...d, visible: false, mode: undefined }));
-            }}
-            onRotateStart={(e) => {
-              // 任务 12.1：旋转由状态机仲裁，拒绝非法重入
-              if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
-                return false;
-              }
-              const id = getComponentIdFromTarget(e.target);
-              if (!id) return false;
-              const comp = componentMap.get(id);
-              if (comp?.status.locked) return false;
-              const datas = e.datas as unknown as RotateDatas;
-              datas.id = id;
-              datas.snapRotate = shiftRef.current;
-              // Canvas Drag Optimization：记录组件原始位置/flip，旋转期间保持不变。
-              // translate 在旋转期间不变（旋转围绕组件中心，位置由 translate 决定）。
-              datas.origX = comp?.position.x ?? 0;
-              datas.origY = comp?.position.y ?? 0;
-              datas.flipX = comp?.style.flipX === true;
-              datas.flipY = comp?.style.flipY === true;
-              // 任务 3.4：镜像旋转开始到交互状态机
-              dispatchInteraction('start-rotate');
-            }}
-            onRotate={(e) => {
-              const datas = e.datas as unknown as RotateDatas;
-              const target = e.target as HTMLElement;
-              const { snapRotate, origX, origY, flipX, flipY } = datas;
-              // 旋转角计算 + transform 写入同步执行（原因同 onDrag：Moveable 同步读 DOM）
-              let rotation = e.rotation;
-              if (snapRotate) {
-                rotation = Math.round(rotation / 15) * 15;
-              }
-              // Canvas Drag Optimization：用 composeComponentTransform 合并 translate + rotate + flip，
-              // 替代字符串拼接/正则替换，避免 translate 部分被意外覆盖。
-              target.style.transform = composeComponentTransform(
-                origX,
-                origY,
-                rotation,
-                flipX,
-                flipY,
-              );
-              // rAF 节流仅保留 React store 更新（尺寸提示）
-              gestureRafThrottlerRef.current?.schedule(() => {
-                setDimension((d) => ({ ...d, rotate: Math.round(rotation), visible: true }));
-              });
-            }}
-            onRotateEnd={(e) => {
-              // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
-              dispatchInteraction('pointer-up');
-              // L1：DOM style 已同步写入，本处理器可直接读取最终值；
-              // 挂起任务仅含 store 更新，丢弃防止覆盖下方的 visible:false
-              gestureRafThrottlerRef.current?.cancel();
-              if (!e.isDrag) return;
-              const datas = e.datas as unknown as Partial<RotateDatas>;
-              const id = datas.id;
-              if (!id) return;
-              const comp = componentMap.get(id);
-              if (!comp) return;
-              const last = e.lastEvent as unknown as
-                | { rotation: number; isDrag: boolean }
-                | undefined;
-              if (!last) return;
-              const rotation = datas.snapRotate
-                ? Math.round(last.rotation / 15) * 15
-                : Math.round(last.rotation);
-              updateComponent(id, {
-                position: { ...comp.position, rotation },
-              });
-              setDimension((d) => ({ ...d, visible: false }));
-            }}
-            // --- Group target events ---
-            onDragGroupStart={(e) => {
-              // 任务 12.1：组拖拽由状态机仲裁，拒绝非法重入
-              // 允许 marquee-selecting：框选后未释放鼠标即可拖拽（与单组件拖拽行为一致）
-              if (
-                interactionState !== 'idle' &&
-                interactionState !== 'hovering' &&
-                interactionState !== 'marquee-selecting'
-              ) {
-                return false;
-              }
-              const ids: string[] = [];
-              const transforms: Array<{ rotation: number; flipX: boolean; flipY: boolean }> = [];
-              for (const t of e.targets) {
-                const id = getComponentIdFromTarget(t);
-                if (id) {
-                  const comp = componentMap.get(id);
-                  if (comp?.status.locked) return false;
-                  ids.push(id);
-                  // Canvas Drag Optimization：记录每个组件的 rotation/flip，
-                  // 组拖拽期间保持不变，用于 compose transform
-                  transforms.push({
-                    rotation: comp?.position.rotation ?? 0,
-                    flipX: comp?.style.flipX === true,
-                    flipY: comp?.style.flipY === true,
-                  });
-                }
-              }
-              const datas = e.datas as unknown as GroupDragDatas;
-              datas.ids = ids;
-              datas.transforms = transforms;
-              datas.isAltCopy = readAltKey(e.inputEvent);
-              datas.altCopyClones = [];
-              // Alt+组拖拽复制（PS 风格）：立即克隆所有选中组件 DOM，
-              // 拖拽过程中移动克隆体（原件不动），松手时创建真实副本。
-              // cloneNode(true) 复制原 transform，拖拽中 onDragGroup 覆盖 translate 部分。
-              if (datas.isAltCopy && contentRef.current) {
-                for (const t of e.targets) {
-                  const clone = t.cloneNode(true) as HTMLElement;
-                  clone.style.position = 'absolute';
-                  clone.style.pointerEvents = 'none';
-                  clone.style.userSelect = 'none';
-                  clone.setAttribute('data-alt-copy-clone', 'true');
-                  contentRef.current.appendChild(clone);
-                  datas.altCopyClones.push(clone);
-                }
-              }
-              // 任务 3.3：镜像组拖拽开始到交互状态机
-              dispatchInteraction('start-drag');
-            }}
-            onDragGroup={(e) => {
-              const datas = e.datas as unknown as GroupDragDatas;
-              // Canvas Drag Optimization：用 beforeTranslate + composeComponentTransform 替代 left/top。
-              // 每个 target 保留各自的 rotation/flip，仅 translate 跟随组拖拽变化。
-              if (datas.isAltCopy && datas.altCopyClones.length > 0) {
-                for (let i = 0; i < e.events.length && i < datas.altCopyClones.length; i++) {
-                  const ev = e.events[i];
-                  const clone = datas.altCopyClones[i];
-                  const t = datas.transforms[i] ?? { rotation: 0, flipX: false, flipY: false };
-                  const { beforeTranslate } = ev;
-                  clone.style.transform = composeComponentTransform(
-                    beforeTranslate[0],
-                    beforeTranslate[1],
-                    t.rotation,
-                    t.flipX,
-                    t.flipY,
-                  );
-                }
-              } else {
-                for (let i = 0; i < e.events.length; i++) {
-                  const ev = e.events[i];
-                  const t = datas.transforms[i] ?? { rotation: 0, flipX: false, flipY: false };
-                  const { beforeTranslate } = ev;
-                  ev.target.style.transform = composeComponentTransform(
-                    beforeTranslate[0],
-                    beforeTranslate[1],
-                    t.rotation,
-                    t.flipX,
-                    t.flipY,
-                  );
-                }
-              }
-            }}
-            onDragGroupEnd={(e) => {
-              // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
-              dispatchInteraction('pointer-up');
-              const datas = e.datas as unknown as Partial<GroupDragDatas>;
-              // Alt+组拖拽复制：零位移或异常结束时也要清理克隆体
-              if (datas.isAltCopy && datas.altCopyClones && datas.altCopyClones.length > 0) {
-                for (const clone of datas.altCopyClones) {
-                  clone.remove();
-                }
-                datas.altCopyClones = [];
-              }
-              if (!e.isDrag) return;
-              const ids = datas.ids;
-              if (!ids || ids.length === 0) return;
-              // Alt+组拖拽复制（PS 风格）：在克隆体最终位置创建真实副本
-              if (datas.isAltCopy) {
-                // 用第一个事件的 beforeTranslate 作为副本基准位置
-                const firstEvent = e.events[0];
-                const last = firstEvent?.lastEvent as unknown as
-                  | { beforeTranslate: [number, number] }
-                  | undefined;
-                if (!last) return;
-                duplicateSelectedToPosition(last.beforeTranslate[0], last.beforeTranslate[1]);
-              } else {
-                const updates = e.events
-                  .map((ev) => {
-                    const id = getComponentIdFromTarget(ev.target);
-                    if (!id) return null;
-                    const comp = componentMap.get(id);
-                    if (!comp) return null;
-                    const last = ev.lastEvent as unknown as
-                      | { beforeTranslate: [number, number] }
-                      | undefined;
-                    if (!last) return null;
-                    return {
-                      id,
-                      changes: {
-                        position: {
-                          ...comp.position,
-                          x: last.beforeTranslate[0],
-                          y: last.beforeTranslate[1],
-                        },
-                      },
-                    };
-                  })
-                  .filter((u): u is NonNullable<typeof u> => u != null);
-                // 防御性检查：若部分组件更新失败（如拖拽期间被删除），记录警告并仅更新有效组件
-                if (updates.length !== ids.length) {
-                  console.warn(
-                    `[ScreenCanvas] 组拖拽结束：期望更新 ${ids.length} 个组件，实际有效 ${updates.length} 个`,
-                  );
-                }
-                if (updates.length > 0) {
-                  updateComponentsBatch(updates);
-                }
-              }
-            }}
-            onResizeGroupStart={(e) => {
-              // 任务 12.1：组缩放由状态机仲裁，拒绝非法重入
-              if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
-                return false;
-              }
-              for (const t of e.targets) {
-                const id = getComponentIdFromTarget(t);
-                if (id) {
-                  const comp = componentMap.get(id);
-                  if (comp?.status.locked) return false;
-                }
-              }
-              // 任务 3.4：镜像组缩放开始到交互状态机
-              dispatchInteraction('start-resize');
-            }}
-            onResizeGroup={(e) => {
-              for (const ev of e.events) {
-                const id = getComponentIdFromTarget(ev.target);
-                const comp = id ? componentMap.get(id) : undefined;
-                const rotation = comp?.position.rotation ?? 0;
-                const flipX = comp?.style.flipX === true;
-                const flipY = comp?.style.flipY === true;
-                ev.target.style.width = `${ev.width}px`;
-                ev.target.style.height = `${ev.height}px`;
-                // Canvas Drag Optimization：用 beforeTranslate 替代 left/top
-                if (ev.drag) {
-                  const { beforeTranslate } = ev.drag;
-                  ev.target.style.transform = composeComponentTransform(
-                    beforeTranslate[0],
-                    beforeTranslate[1],
-                    rotation,
-                    flipX,
-                    flipY,
-                  );
-                }
-              }
-            }}
-            onResizeGroupEnd={(e) => {
-              // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
-              dispatchInteraction('pointer-up');
-              if (!e.isDrag) return;
-              const updates = e.events
-                .map((ev) => {
-                  const id = getComponentIdFromTarget(ev.target);
-                  if (!id) return null;
-                  const comp = componentMap.get(id);
-                  if (!comp) return null;
-                  const last = ev.lastEvent as unknown as
-                    | {
-                        width: number;
-                        height: number;
-                        drag: { beforeTranslate: [number, number] };
-                      }
-                    | undefined;
-                  if (!last) return null;
-                  return {
-                    id,
-                    changes: {
-                      position: {
-                        ...comp.position,
-                        x: last.drag.beforeTranslate[0],
-                        y: last.drag.beforeTranslate[1],
-                        width: last.width,
-                        height: last.height,
-                      },
-                    },
-                  };
-                })
-                .filter((u): u is NonNullable<typeof u> => u != null);
-              // 防御性检查：若部分组件更新失败（如缩放期间被删除），记录警告并仅更新有效组件
-              if (updates.length !== e.events.length) {
-                console.warn(
-                  `[ScreenCanvas] 组缩放结束：期望更新 ${e.events.length} 个组件，实际有效 ${updates.length} 个`,
-                );
-              }
-              if (updates.length > 0) {
-                updateComponentsBatch(updates);
-              }
-            }}
-            onChangeTargets={() => {}}
+            handlers={handlers}
           />
         </div>
 
@@ -1871,8 +1933,13 @@ export function ScreenCanvas({
                         groupPid != null && activeGroupId !== groupPid && !isPotentialDoubleClick
                           ? components.filter((c) => c.parentId === groupPid).map((c) => c.id)
                           : [targetId];
+                      // 抽帧根因修复：在 flushSync 内同时更新 selectedComponentIds 和 targets，
+                      // 让一次同步渲染就把 Moveable 的 target 准备好。
+                      // 原本仅 selectComponents，targets 由 useLayoutEffect 二次渲染派生，
+                      // 导致 dragStart 时 Moveable target 还是空数组 → 控制框晚一帧出现。
                       flushSync(() => {
                         selectComponents(selectionToApply);
+                        setTargets(computeTargetsForIds(selectionToApply));
                       });
                       moveableRef.current.dragStart(mouseEvt);
                     }
@@ -1938,6 +2005,7 @@ export function ScreenCanvas({
                 // 双击文本：仍需同步选中，便于退出编辑后控制框已就位
                 flushSync(() => {
                   selectComponents(result.selection);
+                  setTargets(computeTargetsForIds(result.selection));
                 });
                 return;
               }
@@ -1948,15 +2016,18 @@ export function ScreenCanvas({
               if (inputEvent instanceof MouseEvent) {
                 // 任务 13.7：同步触发 dragStart 前用 ref 读取最新状态做 guard。
                 //
-                // 抖动优化：原实现用 setTimeout(dragStart, 0) 等待 React 完成
-                // selectComponents 导致的重渲染，但 setTimeout 让控制框先 paint、
-                // 之后才开始拖拽，造成"先选中再拖拽"的两步视觉。
-                // 改用 flushSync 同步完成 selectComponents + 渲染，然后立即 dragStart，
-                // 让"选中 + 开始拖拽"在同一帧完成。
+                // 抽帧根因修复：
+                // targets 原本由 useLayoutEffect 从 selectedComponentIds 派生（两步渲染），
+                // 即使 flushSync(selectComponents) 同步完成第一步，useLayoutEffect 内的
+                // setTargets 触发的第二次渲染无法被同一 flushSync 包裹 → Moveable 的
+                // target prop 仍是空数组 → dragStart 在空 target 上调用 → 控制框晚一帧。
+                // 修复：在 flushSync 内同时调用 selectComponents 和 setTargets，让一次
+                // 同步渲染就把 Moveable 的 target 准备好，然后立即 dragStart。
                 if (activeToolRef.current !== 'select') {
                   // 工具切换：仍需同步选中，但跳过 dragStart
                   flushSync(() => {
                     selectComponents(result.selection);
+                    setTargets(computeTargetsForIds(result.selection));
                   });
                   dispatchInteraction('pointer-up');
                   return;
@@ -1966,15 +2037,17 @@ export function ScreenCanvas({
                   // 非允许状态：仅同步选中，跳过 dragStart
                   flushSync(() => {
                     selectComponents(result.selection);
+                    setTargets(computeTargetsForIds(result.selection));
                   });
                   dispatchInteraction('pointer-up');
                   return;
                 }
-                // flushSync 同步完成 selectComponents，Moveable target 立即更新
+                // flushSync 同步完成 selectComponents + setTargets，Moveable target 立即就位
                 flushSync(() => {
                   selectComponents(result.selection);
+                  setTargets(computeTargetsForIds(result.selection));
                 });
-                // 立即同步 dragStart（无需 setTimeout，Moveable target 已就绪）
+                // 立即同步 dragStart（Moveable target 已就绪，控制框已渲染）
                 moveableRef.current?.dragStart(inputEvent);
                 // 任务 3.5：镜像框选结束到交互状态机
                 // dragStart 已同步触发 onDragStart（其中 dispatchInteraction('start-drag')）
@@ -1984,8 +2057,12 @@ export function ScreenCanvas({
               }
             }
 
-            // 非拖拽启动场景（如纯点击选中、框选）：异步更新即可
-            selectComponents(result.selection);
+            // 非拖拽启动场景（如纯点击选中、框选）：同步更新选中与 targets，
+            // 避免 useLayoutEffect 二次渲染导致 Moveable 控制框晚一帧显示
+            flushSync(() => {
+              selectComponents(result.selection);
+              setTargets(computeTargetsForIds(result.selection));
+            });
             // 任务 3.5：镜像框选结束到交互状态机（marquee-selecting → idle）
             dispatchInteraction('pointer-up');
           }}

@@ -14,7 +14,15 @@
 import type { ReactNode } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
 
-/** 属性面板 Tab 标识（按组件类型动态显隐） */
+/**
+ * 属性面板 Tab 标识（按组件类型动态显隐）。
+ *
+ * 四大类语义边界：
+ * - `appearance`（属性）：位置尺寸 / 层级状态 / 样式 / 文本 / 图表配置 / 滤镜
+ * - `data`（数据）：数据源 / 字段映射 / 数据转换 / 全局变量绑定
+ * - `interaction`（交互）：悬停提示 / 选中高亮 / 联动触发
+ * - `events`（事件）：快速事件配置（派生自 blueprint）+ 打开事件蓝图入口
+ */
 export type PropertyTabId = 'appearance' | 'data' | 'interaction' | 'events';
 
 /** Tab 显示标签 */

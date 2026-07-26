@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ScreenBenchmarkRouteImport } from './routes/screen-benchmark'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as AppIndexRouteImport } from './routes/_app.index'
@@ -25,6 +26,11 @@ import { Route as AppDatasetIndexRouteImport } from './routes/_app.dataset.index
 import { Route as AppScreenIdRouteImport } from './routes/_app.screen.$id'
 import { Route as AppDatasetIdRouteImport } from './routes/_app.dataset.$id'
 
+const ScreenBenchmarkRoute = ScreenBenchmarkRouteImport.update({
+  id: '/screen-benchmark',
+  path: '/screen-benchmark',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -103,6 +109,7 @@ const AppDatasetIdRoute = AppDatasetIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/screen-benchmark': typeof ScreenBenchmarkRoute
   '/data-table-playground': typeof AppDataTablePlaygroundRoute
   '/datasource-connection': typeof AppDatasourceConnectionRoute
   '/dict': typeof AppDictRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/screen-benchmark': typeof ScreenBenchmarkRoute
   '/data-table-playground': typeof AppDataTablePlaygroundRoute
   '/datasource-connection': typeof AppDatasourceConnectionRoute
   '/dict': typeof AppDictRoute
@@ -136,6 +144,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/screen-benchmark': typeof ScreenBenchmarkRoute
   '/_app/data-table-playground': typeof AppDataTablePlaygroundRoute
   '/_app/datasource-connection': typeof AppDatasourceConnectionRoute
   '/_app/dict': typeof AppDictRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/screen-benchmark'
     | '/data-table-playground'
     | '/datasource-connection'
     | '/dict'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/screen-benchmark'
     | '/data-table-playground'
     | '/datasource-connection'
     | '/dict'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/screen-benchmark'
     | '/_app/data-table-playground'
     | '/_app/datasource-connection'
     | '/_app/dict'
@@ -205,12 +217,20 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ScreenBenchmarkRoute: typeof ScreenBenchmarkRoute
   ScreenEditorPreviewIdRoute: typeof ScreenEditorPreviewIdRoute
   ScreenPreviewIdRoute: typeof ScreenPreviewIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/screen-benchmark': {
+      id: '/screen-benchmark'
+      path: '/screen-benchmark'
+      fullPath: '/screen-benchmark'
+      preLoaderRoute: typeof ScreenBenchmarkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -352,6 +372,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ScreenBenchmarkRoute: ScreenBenchmarkRoute,
   ScreenEditorPreviewIdRoute: ScreenEditorPreviewIdRoute,
   ScreenPreviewIdRoute: ScreenPreviewIdRoute,
 }

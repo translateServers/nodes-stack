@@ -11,8 +11,14 @@
  * - 不做大爆炸重写，面板壳与分区编排先 Schema 化，字段逐个收敛
  */
 
-import { BarChartConfigSections } from '../components/bar-chart-config-sections';
-import type { PropertySchema } from './types';
+import {
+  BarChartDataSourceSection,
+  BarChartInteractionSection,
+  BarChartLogicSection,
+  BarChartVisualSection,
+} from '../components/bar-chart-config-sections';
+import { QuickEventEditor } from '../components/quick-event-editor';
+import type { PropertySchema, PropertyTabId } from './types';
 
 /** 位置与尺寸分区字段（多组件类型复用） */
 const POSITION_SECTION: PropertySchema[number] = {
@@ -185,6 +191,27 @@ const TEXT_PROPS_SECTION: PropertySchema[number] = {
       defaultValue: 'left',
       controlProps: { options: TEXT_ALIGN_OPTIONS },
     },
+    // Task 7：文本细化配置（Light Chaser 特色：字间距 + 文字描边）
+    {
+      kind: 'field',
+      control: 'number',
+      label: '字间距',
+      path: 'style.letterSpacing',
+      controlProps: { step: 0.1 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '描边宽度',
+      path: 'style.textStrokeWidth',
+      controlProps: { min: 0, step: 0.5 },
+    },
+    {
+      kind: 'field',
+      control: 'color',
+      label: '描边颜色',
+      path: 'style.textStrokeColor',
+    },
   ],
 };
 
@@ -218,40 +245,287 @@ const TRANSFORM_SECTION: PropertySchema[number] = {
 };
 
 /**
- * 通用 Schema：位置尺寸 + 样式 + 变换（所有未注册组件类型回退到此）。
- * 覆盖 shape / rect / image / frame / table / box 等基础组件。
+ * 层级状态分区字段（Task 3）。
+ *
+ * 承载组件命名、zIndex 调整、锁定/隐藏切换；默认折叠以减少视觉噪声。
+ * 写入路径与 editor-store 现有 API 对齐：
+ * - `name` ← renameComponent(id, name) 直接更新 c.name
+ * - `zIndex` ← reorderComponent(id, newZIndex) 直接更新 c.zIndex
+ * - `status.locked` ← setLocked(ids, locked) 更新 c.status.locked（保留 hidden 兄弟字段）
+ * - `status.hidden` ← setHidden(ids, hidden) 更新 c.status.hidden（保留 locked 兄弟字段）
+ * 通过 buildNestedUpdate 写入 `status.locked` 会产生 `{ status: { ...c.status, locked } }`，
+ * 与 setLocked 手写实现等价，不会丢失 status 内的兄弟字段。
  */
-const DEFAULT_SCHEMA: PropertySchema = [POSITION_SECTION, STYLE_SECTION, TRANSFORM_SECTION];
+const LAYER_STATUS_SECTION: PropertySchema[number] = {
+  id: 'layer-status',
+  title: '层级状态',
+  tab: 'appearance',
+  collapsible: true,
+  defaultOpen: false,
+  testId: 'layer-status-section',
+  fields: [
+    {
+      kind: 'field',
+      control: 'text',
+      label: '名称',
+      path: 'name',
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '层级',
+      path: 'zIndex',
+      controlProps: { min: 0, step: 1 },
+    },
+    {
+      kind: 'field',
+      control: 'switch',
+      label: '锁定',
+      path: 'status.locked',
+    },
+    {
+      kind: 'field',
+      control: 'switch',
+      label: '隐藏',
+      path: 'status.hidden',
+    },
+  ],
+};
 
-/** text 组件 Schema：位置尺寸 + 样式 + 文本属性 + 变换 */
+/**
+ * 事件分区（任务 4.8）：在 events tab 渲染 QuickEventEditor。
+ *
+ * customRender 模式下 testId 字段不被 section-renderer 使用，
+ * QuickEventEditor 内部 PanelSection 已自带 testId，便于 E2E/单测定位。
+ */
+const EVENTS_SECTION: PropertySchema[number] = {
+  id: 'quick-events',
+  title: '事件',
+  tab: 'events',
+  customRender: ({ component }) => <QuickEventEditor componentId={component.id} />,
+  testId: 'quick-events-section',
+};
+
+/**
+ * Task 6：组件滤镜分区（Light Chaser 特色）。
+ *
+ * 6 个字段对应 ComponentStyleSchema.filter 子对象的 6 个 CSS filter 函数：
+ * - hueRotate / saturate / brightness / contrast / blur / grayscale
+ * 数值范围与 schema 默认值（hueRotate=0, saturate=100, brightness=100,
+ * contrast=100, blur=0, grayscale=0）一致，渲染层 buildFilterString 仅在
+ * 字段非默认值时拼接对应 CSS filter 函数。
+ */
+const FILTER_SECTION: PropertySchema[number] = {
+  id: 'filter',
+  title: '滤镜',
+  tab: 'appearance',
+  collapsible: true,
+  defaultOpen: false,
+  testId: 'filter-section',
+  fields: [
+    {
+      kind: 'field',
+      control: 'number',
+      label: '色相',
+      path: 'style.filter.hueRotate',
+      defaultValue: 0,
+      controlProps: { min: 0, max: 360, step: 1 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '饱和度',
+      path: 'style.filter.saturate',
+      defaultValue: 100,
+      controlProps: { min: 0, max: 200, step: 1 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '亮度',
+      path: 'style.filter.brightness',
+      defaultValue: 100,
+      controlProps: { min: 0, max: 200, step: 1 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '对比度',
+      path: 'style.filter.contrast',
+      defaultValue: 100,
+      controlProps: { min: 0, max: 200, step: 1 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '模糊',
+      path: 'style.filter.blur',
+      defaultValue: 0,
+      controlProps: { min: 0, max: 20, step: 0.1 },
+    },
+    {
+      kind: 'field',
+      control: 'number',
+      label: '灰度',
+      path: 'style.filter.grayscale',
+      defaultValue: 0,
+      controlProps: { min: 0, max: 100, step: 1 },
+    },
+  ],
+};
+
+/**
+ * 空 tab 占位分区（Task 5）。
+ *
+ * 设计选型：选择方案 A（在 schema 中显式添加 customRender 占位分区）而非方案 B
+ * （section-renderer 检测空 tab 自动渲染提示），原因：
+ * - 当前架构中 tab 仅在被分区引用时才出现在 tabs 数组中（section-renderer.tsx
+ *   第 137-143 行的 tabSet 计算），方案 B 需要额外定义"每类组件应展示哪些 tab"的
+ *   声明式配置，架构改动较大；
+ * - 方案 A 与 BAR_CHART_SCHEMA 中 bar-chart-data / bar-chart-interaction 等
+ *   customRender 分区模式一致，复用现有逃生舱能力，改动最小；
+ * - 后续如某组件需要在该 tab 接入实际编辑器，直接用真实分区替换占位即可。
+ *
+ * customRender 返回内容直接插入 tab，不套 PanelSection（与图表 customRender 一致）。
+ */
+function createEmptyTabPlaceholder(
+  id: string,
+  tab: PropertyTabId,
+  hint: string,
+  testId: string,
+): PropertySchema[number] {
+  return {
+    id,
+    title: '',
+    tab,
+    customRender: () => (
+      <div data-testid={testId} className="py-6 text-center text-xs text-muted-foreground">
+        {hint}
+      </div>
+    ),
+  };
+}
+
+/**
+ * 通用 Schema：位置尺寸 + 样式 + 变换 + 层级状态 + 数据占位 + 交互占位 + 事件
+ * （所有未注册组件类型回退到此，覆盖 shape / rect / image / frame / table / box 等装饰类组件）。
+ *
+ * Task 5：装饰类组件不接数据源与交互配置，但仍展示 data / interaction tab 头与空状态提示，
+ * 与 appearance / events tab 一起构成完整四 tab 语义边界，方便用户理解组件能力范围。
+ */
+const DEFAULT_DATA_EMPTY_SECTION = createEmptyTabPlaceholder(
+  'default-data-empty',
+  'data',
+  '该组件无数据源配置',
+  'empty-data-tab',
+);
+
+const DEFAULT_INTERACTION_EMPTY_SECTION = createEmptyTabPlaceholder(
+  'default-interaction-empty',
+  'interaction',
+  '该组件无交互配置',
+  'empty-interaction-tab',
+);
+
+const DEFAULT_SCHEMA: PropertySchema = [
+  POSITION_SECTION,
+  STYLE_SECTION,
+  TRANSFORM_SECTION,
+  LAYER_STATUS_SECTION,
+  FILTER_SECTION,
+  DEFAULT_DATA_EMPTY_SECTION,
+  DEFAULT_INTERACTION_EMPTY_SECTION,
+  EVENTS_SECTION,
+];
+
+/**
+ * text 组件 Schema：位置尺寸 + 样式 + 文本属性 + 变换 + 层级状态 + 数据占位 + 事件。
+ *
+ * Task 5：text 不接数据源，但仍展示 data tab 头与空状态提示；events tab 由
+ * QuickEventEditor 自身处理空状态（无事件时的引导文案）。
+ */
+const TEXT_DATA_EMPTY_SECTION = createEmptyTabPlaceholder(
+  'text-data-empty',
+  'data',
+  '该组件无数据源配置',
+  'empty-data-tab',
+);
+
 const TEXT_SCHEMA: PropertySchema = [
   POSITION_SECTION,
   STYLE_SECTION,
   TEXT_PROPS_SECTION,
   TRANSFORM_SECTION,
+  LAYER_STATUS_SECTION,
+  FILTER_SECTION,
+  TEXT_DATA_EMPTY_SECTION,
+  EVENTS_SECTION,
 ];
 
 /**
- * bar-chart Schema：位置尺寸 + 图表配置（customRender 逃生舱）。
+ * bar-chart Schema：按 tab 分布（Task 2 重组 + Task 4 接入 QuickEventEditor）。
  *
- * bar-chart 的数据/逻辑/视觉/交互四层配置由 BarChartConfigSections 原样挂载，
- * 内部自行渲染 4 个 PanelSection（datasource/logic/visual/interaction）。
- * customRender 返回内容直接插入 tab，不额外套 PanelSection。
+ * - `appearance` tab（默认激活）：位置尺寸 + 视觉层（标题 + StyleFields）+ 变换 + 层级状态
+ * - `data` tab：数据源 + 字段映射（BarChartDataSourceSection）+ 数据转换（BarChartLogicSection）
+ * - `interaction` tab：悬停提示（BarChartInteractionSection）
+ * - `events` tab：QuickEventEditor（派生自 blueprint 的快速事件配置）
+ *
+ * 视觉层 StyleFields 已覆盖背景/透明度/边框等样式字段，故不再重复挂载 STYLE_SECTION。
+ * customRender 返回内容直接插入 tab，不额外套 PanelSection（由子组件内部自行渲染）。
  */
 const BAR_CHART_SCHEMA: PropertySchema = [
+  // appearance tab（默认激活）
   POSITION_SECTION,
   {
-    id: 'bar-chart-config',
+    id: 'bar-chart-visual',
     title: '',
-    tab: 'data',
+    tab: 'appearance',
     customRender: (ctx) => (
-      <BarChartConfigSections
+      <BarChartVisualSection
         key={ctx.component.id}
         component={ctx.component}
         onUpdate={ctx.onUpdate}
       />
     ),
   },
+  TRANSFORM_SECTION,
+  LAYER_STATUS_SECTION,
+  FILTER_SECTION,
+  // data tab：数据源 + 字段映射 + 数据转换
+  {
+    id: 'bar-chart-data',
+    title: '',
+    tab: 'data',
+    customRender: (ctx) => (
+      <>
+        <BarChartDataSourceSection
+          key={`${ctx.component.id}:data`}
+          component={ctx.component}
+          onUpdate={ctx.onUpdate}
+        />
+        <BarChartLogicSection
+          key={`${ctx.component.id}:logic`}
+          component={ctx.component}
+          onUpdate={ctx.onUpdate}
+        />
+      </>
+    ),
+  },
+  // interaction tab：悬停提示
+  {
+    id: 'bar-chart-interaction',
+    title: '',
+    tab: 'interaction',
+    customRender: (ctx) => (
+      <BarChartInteractionSection
+        key={ctx.component.id}
+        component={ctx.component}
+        onUpdate={ctx.onUpdate}
+      />
+    ),
+  },
+  // events tab：QuickEventEditor（Task 4）
+  EVENTS_SECTION,
 ];
 
 /**
@@ -275,6 +549,8 @@ export function getSchemaForComponentType(type: string): PropertySchema {
 export {
   BAR_CHART_SCHEMA,
   DEFAULT_SCHEMA,
+  FILTER_SECTION,
+  LAYER_STATUS_SECTION,
   POSITION_SECTION,
   STYLE_SECTION,
   TEXT_PROPS_SECTION,

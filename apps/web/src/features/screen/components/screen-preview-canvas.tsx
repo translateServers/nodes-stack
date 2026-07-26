@@ -2,6 +2,7 @@ import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 import { resolveComponentContainerStyle } from '../registry/component-container-style';
 import { BlueprintPreviewProvider, useBlueprintPreviewRuntime } from '../blueprint/runtime';
 import { PreviewComponentRenderer } from './preview-component-renderer';
+import { buildFilterString } from './screen-canvas';
 
 /**
  * 按 scaleMode 计算画布缩放比以适配视口。
@@ -90,7 +91,11 @@ export function PreviewCanvas({ project }: PreviewCanvasProps) {
             .map((component) => (
               <div
                 key={component.id}
-                style={resolveComponentContainerStyle(component)}
+                style={{
+                  ...resolveComponentContainerStyle(component),
+                  // Task 6：组件 CSS 滤镜在预览/发布模式下同样生效
+                  filter: buildFilterString(component.style.filter) || undefined,
+                }}
                 data-preview-component-id={component.id}
                 onClick={(e) => {
                   // 阻止冒泡到父容器（避免画布空白处点击触发组件事件）

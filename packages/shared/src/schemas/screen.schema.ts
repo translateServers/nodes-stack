@@ -3,6 +3,7 @@ import { DateTimeStringSchema } from './datetime.schema.js';
 import { EventBlueprintSchema } from './blueprint.schema.js';
 import { FieldMappingSchema } from './field-mapping.schema.js';
 import { RefreshStrategySchema } from './dataset.schema.js';
+import { GlobalVariableSchema } from './global-variable.schema.js';
 
 // ===== 枚举 =====
 
@@ -52,6 +53,18 @@ export const ComponentStyleSchema = z.object({
   borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional().describe('边框样式'),
   borderRadius: z.number().min(0).optional().describe('圆角'),
   backgroundColor: z.string().optional().describe('背景颜色'),
+  // Task 6：组件滤镜（Light Chaser 特色），CSS filter 函数族
+  filter: z
+    .object({
+      hueRotate: z.number().min(0).max(360).default(0).describe('色相旋转（度）'),
+      saturate: z.number().min(0).max(200).default(100).describe('饱和度（%）'),
+      brightness: z.number().min(0).max(200).default(100).describe('亮度（%）'),
+      contrast: z.number().min(0).max(200).default(100).describe('对比度（%）'),
+      blur: z.number().min(0).max(20).default(0).describe('模糊（px）'),
+      grayscale: z.number().min(0).max(100).default(0).describe('灰度（%）'),
+    })
+    .optional()
+    .describe('组件 CSS 滤镜'),
   fontSize: z.number().int().positive().optional().describe('字体大小'),
   color: z.string().optional().describe('字体颜色'),
   textAlign: z.enum(['left', 'center', 'right']).optional().describe('文字对齐'),
@@ -63,6 +76,10 @@ export const ComponentStyleSchema = z.object({
     .optional()
     .describe('字体粗细（CSS font-weight 字符串，如 "normal"/"bold"/"700"）'),
   lineHeight: z.number().positive().optional().describe('行高倍数（如 1.5 表示 1.5 倍行高）'),
+  // Task 7：文本细化配置（Light Chaser 特色：字间距 + 文字描边）
+  letterSpacing: z.number().optional().describe('字间距（px）'),
+  textStrokeWidth: z.number().min(0).optional().describe('文字描边宽度（px）'),
+  textStrokeColor: z.string().optional().describe('文字描边颜色'),
   // Phase 2 Slice D：变换（水平/垂直翻转）
   flipX: z.boolean().optional().describe('水平翻转（CSS scaleX(-1)）'),
   flipY: z.boolean().optional().describe('垂直翻转（CSS scaleY(-1)）'),
@@ -247,6 +264,20 @@ export type ComponentDefaultSize = z.infer<typeof ComponentDefaultSizeSchema>;
 export const ComponentBadgeSchema = z.enum(['new', 'beta']);
 export type ComponentBadge = z.infer<typeof ComponentBadgeSchema>;
 
+/** 组件事件定义（蓝图 V2 锚点派生源） */
+export const ComponentEventDefinitionSchema = z.object({
+  id: z.string().min(1).describe('事件标识（如 click, hover, dataLoaded）'),
+  name: z.string().min(1).describe('事件显示名（如 点击, 悬停, 数据加载完成）'),
+});
+export type ComponentEventDefinition = z.infer<typeof ComponentEventDefinitionSchema>;
+
+/** 组件动作定义（蓝图 V2 锚点派生源） */
+export const ComponentActionDefinitionSchema = z.object({
+  id: z.string().min(1).describe('动作标识（如 show, hide, toggleVisibility, refreshData）'),
+  name: z.string().min(1).describe('动作显示名（如 显示, 隐藏, 切换显隐, 刷新数据）'),
+});
+export type ComponentActionDefinition = z.infer<typeof ComponentActionDefinitionSchema>;
+
 export const ComponentDefinitionSchema = z.object({
   type: z.string().min(1).describe('组件类型 key（唯一）'),
   name: z.string().min(1).describe('组件显示名称'),
@@ -263,6 +294,10 @@ export const ComponentDefinitionSchema = z.object({
   description: z.string().optional().describe('hover tooltip 说明'),
   badge: ComponentBadgeSchema.optional().describe('角标（new/beta）'),
   order: z.number().int().optional().describe('分类内排序（升序，缺省按数组顺序）'),
+  /** 组件支持的事件列表（蓝图 V2 锚点派生源） */
+  events: z.array(ComponentEventDefinitionSchema).optional(),
+  /** 组件支持的动作列表（蓝图 V2 锚点派生源） */
+  actions: z.array(ComponentActionDefinitionSchema).optional(),
 });
 export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 
@@ -277,6 +312,10 @@ export const ScreenProjectSchema = z.object({
   blueprint: EventBlueprintSchema.optional().describe(
     '交互层：项目级事件蓝图（跨组件触发与动作编排），与组件级 interaction 字段互不替代',
   ),
+  globalVariables: z
+    .array(GlobalVariableSchema)
+    .default([])
+    .describe('项目级全局变量，可在数据源参数与蓝图模板插值中通过 {{globalVars.xxx}} 引用'),
   status: ScreenProjectStatusSchema.describe('项目状态'),
   thumbnail: z.string().nullable().optional().describe('缩略图'),
   createdAt: DateTimeStringSchema.describe('创建时间'),
@@ -301,6 +340,10 @@ export const UpdateScreenProjectSchema = z.object({
   blueprint: EventBlueprintSchema.optional().describe(
     '事件蓝图（可选；缺省表示不修改，不会为未编辑蓝图的项目凭空写入）',
   ),
+  globalVariables: z
+    .array(GlobalVariableSchema)
+    .optional()
+    .describe('项目级全局变量（可选；缺省表示不修改，与 blueprint 语义一致）'),
   thumbnail: z.string().optional().describe('缩略图'),
   expectedUpdatedAt: DateTimeStringSchema.describe(
     '本次更新基于的保存基线，值来自客户端最后确认的服务端 updatedAt',

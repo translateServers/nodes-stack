@@ -63,6 +63,7 @@ function makeProject(components: ScreenComponent[]): ScreenProject {
     name: '测试项目',
     canvas: createCanvas(),
     components,
+    globalVariables: [],
     status: 'published',
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',

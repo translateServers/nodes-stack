@@ -1,7 +1,7 @@
 # 大屏设计器架构
 
 > 状态：生效中
-> 最近更新：2026-07-24
+> 最近更新：2026-07-26
 > 定位：核心 feature 的架构说明。读完应能理解画布/组件/工具/属性面板/数据层如何协作，以及在哪里扩展
 
 ## 1. 定位与边界
@@ -278,22 +278,40 @@ PropertySection = { id; title; tab; fields?: PropertyField[]; customRender?: (ct
 PropertySchema = PropertySection[]
 ```
 
+**四大类分类语义**：所有分区按 `tab` 字段归入四大类——`appearance`（属性：位置/样式/文本/变换/层级/滤镜）、`data`（数据：数据源/字段映射/逻辑层）、`interaction`（交互：tooltip 等行为）、`events`（事件：QuickEventEditor 派生视图）。即使是 `customRender` 分区也必须声明 `tab`，由渲染器按 tab 归入对应容器。
+
 ### Schema 注册表
 
-预定义可复用分区：`POSITION_SECTION` / `STYLE_SECTION` / `TEXT_PROPS_SECTION` / `TRANSFORM_SECTION`。
+预定义可复用分区：
+
+| 分区 | tab | 说明 |
+|---|---|---|
+| `POSITION_SECTION` | appearance | 位置/尺寸/旋转 |
+| `STYLE_SECTION` | appearance | 背景/透明度/边框/圆角 |
+| `TEXT_PROPS_SECTION` | appearance | 文本属性（含字间距 `letterSpacing` / 描边宽度 `textStrokeWidth` / 描边色 `textStrokeColor`） |
+| `TRANSFORM_SECTION` | appearance | 水平/垂直翻转 |
+| `LAYER_STATUS_SECTION` | appearance | 层级状态：名称（`name`）/ 层级（`zIndex`）/ 锁定（`status.locked`）/ 隐藏（`status.hidden`），默认折叠 |
+| `FILTER_SECTION` | appearance | 组件滤镜，6 个 CSS filter 参数：`hueRotate` / `saturate` / `brightness` / `contrast` / `blur` / `grayscale`，默认折叠 |
+| `EVENTS_SECTION` | events | customRender 挂载 `<QuickEventEditor>`，派生当前组件相关事件规则 |
 
 ```ts
 PROPERTY_SCHEMAS: Record<string, PropertySchema> = {
   text: TEXT_SCHEMA,
-  'bar-chart': BAR_CHART_SCHEMA,  // 用 customRender 挂载 <BarChartConfigSections>
+  'bar-chart': BAR_CHART_SCHEMA,  // 按 tab 分布：appearance 视觉层 / data 数据源+逻辑 / interaction 悬停提示 / events QuickEventEditor
 }
 ```
 
+未注册类型回退到 `DEFAULT_SCHEMA`：位置 + 样式 + 变换 + 层级状态 + 滤镜 + 数据占位 + 交互占位 + 事件，构成完整四 tab 语义边界。
+
 ### 渲染器三层
 
-1. `PropertySchemaRenderer`：按 tab 分组，2+ tab 且无 customRender 时启用 Tabs 容器
-2. `PropertySectionRenderer`：customRender 直接输出；否则套 PanelSection + 字段列表
+1. `PropertySchemaRenderer`：按 tab 分组，**涉及 2+ tab 时始终启用 Tabs 容器**（不再因 customRender 退化为平铺）；customRender 分区按其 `tab` 字段归入对应 tab 的 `TabsContent`，Radix `TabsContent` 仅渲染活跃 tab 内容
+2. `PropertySectionRenderer`：customRender 直接输出（不套 PanelSection，由子组件自行渲染）；否则套 PanelSection + 字段列表
 3. `DeclarativeFieldRenderer`：从 `FIELD_CONTROLS` 查控件，`getByPath` 取值 + `buildNestedUpdate` 构造嵌套 partial
+
+### 未选中组件时的入口
+
+未选中任何组件时右侧面板不渲染 Schema，改为渲染「画布设置」分区与「全局变量管理面板」（`components/global-variables-panel.tsx`）。全局变量是项目级共享的命名变量，可在数据源参数与蓝图模板中通过 `{{globalVars.xxx}}` 引用，详见 [蓝图运行时架构 - 右侧面板派生视图](./blueprint-runtime-architecture.md#右侧面板派生视图)。
 
 ### 字段控件
 

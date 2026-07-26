@@ -37,7 +37,7 @@ export function EditorRightPanel() {
   }
 
   return (
-    <div className="flex h-full" style={{ width }}>
+    <div className="flex h-full" style={{ width, contain: 'layout style paint' }}>
       <PanelResizeHandle
         isDragging={isDragging}
         onPointerDown={handlePointerDown}

@@ -1,7 +1,7 @@
 # 大屏编辑器功能规格
 
 > 状态：生效中
-> 最近更新：2026-07-24
+> 最近更新：2026-07-26
 > 定位：已实现功能的现状描述（非设计方案）。供新人快速了解"已经有什么"，作为后续需求变更的基线
 
 ## 1. 功能概述
@@ -148,16 +148,24 @@
 
 ### 5.1 架构
 
-三层声明式：Schema → Section → Field，单向数据流。
+三层声明式：Schema → Section → Field，单向数据流。所有分区按 `tab` 字段归入四大类，涉及 2+ tab 时始终启用 Tabs 容器（customRender 分区按其 `tab` 字段归入对应 tab）。
 
-### 5.2 Tab 分类
+### 5.2 Tab 分类（四大类）
 
-| Tab | 说明 |
-|---|---|
-| appearance | 位置/样式/文本属性/变换 |
-| data | 数据源/字段映射/逻辑层 |
-| interaction | 交互行为 |
-| events | 事件绑定（预留） |
+| Tab | 说明 | 典型分区 |
+|---|---|---|
+| appearance（属性） | 位置/样式/文本/变换/层级/滤镜 | `POSITION_SECTION` / `STYLE_SECTION` / `TEXT_PROPS_SECTION` / `TRANSFORM_SECTION` / `LAYER_STATUS_SECTION` / `FILTER_SECTION` |
+| data（数据） | 数据源/字段映射/逻辑层 | `BarChartDataSourceSection` + `BarChartLogicSection`（bar-chart）；其他组件 data tab 渲染空状态占位 |
+| interaction（交互） | 交互行为 | `BarChartInteractionSection`（悬停提示）；其他组件 interaction tab 渲染空状态占位 |
+| events（事件） | 事件规则派生视图 | `EVENTS_SECTION`（customRender 挂载 `<QuickEventEditor>`） |
+
+`LAYER_STATUS_SECTION`：层级状态分区，承载组件命名（`name`）/ z-index 调整（`zIndex`）/ 锁定（`status.locked`）/ 隐藏（`status.hidden`），默认折叠以减少视觉噪声。写入路径与 `editor-store` 现有 `renameComponent` / `reorderComponent` / `setLocked` / `setHidden` API 对齐。
+
+`FILTER_SECTION`：组件滤镜分区，6 个 CSS filter 参数：`hueRotate`（0-360）/ `saturate`（0-200）/ `brightness`（0-200）/ `contrast`（0-200）/ `blur`（0-20）/ `grayscale`（0-100），渲染层 `buildFilterString` 仅在字段非默认值时拼接对应 CSS filter 函数。
+
+`TEXT_PROPS_SECTION` 已扩展文本细化配置：字间距 `letterSpacing`、描边宽度 `textStrokeWidth`、描边颜色 `textStrokeColor`。
+
+未选中任何组件时右侧面板不渲染 Schema，改为渲染「画布设置」分区与「全局变量管理面板」（见 [§10.4](#104-全局变量)）。
 
 ### 5.3 字段控件
 
@@ -173,7 +181,7 @@
 ### 5.4 逃生舱
 
 - `customField`：单字段自定义渲染
-- `customRender`：整个 section 自定义渲染（bar-chart 用）
+- `customRender`：整个 section 自定义渲染（bar-chart 各 tab 与 QuickEventEditor 均用）
 
 ## 6. 数据层
 
@@ -300,6 +308,32 @@
 - 沙盒运行时：编辑器内模拟触发，注入 mock deps
 - 沙盒高亮：高亮被触发的节点与连线
 - 执行日志面板
+
+### 10.4 QuickEventEditor 派生视图
+
+`components/quick-event-editor.tsx` 在右侧属性面板 events tab 渲染，从 `ScreenProject.blueprint` 派生当前选中组件相关的事件规则，**无需打开蓝图抽屉即可快速查看与编辑**。
+
+**派生规则**（纯函数，BFS 遍历）：
+
+- **触发器（本组件作为源）**：`trigger.config.componentId === componentId` 的 componentClick / componentHover / dataLoaded / dataError 节点；沿 edges BFS 收集下游 action 链（穿过 condition 节点，仅收集 action）
+- **动作（本组件作为目标）**：`action.config.targetComponentId === componentId` 的 setVisibility / scrollToComponent / refreshDataSource 节点；沿 edges 反向 BFS 找到上游 trigger 来源
+
+**操作能力**：
+
+- 「+ 添加触发器」下拉提供 3 个快速规则模板（点击本组件 → 跳转 URL / 显示隐藏目标组件 / 刷新目标组件数据），选择后构造 trigger + action + edge 三个节点/边一次性写入蓝图
+- 每条规则右侧「删除」按钮走 `AlertDialog` 二次确认：trigger 删除会级联删除其所有下游节点和边；action 删除仅移除单个节点与直接相连边
+- 顶部「打开事件蓝图」按钮调用 `editor-store.openBlueprintSheet({ focusComponentId: componentId })`，拉起全屏蓝图编辑器并自动进入过滤模式
+
+**写操作**：所有增删通过 `editor-store.updateBlueprint(nextBlueprint)` 写入，进入统一历史栈（三重快照：components + canvas + blueprint），支持 `Ctrl/Cmd+Z` 撤销。
+
+### 10.5 全局变量
+
+`components/global-variables-panel.tsx` 在右侧属性面板「未选中组件」分支下渲染，与「画布设置」分区并列。
+
+- 项目级共享命名变量，存储于 `ScreenProject.globalVariables`（`@nebula/shared` 的 `GlobalVariableSchema`）
+- 三种类型：`static`（静态值）/ `api`（定时拉取）/ `computed`（表达式，预留）
+- 在数据源参数与蓝图模板中通过 `{{globalVars.xxx}}` 插值引用，跨组件共享
+- 编辑器 store 提供 `addGlobalVariable` / `updateGlobalVariable` / `removeGlobalVariable` 三个 action，均走历史栈
 
 ## 11. 预览
 

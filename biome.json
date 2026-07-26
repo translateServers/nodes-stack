@@ -12,6 +12,8 @@
       "!**/.next",
       "!**/.output",
       "!**/playwright-report",
+      "!**/benchmark-report",
+      "!**/benchmark-results",
       "!**/test-results",
       "!**/*.tsbuildinfo",
       "!pnpm-lock.yaml",

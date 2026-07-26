@@ -375,7 +375,7 @@ export class DataSourceConnectionService {
         password: upd.password !== undefined && upd.password !== '' ? upd.password : cur.password,
         ...(upd.ssl !== undefined ? { ssl: upd.ssl } : {}),
         ...(cur.ssl !== undefined && upd.ssl === undefined ? { ssl: cur.ssl } : {}),
-      } as DatabaseConnectionConfig;
+      };
     }
     if (type === 'http-api') {
       const cur = current as HttpApiConnectionConfig;
@@ -397,7 +397,7 @@ export class DataSourceConnectionService {
       return merged;
     }
     // 未知类型 fallback：直接返回 update
-    return { ...current, ...update } as DataSourceConnectionConfig;
+    return { ...current, ...update };
   }
 
   /**

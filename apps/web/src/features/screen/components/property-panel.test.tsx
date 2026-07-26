@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 // Mock editor-store：属性面板依赖 zustand store，测试用 vi.fn() 替换以便控制返回值
 vi.mock('../stores/editor-store', () => ({
@@ -103,6 +104,28 @@ describe('PropertyPanel', () => {
       render(<PropertyPanel />);
 
       expect(screen.getByText('画布设置')).toBeDefined();
+    });
+
+    it('Task 9：未选中组件时显示全局变量管理面板（替换 Task 5.1 占位）', () => {
+      setStoreState({
+        project: { components: [], canvas: createCanvas() },
+        selectedComponentIds: [],
+        updateComponent: vi.fn(),
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+
+      render(<PropertyPanel />);
+
+      // Task 5.1 占位分区已被 Task 9 实际面板替换，testId 与空状态文案随之更新
+      const section = screen.getByTestId('global-variables-section');
+      expect(section).toBeDefined();
+      expect(section.textContent).toContain('全局变量');
+      // 默认无变量时显示空状态文案
+      expect(screen.getByTestId('global-variables-empty')).toBeDefined();
+      // 不应再出现 Task 5.1 的占位 testId 与文案
+      expect(screen.queryByTestId('global-variables-placeholder')).toBeNull();
+      expect(screen.queryByText(/Task 9 接入/)).toBeNull();
     });
   });
 
@@ -408,47 +431,64 @@ describe('PropertyPanel', () => {
       });
     }
 
-    it('选中 bar-chart 时按数据、逻辑、视觉、交互四层分组展示且顺序固定', () => {
-      setSelectedComponent(makeBarChartComponent());
-
-      const { container } = render(<PropertyPanel />);
-
-      const sections = container.querySelectorAll('section[data-testid$="-section"]');
-      expect([...sections].map((el) => el.getAttribute('data-testid'))).toEqual([
-        'datasource-section',
-        'logic-section',
-        'visual-section',
-        'interaction-section',
-      ]);
-      expect(within(screen.getByTestId('datasource-section')).getByText('数据')).toBeDefined();
-      expect(within(screen.getByTestId('logic-section')).getByText('逻辑')).toBeDefined();
-      expect(within(screen.getByTestId('visual-section')).getByText('视觉')).toBeDefined();
-      expect(within(screen.getByTestId('interaction-section')).getByText('交互')).toBeDefined();
-    });
-
-    it('分组归属：各层配置项归入对应分组', () => {
+    it('选中 bar-chart 时按 tab 分布展示四层分组（Task 2 tab 容器策略）', async () => {
+      const user = userEvent.setup();
       setSelectedComponent(makeBarChartComponent());
 
       render(<PropertyPanel />);
 
-      // 数据层：静态数据编辑器与字段映射下拉
+      // 默认激活 appearance tab：位置与尺寸 + 视觉层可见，其他 tab 分区未挂载
+      expect(screen.getByText('位置与尺寸')).toBeDefined();
+      expect(screen.getByTestId('visual-section')).toBeDefined();
+      expect(within(screen.getByTestId('visual-section')).getByText('视觉')).toBeDefined();
+      expect(screen.queryByTestId('datasource-section')).toBeNull();
+      expect(screen.queryByTestId('logic-section')).toBeNull();
+      expect(screen.queryByTestId('interaction-section')).toBeNull();
+
+      // 切换到 data tab：数据源 + 逻辑层可见
+      await user.click(screen.getByRole('tab', { name: '数据' }));
+      expect(screen.getByTestId('datasource-section')).toBeDefined();
+      expect(screen.getByTestId('logic-section')).toBeDefined();
+      expect(within(screen.getByTestId('datasource-section')).getByText('数据')).toBeDefined();
+      expect(within(screen.getByTestId('logic-section')).getByText('逻辑')).toBeDefined();
+      expect(screen.queryByTestId('visual-section')).toBeNull();
+
+      // 切换到 interaction tab：交互层可见
+      await user.click(screen.getByRole('tab', { name: '交互' }));
+      expect(screen.getByTestId('interaction-section')).toBeDefined();
+      expect(within(screen.getByTestId('interaction-section')).getByText('交互')).toBeDefined();
+      expect(screen.queryByTestId('datasource-section')).toBeNull();
+
+      // 切换回 appearance tab：视觉层重新挂载
+      await user.click(screen.getByRole('tab', { name: '外观' }));
+      expect(screen.getByTestId('visual-section')).toBeDefined();
+      expect(within(screen.getByTestId('visual-section')).getByText('视觉')).toBeDefined();
+    });
+
+    it('分组归属：各层配置项归入对应 tab（Task 2 tab 容器策略）', async () => {
+      const user = userEvent.setup();
+      setSelectedComponent(makeBarChartComponent());
+
+      render(<PropertyPanel />);
+
+      // appearance tab（默认激活）：视觉层标题与样式字段
+      const visual = screen.getByTestId('visual-section');
+      expect(within(visual).getByText('标题')).toBeDefined();
+      expect(within(visual).getByText('背景')).toBeDefined();
+
+      // 切换到 data tab：数据层 + 逻辑层
+      await user.click(screen.getByRole('tab', { name: '数据' }));
       const datasource = screen.getByTestId('datasource-section');
       expect(within(datasource).getByTestId('static-data-editor')).toBeDefined();
       expect(within(datasource).getByRole('combobox', { name: '维度字段' })).toBeDefined();
       expect(within(datasource).getByRole('combobox', { name: '数值字段' })).toBeDefined();
-
-      // 逻辑层：排序字段、排序方向、条数限制
       const logic = screen.getByTestId('logic-section');
       expect(within(logic).getByRole('combobox', { name: '排序字段' })).toBeDefined();
       expect(within(logic).getByRole('combobox', { name: '排序方向' })).toBeDefined();
       expect(within(logic).getByRole('spinbutton', { name: '条数限制' })).toBeDefined();
 
-      // 视觉层：标题与既有样式编辑归入视觉分组（"样式"子标题已移除，标题由 PanelSection 统一提供）
-      const visual = screen.getByTestId('visual-section');
-      expect(within(visual).getByText('标题')).toBeDefined();
-      expect(within(visual).getByText('背景')).toBeDefined();
-
-      // 交互层：悬停提示开关
+      // 切换到 interaction tab：交互层悬停提示开关
+      await user.click(screen.getByRole('tab', { name: '交互' }));
       const interaction = screen.getByTestId('interaction-section');
       expect(within(interaction).getByRole('switch', { name: '悬停提示' })).toBeDefined();
     });
@@ -499,6 +539,65 @@ describe('PropertyPanel', () => {
       expect(screen.queryByTestId('logic-section')).toBeNull();
       expect(screen.queryByTestId('interaction-section')).toBeNull();
       expect(screen.getByText('文本属性')).toBeDefined();
+    });
+  });
+
+  describe('Task 5 · 空 tab 占位提示', () => {
+    it('装饰类组件（shape）展示四个 tab 头，data/interaction tab 显示空状态提示', async () => {
+      const user = userEvent.setup();
+      const component = makeComponent({ id: 'shape-1', type: 'shape', name: '矩形' });
+      setStoreState({
+        project: { components: [component], canvas: createCanvas() },
+        selectedComponentIds: [component.id],
+        updateComponent: vi.fn(),
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+
+      render(<PropertyPanel />);
+
+      // 四个 tab 头都应渲染（appearance / data / interaction / events）
+      expect(screen.getByRole('tab', { name: '外观' })).toBeDefined();
+      expect(screen.getByRole('tab', { name: '数据' })).toBeDefined();
+      expect(screen.getByRole('tab', { name: '交互' })).toBeDefined();
+      expect(screen.getByRole('tab', { name: '事件' })).toBeDefined();
+
+      // 默认激活 appearance tab，空状态提示未挂载
+      expect(screen.queryByTestId('empty-data-tab')).toBeNull();
+
+      // 切换到 data tab：显示"该组件无数据源配置"
+      await user.click(screen.getByRole('tab', { name: '数据' }));
+      const dataPlaceholder = screen.getByTestId('empty-data-tab');
+      expect(dataPlaceholder.textContent).toBe('该组件无数据源配置');
+
+      // 切换到 interaction tab：显示"该组件无交互配置"
+      await user.click(screen.getByRole('tab', { name: '交互' }));
+      const interactionPlaceholder = screen.getByTestId('empty-interaction-tab');
+      expect(interactionPlaceholder.textContent).toBe('该组件无交互配置');
+    });
+
+    it('text 组件展示三个 tab 头，data tab 显示空状态提示', async () => {
+      const user = userEvent.setup();
+      const component = makeComponent({ id: 'text-1', type: 'text', name: '文本' });
+      setStoreState({
+        project: { components: [component], canvas: createCanvas() },
+        selectedComponentIds: [component.id],
+        updateComponent: vi.fn(),
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+
+      render(<PropertyPanel />);
+
+      // text 没有 interaction tab（仅 appearance / data / events）
+      expect(screen.getByRole('tab', { name: '外观' })).toBeDefined();
+      expect(screen.getByRole('tab', { name: '数据' })).toBeDefined();
+      expect(screen.getByRole('tab', { name: '事件' })).toBeDefined();
+      expect(screen.queryByRole('tab', { name: '交互' })).toBeNull();
+
+      // 切换到 data tab：显示空状态提示
+      await user.click(screen.getByRole('tab', { name: '数据' }));
+      expect(screen.getByTestId('empty-data-tab').textContent).toBe('该组件无数据源配置');
     });
   });
 });

@@ -34,6 +34,7 @@ function makeProject(overrides: Partial<ScreenProject> = {}): ScreenProject {
       scaleMode: 'fit',
     },
     components: [],
+    globalVariables: [],
     status: 'draft',
     thumbnail: null,
     createdAt: '2025-06-01 10:00:00',

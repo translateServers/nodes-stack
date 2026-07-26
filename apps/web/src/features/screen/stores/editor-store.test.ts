@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CanvasConfig, EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
+import type {
+  CanvasConfig,
+  EventBlueprint,
+  GlobalVariable,
+  ScreenComponent,
+  ScreenProject,
+} from '@nebula/shared';
 
 import { useScreenEditorStore, withHistory } from './editor-store';
 import type { ScreenEditorState } from './editor-store';
@@ -1194,6 +1200,291 @@ describe('蓝图编辑手势接入历史栈（任务 5.2）', () => {
       useScreenEditorStore.getState().loadProject(makeProject('proj-2', makeBlueprint(1, [], [])));
       expect(useScreenEditorStore.getState().blueprintGesture.active).toBe(false);
       expect(useScreenEditorStore.getState().blueprintGesture.baseline).toBeUndefined();
+    });
+  });
+});
+
+describe('全局变量 API 接入历史栈（Task 8）', () => {
+  /** 创建一个最小可用的 ScreenProject mock */
+  function makeProject(id = 'proj-1', globalVariables: GlobalVariable[] = []): ScreenProject {
+    return {
+      id,
+      name: `project-${id}`,
+      description: null,
+      canvas: makeMockCanvas(),
+      components: [],
+      globalVariables,
+      status: 'draft',
+      thumbnail: null,
+      createdAt: '2024-01-01 00:00:00',
+      updatedAt: '2024-01-01 00:00:00',
+    } as unknown as ScreenProject;
+  }
+
+  /** 创建一个 static 类型全局变量 mock */
+  function makeStaticVariable(id: string, name: string, value: unknown = ''): GlobalVariable {
+    return {
+      id,
+      name,
+      type: 'static',
+      value,
+    } as unknown as GlobalVariable;
+  }
+
+  beforeEach(() => {
+    // 重置 store 数据字段，保留 actions；隔离每个用例的状态
+    useScreenEditorStore.setState({
+      project: null,
+      selectedComponentIds: [],
+      history: { past: [], future: [] },
+      isDirty: false,
+    });
+  });
+
+  describe('addGlobalVariable', () => {
+    it('追加新变量到 project.globalVariables 并生成唯一 id', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      useScreenEditorStore.getState().addGlobalVariable({
+        name: 'apiBaseUrl',
+        type: 'static',
+        value: 'https://api.example.com',
+      });
+
+      const vars = useScreenEditorStore.getState().project?.globalVariables ?? [];
+      expect(vars).toHaveLength(1);
+      expect(vars[0].name).toBe('apiBaseUrl');
+      expect(vars[0].type).toBe('static');
+      expect(vars[0].value).toBe('https://api.example.com');
+      // id 由 crypto.randomUUID() 生成，应为非空字符串
+      expect(typeof vars[0].id).toBe('string');
+      expect(vars[0].id.length).toBeGreaterThan(0);
+    });
+
+    it('进入历史栈并置脏', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+
+      useScreenEditorStore.getState().addGlobalVariable({
+        name: 'token',
+        type: 'static',
+        value: 'abc',
+      });
+
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
+      expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it('连续添加多个变量：每次都推入历史，id 互不相同', () => {
+      useScreenEditorStore.getState().loadProject(makeProject());
+
+      useScreenEditorStore.getState().addGlobalVariable({ name: 'v1', type: 'static' });
+      useScreenEditorStore.getState().addGlobalVariable({ name: 'v2', type: 'static' });
+      useScreenEditorStore.getState().addGlobalVariable({ name: 'v3', type: 'static' });
+
+      const vars = useScreenEditorStore.getState().project?.globalVariables ?? [];
+      expect(vars).toHaveLength(3);
+      const ids = new Set(vars.map((v) => v.id));
+      expect(ids.size).toBe(3);
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(3);
+    });
+
+    it('历史快照包含 globalVariables 字段（修改前的快照）', () => {
+      const existing = makeStaticVariable('v1', 'apiBaseUrl', 'https://a.com');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [existing]));
+
+      useScreenEditorStore.getState().addGlobalVariable({ name: 'token', type: 'static' });
+
+      const past = useScreenEditorStore.getState().history.past;
+      expect(past).toHaveLength(1);
+      // 快照为修改前状态：仅含 existing 变量
+      expect(past[0].globalVariables).toEqual([existing]);
+    });
+
+    it('project 为 null 时不入栈、不报错（与 addComponent 一致的空操作语义）', () => {
+      expect(() => {
+        useScreenEditorStore.getState().addGlobalVariable({ name: 'v1', type: 'static' });
+      }).not.toThrow();
+      // project 为 null 时 pushHistory 内部 updater 返回 {}，不写入 history
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      // project 不变（仍为 null）
+      expect(useScreenEditorStore.getState().project).toBeNull();
+    });
+  });
+
+  describe('updateGlobalVariable', () => {
+    it('按 id 合并 updates 到目标变量', () => {
+      const v1 = makeStaticVariable('v1', 'apiBaseUrl', 'https://old.com');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().updateGlobalVariable('v1', { value: 'https://new.com' });
+
+      const vars = useScreenEditorStore.getState().project?.globalVariables ?? [];
+      expect(vars[0].value).toBe('https://new.com');
+      // 未修改的字段保留
+      expect(vars[0].name).toBe('apiBaseUrl');
+      expect(vars[0].type).toBe('static');
+    });
+
+    it('进入历史栈并置脏', () => {
+      const v1 = makeStaticVariable('v1', 'apiBaseUrl', 'https://old.com');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+      // loadProject 后再 loadProject 重置脏状态
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+
+      useScreenEditorStore.getState().updateGlobalVariable('v1', { value: 'https://new.com' });
+
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
+      expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it('找不到 id 时为空操作（不入栈、不置脏）', () => {
+      const v1 = makeStaticVariable('v1', 'apiBaseUrl', 'https://a.com');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().updateGlobalVariable('nonexistent', { value: 'x' });
+
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+      // 原变量未被修改
+      expect(useScreenEditorStore.getState().project?.globalVariables?.[0].value).toBe(
+        'https://a.com',
+      );
+    });
+
+    it('type 切换：static → api 时合并 apiConfig', () => {
+      const v1 = makeStaticVariable('v1', 'token', '');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().updateGlobalVariable('v1', {
+        type: 'api',
+        apiConfig: {
+          url: 'https://auth.example.com/token',
+          method: 'POST',
+          refreshInterval: 60000,
+        },
+      });
+
+      const updated = useScreenEditorStore.getState().project?.globalVariables?.[0];
+      expect(updated?.type).toBe('api');
+      expect(updated?.apiConfig?.url).toBe('https://auth.example.com/token');
+      expect(updated?.apiConfig?.method).toBe('POST');
+    });
+  });
+
+  describe('removeGlobalVariable', () => {
+    it('按 id 从 globalVariables 移除目标变量', () => {
+      const v1 = makeStaticVariable('v1', 'a', '1');
+      const v2 = makeStaticVariable('v2', 'b', '2');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1, v2]));
+
+      useScreenEditorStore.getState().removeGlobalVariable('v1');
+
+      const vars = useScreenEditorStore.getState().project?.globalVariables ?? [];
+      expect(vars).toHaveLength(1);
+      expect(vars[0].id).toBe('v2');
+    });
+
+    it('进入历史栈并置脏', () => {
+      const v1 = makeStaticVariable('v1', 'a', '1');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+
+      useScreenEditorStore.getState().removeGlobalVariable('v1');
+
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(1);
+      expect(useScreenEditorStore.getState().isDirty).toBe(true);
+    });
+
+    it('找不到 id 时为空操作（不入栈、不置脏）', () => {
+      const v1 = makeStaticVariable('v1', 'a', '1');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().removeGlobalVariable('nonexistent');
+
+      expect(useScreenEditorStore.getState().history.past).toHaveLength(0);
+      expect(useScreenEditorStore.getState().isDirty).toBe(false);
+      expect(useScreenEditorStore.getState().project?.globalVariables).toHaveLength(1);
+    });
+  });
+
+  describe('undo/redo 同步恢复 globalVariables', () => {
+    it('undo 恢复被删除的变量', () => {
+      const v1 = makeStaticVariable('v1', 'a', '1');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().removeGlobalVariable('v1');
+      expect(useScreenEditorStore.getState().project?.globalVariables).toHaveLength(0);
+
+      useScreenEditorStore.getState().undo();
+      expect(useScreenEditorStore.getState().project?.globalVariables).toEqual([v1]);
+    });
+
+    it('redo 重新应用删除', () => {
+      const v1 = makeStaticVariable('v1', 'a', '1');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().removeGlobalVariable('v1');
+      useScreenEditorStore.getState().undo();
+      useScreenEditorStore.getState().redo();
+
+      expect(useScreenEditorStore.getState().project?.globalVariables).toHaveLength(0);
+    });
+
+    it('undo 恢复被修改的变量值', () => {
+      const v1 = makeStaticVariable('v1', 'apiBaseUrl', 'https://old.com');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      useScreenEditorStore.getState().updateGlobalVariable('v1', {
+        value: 'https://new.com',
+      });
+      useScreenEditorStore.getState().undo();
+
+      expect(useScreenEditorStore.getState().project?.globalVariables?.[0].value).toBe(
+        'https://old.com',
+      );
+    });
+  });
+
+  describe('旧快照兼容（无 globalVariables 字段）', () => {
+    it('旧快照（无 globalVariables 字段）undo 后 project.globalVariables 恢复为 []', () => {
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', []));
+      useScreenEditorStore.getState().addGlobalVariable({ name: 'v1', type: 'static' });
+
+      // 手动注入旧格式快照（无 globalVariables 字段）
+      const oldSnapshot = {
+        components: [],
+        canvas: makeMockCanvas(),
+        // 没有 globalVariables 字段
+      };
+      useScreenEditorStore.setState({
+        history: { past: [oldSnapshot], future: [] },
+      });
+
+      useScreenEditorStore.getState().undo();
+      // 旧快照无 globalVariables → 按 [] 恢复（与 schema default 一致）
+      expect(useScreenEditorStore.getState().project?.globalVariables).toEqual([]);
+    });
+  });
+
+  describe('与组件/画布编辑共享同一时间线', () => {
+    it('undo 组件操作不会误回退 globalVariables', () => {
+      const v1 = makeStaticVariable('v1', 'a', '1');
+      useScreenEditorStore.getState().loadProject(makeProject('proj-1', [v1]));
+
+      // 添加组件 → pushHistory 推入 (空组件 + [v1])
+      useScreenEditorStore.getState().addComponent(makeMockComponent('comp-1'));
+
+      // 修改 globalVariables → pushHistory 推入 (1 组件 + [v1])
+      useScreenEditorStore.getState().updateGlobalVariable('v1', { value: '2' });
+
+      // undo 变量修改：globalVariables 回退到 [v1]，组件保持 1 个
+      useScreenEditorStore.getState().undo();
+      const state1 = useScreenEditorStore.getState();
+      expect(state1.project?.globalVariables?.[0].value).toBe('1');
+      expect(state1.project?.components).toHaveLength(1);
     });
   });
 });

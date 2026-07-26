@@ -11,4 +11,5 @@ export * from './blueprint.schema.js';
 export * from './field-mapping.schema.js';
 export * from './dataset.schema.js';
 export * from './datasource-connection.schema.js';
+export * from './global-variable.schema.js';
 export * from './screen.schema.js';

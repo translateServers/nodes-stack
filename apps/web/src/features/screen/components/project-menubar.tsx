@@ -10,7 +10,7 @@
  * - 禁用态基于 store 状态精确计算
  */
 
-import { memo, useMemo } from 'react';
+import { memo, useDeferredValue, useMemo } from 'react';
 import {
   Save,
   Upload,
@@ -120,6 +120,11 @@ export const ProjectMenubar = memo(function ProjectMenubar({
   // store 状态与 action
   const project = useScreenEditorStore((s) => s.project);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  // 性能优化（2026-07-26）：与 PropertyPanel/LayerPanel 一致，
+  // 用 useDeferredValue 把菜单栏对 selectedComponentIds 的响应降级为 transition。
+  // React 会先提交 Moveable 控制框的高优先级更新（store.targets），
+  // 等主线程空闲后再渲染菜单项的禁用态（通常 <50ms，不可感知）。
+  const deferredSelectedIds = useDeferredValue(selectedComponentIds);
   const clipboard = useScreenEditorStore((s) => s.clipboard);
   const canUndo = useScreenEditorStore((s) => s.history.past.length > 0);
   const canRedo = useScreenEditorStore((s) => s.history.future.length > 0);
@@ -142,7 +147,7 @@ export const ProjectMenubar = memo(function ProjectMenubar({
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
 
-  const hasSelection = selectedComponentIds.length > 0;
+  const hasSelection = deferredSelectedIds.length > 0;
   const hasGuides = guides.vertical.length > 0 || guides.horizontal.length > 0;
 
   const handleSelectAll = useMemo(() => {

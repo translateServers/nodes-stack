@@ -25,6 +25,8 @@ import { ColorInput, numberInputClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
 // Phase 2 Slice B：属性面板 Schema 化（注册表驱动 + 声明式字段 + customRender 逃生舱）
 import { getSchemaForComponentType, PropertySchemaRenderer } from '../property-schema';
+// Task 9：全局变量管理面板（画布设置入口）
+import GlobalVariablesPanel from './global-variables-panel';
 
 /**
  * rerender-no-inline-components：对齐命令表提升到模块级。
@@ -243,6 +245,8 @@ export function PropertyPanel() {
             <PanelSection title="画布设置" testId="canvas-settings-section">
               <CanvasSettingsFields canvas={canvas} onUpdate={updateCanvas} />
             </PanelSection>
+            {/* Task 9：全局变量管理面板（替换 Task 5.1 占位分区） */}
+            <GlobalVariablesPanel />
           </>
         )}
       </div>

@@ -410,3 +410,62 @@ describe('useApiDataSource 定时刷新与竞态防护（任务 7.1-7.2）', () 
     expect(result.current).toEqual({ status: 'success', data: secondPayload });
   });
 });
+
+describe('useApiDataSource 全局变量插值（Task 8.5）', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('传入 globalVars 时对 url/headers/params 应用插值（预览模式）', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig({
+      url: '{{globalVars.apiBaseUrl}}/data',
+      headers: { Authorization: 'Bearer {{globalVars.token}}' },
+      params: { comp: '{{globalVars.compId}}', limit: 100 },
+    });
+    const globalVars = {
+      apiBaseUrl: 'https://api.example.com',
+      token: 'abc123',
+      compId: 'c1',
+    };
+
+    const { result } = renderHook(() => useApiDataSource(config, { globalVars }));
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('success');
+    });
+
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
+    // url 已插值
+    expect(calledUrl).toContain('https://api.example.com/data');
+    // params 中的字符串值已插值
+    expect(calledUrl).toContain('comp=c1');
+    // params 中的 number 原样保留
+    expect(calledUrl).toContain('limit=100');
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    // headers value 已插值
+    expect(init.headers).toEqual({ Authorization: 'Bearer abc123' });
+  });
+
+  it('未传入 globalVars 时原样使用 apiConfig（编辑模式保留占位符）', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse([]));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const config = makeGetConfig({
+      url: '{{globalVars.apiBaseUrl}}/data',
+    });
+
+    const { result } = renderHook(() => useApiDataSource(config));
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('success');
+    });
+
+    // 未传入 globalVars：url 原样使用（占位符保留）
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(calledUrl).toContain('{{globalVars.apiBaseUrl}}/data');
+  });
+});

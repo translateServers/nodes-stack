@@ -18,6 +18,11 @@ export function TextComponent({ props, style }: TextComponentProps) {
         // Phase 2 Slice D：文本增强字段（字重 / 行高），由 Schema 声明式字段写入 style
         fontWeight: style.fontWeight,
         lineHeight: style.lineHeight,
+        // Task 7：文本细化配置（Light Chaser 特色：字间距 + 文字描边）
+        letterSpacing: style.letterSpacing ? `${style.letterSpacing}px` : undefined,
+        WebkitTextStroke: style.textStrokeWidth
+          ? `${style.textStrokeWidth}px ${style.textStrokeColor ?? '#000000'}`
+          : undefined,
         overflow: 'hidden',
         wordBreak: 'break-word',
       }}

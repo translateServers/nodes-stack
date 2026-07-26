@@ -71,8 +71,19 @@ export function ScreenEditor() {
   // 任务 9.1：蓝图→画布闪烁高亮联动
   const { flashingComponentId, flashComponent } = useCanvasFlash();
   // 任务 9.2：画布→蓝图过滤联动（选中单个组件时传给 BlueprintSheet 过滤视图）
-  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
-  const filterComponentId = selectedComponentIds.length === 1 ? selectedComponentIds[0] : null;
+  //
+  // 性能优化（2026-07-26）：原本 ScreenEditor 订阅 selectedComponentIds 来派生
+  // filterComponentId，但这导致每次点击组件 → ScreenEditor 重渲染 → 整个外壳
+  // （左/右面板、画布、上下文菜单、状态栏等）一起重渲染，造成 Moveable 控制框
+  // 显示/隐藏延迟（用户感知"抽帧"）。
+  // 现在 BlueprintSheet 内部自己订阅 selectedComponentIds 派生 filterComponentId，
+  // ScreenEditor 完全脱离 selectedComponentIds 订阅链路，仅保留 BlueprintSheet
+  // 显式优先值（QuickEventEditor 携带的 focusComponentId）。
+  // 任务 4.7：QuickEventEditor「打开事件蓝图」入口通过 store API 打开 Sheet，
+  // 可携带 focusComponentId 自动进入过滤模式（优先级高于选中组件派生的 filterComponentId）
+  const blueprintSheetOpen = useScreenEditorStore((s) => s.blueprintSheetOpen);
+  const blueprintFocusComponentId = useScreenEditorStore((s) => s.blueprintFocusComponentId);
+  const closeBlueprintSheet = useScreenEditorStore((s) => s.closeBlueprintSheet);
   const toolStateMachine = useToolStateMachine();
   const interactionStateMachine = useInteractionStateMachine();
   // 任务 2.2：编辑器只创建一套会话控制器，下发给画布、工具入口、状态栏和快捷键
@@ -389,7 +400,7 @@ export function ScreenEditor() {
     onFitToScreen: handleFitToScreen,
     onShowHelp: () => setShowHelp(true),
     editorSession,
-    suspended: showEventBlueprint || showCodeEditor,
+    suspended: showEventBlueprint || blueprintSheetOpen || showCodeEditor,
   });
 
   if (isLoading) {
@@ -509,10 +520,16 @@ export function ScreenEditor() {
         projectId={storeProject?.id}
       />
       <BlueprintSheet
-        open={showEventBlueprint}
-        onOpenChange={setShowEventBlueprint}
+        open={showEventBlueprint || blueprintSheetOpen}
+        onOpenChange={(next) => {
+          // 任一来源关闭都同步：React state 关闭工具栏入口，store API 关闭 QuickEventEditor 入口
+          setShowEventBlueprint(next);
+          if (!next) closeBlueprintSheet();
+        }}
         onLocateComponent={flashComponent}
-        filterComponentId={filterComponentId}
+        // 仅传 QuickEventEditor 的显式 focusComponentId；普通选中态由 BlueprintSheet
+        // 内部订阅 selectedComponentIds 自动派生，避免 ScreenEditor 重新渲染
+        filterComponentId={blueprintFocusComponentId}
         onSave={handleSave}
         onShowHelp={() => setShowHelp(true)}
       />

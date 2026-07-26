@@ -1,0 +1,455 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\worker\\nebula\\apps\\web\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config=e2e/playwright.benchmark.config.ts",
+      "--headed"
+    ],
+    "configFile": "C:\\worker\\nebula\\apps\\web\\e2e\\playwright.benchmark.config.ts",
+    "rootDir": "C:/worker/nebula/apps/web/e2e/benchmark",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/worker/nebula/apps/web/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "C:/worker/nebula/apps/web/e2e/benchmark",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "html",
+        {
+          "open": "never",
+          "outputFolder": "benchmark-report"
+        }
+      ],
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "benchmark-results/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.0",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "tests\\screen-benchmark-fps.spec.ts",
+      "file": "tests/screen-benchmark-fps.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "画布拖拽 FPS 基准测试",
+          "file": "tests/screen-benchmark-fps.spec.ts",
+          "line": 88,
+          "column": 6,
+          "specs": [
+            {
+              "title": "1. 静态画布 baseline FPS（无交互参考线）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 4960,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: static-baseline ===\n  Duration:        2010 ms\n  Total frames:    290\n  Avg FPS:         144.3\n  Min FPS:         109.9\n  Max FPS:         344.8\n  P95 FPS:         153.8  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:47:42.045Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-static-baseline.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IHN0YXRpYy1iYXNlbGluZSA9PT0KICBEdXJhdGlvbjogICAgICAgIDIwMTAgbXMKICBUb3RhbCBmcmFtZXM6ICAgIDI5MAogIEF2ZyBGUFM6ICAgICAgICAgMTQ0LjMKICBNaW4gRlBTOiAgICAgICAgIDEwOS45CiAgTWF4IEZQUzogICAgICAgICAzNDQuOAogIFA5NSBGUFM6ICAgICAgICAgMTUzLjggICg5NSUgb2YgZnJhbWVzIGFyZSBhdCBsZWFzdCB0aGlzIGZhc3QpCiAgRHJvcHBlZCBmcmFtZXM6ICAwICgwLjAlIG9mIHRvdGFsKQo9PT0gRW5kIFJlcG9ydCA9PT0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-8e2111b6c0907e758374",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 98,
+              "column": 3
+            },
+            {
+              "title": "2. 点击选中组件时 FPS（Moveable 控制框出现）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3217,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: click-select ===\n  Duration:        1124 ms\n  Total frames:    162\n  Avg FPS:         144.1\n  Min FPS:         52.6\n  Max FPS:         1250.0\n  P95 FPS:         163.9  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:47:47.313Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-click-select.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IGNsaWNrLXNlbGVjdCA9PT0KICBEdXJhdGlvbjogICAgICAgIDExMjQgbXMKICBUb3RhbCBmcmFtZXM6ICAgIDE2MgogIEF2ZyBGUFM6ICAgICAgICAgMTQ0LjEKICBNaW4gRlBTOiAgICAgICAgIDUyLjYKICBNYXggRlBTOiAgICAgICAgIDEyNTAuMAogIFA5NSBGUFM6ICAgICAgICAgMTYzLjkgICg5NSUgb2YgZnJhbWVzIGFyZSBhdCBsZWFzdCB0aGlzIGZhc3QpCiAgRHJvcHBlZCBmcmFtZXM6ICAwICgwLjAlIG9mIHRvdGFsKQo9PT0gRW5kIFJlcG9ydCA9PT0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-0213239a7da9b8195156",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 114,
+              "column": 3
+            },
+            {
+              "title": "3. 拖拽组件过程中 FPS（持续 onDrag）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6220,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: drag-component ===\n  Duration:        3893 ms\n  Total frames:    561\n  Avg FPS:         144.1\n  Min FPS:         74.6\n  Max FPS:         714.3\n  P95 FPS:         227.3  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:47:50.569Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-drag-component.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IGRyYWctY29tcG9uZW50ID09PQogIER1cmF0aW9uOiAgICAgICAgMzg5MyBtcwogIFRvdGFsIGZyYW1lczogICAgNTYxCiAgQXZnIEZQUzogICAgICAgICAxNDQuMQogIE1pbiBGUFM6ICAgICAgICAgNzQuNgogIE1heCBGUFM6ICAgICAgICAgNzE0LjMKICBQOTUgRlBTOiAgICAgICAgIDIyNy4zICAoOTUlIG9mIGZyYW1lcyBhcmUgYXQgbGVhc3QgdGhpcyBmYXN0KQogIERyb3BwZWQgZnJhbWVzOiAgMCAoMC4wJSBvZiB0b3RhbCkKPT09IEVuZCBSZXBvcnQgPT09"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-2a2e7915188584521d34",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 134,
+              "column": 3
+            },
+            {
+              "title": "4. 拖拽未选中组件（直接 mousedown 启动）FPS",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 5942,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: drag-unselected ===\n  Duration:        3841 ms\n  Total frames:    551\n  Avg FPS:         143.5\n  Min FPS:         42.7\n  Max FPS:         1000.0\n  P95 FPS:         227.3  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:47:56.805Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-drag-unselected.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IGRyYWctdW5zZWxlY3RlZCA9PT0KICBEdXJhdGlvbjogICAgICAgIDM4NDEgbXMKICBUb3RhbCBmcmFtZXM6ICAgIDU1MQogIEF2ZyBGUFM6ICAgICAgICAgMTQzLjUKICBNaW4gRlBTOiAgICAgICAgIDQyLjcKICBNYXggRlBTOiAgICAgICAgIDEwMDAuMAogIFA5NSBGUFM6ICAgICAgICAgMjI3LjMgICg5NSUgb2YgZnJhbWVzIGFyZSBhdCBsZWFzdCB0aGlzIGZhc3QpCiAgRHJvcHBlZCBmcmFtZXM6ICAwICgwLjAlIG9mIHRvdGFsKQo9PT0gRW5kIFJlcG9ydCA9PT0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-b94a955a7d77ae1cee2f",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 155,
+              "column": 3
+            },
+            {
+              "title": "5. 点击空白取消选中时 FPS（控制框隐藏）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 3212,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: click-blank-deselect ===\n  Duration:        867 ms\n  Total frames:    125\n  Avg FPS:         144.1\n  Min FPS:         87.0\n  Max FPS:         384.6\n  P95 FPS:         166.7  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:48:02.762Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-click-blank-deselect.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IGNsaWNrLWJsYW5rLWRlc2VsZWN0ID09PQogIER1cmF0aW9uOiAgICAgICAgODY3IG1zCiAgVG90YWwgZnJhbWVzOiAgICAxMjUKICBBdmcgRlBTOiAgICAgICAgIDE0NC4xCiAgTWluIEZQUzogICAgICAgICA4Ny4wCiAgTWF4IEZQUzogICAgICAgICAzODQuNgogIFA5NSBGUFM6ICAgICAgICAgMTY2LjcgICg5NSUgb2YgZnJhbWVzIGFyZSBhdCBsZWFzdCB0aGlzIGZhc3QpCiAgRHJvcHBlZCBmcmFtZXM6ICAwICgwLjAlIG9mIHRvdGFsKQo9PT0gRW5kIFJlcG9ydCA9PT0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-224454348096980f47ef",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 174,
+              "column": 3
+            },
+            {
+              "title": "6. 反复选中/取消循环（检测性能退化）",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6460,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: repeated-select-deselect ===\n  Duration:        3663 ms\n  Total frames:    525\n  Avg FPS:         143.3\n  Min FPS:         33.6\n  Max FPS:         2500.0\n  P95 FPS:         204.1  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:48:05.990Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-repeated-select-deselect.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IHJlcGVhdGVkLXNlbGVjdC1kZXNlbGVjdCA9PT0KICBEdXJhdGlvbjogICAgICAgIDM2NjMgbXMKICBUb3RhbCBmcmFtZXM6ICAgIDUyNQogIEF2ZyBGUFM6ICAgICAgICAgMTQzLjMKICBNaW4gRlBTOiAgICAgICAgIDMzLjYKICBNYXggRlBTOiAgICAgICAgIDI1MDAuMAogIFA5NSBGUFM6ICAgICAgICAgMjA0LjEgICg5NSUgb2YgZnJhbWVzIGFyZSBhdCBsZWFzdCB0aGlzIGZhc3QpCiAgRHJvcHBlZCBmcmFtZXM6ICAwICgwLjAlIG9mIHRvdGFsKQo9PT0gRW5kIFJlcG9ydCA9PT0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-24012018a78cede50874",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 192,
+              "column": 3
+            },
+            {
+              "title": "7. 持续拖拽长距离（压力测试）FPS",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 10452,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: long-drag-stress ===\n  Duration:        8097 ms\n  Total frames:    1166\n  Avg FPS:         144.0\n  Min FPS:         68.5\n  Max FPS:         909.1\n  P95 FPS:         217.4  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:48:12.466Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-long-drag-stress.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IGxvbmctZHJhZy1zdHJlc3MgPT09CiAgRHVyYXRpb246ICAgICAgICA4MDk3IG1zCiAgVG90YWwgZnJhbWVzOiAgICAxMTY2CiAgQXZnIEZQUzogICAgICAgICAxNDQuMAogIE1pbiBGUFM6ICAgICAgICAgNjguNQogIE1heCBGUFM6ICAgICAgICAgOTA5LjEKICBQOTUgRlBTOiAgICAgICAgIDIxNy40ICAoOTUlIG9mIGZyYW1lcyBhcmUgYXQgbGVhc3QgdGhpcyBmYXN0KQogIERyb3BwZWQgZnJhbWVzOiAgMCAoMC4wJSBvZiB0b3RhbCkKPT09IEVuZCBSZXBvcnQgPT09"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-03ce19273a671af71edd",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 221,
+              "column": 3
+            },
+            {
+              "title": "8. 多组件框选 + 组拖拽 FPS",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 6265,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "\n=== FPS Report: group-drag ===\n  Duration:        3749 ms\n  Total frames:    540\n  Avg FPS:         144.0\n  Min FPS:         90.1\n  Max FPS:         294.1\n  P95 FPS:         175.4  (95% of frames are at least this fast)\n  Dropped frames:  0 (0.0% of total)\n=== End Report ===\n\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-07-25T23:48:22.934Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "fps-report-group-drag.txt",
+                          "contentType": "text/plain",
+                          "body": "PT09IEZQUyBSZXBvcnQ6IGdyb3VwLWRyYWcgPT09CiAgRHVyYXRpb246ICAgICAgICAzNzQ5IG1zCiAgVG90YWwgZnJhbWVzOiAgICA1NDAKICBBdmcgRlBTOiAgICAgICAgIDE0NC4wCiAgTWluIEZQUzogICAgICAgICA5MC4xCiAgTWF4IEZQUzogICAgICAgICAyOTQuMQogIFA5NSBGUFM6ICAgICAgICAgMTc1LjQgICg5NSUgb2YgZnJhbWVzIGFyZSBhdCBsZWFzdCB0aGlzIGZhc3QpCiAgRHJvcHBlZCBmcmFtZXM6ICAwICgwLjAlIG9mIHRvdGFsKQo9PT0gRW5kIFJlcG9ydCA9PT0="
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "80ed9a2f01365d28bc02-eb8f5dbfa5b5e54e3308",
+              "file": "tests/screen-benchmark-fps.spec.ts",
+              "line": 239,
+              "column": 3
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-07-25T23:47:38.589Z",
+    "duration": 51565.768,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

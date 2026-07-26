@@ -11,7 +11,7 @@
  * 单向数据流不变：所有 onChange → buildNestedUpdate → onUpdate → store.updateComponent
  */
 
-import { Fragment, useMemo, useState, type ComponentType, type JSX } from 'react';
+import { Fragment, memo, useMemo, useState, type ComponentType, type JSX } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PanelSection } from '../components/ui-primitives';
@@ -119,13 +119,27 @@ function PropertySectionRenderer({
  * 属性 Schema 渲染器入口。
  *
  * 渲染策略：
- * - 当 schema 涉及 2+ 个 tab 且无 customRender 分区时 → 使用 Tabs 容器（外观/数据/交互）
- * - 否则 → 平铺渲染所有分区（保留 bar-chart 等复杂组件的当前交互体验）
+ * - 当 schema 涉及 2+ 个 tab 时 → 始终使用 Tabs 容器（外观/数据/交互/事件）
+ * - 否则 → 平铺渲染所有分区（单 tab 无需切换）
  *
- * Tabs 仅在纯声明式 schema 下启用，避免 customRender 分区被拆散到不同 tab
- * 导致内部 PanelSection 跨 tab 渲染（Radix TabsContent 仅渲染活跃 tab 内容）。
+ * customRender 分区按其 `tab` 字段归入对应 tab；其内部自行渲染的 PanelSection
+ * 随分区整体挂载到该 tab 的 TabsContent 下（Radix TabsContent 仅渲染活跃 tab 内容）。
  */
-export function PropertySchemaRenderer({
+/**
+ * 性能优化（2026-07-26）：memo 化 PropertySchemaRenderer。
+ *
+ * 配合 PropertyPanel 的 useState + useEffect 推迟渲染策略：
+ * - 切换选中时，PropertyPanel 第一次渲染用旧 renderedIds，派生的 selectedComponent
+ *   引用未变（components 数组未变，find 返回同引用）→ memo bail out → 跳过渲染（开销小）
+ * - useEffect 触发第二次渲染，用新 renderedIds，selectedComponent 引用变化
+ *   → memo 触发渲染 → 渲染新组件字段（开销大，但只渲染一次，且在下一个 macrotask）
+ *
+ * 默认 Object.is 比较即可满足需求（schema / component / onUpdate 引用稳定时跳过）。
+ * - schema 在 PropertyPanel 中由 useMemo 派生（依赖 selectedComponent），引用稳定
+ * - onUpdate 由 useCallback 包装，引用稳定
+ * - component 引用每次 find 调用都返回数组元素引用，引用稳定（除非 components 数组变化）
+ */
+export const PropertySchemaRenderer = memo(function PropertySchemaRenderer({
   schema,
   component,
   onUpdate,
@@ -134,17 +148,15 @@ export function PropertySchemaRenderer({
   component: ScreenComponent;
   onUpdate: (updates: Partial<ScreenComponent>) => void;
 }) {
-  const { tabs, hasCustomRender } = useMemo(() => {
+  const tabs = useMemo(() => {
     const tabSet = new Set<PropertyTabId>();
-    let hasCustom = false;
     for (const section of schema) {
       tabSet.add(section.tab);
-      if (section.customRender) hasCustom = true;
     }
-    return { tabs: [...tabSet], hasCustomRender: hasCustom };
+    return [...tabSet];
   }, [schema]);
 
-  const useTabs = tabs.length >= 2 && !hasCustomRender;
+  const useTabs = tabs.length >= 2;
 
   const [activeTab, setActiveTab] = useState<PropertyTabId>(tabs[0] ?? 'appearance');
 
@@ -197,4 +209,4 @@ export function PropertySchemaRenderer({
       ))}
     </Tabs>
   );
-}
+});

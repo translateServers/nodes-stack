@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ApiDataSourceConfig } from '@nebula/shared';
+import { interpolateApiDataSourceConfig } from '../blueprint/lib/template-interpolation';
 
 /** 单次请求超时时间（毫秒） */
 export const API_REQUEST_TIMEOUT_MS = 10_000;
@@ -89,6 +90,14 @@ export function buildUrlWithParams(
 export interface UseApiDataSourceOptions {
   /** 覆盖默认超时时间（毫秒）；默认 API_REQUEST_TIMEOUT_MS */
   timeoutMs?: number;
+  /**
+   * 全局变量上下文（Task 8.5）：传入后对 apiConfig 的 url / params / headers 应用 `{{globalVars.xxx}}` 插值。
+   * - 预览模式传入：请求前先插值，使全局变量在运行时生效
+   * - 编辑模式不传：原样使用 apiConfig，保留 `{{globalVars.xxx}}` 占位符供 UI 展示
+   * 注意：调用方需保证 globalVars 引用稳定（如 useMemo / zustand selector），
+   * 否则每次渲染都会触发 effect 重新执行（与 apiConfig 行为一致）。
+   */
+  globalVars?: Record<string, unknown>;
 }
 
 export function useApiDataSource(
@@ -97,6 +106,7 @@ export function useApiDataSource(
 ): ApiRequestState {
   const [state, setState] = useState<ApiRequestState>({ status: 'idle' });
   const timeoutMs = options?.timeoutMs ?? API_REQUEST_TIMEOUT_MS;
+  const globalVars = options?.globalVars;
   const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -104,6 +114,12 @@ export function useApiDataSource(
       setState({ status: 'idle' });
       return;
     }
+
+    // Task 8.5：预览模式下对 apiConfig 应用全局变量插值；
+    // globalVars 为 undefined（编辑模式）时原样使用，保留占位符供 UI 展示。
+    const effectiveConfig = globalVars
+      ? interpolateApiDataSourceConfig(apiConfig, globalVars)
+      : apiConfig;
 
     let disposed = false;
     let intervalId: ReturnType<typeof setInterval> | undefined;
@@ -124,12 +140,12 @@ export function useApiDataSource(
 
       const run = async (): Promise<void> => {
         try {
-          const url = buildUrlWithParams(apiConfig.url, apiConfig.params);
+          const url = buildUrlWithParams(effectiveConfig.url, effectiveConfig.params);
           // 公开预览脱敏后的 [REDACTED] 请求头不携带（任务 9.2：不用占位值伪造）
           const headers =
-            apiConfig.headers !== undefined
+            effectiveConfig.headers !== undefined
               ? Object.fromEntries(
-                  Object.entries(apiConfig.headers).filter(([, v]) => v !== '[REDACTED]'),
+                  Object.entries(effectiveConfig.headers).filter(([, v]) => v !== '[REDACTED]'),
                 )
               : undefined;
           const response = await fetch(url, {
@@ -196,7 +212,7 @@ export function useApiDataSource(
     executeRequest();
 
     // 定时刷新（7.1）：refreshInterval > 0 时按间隔重新请求
-    const refreshSeconds = apiConfig.refreshInterval;
+    const refreshSeconds = effectiveConfig.refreshInterval;
     if (refreshSeconds !== undefined && refreshSeconds > 0) {
       intervalId = setInterval(executeRequest, refreshSeconds * 1000);
     }
@@ -209,7 +225,7 @@ export function useApiDataSource(
       controllerRef.current?.abort();
       controllerRef.current = null;
     };
-  }, [apiConfig, timeoutMs]);
+  }, [apiConfig, timeoutMs, globalVars]);
 
   return state;
 }

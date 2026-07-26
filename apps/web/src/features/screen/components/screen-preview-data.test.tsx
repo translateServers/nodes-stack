@@ -56,6 +56,7 @@ function makeProject(components: ScreenComponent[]): ScreenProject {
     name: '预览项目',
     canvas: { width: 1920, height: 1080, backgroundColor: '#000000', scaleMode: 'fit' },
     components,
+    globalVariables: [],
     status: 'published',
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',

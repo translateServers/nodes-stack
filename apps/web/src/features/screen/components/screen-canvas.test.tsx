@@ -1,8 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, cleanup, fireEvent } from '@testing-library/react';
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
-import type { ScreenComponent, ScreenProject } from '@nebula/shared';
-import { ScreenCanvas } from './screen-canvas';
+import type { ComponentStyle, ScreenComponent, ScreenProject } from '@nebula/shared';
+import { ScreenCanvas, buildFilterString } from './screen-canvas';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { pickImageFile } from '../lib/image-file-adapter';
 import type {
@@ -146,6 +146,9 @@ vi.mock('react-moveable', () => ({
       onDragStart: props.onDragStart,
       onDrag: props.onDrag,
       onResizeStart: props.onResizeStart,
+      // PS 风格即时切换测试需要捕获 onResize，验证拖拽中按住/松开 Alt 时
+      // 实时从 ref 读取修饰键状态切换中心变换模式
+      onResize: props.onResize,
       onRotateStart: props.onRotateStart,
       onDragGroupStart: props.onDragGroupStart,
       onDragGroup: props.onDragGroup,
@@ -265,6 +268,7 @@ function makeProject(): ScreenProject {
         zIndex: 0,
       },
     ],
+    globalVariables: [],
     status: 'draft',
     thumbnail: null,
     createdAt: '2025-06-01 10:00:00',
@@ -295,6 +299,13 @@ function setupStore(
     gridSize: 10,
     selectComponents: vi.fn(),
     clearSelection: vi.fn(),
+    // setTargets 真正更新 targets 字段；额外触发重渲染模拟 zustand 订阅通知
+    setTargets: vi.fn((next: HTMLElement[]) => {
+      store.targets = next;
+      // 触发 useScreenEditorStore 订阅者重渲染（模拟 zustand 通知）
+      mockUseStore.mockImplementation(<T,>(selector: (s: typeof store) => T): T => selector(store));
+    }),
+    targets: [] as HTMLElement[],
     setActiveGroupId: vi.fn(),
     updateComponent: vi.fn(),
     updateComponentsBatch: vi.fn(),
@@ -1382,13 +1393,13 @@ describe('任务 13.7 问题 2：onSelectEnd setTimeout dragStart guard', () => 
 /**
  * onDragStart 未选中组件立即选中并启动拖拽（消除抽帧优化）。
  *
- * 优化前：pointerdown → Selecto onDragStart → 移动阈值 → onSelectEnd →
- *   flushSync(选中) → dragStart。用户已移动一段距离才开始拖拽，视觉上
- *   有"组件原地不动 → 突然开始移动"的抽帧/瞬移感。
+ * 抽帧根因：targets 原本由 useLayoutEffect 从 selectedComponentIds 派生（两步渲染），
+ *   即使 flushSync(selectComponents) 同步完成第一步，useLayoutEffect 内的
+ *   setTargets 触发的第二次渲染无法被同一 flushSync 包裹 → Moveable 的
+ *   target prop 仍是空数组 → dragStart 在空 target 上调用 → 控制框晚一帧。
  *
- * 优化后：Selecto onDragStart 命中未选中组件时，立即 flushSync 选中 +
- *   dragStart 启动 Moveable 拖拽 + e.stop() 阻止 Selecto。选中与拖拽
- *   启动提前到 onDragStart 阶段，消除等待 onSelectEnd 的延迟。
+ * 修复：在 flushSync 内同时调用 selectComponents 和 setTargets，让一次同步渲染
+ *   就把 Moveable 的 target 准备好，然后立即 dragStart。
  */
 describe('onDragStart 未选中组件立即选中并启动拖拽', () => {
   let store: ReturnType<typeof setupStore>;
@@ -1952,15 +1963,28 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
   it('新组件被选中并挂载时 Moveable target 更新（修复 control 框不跟随副本）', () => {
     // 场景：Alt+复制 / 粘贴 / 新建后，新组件被选中但 ref 在 commit 阶段才注册，
     // useMemo 在 render 阶段已计算完毕拿不到新 DOM，Moveable target 为空。
-    // 改用 useState + useLayoutEffect：在所有 ref 回调执行后同步通过 querySelector
-    // 查找新挂载的 DOM，setTargets 触发重渲染让 Moveable 拿到正确 target。
+    // 改用 store.targets + useLayoutEffect：在所有 ref 回调执行后同步通过 querySelector
+    // 查找新挂载的 DOM，setTargets 更新 store.targets 触发订阅者重渲染让 Moveable 拿到正确 target。
+    //
+    // 测试策略：mock store 无法模拟 zustand 订阅通知让 memo 化的 MoveableContainer 重渲染，
+    // 改为直接验证 useLayoutEffect 调用 setTargets 时传入的 DOM 元素 data-component-id。
+    // 在真实环境下，setTargets 会触发 zustand 订阅通知让 MoveableContainer 重渲染，
+    // Moveable 通过 useScreenEditorStore(s => s.targets) 拿到正确 target。
     capturedMoveable = null;
     capturedSelecto = null;
     const session = makeSession('select', 'idle');
     const { rerender } = render(<ScreenCanvas editorSession={session} />);
 
-    // 初始：c1 被选中，Moveable target 包含 c1 的 DOM
-    expect(capturedMoveable!.target).toHaveLength(1);
+    const setTargetsMock = store.setTargets as ReturnType<typeof vi.fn>;
+    // 初始：c1 被选中，useLayoutEffect 派生 targets 后调用 setTargets
+    expect(setTargetsMock).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ tagName: 'DIV' })]),
+    );
+    // 验证初始派生的是 c1 的 DOM
+    const initialCall = setTargetsMock.mock.lastCall;
+    const initialTargets = initialCall?.[0] as HTMLElement[];
+    expect(initialTargets).toHaveLength(1);
+    expect(initialTargets[0].getAttribute('data-component-id')).toBe('c1');
 
     // 模拟复制/粘贴：向 store 添加新组件 c2，选中切换到 c2
     const c2: ScreenComponent = {
@@ -1979,16 +2003,26 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     };
     store.project = { ...currentProject, components: [...currentProject.components, c2] };
     store.selectedComponentIds = ['c2'];
+    // 重置 setTargets mock 计数，便于后续断言
+    setTargetsMock.mockClear();
 
     // rerender：React 渲染 c2 的 CanvasComponentWrapper，commit 阶段 ref 注册后
-    // useLayoutEffect 同步执行 querySelector 拿到 c2 的 DOM 并 setTargets
+    // useLayoutEffect 同步执行 querySelector 拿到 c2 的 DOM 并 setTargets 更新 store.targets
     rerender(<ScreenCanvas editorSession={session} />);
 
-    // 修复前：targets 为空数组（useMemo 在 render 阶段拿不到新 DOM），控制框不显示
-    // 修复后：useLayoutEffect 在 commit 后通过 DOM 查询拿到 c2 的 DOM
-    expect(capturedMoveable!.target).toHaveLength(1);
-    const targetEl = (capturedMoveable!.target as HTMLElement[])[0];
+    // 验证 useLayoutEffect 已派生包含 c2 的 targets
+    expect(setTargetsMock).toHaveBeenCalled();
+    const lastCall = setTargetsMock.mock.lastCall;
+    const lastTargets = lastCall?.[0] as HTMLElement[];
+    expect(lastTargets).toHaveLength(1);
+    // 关键断言：派生的 DOM 元素的 data-component-id 应为 c2（而非 c1）
+    // 这验证了 ref 注册延迟场景下 useLayoutEffect 仍能通过 querySelector 拿到新挂载的 DOM
+    const targetEl = lastTargets[0];
     expect(targetEl.getAttribute('data-component-id')).toBe('c2');
+    // store.targets 也应被更新为 c2 的 DOM
+    const storeTargets = store.targets as HTMLElement[];
+    expect(storeTargets).toHaveLength(1);
+    expect(storeTargets[0].getAttribute('data-component-id')).toBe('c2');
   });
 
   it('回归：反复"选中 → 取消选中"循环中零位移手势均恢复状态机', () => {
@@ -2027,5 +2061,139 @@ describe('任务 13.8：零位移手势结束时恢复交互状态机', () => {
     expect(countDispatch(dispatchInteraction, 'pointer-up')).toBe(cycles * 3);
     // 每轮 1 次 start-drag（零位移点击选中组件触发的 Moveable 手势）
     expect(countDispatch(dispatchInteraction, 'start-drag')).toBe(cycles);
+  });
+});
+
+/**
+ * Task 6：buildFilterString 单元测试
+ *
+ * 验证 ComponentStyle.filter → CSS filter 字符串的转换规则：
+ * - 缺失或全默认值返回空串
+ * - 仅拼接非默认值字段（避免 brightness(100%) 噪声）
+ * - blur 单位为 px，其余为 %
+ * - hue-rotate 单位为 deg
+ * - 多字段按 hue-rotate/saturate/brightness/contrast/blur/grayscale 顺序拼接
+ */
+describe('Task 6 · buildFilterString', () => {
+  it('filter 为 undefined 时返回空串', () => {
+    expect(buildFilterString(undefined)).toBe('');
+  });
+
+  it('所有字段为默认值时返回空串（不应用 filter 样式）', () => {
+    const filter = {
+      hueRotate: 0,
+      saturate: 100,
+      brightness: 100,
+      contrast: 100,
+      blur: 0,
+      grayscale: 0,
+    } satisfies ComponentStyle['filter'];
+    expect(buildFilterString(filter)).toBe('');
+  });
+
+  it('仅 hueRotate 非默认 → hue-rotate(<n>deg)', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 90,
+        saturate: 100,
+        brightness: 100,
+        contrast: 100,
+        blur: 0,
+        grayscale: 0,
+      }),
+    ).toBe('hue-rotate(90deg)');
+  });
+
+  it('仅 saturate 非默认 → saturate(<n>%)', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 0,
+        saturate: 150,
+        brightness: 100,
+        contrast: 100,
+        blur: 0,
+        grayscale: 0,
+      }),
+    ).toBe('saturate(150%)');
+  });
+
+  it('仅 brightness 非默认 → brightness(<n>%)', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 0,
+        saturate: 100,
+        brightness: 80,
+        contrast: 100,
+        blur: 0,
+        grayscale: 0,
+      }),
+    ).toBe('brightness(80%)');
+  });
+
+  it('仅 contrast 非默认 → contrast(<n>%)', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 0,
+        saturate: 100,
+        brightness: 100,
+        contrast: 120,
+        blur: 0,
+        grayscale: 0,
+      }),
+    ).toBe('contrast(120%)');
+  });
+
+  it('仅 blur 非默认 → blur(<n>px)', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 0,
+        saturate: 100,
+        brightness: 100,
+        contrast: 100,
+        blur: 3.5,
+        grayscale: 0,
+      }),
+    ).toBe('blur(3.5px)');
+  });
+
+  it('仅 grayscale 非默认 → grayscale(<n>%)', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 0,
+        saturate: 100,
+        brightness: 100,
+        contrast: 100,
+        blur: 0,
+        grayscale: 50,
+      }),
+    ).toBe('grayscale(50%)');
+  });
+
+  it('多字段非默认时按 hue-rotate/saturate/brightness/contrast/blur/grayscale 顺序拼接', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 30,
+        saturate: 120,
+        brightness: 90,
+        contrast: 110,
+        blur: 2,
+        grayscale: 25,
+      }),
+    ).toBe(
+      'hue-rotate(30deg) saturate(120%) brightness(90%) contrast(110%) blur(2px) grayscale(25%)',
+    );
+  });
+
+  it('hueRotate=0 被跳过（不产生 hue-rotate(0deg) 噪声）', () => {
+    expect(
+      buildFilterString({
+        hueRotate: 0,
+        saturate: 100,
+        brightness: 80,
+        contrast: 100,
+        blur: 0,
+        grayscale: 0,
+      }),
+    ).toBe('brightness(80%)');
   });
 });

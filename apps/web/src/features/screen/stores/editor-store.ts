@@ -1,19 +1,26 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { ScreenProject, ScreenComponent, CanvasConfig, EventBlueprint } from '@nebula/shared';
+import type {
+  ScreenProject,
+  ScreenComponent,
+  CanvasConfig,
+  EventBlueprint,
+  GlobalVariable,
+} from '@nebula/shared';
 import { loadPreferences, savePreference, type PreferenceValues } from '../lib/preferences-persist';
 
 /**
- * 历史栈条目：组件数组 + 画布配置 + 事件蓝图的三重快照（任务 5.1）。
- * 撤销/重做时同步恢复三者，画布配置、组件编辑与蓝图编辑共享同一时间线。
+ * 历史栈条目：组件数组 + 画布配置 + 事件蓝图 + 全局变量的四重快照（任务 5.1 / Task 8）。
+ * 撤销/重做时同步恢复四者，画布配置、组件编辑、蓝图编辑与全局变量编辑共享同一时间线。
  *
- * `blueprint` 为可选字段：旧快照（任务 5.1 前的历史栈）无此字段，
- * undo/redo 时按 undefined 处理，向后兼容。
+ * `blueprint` / `globalVariables` 为可选字段：旧快照（任务 5.1 / Task 8 前的历史栈）无此字段，
+ * undo/redo 时按 undefined / [] 处理，向后兼容。
  */
 interface HistoryEntry {
   components: ScreenComponent[];
   canvas: CanvasConfig;
   blueprint?: EventBlueprint;
+  globalVariables?: GlobalVariable[];
 }
 
 interface HistoryState {
@@ -107,6 +114,31 @@ interface ScreenEditorData {
    * 不进入历史栈本身，仅作运行时标记。
    */
   blueprintGesture: { active: boolean; baseline: EventBlueprint | undefined };
+  /**
+   * 事件蓝图 Sheet 开关（任务 4.7）：属性面板 QuickEventEditor「打开事件蓝图」按钮通过
+   * `openBlueprintSheet` 入口打开 Sheet，无需依赖 React state 拉起，便于跨组件触发。
+   * - `blueprintSheetOpen`：Sheet 是否打开
+   * - `blueprintFocusComponentId`：打开时希望 Sheet 聚焦过滤的组件 id（可选）；
+   *   为 null 时表示不开启过滤模式（展示完整蓝图）
+   * 与原 screen-editor 内 `showEventBlueprint` React state 并存：
+   * 工具栏入口继续走 React state（保留 Escape 关闭等行为），
+   * QuickEventEditor 走 store API（可携带 focusComponentId 自动过滤）。
+   * 任一来源为 true 都视为打开。
+   */
+  blueprintSheetOpen: boolean;
+  blueprintFocusComponentId: string | null;
+  /**
+   * Moveable 的 target DOM 元素数组（同步派生自 selectedComponentIds）。
+   *
+   * 拆分到独立 store 字段而非组件 useState 的原因：
+   * 屏幕画布 ScreenCanvas 是订阅 23+ store 字段的巨型函数组件，
+   * 即使 flushSync 同步更新 selectedComponentIds，ScreenCanvas 重渲染开销
+   * 仍会让 Moveable 控制框显示有可感知延迟。
+   * 把 targets 移到 store 中，让 MoveableContainer 子组件用 memo 隔离
+   * 独立订阅 targets，渲染开销 <1ms，控制框立即显示。
+   * 参考 light-chaser 的 DesignerMovable（observer + mobx 同步订阅）。
+   */
+  targets: HTMLElement[];
 }
 
 interface ScreenEditorActions {
@@ -116,6 +148,8 @@ interface ScreenEditorActions {
   selectComponent: (id: string | null) => void;
   selectComponents: (ids: string[]) => void;
   clearSelection: () => void;
+  /** 同步设置 targets（不入历史栈） */
+  setTargets: (targets: HTMLElement[]) => void;
   addComponent: (component: ScreenComponent) => void;
   /** 重命名组件（入历史栈；trim 后为空或与原名相同则忽略） */
   renameComponent: (id: string, name: string) => void;
@@ -145,6 +179,21 @@ interface ScreenEditorActions {
    * 无净变化则不产生空历史记录。未处于手势中时调用为空操作。
    */
   endBlueprintGesture: () => void;
+  /**
+   * 新增全局变量（Task 8）：生成 id 并追加到 project.globalVariables，走历史栈。
+   * 与 updateComponent 语义一致：进入历史栈、置脏。
+   */
+  addGlobalVariable: (variable: Omit<GlobalVariable, 'id'>) => void;
+  /**
+   * 更新指定 id 的全局变量（Task 8）：合并 updates 到目标变量，走历史栈。
+   * 找不到目标 id 时为空操作（不入栈、不置脏）。
+   */
+  updateGlobalVariable: (id: string, updates: Partial<GlobalVariable>) => void;
+  /**
+   * 删除指定 id 的全局变量（Task 8）：从 project.globalVariables 移除，走历史栈。
+   * 找不到目标 id 时为空操作。
+   */
+  removeGlobalVariable: (id: string) => void;
   setCanvasScale: (scale: number) => void;
   setCanvasOffset: (offset: { x: number; y: number }) => void;
   setCanvasScaleAndOffset: (scale: number, offset: { x: number; y: number }) => void;
@@ -221,6 +270,16 @@ interface ScreenEditorActions {
   cycleScreenMode: () => void;
   /** 进入/退出分组编辑模式：设置 activeGroupId（双击进入分组） */
   setActiveGroupId: (groupId: string | null) => void;
+  /**
+   * 打开事件蓝图 Sheet（任务 4.7）。
+   * - 传入 `focusComponentId` 时 Sheet 自动进入过滤模式聚焦该组件相关节点
+   * - 不传 `focusComponentId` 时 Sheet 展示完整蓝图（不开启过滤）
+   * 与工具栏入口（React state）独立：此方法仅切换 store 内的开关字段，
+   * 由 screen-editor 订阅后驱动 BlueprintSheet 的 `open` prop。
+   */
+  openBlueprintSheet: (options?: { focusComponentId?: string }) => void;
+  /** 关闭事件蓝图 Sheet（任务 4.7），并清空 focusComponentId */
+  closeBlueprintSheet: () => void;
 }
 
 export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
@@ -258,6 +317,9 @@ const initialData: ScreenEditorData = {
   screenMode: 'standard',
   isDirty: false,
   blueprintGesture: { active: false, baseline: undefined },
+  blueprintSheetOpen: false,
+  blueprintFocusComponentId: null,
+  targets: [],
 };
 
 /**
@@ -281,14 +343,17 @@ function pushHistory(set: ScreenEditorSet): void {
         // 浅拷贝即可：store 内所有 update 操作均为 immutable（用展开符产生新对象/新数组），
         // 不会原地修改 component / canvas / blueprint 对象，因此旧引用始终保留历史快照语义。
         // 改用浅拷贝避免大组件树深拷贝（structuredClone）带来的性能开销。
-        // blueprint 为可选字段：仅当当前 project.blueprint 存在时写入快照，
-        // 旧快照（任务 5.1 前）没有此字段，undo/redo 时按 undefined 处理。
+        // blueprint / globalVariables 为可选字段：仅当当前 project.blueprint / globalVariables 存在时写入快照，
+        // 旧快照（任务 5.1 / Task 8 前）没有此字段，undo/redo 时按 undefined / [] 处理。
         past: [
           ...state.history.past,
           {
             components: [...state.project.components],
             canvas: { ...state.project.canvas },
             ...(state.project.blueprint ? { blueprint: { ...state.project.blueprint } } : {}),
+            ...(state.project.globalVariables
+              ? { globalVariables: [...state.project.globalVariables] }
+              : {}),
           },
         ].slice(-HISTORY_LIMIT),
         future: [],
@@ -338,6 +403,9 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             isDirty: false,
             // 加载新项目时重置蓝图手势，避免跨项目残留手势态
             blueprintGesture: { active: false, baseline: undefined },
+            // 加载新项目时关闭事件蓝图 Sheet，避免跨项目残留打开状态
+            blueprintSheetOpen: false,
+            blueprintFocusComponentId: null,
           },
           false,
           'loadProject',
@@ -368,7 +436,11 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
       },
 
       clearSelection: () => {
-        set({ selectedComponentIds: [] }, false, 'clearSelection');
+        set({ selectedComponentIds: [], targets: [] }, false, 'clearSelection');
+      },
+
+      setTargets: (targets) => {
+        set({ targets }, false, 'setTargets');
       },
 
       addComponent: (component) => {
@@ -558,6 +630,7 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         if (unchanged) return;
         // 补入一条历史：快照的 blueprint 取手势起点 baseline，使 undo 回到手势前；
         // 组件/画布取当前值（手势仅改动蓝图，二者在手势期间不变）。
+        // globalVariables 同样取当前值（手势不影响全局变量，但需快照以保持 undo/redo 一致性）。
         set(
           (state) => {
             if (!state.project) return {};
@@ -569,6 +642,9 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                     components: [...state.project.components],
                     canvas: { ...state.project.canvas },
                     ...(baseline ? { blueprint: { ...baseline } } : {}),
+                    ...(state.project.globalVariables
+                      ? { globalVariables: [...state.project.globalVariables] }
+                      : {}),
                   },
                 ].slice(-HISTORY_LIMIT),
                 future: [],
@@ -578,6 +654,58 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
           false,
           'endBlueprintGestureCommit',
         );
+      },
+
+      addGlobalVariable: (variable) => {
+        withHistory(set, 'addGlobalVariable', (state) => {
+          if (!state.project) return {};
+          const newVariable: GlobalVariable = {
+            ...variable,
+            id: crypto.randomUUID(),
+          };
+          return {
+            project: {
+              ...state.project,
+              globalVariables: [...(state.project.globalVariables ?? []), newVariable],
+            },
+          };
+        });
+      },
+
+      updateGlobalVariable: (id, updates) => {
+        const { project } = get();
+        // 找不到目标 id 时为空操作（不入栈、不置脏），与 updateCanvas "无变化不入栈" 语义一致
+        const exists = (project?.globalVariables ?? []).some((v: GlobalVariable) => v.id === id);
+        if (!exists) return;
+        withHistory(set, 'updateGlobalVariable', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              globalVariables: (state.project.globalVariables ?? []).map((v: GlobalVariable) =>
+                v.id === id ? { ...v, ...updates } : v,
+              ),
+            },
+          };
+        });
+      },
+
+      removeGlobalVariable: (id) => {
+        const { project } = get();
+        // 找不到目标 id 时为空操作（不入栈、不置脏），与 updateGlobalVariable 语义一致
+        const exists = (project?.globalVariables ?? []).some((v: GlobalVariable) => v.id === id);
+        if (!exists) return;
+        withHistory(set, 'removeGlobalVariable', (state) => {
+          if (!state.project) return {};
+          return {
+            project: {
+              ...state.project,
+              globalVariables: (state.project.globalVariables ?? []).filter(
+                (v: GlobalVariable) => v.id !== id,
+              ),
+            },
+          };
+        });
       },
 
       setCanvasScale: (scale) => {
@@ -907,6 +1035,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                 canvas: previous.canvas,
                 // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
                 blueprint: previous.blueprint ? { ...previous.blueprint } : undefined,
+                // globalVariables 可选：旧快照无此字段时按 [] 恢复（与 schema default 一致）
+                globalVariables: previous.globalVariables ? [...previous.globalVariables] : [],
               },
               selectedComponentIds: [],
               history: {
@@ -918,6 +1048,9 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                     canvas: { ...state.project.canvas },
                     ...(state.project.blueprint
                       ? { blueprint: { ...state.project.blueprint } }
+                      : {}),
+                    ...(state.project.globalVariables
+                      ? { globalVariables: [...state.project.globalVariables] }
                       : {}),
                   },
                   ...state.history.future,
@@ -945,6 +1078,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                 canvas: next.canvas,
                 // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
                 blueprint: next.blueprint ? { ...next.blueprint } : undefined,
+                // globalVariables 可选：旧快照无此字段时按 [] 恢复（与 schema default 一致）
+                globalVariables: next.globalVariables ? [...next.globalVariables] : [],
               },
               selectedComponentIds: [],
               history: {
@@ -955,6 +1090,9 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
                     canvas: { ...state.project.canvas },
                     ...(state.project.blueprint
                       ? { blueprint: { ...state.project.blueprint } }
+                      : {}),
+                    ...(state.project.globalVariables
+                      ? { globalVariables: [...state.project.globalVariables] }
                       : {}),
                   },
                 ],
@@ -1225,6 +1363,26 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
 
       setActiveGroupId: (groupId) => {
         set({ activeGroupId: groupId }, false, 'setActiveGroupId');
+      },
+
+      openBlueprintSheet: (options) => {
+        const focusComponentId = options?.focusComponentId;
+        set(
+          {
+            blueprintSheetOpen: true,
+            blueprintFocusComponentId: focusComponentId ?? null,
+          },
+          false,
+          'openBlueprintSheet',
+        );
+      },
+
+      closeBlueprintSheet: () => {
+        set(
+          { blueprintSheetOpen: false, blueprintFocusComponentId: null },
+          false,
+          'closeBlueprintSheet',
+        );
       },
     }),
     { name: 'ScreenEditorStore' },
