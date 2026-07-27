@@ -56,8 +56,8 @@
 
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
-| [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-24） | 大屏编辑器功能规格（现状基线） |
-| [dataset-management/](./specs/dataset-management/README.md) | 实施中（2026-07-25） | 数据集管理设计规格（独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter）。第一阶段 MVP 已完成 |
+| [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-28） | 大屏编辑器功能规格（现状基线） |
+| [dataset-management/](./specs/dataset-management/README.md) | 实施中（2026-07-28） | 数据集管理设计规格（独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter）。第一阶段 MVP 已完成 |
 | [blueprint-redesign/](./specs/blueprint-redesign/spec.md) | 生效中（2026-07-26） | 事件蓝图 V2 重新设计（组件即节点、锚点即事件、V1→V2 自动迁移，已落地） |
 
 > 完整功能规格清单见 [specs/README.md](./specs/README.md)。

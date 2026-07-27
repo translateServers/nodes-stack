@@ -68,12 +68,12 @@
 
 ## P1：文本细化配置（Light Chaser 特色）
 
-- [ ] Task 7: 扩展 ComponentStyleSchema 文本字段与 TEXT_PROPS_SECTION
-  - [ ] SubTask 7.1: 在 `ComponentStyleSchema` 新增 `letterSpacing: z.number().optional()`、`textStrokeWidth: z.number().min(0).optional()`、`textStrokeColor: z.string().optional()`
-  - [ ] SubTask 7.2: 扩展 `TEXT_PROPS_SECTION` 新增 3 个字段：字间距（number，path `style.letterSpacing`）、描边宽度（number，path `style.textStrokeWidth`）、描边颜色（color，path `style.textStrokeColor`）
-  - [ ] SubTask 7.3: 在 `text-component.tsx` 渲染层应用 `letter-spacing` 与 `-webkit-text-stroke` CSS 属性
-  - [ ] SubTask 7.4: 补充 `text-component.test.tsx` 测试：含字间距与描边的渲染快照
-  - [ ] SubTask 7.5: 运行 `pnpm --filter @nebula/web test -- --reporter=verbose text-component` 验证
+- [x] Task 7: 扩展 ComponentStyleSchema 文本字段与 TEXT_PROPS_SECTION
+  - [x] SubTask 7.1: 在 `ComponentStyleSchema` 新增 `letterSpacing: z.number().optional()`、`textStrokeWidth: z.number().min(0).optional()`、`textStrokeColor: z.string().optional()`
+  - [x] SubTask 7.2: 扩展 `TEXT_PROPS_SECTION` 新增 3 个字段：字间距（number，path `style.letterSpacing`）、描边宽度（number，path `style.textStrokeWidth`）、描边颜色（color，path `style.textStrokeColor`）
+  - [x] SubTask 7.3: 在 `text-component.tsx` 渲染层应用 `letter-spacing` 与 `-webkit-text-stroke` CSS 属性
+  - [x] SubTask 7.4: 补充 `text-component.test.tsx` 测试：含字间距与描边的渲染快照
+  - [x] SubTask 7.5: 运行 `pnpm --filter @nebula/web test -- --reporter=verbose text-component` 验证
 
 ## P1：全局变量机制（Light Chaser 特色）
 
@@ -96,9 +96,9 @@
 ## P2：文档与质量门
 
 - [ ] Task 10: 更新文档与运行根目录质量门
-  - [ ] SubTask 10.1: 更新 `docs/architecture/screen-editor-architecture.md` 的属性面板章节，说明四大类分类与 tab 容器策略
-  - [ ] SubTask 10.2: 更新 `docs/specs/screen-editor/README.md` §7 属性面板与 §10 事件蓝图，说明 QuickEventEditor 派生视图
-  - [ ] SubTask 10.3: 在 `docs/architecture/blueprint-runtime-architecture.md` 新增章节「右侧面板派生视图」，说明与蓝图的数据共享机制
+  - [x] SubTask 10.1: 更新 `docs/architecture/screen-editor-architecture.md` 的属性面板章节，说明四大类分类与 tab 容器策略
+  - [x] SubTask 10.2: 更新 `docs/specs/screen-editor/README.md` §7 属性面板与 §10 事件蓝图，说明 QuickEventEditor 派生视图
+  - [x] SubTask 10.3: 在 `docs/architecture/blueprint-runtime-architecture.md` 新增章节「右侧面板派生视图」，说明与蓝图的数据共享机制
   - [ ] SubTask 10.4: 运行根目录 `pnpm lint` 确保全项目（含 @nebula/web、@nebula/shared、@nebula/nestjs-server）零错误
   - [ ] SubTask 10.5: 运行根目录 `pnpm typecheck` 与 `pnpm test` 确保无回归
 
