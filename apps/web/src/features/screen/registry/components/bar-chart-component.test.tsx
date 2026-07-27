@@ -166,14 +166,29 @@ describe('BarChartComponent（数据源驱动渲染）', () => {
     expect(container.textContent).toContain('月度销售');
   });
 
-  it('柱条颜色取 style.backgroundColor，不回退', () => {
+  it('柱条渐变继承 style.backgroundColor', () => {
     const { container } = renderBarChart({
       style: { backgroundColor: '#ff0000' },
       dataSource: { type: 'static', staticData: SAMPLE_DATA },
     });
-    const rects = container.querySelectorAll('rect');
-    expect(rects.length).toBeGreaterThan(0);
-    expect(rects[0].getAttribute('fill')).toBe('#ff0000');
+    const gradient = container.querySelector('linearGradient');
+    const rects = container.querySelectorAll('.nebula-bar-chart-bar');
+    expect(gradient).not.toBeNull();
+    expect(gradient?.querySelector('stop')?.getAttribute('stop-color')).toBe('#ff0000');
+    expect(rects[0].getAttribute('fill')).toBe(`url(#${gradient?.id})`);
+  });
+
+  it('渲染网格基线并为柱条设置交错生长延迟', () => {
+    const { container } = renderBarChart({
+      dataSource: { type: 'static', staticData: SAMPLE_DATA },
+    });
+    const bars = container.querySelectorAll<SVGRectElement>('.nebula-bar-chart-bar');
+    expect(container.querySelectorAll('.nebula-bar-chart-grid-line')).toHaveLength(4);
+    expect(container.querySelector('.nebula-bar-chart-baseline')).not.toBeNull();
+    expect(bars).toHaveLength(3);
+    expect(bars[0].style.animationDelay).toBe('100ms');
+    expect(bars[1].style.animationDelay).toBe('180ms');
+    expect(bars[2].style.animationDelay).toBe('260ms');
   });
 });
 

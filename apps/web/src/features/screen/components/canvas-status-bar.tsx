@@ -3,17 +3,18 @@
  *
  * VSCode/Figma 风格的 IDE 状态栏，分三段：
  * - 左侧：当前工具 + 选中信息
- * - 中间：画布尺寸
+ * - 中间：画布尺寸（拖拽时 DimensionIndicator 通过 ref 直写 DOM，不走 React render）
  * - 右侧：Snap/Guide 开关 + 缩放百分比
  *
  * 高度 28px（h-7），bg-card + border-t，紧凑信息密度。
  */
 
-import { memo, useDeferredValue } from 'react';
+import { memo, useDeferredValue, useEffect, useRef } from 'react';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
 import { useDimensionStore } from './screen-canvas';
+import type { DimensionInfo } from './screen-canvas';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -78,6 +79,69 @@ function Divider() {
   return <span className="mx-1 h-3 w-px bg-border" />;
 }
 
+/**
+ * 独立尺寸指示器（性能优化）。
+ *
+ * 拖拽/缩放过程中 dimension 每帧变化，此组件通过 store.subscribe + ref 直接更新 DOM
+ * textContent，完全绕过 React 渲染。只有 visible 状态变化（低频：拖拽开始/结束）才会
+ * 触发 React render 切换 text-primary class。
+ *
+ * CanvasStatusBar 主体（工具、选中信息、开关、缩放）不会因拖拽每帧重渲染。
+ */
+const DimensionIndicator = memo(function DimensionIndicator({
+  canvasWidth,
+  canvasHeight,
+}: {
+  canvasWidth: number;
+  canvasHeight: number;
+}) {
+  const dimensionRef = useRef<HTMLSpanElement>(null);
+  // 仅订阅 visible（布尔值，引用稳定），拖拽开始/结束时才触发组件 render
+  const dimensionVisible = useDimensionStore((s) => s.dimension.visible);
+
+  // 挂载后订阅 dimension 变化，每帧直写 textContent，不走 React render
+  useEffect(() => {
+    const el = dimensionRef.current;
+    if (!el) return;
+
+    const updateText = (dim: DimensionInfo) => {
+      if (dim.visible) {
+        let text = `X:${dim.x} Y:${dim.y}`;
+        if (dim.w > 0) text += ` W:${dim.w}`;
+        if (dim.h > 0) text += ` H:${dim.h}`;
+        if (dim.rotate !== 0) text += ` R:${dim.rotate}°`;
+        if (dim.mode) text += ` [${dim.mode}]`;
+        el.textContent = text;
+      } else {
+        el.textContent = `${canvasWidth} × ${canvasHeight}`;
+      }
+    };
+
+    // 初始同步一次
+    updateText(useDimensionStore.getState().dimension);
+
+    // 订阅后续变化
+    const unsubscribe = useDimensionStore.subscribe((state, prev) => {
+      if (state.dimension !== prev.dimension) {
+        updateText(state.dimension);
+      }
+    });
+
+    return unsubscribe;
+  }, [canvasWidth, canvasHeight]);
+
+  return (
+    <span
+      ref={dimensionRef}
+      className={cn('font-mono', dimensionVisible ? 'text-primary' : '')}
+      data-testid="dimension-indicator"
+    >
+      {/* 初始内容仅在 SSR/hydration 时显示，useEffect 挂载后立即被 textContent 覆盖 */}
+      {`${canvasWidth} × ${canvasHeight}`}
+    </span>
+  );
+});
+
 export const CanvasStatusBar = memo(function CanvasStatusBar({
   editorSession,
 }: CanvasStatusBarProps) {
@@ -111,8 +175,6 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
   const toggleGuidesVisibility = useScreenEditorStore((s) => s.toggleGuidesVisibility);
   const toggleEvents = useScreenEditorStore((s) => s.toggleEvents);
 
-  const dimension = useDimensionStore((s) => s.dimension);
-
   const activeTool = editorSession.activeTool;
   const toolDef = getToolById(activeTool);
   // activeTool 受 ToolStateMachine 约束，必然能在注册表中找到；防御性回退到选择工具
@@ -145,21 +207,9 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
           </span>
         </div>
 
-        {/* 中间：拖拽时显示实时尺寸，空闲时显示画布尺寸 */}
-        <div className="flex items-center gap-2 font-mono">
-          {dimension.visible ? (
-            <span className="text-primary">
-              X:{dimension.x} Y:{dimension.y}
-              {dimension.w > 0 && ` W:${dimension.w}`}
-              {dimension.h > 0 && ` H:${dimension.h}`}
-              {dimension.rotate !== 0 && ` R:${dimension.rotate}°`}
-              {dimension.mode && ` [${dimension.mode}]`}
-            </span>
-          ) : (
-            <span>
-              {canvasWidth} × {canvasHeight}
-            </span>
-          )}
+        {/* 中间：拖拽时显示实时尺寸（DimensionIndicator 通过 ref 直写 DOM，不走 React render），空闲时显示画布尺寸 */}
+        <div className="flex items-center gap-2">
+          <DimensionIndicator canvasWidth={canvasWidth} canvasHeight={canvasHeight} />
         </div>
 
         {/* 右侧：开关 + 缩放 */}

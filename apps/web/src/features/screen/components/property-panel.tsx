@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useDeferredValue, useMemo } from 'react';
 import type { ComponentType } from 'react';
 import {
   AlignLeft,
@@ -168,14 +168,17 @@ const MultiSelectPanel = memo(function MultiSelectPanel({
 });
 
 export function PropertyPanel() {
-  // 细粒度订阅：仅当 components 数组引用变化时重渲染（拖拽 onDragEnd / onResizeEnd 通过
-  // updateComponent 创建新数组引用，确保属性面板数值实时同步，肉眼无滞后）
   const components = useScreenEditorStore((s) => s.project?.components);
   const canvas = useScreenEditorStore((s) => s.project?.canvas);
-  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  const rawSelectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const updateComponent = useScreenEditorStore((s) => s.updateComponent);
   const updateCanvas = useScreenEditorStore((s) => s.updateCanvas);
   const removeComponent = useScreenEditorStore((s) => s.removeComponent);
+
+  // 性能优化：选中态响应降级为 transition，避免 flushSync 同步冲刷把属性面板的
+  // Schema 表单重建塞进点击帧（与 CanvasStatusBar useDeferredValue 模式一致）。
+  // 选中控制框（MoveableContainer）立即同步渲染，属性面板滞后一帧（<50ms 不可感知）。
+  const selectedComponentIds = useDeferredValue(rawSelectedComponentIds);
 
   const singleSelectedId = selectedComponentIds.length === 1 ? selectedComponentIds[0] : null;
   const selectedComponent = useMemo(

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import {
   Eye,
   EyeOff,
@@ -283,7 +283,7 @@ function InlineRenameInput({
 
 export function LayerPanel() {
   const project = useScreenEditorStore((s) => s.project);
-  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  const rawSelectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const selectComponent = useScreenEditorStore((s) => s.selectComponent);
   const selectComponents = useScreenEditorStore((s) => s.selectComponents);
   const setLocked = useScreenEditorStore((s) => s.setLocked);
@@ -299,6 +299,11 @@ export function LayerPanel() {
   const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
   const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
   const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
+
+  // 性能优化：选中态响应降级为 transition，避免 flushSync 同步冲刷把图层树重建
+  // 塞进点击帧（与 CanvasStatusBar、PropertyPanel useDeferredValue 模式一致）。
+  // 选中控制框（MoveableContainer）立即同步渲染，图层选中高亮滞后一帧（<50ms 不可感知）。
+  const selectedComponentIds = useDeferredValue(rawSelectedComponentIds);
 
   // 行内重命名目标（Phase 2 Slice A）：null 表示不在重命名态
   const [renamingId, setRenamingId] = useState<string | null>(null);

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
+import { memo, useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import Ruler from '@scena/react-ruler';
 import { useUiStore } from '@/store';
 
 export interface RulersHandle {
-  syncScroll: () => void;
+  syncScroll: (scale?: number, offset?: { x: number; y: number }) => void;
 }
 
 interface RulersProps {
@@ -59,74 +59,88 @@ function useIsDark(): boolean {
   return theme === 'dark' || (theme === 'system' && systemDark);
 }
 
-export const CanvasRulers = forwardRef<RulersHandle, RulersProps>(function CanvasRulers(
-  { scale, offset, containerRef },
-  ref,
-) {
-  const rulerXRef = useRef<Ruler>(null);
-  const rulerYRef = useRef<Ruler>(null);
-  const isDark = useIsDark();
-  const palette = isDark ? DARK_PALETTE : LIGHT_PALETTE;
+export const CanvasRulers = memo(
+  forwardRef<RulersHandle, RulersProps>(function CanvasRulers(
+    { scale, offset, containerRef },
+    ref,
+  ) {
+    const rulerXRef = useRef<Ruler>(null);
+    const rulerYRef = useRef<Ruler>(null);
+    const isDark = useIsDark();
+    const palette = isDark ? DARK_PALETTE : LIGHT_PALETTE;
 
-  useImperativeHandle(ref, () => ({
-    syncScroll() {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const scrollX = -(rect.left - offset.x) / scale;
-      const scrollY = -(rect.top - offset.y) / scale;
+    const scaleRef = useRef(scale);
+    const offsetRef = useRef(offset);
+    const containerRefRef = useRef(containerRef);
+    scaleRef.current = scale;
+    offsetRef.current = offset;
+    containerRefRef.current = containerRef;
+
+    const doSyncScroll = (s: number, o: { x: number; y: number }) => {
+      const container = containerRefRef.current;
+      if (!container.current) return;
+      const rect = container.current.getBoundingClientRect();
+      const scrollX = -(rect.left - o.x) / s;
+      const scrollY = -(rect.top - o.y) / s;
       rulerXRef.current?.scroll(scrollX);
       rulerYRef.current?.scroll(scrollY);
-    },
-  }));
+    };
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const scrollX = -(rect.left - offset.x) / scale;
-    const scrollY = -(rect.top - offset.y) / scale;
-    rulerXRef.current?.scroll(scrollX);
-    rulerYRef.current?.scroll(scrollY);
-  }, [scale, offset, containerRef]);
+    useImperativeHandle(ref, () => ({
+      syncScroll(s?: number, o?: { x: number; y: number }) {
+        const currentScale = s ?? scaleRef.current;
+        const currentOffset = o ?? offsetRef.current;
+        doSyncScroll(currentScale, currentOffset);
+      },
+    }));
 
-  const unit = Math.max(1, Math.floor(50 / scale));
+    useEffect(() => {
+      doSyncScroll(scale, offset);
+    }, [scale, offset]);
 
-  return (
-    <div className="pointer-events-none absolute inset-0 z-50">
-      <div
-        className={`absolute left-0 top-0 h-5 w-5 border-b border-r text-center text-[9px] leading-5 ${palette.cornerBg} ${palette.cornerBorder} ${palette.cornerText}`}
-      >
-        px
+    const unit = Math.max(1, Math.floor(50 / scale));
+
+    return (
+      <div className="pointer-events-none absolute inset-0 z-50">
+        <div
+          className={`absolute left-0 top-0 h-5 w-5 border-b border-r text-center text-[9px] leading-5 ${palette.cornerBg} ${palette.cornerBorder} ${palette.cornerText}`}
+        >
+          px
+        </div>
+        <div className="absolute top-0" style={{ left: RULER_SIZE, right: 0, height: RULER_SIZE }}>
+          <Ruler
+            ref={rulerXRef}
+            type="horizontal"
+            style={{ width: '100%', height: RULER_SIZE }}
+            lineColor={palette.line}
+            textColor={palette.text}
+            backgroundColor={palette.background}
+            negativeRuler
+            zoom={scale}
+            unit={unit}
+            segment={2}
+            textOffset={[0, 10]}
+          />
+        </div>
+        <div className="absolute left-0" style={{ top: RULER_SIZE, bottom: 0, width: RULER_SIZE }}>
+          <Ruler
+            ref={rulerYRef}
+            type="vertical"
+            style={{ width: RULER_SIZE, height: '100%' }}
+            lineColor={palette.line}
+            textColor={palette.text}
+            backgroundColor={palette.background}
+            negativeRuler
+            zoom={scale}
+            unit={unit}
+            segment={2}
+            textOffset={[10, 0]}
+          />
+        </div>
       </div>
-      <div className="absolute top-0" style={{ left: RULER_SIZE, right: 0, height: RULER_SIZE }}>
-        <Ruler
-          ref={rulerXRef}
-          type="horizontal"
-          style={{ width: '100%', height: RULER_SIZE }}
-          lineColor={palette.line}
-          textColor={palette.text}
-          backgroundColor={palette.background}
-          negativeRuler
-          zoom={scale}
-          unit={unit}
-          segment={2}
-          textOffset={[0, 10]}
-        />
-      </div>
-      <div className="absolute left-0" style={{ top: RULER_SIZE, bottom: 0, width: RULER_SIZE }}>
-        <Ruler
-          ref={rulerYRef}
-          type="vertical"
-          style={{ width: RULER_SIZE, height: '100%' }}
-          lineColor={palette.line}
-          textColor={palette.text}
-          backgroundColor={palette.background}
-          negativeRuler
-          zoom={scale}
-          unit={unit}
-          segment={2}
-          textOffset={[10, 0]}
-        />
-      </div>
-    </div>
-  );
-});
+    );
+  }),
+  (prevProps, nextProps) => {
+    return prevProps.scale === nextProps.scale;
+  },
+);

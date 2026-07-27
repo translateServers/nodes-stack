@@ -6,7 +6,7 @@
  * - 可折叠为 48px 图标轨：点击图标展开并定位到对应 Tab
  */
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Layers, Package, PanelLeftClose } from 'lucide-react';
 import { ComponentLibrary } from './component-library';
 import { LayerPanel } from './layer-panel';
@@ -15,7 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type LeftPanelTab = 'library' | 'layers';
 
-export function EditorLeftPanel() {
+// 性能优化：memo 化左侧面板。该组件不接收外部 props，ScreenEditor 重渲染时
+// （如选中态变化、视口状态变化）完全跳过左侧面板子树（含 ComponentLibrary、
+// LayerPanel），避免不必要的重渲染。
+export const EditorLeftPanel = memo(function EditorLeftPanel() {
   const [tab, setTab] = useState<LeftPanelTab>('library');
   const [collapsed, setCollapsed] = useState(false);
   const { width, isDragging, handlePointerDown, handleDoubleClick } = useResizablePanel({
@@ -97,4 +100,4 @@ export function EditorLeftPanel() {
       />
     </div>
   );
-}
+});

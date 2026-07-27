@@ -80,8 +80,9 @@ export function PreviewCanvas({ project }: PreviewCanvasProps) {
   return (
     <BlueprintPreviewProvider value={contextValue}>
       <BlueprintEventProvider value={onComponentEvent}>
-        <div className="flex h-screen w-screen items-center justify-center overflow-hidden bg-black">
+        <div className="screen-preview-atmosphere flex h-screen w-screen items-center justify-center overflow-hidden bg-black">
           <div
+            className="screen-preview-stage"
             style={{
               width: canvas.width,
               height: canvas.height,
@@ -98,13 +99,14 @@ export function PreviewCanvas({ project }: PreviewCanvasProps) {
             {components
               .filter((c) => isComponentVisible(c, contextValue.visibilityOverrides))
               .sort((a, b) => a.zIndex - b.zIndex)
-              .map((component) => (
+              .map((component, index) => (
                 <div
                   key={component.id}
+                  className="screen-preview-component-enter"
                   style={{
                     ...resolveComponentContainerStyle(component),
-                    // Task 6：组件 CSS 滤镜在预览/发布模式下同样生效
                     filter: buildFilterString(component.style.filter) || undefined,
+                    animationDelay: `${Math.min(index, 12) * 90 + 120}ms`,
                   }}
                   data-preview-component-id={component.id}
                   onClick={(e) => {

@@ -27,8 +27,9 @@ import { SELECTO_ALLOWED_STATES } from '../hooks/use-interaction-state-machine';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
 import { MoveableContainer, type MoveableHandlers } from './moveable-container';
+import type { RulersHandle } from './canvas-rulers';
 
-interface DimensionInfo {
+export interface DimensionInfo {
   x: number;
   y: number;
   w: number;
@@ -314,6 +315,7 @@ export function ScreenCanvas({
   onDrop,
   onDragOver,
   editorSession,
+  rulersRef,
 }: {
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -328,6 +330,7 @@ export function ScreenCanvas({
     | 'endTextEditing'
     | 'isEditingText'
   >;
+  rulersRef?: React.RefObject<RulersHandle | null>;
 }) {
   const { activeTool, activeCapabilities: capabilities } = editorSession;
   const { dispatchInteraction } = editorSession;
@@ -392,6 +395,14 @@ export function ScreenCanvas({
   const canvasOffsetRef = useRef(canvasOffset);
   canvasScaleRef.current = canvasScale;
   canvasOffsetRef.current = canvasOffset;
+
+  useLayoutEffect(() => {
+    const transformEl = canvasTransformRef.current;
+    if (transformEl) {
+      transformEl.style.transform = `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${canvasScale})`;
+    }
+    rulersRef?.current?.syncScroll(canvasScale, canvasOffset);
+  }, [canvasScale, canvasOffset, rulersRef]);
 
   const showBorderGuides = useScreenEditorStore((s) => s.showBorderGuides);
   const selectComponents = useScreenEditorStore((s) => s.selectComponents);
@@ -610,47 +621,34 @@ export function ScreenCanvas({
   const handleCreateText = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      // 仅在 idle/hovering 状态下可以开始创建，避免与其他交互重入
-      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) return;
       const el = containerRef.current;
       const proj = project;
       if (!el || !proj) return;
       const rect = el.getBoundingClientRect();
-      // 屏幕坐标 → 画布坐标
-      const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
-      const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
-      // 计算最大 zIndex
+      const scale = canvasScaleRef.current;
+      const off = canvasOffsetRef.current;
+      const canvasX = (e.clientX - rect.left - off.x) / scale;
+      const canvasY = (e.clientY - rect.top - off.y) / scale;
       const maxZ = proj.components.reduce(
         (m: number, c: ScreenComponent) => Math.max(m, c.zIndex),
         0,
       );
       const instance = createComponentInstance('text', canvasX, canvasY, maxZ + 1, proj.components);
       if (!instance) return;
-      // 写入 Store
       addComponent(instance);
       selectComponent(instance.id);
-      // 进入文本编辑态
       beginTextEditing({
         componentId: instance.id,
         initialContent: DEFAULT_TEXT_CONTENT,
         isNewlyCreated: true,
       });
-      // 派发到交互状态机：先标记创建态，再进入编辑态
       dispatchInteraction('start-create');
       dispatchInteraction('double-click');
       e.preventDefault();
       e.stopPropagation();
     },
-    [
-      interactionState,
-      project,
-      canvasScale,
-      canvasOffset,
-      addComponent,
-      selectComponent,
-      beginTextEditing,
-      dispatchInteraction,
-    ],
+    [project, addComponent, selectComponent, beginTextEditing, dispatchInteraction],
   );
 
   /**
@@ -716,12 +714,14 @@ export function ScreenCanvas({
   const handleCreateShapeStart = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) return;
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
-      const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+      const scale = canvasScaleRef.current;
+      const off = canvasOffsetRef.current;
+      const canvasX = (e.clientX - rect.left - off.x) / scale;
+      const canvasY = (e.clientY - rect.top - off.y) / scale;
       setShapeCreation({
         tool: activeTool as 'rect' | 'ellipse',
         startX: canvasX,
@@ -734,7 +734,7 @@ export function ScreenCanvas({
       e.preventDefault();
       e.stopPropagation();
     },
-    [interactionState, canvasScale, canvasOffset, activeTool, dispatchInteraction],
+    [activeTool, dispatchInteraction],
   );
 
   /**
@@ -758,13 +758,15 @@ export function ScreenCanvas({
   const handleCreateImage = useCallback(
     async (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) return;
       const el = containerRef.current;
       const proj = project;
       if (!el || !proj) return;
       const rect = el.getBoundingClientRect();
-      const canvasX = (e.clientX - rect.left - canvasOffset.x) / canvasScale;
-      const canvasY = (e.clientY - rect.top - canvasOffset.y) / canvasScale;
+      const scale = canvasScaleRef.current;
+      const off = canvasOffsetRef.current;
+      const canvasX = (e.clientX - rect.left - off.x) / scale;
+      const canvasY = (e.clientY - rect.top - off.y) / scale;
       e.preventDefault();
       e.stopPropagation();
       dispatchInteraction('start-create');
@@ -818,15 +820,7 @@ export function ScreenCanvas({
       selectComponent(instance.id);
       dispatchInteraction('commit-create');
     },
-    [
-      interactionState,
-      project,
-      canvasScale,
-      canvasOffset,
-      addComponent,
-      selectComponent,
-      dispatchInteraction,
-    ],
+    [project, addComponent, selectComponent, dispatchInteraction],
   );
 
   /**
@@ -849,31 +843,34 @@ export function ScreenCanvas({
   const handleZoomToolClick = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      // 任务 12.2：缩放由状态机仲裁，拒绝非法重入
-      if (!SELECTO_ALLOWED_STATES.has(interactionState)) return;
+      if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) return;
       const el = containerRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
-      // Alt 修饰键：反向缩小（任务 8.3）
       const zoomOut = e.altKey;
-      // 任务 12.2：进入 zooming 态以仲裁后续重入
       dispatchInteraction('start-zoom');
       const result = zoomToolClick({
-        currentScale: canvasScale,
-        currentOffset: canvasOffset,
+        currentScale: canvasScaleRef.current,
+        currentOffset: canvasOffsetRef.current,
         cursorX,
         cursorY,
         zoomOut,
       });
+      canvasScaleRef.current = result.scale;
+      canvasOffsetRef.current = result.offset;
+      const transformEl = canvasTransformRef.current;
+      if (transformEl) {
+        transformEl.style.transform = `translate3d(${result.offset.x}px, ${result.offset.y}px, 0) scale(${result.scale})`;
+      }
       setCanvasScaleAndOffset(result.scale, result.offset);
-      // 任务 12.2：缩放操作完成，退出 zooming 态
+      rulersRef?.current?.syncScroll(result.scale, result.offset);
       dispatchInteraction('end-zoom');
       e.preventDefault();
       e.stopPropagation();
     },
-    [interactionState, canvasScale, canvasOffset, setCanvasScaleAndOffset, dispatchInteraction],
+    [setCanvasScaleAndOffset, dispatchInteraction, rulersRef],
   );
 
   const handlePanStart = useCallback(
@@ -957,19 +954,15 @@ export function ScreenCanvas({
       const newX = panState.current.origX + dx;
       const newY = panState.current.origY + dy;
       const scale = canvasScaleRef.current;
-      // Canvas Pan Optimization：直接操作 DOM transform（同步，GPU 合成层），
-      // 避免 pointermove 触发 zustand store 更新 -> ScreenCanvas 重渲染 -> 掉帧。
-      // transform 值与 React 渲染产物一致，store 更新后 React style diff 不会覆盖。
+      const newOffset = { x: newX, y: newY };
+      canvasOffsetRef.current = newOffset;
       const transformEl = canvasTransformRef.current;
       if (transformEl) {
         transformEl.style.transform = `translate3d(${newX}px, ${newY}px, 0) scale(${scale})`;
       }
-      // rAF 节流 store 更新：同帧多次 pointermove 仅最后一次生效，降低重渲染频率
-      gestureRafThrottlerRef.current?.schedule(() => {
-        setCanvasScaleAndOffset(scale, { x: newX, y: newY });
-      });
+      rulersRef?.current?.syncScroll(scale, newOffset);
     },
-    [shapeCreation, setCanvasScaleAndOffset],
+    [shapeCreation, rulersRef],
   );
 
   const handlePanEnd = useCallback(
@@ -1019,22 +1012,26 @@ export function ScreenCanvas({
       if (!panState.current) return;
       panState.current = null;
       (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-      // Canvas Pan Optimization：丢弃挂起的 rAF store 更新，同步最终值到 store。
       gestureRafThrottlerRef.current?.cancel();
       const transformEl = canvasTransformRef.current;
+      let finalScale = canvasScaleRef.current;
+      let finalOffset = canvasOffsetRef.current;
       if (transformEl) {
         const match = transformEl.style.transform.match(
           /translate3d\(([-\d.]+)px,\s*([-\d.]+)px,\s*0\)\s*scale\(([\d.]+)\)/,
         );
         if (match) {
-          setCanvasScaleAndOffset(Number.parseFloat(match[3]), {
+          finalScale = Number.parseFloat(match[3]);
+          finalOffset = {
             x: Number.parseFloat(match[1]),
             y: Number.parseFloat(match[2]),
-          });
-        } else {
-          setCanvasScaleAndOffset(canvasScaleRef.current, canvasOffsetRef.current);
+          };
         }
       }
+      canvasScaleRef.current = finalScale;
+      canvasOffsetRef.current = finalOffset;
+      setCanvasScaleAndOffset(finalScale, finalOffset);
+      rulersRef?.current?.syncScroll(finalScale, finalOffset);
       dispatchInteraction('pointer-up');
     },
     [
@@ -1044,6 +1041,7 @@ export function ScreenCanvas({
       selectComponent,
       dispatchInteraction,
       setCanvasScaleAndOffset,
+      rulersRef,
     ],
   );
 
@@ -1052,34 +1050,37 @@ export function ScreenCanvas({
     if (!el) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // 任务 8.4：浏览器默认行为隔离。
-      // 缩放手势：Alt+滚轮（原有）或 Ctrl/Cmd+滚轮（主流编辑器习惯）
-      // 拦截浏览器原生页面缩放（Ctrl/Cmd+滚轮）与图片缩放（Alt+滚轮），
-      // 统一走 zoomWithBoundary 边界约束。
       const isZoomGesture = e.altKey || e.ctrlKey || e.metaKey;
       if (!isZoomGesture) return;
       e.preventDefault();
-      const state = useScreenEditorStore.getState();
+      const currentScale = canvasScaleRef.current;
+      const currentOffset = canvasOffsetRef.current;
       const rect = el.getBoundingClientRect();
       const cursorX = e.clientX - rect.left;
       const cursorY = e.clientY - rect.top;
-      // 任务 8.1：统一调用 zoomWithBoundary，边界约束与锚点不变性由其内部保证
       const factor = e.deltaY > 0 ? 1 / WHEEL_ZOOM_FACTOR : WHEEL_ZOOM_FACTOR;
       const result = zoomWithBoundary({
-        currentScale: state.canvasScale,
-        currentOffset: state.canvasOffset,
+        currentScale,
+        currentOffset,
         cursorX,
         cursorY,
         factor,
       });
-      setCanvasScaleAndOffset(result.scale, result.offset);
+      canvasScaleRef.current = result.scale;
+      canvasOffsetRef.current = result.offset;
+      const transformEl = canvasTransformRef.current;
+      if (transformEl) {
+        transformEl.style.transform = `translate3d(${result.offset.x}px, ${result.offset.y}px, 0) scale(${result.scale})`;
+      }
+      rulersRef?.current?.syncScroll(result.scale, result.offset);
+      gestureRafThrottlerRef.current?.schedule(() => {
+        setCanvasScaleAndOffset(result.scale, result.offset);
+      });
     };
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
-    // H4 优化：handleWheel 内通过 useScreenEditorStore.getState() 读取最新状态，
-    // 不依赖闭包中的 project，移除该依赖避免每次 project 变化重绑事件监听器。
-  }, [setCanvasScaleAndOffset]);
+  }, [setCanvasScaleAndOffset, rulersRef]);
 
   const components = project?.components ?? [];
   const canvas = project?.canvas;

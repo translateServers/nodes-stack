@@ -190,26 +190,49 @@ export function useEditorSession({
     [dispatchInteraction, setTool],
   );
 
-  return {
-    // 工具状态
-    activeTool,
-    currentTool,
-    hasTemporaryTool,
-    setTool: setToolWithCleanup,
-    pushTemporaryTool,
-    popTemporaryTool,
-    // 交互状态
-    interactionState,
-    isInteracting,
-    isEditingText,
-    isContextMenuOpen,
-    dispatchInteraction,
-    // 活动工具能力
-    activeCapabilities,
-    hasCapability,
-    // 文本编辑对象
-    textEditing,
-    beginTextEditing,
-    endTextEditing,
-  };
+  // 性能优化：返回值 useMemo 化，保证 ScreenEditor 重渲染时 session 引用稳定，
+  // memo 消费方（EditorLeftPanel/EditorRightPanel/CanvasStatusBar 等）不会因引用
+  // 变化而失效重渲染（消除 S4 放大效应）。
+  return useMemo<EditorSessionApi>(
+    () => ({
+      // 工具状态
+      activeTool,
+      currentTool,
+      hasTemporaryTool,
+      setTool: setToolWithCleanup,
+      pushTemporaryTool,
+      popTemporaryTool,
+      // 交互状态
+      interactionState,
+      isInteracting,
+      isEditingText,
+      isContextMenuOpen,
+      dispatchInteraction,
+      // 活动工具能力
+      activeCapabilities,
+      hasCapability,
+      // 文本编辑对象
+      textEditing,
+      beginTextEditing,
+      endTextEditing,
+    }),
+    [
+      activeTool,
+      currentTool,
+      hasTemporaryTool,
+      setToolWithCleanup,
+      pushTemporaryTool,
+      popTemporaryTool,
+      interactionState,
+      isInteracting,
+      isEditingText,
+      isContextMenuOpen,
+      dispatchInteraction,
+      activeCapabilities,
+      hasCapability,
+      textEditing,
+      beginTextEditing,
+      endTextEditing,
+    ],
+  );
 }

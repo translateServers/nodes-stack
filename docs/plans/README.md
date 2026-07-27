@@ -6,7 +6,7 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| _待创建_ | — | — |
+| [screen-designer-drag-performance/](./screen-designer-drag-performance/README.md) | 生效中 | 大屏设计器拖拽卡顿优化：高频状态订阅隔离、外壳组件渲染解耦 |
 
 ## 归属规则
 

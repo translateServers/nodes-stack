@@ -127,6 +127,31 @@ describe('ScreenPreview', () => {
     });
   });
 
+  describe('预览氛围与交错入场', () => {
+    it('渲染预览氛围背景与画布舞台', () => {
+      setProject(makeProject([makeComponent()]));
+
+      const { container } = render(<ScreenPreview />);
+
+      expect(container.querySelector('.screen-preview-atmosphere')).not.toBeNull();
+      expect(container.querySelector('.screen-preview-stage')).not.toBeNull();
+    });
+
+    it('按 zIndex 顺序为可见组件设置交错入场延迟', () => {
+      const upper = makeComponent({ id: 'upper', name: '上层', zIndex: 5 });
+      const lower = makeComponent({ id: 'lower', name: '下层', zIndex: 1 });
+      setProject(makeProject([upper, lower]));
+
+      render(<ScreenPreview />);
+
+      const lowerEnter = screen.getByTestId('renderer-lower').parentElement as HTMLElement;
+      const upperEnter = screen.getByTestId('renderer-upper').parentElement as HTMLElement;
+      expect(lowerEnter.classList.contains('screen-preview-component-enter')).toBe(true);
+      expect(lowerEnter.style.animationDelay).toBe('120ms');
+      expect(upperEnter.style.animationDelay).toBe('210ms');
+    });
+  });
+
   describe('不渲染编辑器选中态', () => {
     it('组件容器不包含 data-component-id 属性（编辑器选中标识）', () => {
       const comp = makeComponent({ id: 'comp-a', name: '组件A' });

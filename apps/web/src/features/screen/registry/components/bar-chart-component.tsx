@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useId, useMemo } from 'react';
 import type { DataSourceConfig, RefreshIntervalUnit } from '@nebula/shared';
 import { BarChart3 } from 'lucide-react';
 import type { RendererComponentProps } from '../renderer';
@@ -56,6 +56,7 @@ export function BarChartComponent({
 }: RendererComponentProps) {
   // 事件蓝图修复：读取组件事件回调（编辑态返回 null，自动短路）
   const emitEvent = useComponentEvent();
+  const gradientId = `bar-chart-gradient-${useId().replaceAll(':', '')}`;
 
   // 任务 3.3：无数据层配置时回退遗留 props.data；有数据层时数据层唯一生效
   const effectiveDataSource = useMemo<DataSourceConfig | undefined>(() => {
@@ -185,9 +186,46 @@ export function BarChartComponent({
   const labelColor = style.color ?? '#aaa';
   const titleColor = style.color ?? '#fff';
   const bottomLabelY = 300 - 10;
+  const baselineY = padding.top + chartHeight;
+  const gridLines = [0.25, 0.5, 0.75, 1];
 
   return (
-    <svg width="100%" height="100%" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+    <svg
+      className="nebula-bar-chart"
+      width="100%"
+      height="100%"
+      viewBox="0 0 400 300"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={barColor} stopOpacity={1} />
+          <stop offset="58%" stopColor={barColor} stopOpacity={0.82} />
+          <stop offset="100%" stopColor={barColor} stopOpacity={0.42} />
+        </linearGradient>
+      </defs>
+      <g aria-hidden="true">
+        {gridLines.map((ratio) => {
+          const y = padding.top + chartHeight * (1 - ratio);
+          return (
+            <line
+              key={ratio}
+              className="nebula-bar-chart-grid-line"
+              x1={padding.left}
+              x2={400 - padding.right}
+              y1={y}
+              y2={y}
+            />
+          );
+        })}
+        <line
+          className="nebula-bar-chart-baseline"
+          x1={padding.left}
+          x2={400 - padding.right}
+          y1={baselineY}
+          y2={baselineY}
+        />
+      </g>
       {title && (
         <text x={200} y={20} textAnchor="middle" fontSize={14} fill={titleColor}>
           {title}
@@ -201,7 +239,17 @@ export function BarChartComponent({
         return (
           <g key={item.name}>
             {tooltipOnHover && <title>{`${item.name}: ${item.value}`}</title>}
-            <rect x={x} y={y} width={barWidth} height={barHeight} fill={barColor} rx={2} />
+            <rect
+              className="nebula-bar-chart-bar"
+              data-bar-index={i}
+              x={x}
+              y={y}
+              width={barWidth}
+              height={barHeight}
+              fill={`url(#${gradientId})`}
+              rx={3}
+              style={{ animationDelay: `${i * 80 + 100}ms` }}
+            />
             <text
               x={x + halfBarWidth}
               y={bottomLabelY}

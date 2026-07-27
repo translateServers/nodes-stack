@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import type { TextEditExitKind } from '../lib/text-editing-contract';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
@@ -45,7 +45,9 @@ export function ScreenEditor() {
   const publishMutation = usePublishScreenProject();
 
   const loadProject = useScreenEditorStore((s) => s.loadProject);
-  const storeProject = useScreenEditorStore((s) => s.project);
+  // 性能优化：细粒度订阅，仅订阅渲染真正需要的字段，避免整个 project 对象变化（如拖拽结束
+  // updateComponent）触发 ScreenEditor 外壳重渲染。回调中需要 project 时统一用 getState() 读取。
+  const canvasConfig = useScreenEditorStore((s) => s.project?.canvas);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
@@ -237,37 +239,34 @@ export function ScreenEditor() {
   }, [editorSession]);
 
   const handleSave = useCallback(() => {
-    if (!storeProject) return;
+    const currentProject = useScreenEditorStore.getState().project;
+    if (!currentProject) return;
     updateMutation.mutate(
       {
-        id: storeProject.id,
+        id: currentProject.id,
         params: {
-          name: storeProject.name,
-          description: storeProject.description ?? undefined,
-          canvas: storeProject.canvas,
-          components: storeProject.components,
+          name: currentProject.name,
+          description: currentProject.description ?? undefined,
+          canvas: currentProject.canvas,
+          components: currentProject.components,
           // 任务 5.3：blueprint 随项目保存；undefined 时后端不修改该列（不凭空写入）
-          blueprint: storeProject.blueprint,
-          expectedUpdatedAt: storeProject.updatedAt,
+          blueprint: currentProject.blueprint,
+          expectedUpdatedAt: currentProject.updatedAt,
         },
       },
       {
         onSuccess: (response) => {
-          // 保存成功后用服务端响应（含新 updatedAt 与 draft 状态）回写 Store，
-          // 作为下次保存/发布基线；保存失败时不调用，保持本地内容
           loadProject(response);
           setLastSavedAt(new Date());
         },
         onError: (error) => {
-          // 保存冲突：打开冲突对话框，不调用 loadProject，保持本地 Store/历史/基线不变
-          // 非冲突错误由全局错误拦截器处理 Toast
           if (isSaveConflictError(error)) {
             setShowConflictDialog(true);
           }
         },
       },
     );
-  }, [storeProject, updateMutation, loadProject]);
+  }, [updateMutation, loadProject]);
 
   // 重新加载服务端版本：放弃本地未保存修改，用服务端最新项目整体替换 Store 项目、基线、选中态和本地历史
   // 重新加载失败时（refetch 抛出异常或 result.data 为空）保持本地内容，不关闭对话框，用户可重试或取消
@@ -288,42 +287,36 @@ export function ScreenEditor() {
   }, [refetch, loadProject]);
 
   const doPublish = useCallback(() => {
-    if (!storeProject) return;
+    const currentProject = useScreenEditorStore.getState().project;
+    if (!currentProject) return;
     publishMutation.mutate(
       {
-        id: storeProject.id,
-        expectedUpdatedAt: storeProject.updatedAt,
+        id: currentProject.id,
+        expectedUpdatedAt: currentProject.updatedAt,
       },
       {
         onSuccess: (response) => {
-          // 发布成功后用服务端响应（含新 updatedAt 与 published 状态）回写 Store，
-          // 作为下次保存/发布基线；发布失败时不调用，保持本地内容
           loadProject(response);
         },
         onError: (error) => {
-          // 发布冲突：复用保存冲突对话框，不调用 loadProject，保持本地 Store/历史/基线不变，
-          // 也不更新详情缓存与公开预览缓存（mutation 的 onSuccess 未触发）
-          // 非冲突错误由全局错误拦截器处理 Toast
           if (isSaveConflictError(error)) {
             setShowConflictDialog(true);
           }
         },
       },
     );
-  }, [storeProject, publishMutation, loadProject]);
+  }, [publishMutation, loadProject]);
 
   const handlePublish = useCallback(() => {
-    if (!storeProject) return;
-    // 任务 8.3：存在本地脏状态时阻止直接发布，要求用户显式保存
+    const currentProject = useScreenEditorStore.getState().project;
+    if (!currentProject) return;
     if (useScreenEditorStore.getState().isDirty) {
       toast.warning('请先保存修改后再发布');
       return;
     }
-    // 任务 5.3：发布前编译蓝图，存在 error 级诊断时弹出确认对话框
-    // 编辑器加载时已自动迁移 V1 → V2（见 editor-store.loadProject），此处按版本分发
-    const blueprint = storeProject.blueprint;
+    const blueprint = currentProject.blueprint;
     if (blueprint) {
-      const componentIds = new Set(storeProject.components.map((c) => c.id));
+      const componentIds = new Set(currentProject.components.map((c) => c.id));
       const diagnostics =
         blueprint.version === EVENT_BLUEPRINT_VERSION_V2
           ? compileBlueprintV2(blueprint, { componentIds }).diagnostics
@@ -336,7 +329,7 @@ export function ScreenEditor() {
       }
     }
     doPublish();
-  }, [storeProject, doPublish]);
+  }, [doPublish]);
 
   const handlePublishConfirm = useCallback(() => {
     setShowPublishConfirm(false);
@@ -351,33 +344,47 @@ export function ScreenEditor() {
 
   /** 导出当前项目为 JSON 文件，由浏览器直接触发下载 */
   const handleExport = useCallback(() => {
-    if (!storeProject) return;
+    const currentProject = useScreenEditorStore.getState().project;
+    if (!currentProject) return;
     try {
-      const json = JSON.stringify(storeProject, null, 2);
+      const json = JSON.stringify(currentProject, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${storeProject.name}.json`;
+      link.download = `${currentProject.name}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      toast.success(`已导出 ${storeProject.name}.json`);
+      toast.success(`已导出 ${currentProject.name}.json`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '导出失败');
     }
-  }, [storeProject]);
+  }, []);
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
 
   /**
-   * P0 优化：提前计算文本编辑器组件，避免 JSX 中重复 find 调用（原代码两次 find 同一组件）。
-   * js-cache-property-access：单次查找 + 复用结果
+   * 文本编辑组件查找：textEditing 为低频状态（仅双击文本进入/退出编辑时变化），
+   * 直接从 store 读取，不订阅 components 数组引用以避免拖拽结束触发外壳重渲染。
    */
-  const editingComponent = editorSession.textEditing
-    ? storeProject?.components.find((c) => c.id === editorSession.textEditing?.componentId)
-    : undefined;
+  const textEditing = editorSession.textEditing;
+  const editingComponent = useMemo(() => {
+    if (!textEditing) return undefined;
+    return useScreenEditorStore
+      .getState()
+      .project?.components.find((c) => c.id === textEditing.componentId);
+  }, [textEditing]);
+
+  /**
+   * CanvasFlashOverlay 所需 components：flashingComponentId 为低频事件（蓝图跳转），
+   * 直接从 store 读取最新值，不订阅 components 引用。
+   */
+  const flashComponents = useMemo(
+    () => (flashingComponentId ? useScreenEditorStore.getState().project?.components : undefined),
+    [flashingComponentId],
+  );
 
   // P0 优化：用 getState() 读取 canvasScale，避免 callback 依赖 canvasScale 导致每次缩放重建
   const handleZoomIn = useCallback(() => {
@@ -389,16 +396,17 @@ export function ScreenEditor() {
   }, [setCanvasScale]);
 
   const handleFitToScreen = useCallback(() => {
-    if (!canvasContainerRef.current || !storeProject) return;
+    const currentProject = useScreenEditorStore.getState().project;
+    if (!canvasContainerRef.current || !currentProject) return;
     const rect = canvasContainerRef.current.getBoundingClientRect();
-    const canvas = storeProject.canvas;
+    const canvas = currentProject.canvas;
     const scaleX = (rect.width - 60) / canvas.width;
     const scaleY = (rect.height - 60) / canvas.height;
     const fitScale = Math.min(scaleX, scaleY, 1);
     const offsetX = (rect.width - canvas.width * fitScale) / 2;
     const offsetY = (rect.height - canvas.height * fitScale) / 2;
     setCanvasScaleAndOffset(fitScale, { x: offsetX, y: offsetY });
-  }, [storeProject, setCanvasScaleAndOffset]);
+  }, [setCanvasScaleAndOffset]);
 
   useKeyboardShortcuts({
     onSave: handleSave,
@@ -418,8 +426,9 @@ export function ScreenEditor() {
     );
   }
 
-  const canvasWidth = storeProject?.canvas.width ?? 1920;
-  const canvasHeight = storeProject?.canvas.height ?? 1080;
+  const canvasWidth = canvasConfig?.width ?? 1920;
+  const canvasHeight = canvasConfig?.height ?? 1080;
+  const currentProjectId = useScreenEditorStore.getState().project?.id;
 
   return (
     <TooltipProvider>
@@ -484,6 +493,7 @@ export function ScreenEditor() {
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   editorSession={editorSession}
+                  rulersRef={rulersRef}
                 />
               </div>
               <CanvasGuides
@@ -502,10 +512,10 @@ export function ScreenEditor() {
                 />
               )}
               {/* 任务 9.1：蓝图→画布闪烁高亮覆盖层 */}
-              {storeProject && (
+              {flashComponents && (
                 <CanvasFlashOverlay
                   flashingComponentId={flashingComponentId}
-                  components={storeProject.components}
+                  components={flashComponents}
                 />
               )}
             </div>
@@ -524,7 +534,7 @@ export function ScreenEditor() {
       <SnapshotManagerDialog
         open={showSnapshotManager}
         onOpenChange={setShowSnapshotManager}
-        projectId={storeProject?.id}
+        projectId={currentProjectId}
       />
       <BlueprintSheetV2
         open={showEventBlueprint || blueprintSheetOpen}
