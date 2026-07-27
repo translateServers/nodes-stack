@@ -1,7 +1,7 @@
 # 数据集管理规格文档修订 Spec
 
-> 状态：设计中
-> 最近更新：2026-07-25
+> 状态：已归档（修订已全部落地，结果沉淀在 `docs/specs/dataset-management/` 原目录）
+> 最近更新：2026-07-27
 > 定位：根据前后端对接失败反馈，修订 `docs/specs/dataset-management/` 下的规格文档，使其与已落地的契约方案（`docs/conventions/frontend-backend-contract.md` + `packages/shared/src/contracts/`）对齐。**只改文档，不动代码**。
 
 ## Why
