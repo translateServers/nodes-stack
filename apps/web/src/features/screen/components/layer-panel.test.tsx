@@ -169,6 +169,17 @@ function openContextMenuOnRow(row: HTMLElement): void {
   fireEvent.contextMenu(row);
 }
 
+/**
+ * 通过行文本定位行并触发右键（单一共享菜单结构：右键后菜单内容才挂载）。
+ * 同时适用于组件行（文本为组件名）与分组行（文本为「组 N」标签）。
+ */
+function openMenuOnRowWithText(text: string): HTMLElement {
+  const row = screen.getByText(text).closest('div');
+  if (!row) throw new Error(`行「${text}」未渲染`);
+  openContextMenuOnRow(row);
+  return screen.getByTestId('layer-context-menu');
+}
+
 describe('LayerPanel · 命令描述符驱动右键菜单（Phase 2 Slice A）', () => {
   let store: StoreState;
 
@@ -188,9 +199,7 @@ describe('LayerPanel · 命令描述符驱动右键菜单（Phase 2 Slice A）',
     );
 
     render(<LayerPanel />);
-    const menus = screen.getAllByTestId('layer-context-menu');
-    // 第一行（顶层 a）的菜单
-    const menu = menus[0];
+    const menu = openMenuOnRowWithText('comp-a');
     expect(within(menu).getByTestId('layer-command-rename')).toBeInTheDocument();
     expect(within(menu).getByTestId('layer-command-copy')).toBeInTheDocument();
     expect(within(menu).getByTestId('layer-command-duplicate')).toBeInTheDocument();
@@ -214,8 +223,7 @@ describe('LayerPanel · 命令描述符驱动右键菜单（Phase 2 Slice A）',
     );
 
     render(<LayerPanel />);
-    const menus = screen.getAllByTestId('layer-context-menu');
-    const menu = menus[0];
+    const menu = openMenuOnRowWithText('comp-a');
     expect(within(menu).queryByTestId('layer-command-rename')).toBeNull();
     expect(within(menu).queryByTestId('layer-command-bring-forward')).toBeNull();
     expect(within(menu).queryByTestId('layer-command-send-backward')).toBeNull();
@@ -232,7 +240,7 @@ describe('LayerPanel · 命令描述符驱动右键菜单（Phase 2 Slice A）',
     );
 
     render(<LayerPanel />);
-    const menu = screen.getByTestId('layer-context-menu');
+    const menu = openMenuOnRowWithText('comp-a');
     expect(within(menu).queryByTestId('layer-command-group')).toBeNull();
   });
 
@@ -289,7 +297,8 @@ describe('LayerPanel · 命令执行接入', () => {
     );
 
     render(<LayerPanel />);
-    fireEvent.click(screen.getByTestId('layer-command-rename'));
+    const menu = openMenuOnRowWithText('原始名');
+    fireEvent.click(within(menu).getByTestId('layer-command-rename'));
 
     expect(screen.getByTestId('layer-rename-input')).toBeInTheDocument();
     expect(screen.getByTestId<HTMLInputElement>('layer-rename-input').value).toBe('原始名');
@@ -312,7 +321,8 @@ describe('LayerPanel · 命令执行接入', () => {
     });
 
     render(<LayerPanel />);
-    fireEvent.click(screen.getByTestId('layer-command-rename'));
+    const menu = openMenuOnRowWithText('原始名');
+    fireEvent.click(within(menu).getByTestId('layer-command-rename'));
 
     const input = screen.getByTestId('layer-rename-input');
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -331,7 +341,8 @@ describe('LayerPanel · 命令执行接入', () => {
     );
 
     render(<LayerPanel />);
-    fireEvent.click(screen.getByTestId('layer-command-rename'));
+    const menu = openMenuOnRowWithText('原始名');
+    fireEvent.click(within(menu).getByTestId('layer-command-rename'));
 
     const input = screen.getByTestId('layer-rename-input');
     fireEvent.keyDown(input, { key: 'Escape' });
@@ -356,7 +367,8 @@ describe('LayerPanel · 命令执行接入', () => {
     });
 
     render(<LayerPanel />);
-    fireEvent.click(screen.getByTestId('layer-command-rename'));
+    const menu = openMenuOnRowWithText('原始名');
+    fireEvent.click(within(menu).getByTestId('layer-command-rename'));
     fireEvent.keyDown(screen.getByTestId('layer-rename-input'), { key: 'Enter' });
 
     expect(store.renameComponent).not.toHaveBeenCalled();
@@ -371,7 +383,8 @@ describe('LayerPanel · 命令执行接入', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    fireEvent.click(screen.getByTestId('layer-command-delete'));
+    const menu = openMenuOnRowWithText('comp-a');
+    fireEvent.click(within(menu).getByTestId('layer-command-delete'));
 
     expect(store.removeSelectedComponents).toHaveBeenCalled();
   });
@@ -385,7 +398,8 @@ describe('LayerPanel · 命令执行接入', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    fireEvent.click(screen.getByTestId('layer-command-toggle-lock'));
+    const menu = openMenuOnRowWithText('comp-a');
+    fireEvent.click(within(menu).getByTestId('layer-command-toggle-lock'));
 
     expect(store.setLocked).toHaveBeenCalledWith(['a'], true);
   });
@@ -400,8 +414,8 @@ describe('LayerPanel · 命令执行接入', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    // 顶层菜单是 a 的（zIndex 高者在前）
-    const menu = screen.getAllByTestId('layer-context-menu')[0];
+    // 右键 a 行（zIndex 高者）打开其菜单
+    const menu = openMenuOnRowWithText('comp-a');
     fireEvent.click(within(menu).getByTestId('layer-command-bring-to-front'));
 
     expect(store.reorderToTop).toHaveBeenCalledWith('a');
@@ -417,9 +431,8 @@ describe('LayerPanel · 命令执行接入', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    // a 的菜单是第二个（topLevelOrdered = [top, a]）
-    const menus = screen.getAllByTestId('layer-context-menu');
-    const menuA = menus[1];
+    // 右键 a 行（topLevelOrdered = [top, a]，a 的 index 为 1）
+    const menuA = openMenuOnRowWithText('comp-a');
     fireEvent.click(within(menuA).getByTestId('layer-command-bring-forward'));
 
     expect(store.reorderLayerToIndex).toHaveBeenCalledWith('a', 0);
@@ -435,9 +448,8 @@ describe('LayerPanel · 命令执行接入', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    // top 的菜单是第一个
-    const menus = screen.getAllByTestId('layer-context-menu');
-    const menuTop = menus[0];
+    // 右键 top 行（topLevelOrdered 首项）
+    const menuTop = openMenuOnRowWithText('comp-top');
     fireEvent.click(within(menuTop).getByTestId('layer-command-send-backward'));
 
     expect(store.reorderLayerToIndex).toHaveBeenCalledWith('top', 1);
@@ -472,9 +484,8 @@ describe('LayerPanel · 分组行右键菜单', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    // 分组行渲染在子组件之前：menus[0] 是分组行菜单，其后是 c1/c2 的菜单
-    const menus = screen.getAllByTestId('layer-context-menu');
-    const groupMenu = menus[0];
+    // 右键分组行打开共享菜单（命令上下文为分组）
+    const groupMenu = openMenuOnRowWithText('组 1');
 
     expect(within(groupMenu).queryByTestId('layer-command-rename')).toBeNull();
     expect(within(groupMenu).queryByTestId('layer-command-copy')).toBeNull();
@@ -494,8 +505,7 @@ describe('LayerPanel · 分组行右键菜单', () => {
     setStoreState(store);
 
     render(<LayerPanel />);
-    const menus = screen.getAllByTestId('layer-context-menu');
-    const groupMenu = menus[0];
+    const groupMenu = openMenuOnRowWithText('组 1');
     fireEvent.click(within(groupMenu).getByTestId('layer-command-toggle-lock'));
 
     expect(store.setLocked).toHaveBeenCalledWith(['c1', 'c2'], true);
