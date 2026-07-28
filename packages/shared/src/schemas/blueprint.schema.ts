@@ -416,15 +416,46 @@ export const GlobalScrollToConfigSchema = z.object({
 export type GlobalScrollToConfig = z.infer<typeof GlobalScrollToConfigSchema>;
 
 /**
+ * 全局 interval 节点配置（定时器触发）
+ *
+ * 复用 V1 TriggerIntervalConfigSchema 的 intervalMs 范围校验逻辑
+ * （不含 type 字段，改用 globalType 判别）。
+ */
+export const GlobalIntervalConfigSchema = z
+  .object({
+    globalType: z.literal('interval'),
+    /** 触发间隔（毫秒），必须 > 0；运行时由执行器安排 setInterval */
+    intervalMs: z.number().int().positive().describe('触发间隔（毫秒），必须为正整数'),
+  })
+  .superRefine((config, ctx) => {
+    if (config.intervalMs < 100) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['intervalMs'],
+        message: '定时器间隔不得小于 100ms，避免高频触发影响性能',
+      });
+    }
+    if (config.intervalMs > 86_400_000) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['intervalMs'],
+        message: '定时器间隔不得超过 86400000ms（24 小时）',
+      });
+    }
+  });
+export type GlobalIntervalConfig = z.infer<typeof GlobalIntervalConfigSchema>;
+
+/**
  * 全局节点配置判别联合（按 globalType 判别）
  *
- * 仅包含需要配置的全局节点类型（navigate / requestApi / scrollTo）。
+ * 仅包含需要配置的全局节点类型（navigate / requestApi / scrollTo / interval）。
  * pageLoad 全局节点无配置字段，config 为 undefined。
  */
 export const GlobalNodeConfigSchema = z.discriminatedUnion('globalType', [
   GlobalNavigateConfigSchema,
   GlobalRequestApiConfigSchema,
   GlobalScrollToConfigSchema,
+  GlobalIntervalConfigSchema,
 ]);
 export type GlobalNodeConfig = z.infer<typeof GlobalNodeConfigSchema>;
 
@@ -448,7 +479,7 @@ export const ComponentNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('component'),
   componentId: z.string().describe('组件 ID；全局节点固定为 "global"'),
   globalType: z
-    .enum(['pageLoad', 'navigate', 'requestApi', 'scrollTo'])
+    .enum(['pageLoad', 'navigate', 'requestApi', 'scrollTo', 'interval'])
     .optional()
     .describe('全局节点子类型；普通组件节点缺省'),
   config: GlobalNodeConfigSchema.optional().describe(

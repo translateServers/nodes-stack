@@ -24,6 +24,7 @@ import {
   type ComponentNode,
   type EventBlueprint,
   type EventBlueprintV2,
+  type GlobalIntervalConfig,
   type GlobalNavigateConfig,
   type GlobalRequestApiConfig,
 } from './blueprint.schema.js';
@@ -133,6 +134,9 @@ export function migrateBlueprintV1ToV2(v1: EventBlueprint): MigrationResult {
   let requestApiV2Id: string | undefined;
   let requestApiPosition: BlueprintNodePosition | undefined;
   let requestApiConfig: GlobalRequestApiConfig | undefined;
+  let intervalV2Id: string | undefined;
+  let intervalPosition: BlueprintNodePosition | undefined;
+  let intervalConfig: GlobalIntervalConfig | undefined;
 
   // ===== 第一阶段：遍历 V1 节点，建立映射 + 创建 condition/comment 节点 =====
   for (const node of v1.nodes) {
@@ -146,17 +150,16 @@ export function migrateBlueprintV1ToV2(v1: EventBlueprint): MigrationResult {
         }
         nodeIdMap.set(node.id, pageLoadV2Id);
       } else if (config.type === 'interval') {
-        // interval trigger：V1 schema 无 componentId 字段
-        // V2 暂不特殊处理 interval 行为，迁移为 componentId 为空的组件节点
-        // 使用特殊 groupKey 避免与其他空 componentId 的组件合并
-        const groupKey = '__interval__';
-        let group = componentGroups.get(groupKey);
-        if (group === undefined) {
-          const v2Id = idGen.generate('component', 'interval');
-          group = { componentId: '', position: node.position, v2NodeId: v2Id };
-          componentGroups.set(groupKey, group);
+        // interval trigger：迁移为全局 interval 节点（单例）
+        if (intervalV2Id === undefined) {
+          intervalV2Id = idGen.generate('component', 'interval');
+          intervalPosition = node.position;
+          intervalConfig = {
+            globalType: 'interval',
+            intervalMs: config.intervalMs,
+          };
         }
-        nodeIdMap.set(node.id, group.v2NodeId);
+        nodeIdMap.set(node.id, intervalV2Id);
       } else {
         // 组件 trigger：componentClick / componentHover / dataLoaded / dataError
         const componentId = config.componentId;
@@ -279,6 +282,20 @@ export function migrateBlueprintV1ToV2(v1: EventBlueprint): MigrationResult {
       globalType: 'requestApi',
       config: requestApiConfig,
       position: requestApiPosition,
+    });
+  }
+  if (
+    intervalV2Id !== undefined &&
+    intervalPosition !== undefined &&
+    intervalConfig !== undefined
+  ) {
+    v2Nodes.push({
+      id: intervalV2Id,
+      kind: 'component',
+      componentId: GLOBAL_COMPONENT_ID,
+      globalType: 'interval',
+      config: intervalConfig,
+      position: intervalPosition,
     });
   }
 

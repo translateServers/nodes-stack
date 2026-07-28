@@ -16,7 +16,8 @@ import type { V2CompiledRule } from '../compiler/v2-types.js';
 /** V2 触发事件类型 */
 export type V2TriggerEvent =
   | { kind: 'componentEvent'; componentId: string; eventId: string; payload?: unknown }
-  | { kind: 'pageLoad' };
+  | { kind: 'pageLoad' }
+  | { kind: 'interval' };
 
 /** V2 动作执行结果 */
 export type V2ActionResult =

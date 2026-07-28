@@ -28,7 +28,7 @@ export interface V2NodeIndexEntry {
   /** 仅 component 节点 */
   componentId?: string;
   /** 仅全局节点 */
-  globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+  globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
 }
 
 /** V2 节点索引 */

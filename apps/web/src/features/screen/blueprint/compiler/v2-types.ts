@@ -9,8 +9,7 @@
  * - trigger 不再独立成节点，触发信息内联到 rule 的 triggerEventId / triggerComponentId
  * - action / condition / delay 统一为 step，运行时按 step.kind 判别
  * - condition 直接持有 thenSteps / elseSteps（嵌套），运行时递归执行
- * - delay step 保留在编译产物中，运行时直接跳过（由调用方在调用执行器前用
- *   setTimeout 处理延时，编译器将 delay 后的 steps 拆分为独立 rule）
+ * - delay step 保留在编译产物中，运行时通过 sleep(delayMs) 真实等待后继续执行后续步骤
  */
 
 import type {
@@ -83,14 +82,16 @@ export type V2CompiledStep = V2ActionStep | V2ConditionStep | V2DelayStep;
 
 /** V2 编译后规则：以一个组件事件为入口的执行链 */
 export interface V2CompiledRule {
-  /** 触发节点 ID（组件节点或全局 pageLoad 节点） */
+  /** 触发节点 ID（组件节点或全局 pageLoad/interval 节点） */
   triggerNodeId: string;
-  /** 触发事件 ID（如 'click' / 'pageLoad'） */
+  /** 触发事件 ID（如 'click' / 'pageLoad' / 'interval'） */
   triggerEventId: V2TriggerEventId;
-  /** 触发组件 ID（全局 pageLoad 为 'global'；普通组件为组件 ID） */
+  /** 触发组件 ID（全局 pageLoad/interval 为 'global'；普通组件为组件 ID） */
   triggerComponentId: string;
   /** 步骤链 */
   steps: V2CompiledStep[];
+  /** 定时器间隔（毫秒），仅 triggerEventId === 'interval' 时有值；运行时用于 setInterval */
+  intervalMs?: number;
 }
 
 /** V2 诊断级别 */

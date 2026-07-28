@@ -129,6 +129,21 @@ function validateComponentNode(
       }
       break;
     }
+    case 'interval': {
+      const config = node.config;
+      if (config && config.globalType === 'interval') {
+        const { intervalMs } = config;
+        if (intervalMs < 100 || intervalMs > 86_400_000) {
+          diagnostics.push({
+            level: 'error',
+            code: 'invalid-delay',
+            message: `定时器间隔 ${intervalMs}ms 超出有效范围（100 ~ 86400000）`,
+            nodeId: node.id,
+          });
+        }
+      }
+      break;
+    }
     case 'pageLoad':
     case undefined:
       // pageLoad 全局节点无 config；普通组件节点已由上方 dangling 诊断覆盖
@@ -178,12 +193,22 @@ function compileRules(indexes: V2BlueprintIndexes): V2CompiledRule[] {
 
       compileStepsFromHandle(entry.id, evtHandle, indexes, steps, visited, 0);
 
-      rules.push({
+      const rule: V2CompiledRule = {
         triggerNodeId: entry.id,
         triggerEventId: eventId,
         triggerComponentId,
         steps,
-      });
+      };
+
+      // interval 触发规则：从节点 config 中提取 intervalMs 供运行时调度
+      if (eventId === 'interval') {
+        const node = entry.node;
+        if (node.kind === 'component' && node.config?.globalType === 'interval') {
+          rule.intervalMs = node.config.intervalMs;
+        }
+      }
+
+      rules.push(rule);
     }
   }
 

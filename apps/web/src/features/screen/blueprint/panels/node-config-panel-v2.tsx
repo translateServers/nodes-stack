@@ -22,6 +22,7 @@ import type { Node } from '@xyflow/react';
 import type {
   CommentNodeConfig,
   ConditionNodeConfig,
+  GlobalIntervalConfig,
   GlobalNavigateConfig,
   GlobalNodeConfig,
   GlobalRequestApiConfig,
@@ -57,7 +58,7 @@ export function V2NodeConfigPanel({
 }: V2NodeConfigPanelProps): JSX.Element {
   const data = node.data as {
     componentId?: string;
-    globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+    globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
     config?: unknown;
   };
   const rfType = node.type ?? 'component';
@@ -101,6 +102,15 @@ export function V2NodeConfigPanel({
           <ScrollToConfigForm
             config={data.config as GlobalScrollToConfig}
             components={components}
+            onChange={(config) => onChange({ kind: 'global-config', config })}
+          />
+        )}
+
+        {rfType === 'global' && data.globalType === 'interval' && (
+          <IntervalConfigForm
+            config={
+              (data.config as GlobalIntervalConfig) ?? { globalType: 'interval', intervalMs: 1000 }
+            }
             onChange={(config) => onChange({ kind: 'global-config', config })}
           />
         )}
@@ -285,6 +295,36 @@ function ScrollToConfigForm({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+/** 全局 interval 配置表单：intervalMs 数字输入（100 ~ 86400000） */
+function IntervalConfigForm({
+  config,
+  onChange,
+}: {
+  config: GlobalIntervalConfig;
+  onChange: (next: GlobalIntervalConfig) => void;
+}): JSX.Element {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">
+        触发间隔（毫秒，100 ~ 86400000）
+      </span>
+      <input
+        type="number"
+        min={100}
+        max={86400000}
+        value={config.intervalMs}
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+          const value = Number.parseInt(e.target.value, 10);
+          if (Number.isNaN(value)) return;
+          onChange({ ...config, intervalMs: value });
+        }}
+        className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        data-testid="v2-config-interval-ms"
+      />
     </label>
   );
 }

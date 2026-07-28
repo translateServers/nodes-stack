@@ -22,6 +22,7 @@ import {
   Navigation,
   Send,
   Square,
+  Timer,
   Type,
 } from 'lucide-react';
 import { GLOBAL_COMPONENT_ID, type ScreenComponent } from '@nebula/shared';
@@ -30,7 +31,7 @@ import { GLOBAL_COMPONENT_ID, type ScreenComponent } from '@nebula/shared';
 export type V2NodeKind = 'component' | 'condition' | 'delay' | 'comment';
 
 /** V2 全局节点子类型（仅当 kind === 'component' 且 globalType 有值时为全局节点） */
-export type V2GlobalSubtype = 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+export type V2GlobalSubtype = 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
 
 /** 选项分组（用于搜索面板分区显示） */
 export type V2NodeOptionGroup = 'canvas-component' | 'global' | 'logic';
@@ -98,6 +99,16 @@ export const V2_NODE_OPTIONS: readonly V2NodeOption[] = [
     label: '滚动定位',
     description: '滚动到指定组件位置',
     icon: <MousePointerClick className="size-4" />,
+  },
+  {
+    id: 'global.interval',
+    kind: 'component',
+    subtype: 'globalInterval',
+    globalType: 'interval',
+    group: 'global',
+    label: '定时触发',
+    description: '按固定间隔循环触发执行',
+    icon: <Timer className="size-4" />,
   },
   {
     id: 'condition',
@@ -205,7 +216,8 @@ export type V2SearchPanelMode = 'create' | 'connect';
  */
 export function isV2ConnectableTarget(option: V2NodeOption): boolean {
   if (option.kind === 'comment') return false;
-  // 全局 pageLoad 节点只有输出，不能作为连线目标
+  // 全局 pageLoad / interval 节点只有输出，不能作为连线目标
   if (option.globalType === 'pageLoad') return false;
+  if (option.globalType === 'interval') return false;
   return true;
 }

@@ -86,7 +86,7 @@ function buildSnapContext(
   for (const rfNode of rfNodes) {
     const data = rfNode.data as {
       componentId?: string;
-      globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+      globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
     };
     const rfType = rfNode.type ?? 'component';
     const kind: V2NodeIndexEntry['kind'] =

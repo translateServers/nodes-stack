@@ -5,8 +5,7 @@
  * - 按 steps 顺序执行
  * - action 步骤按 actionId 分发到 RuntimeDeps
  * - condition 步骤求值表达式后递归执行 then/else 分支
- * - delay 步骤在运行时直接跳过（不产生 ActionResult），由调用方在调用执行器前
- *   用 setTimeout 处理延时（编译器将 delay 后的 steps 拆分为独立 rule）
+ * - delay 步骤真实等待 delayMs 毫秒后继续执行后续步骤（不产生 ActionResult）
  * - dangling 目标组件跳过并记录
  * - 失败动作不中断后续独立动作
  *
@@ -14,6 +13,7 @@
  * - trigger 信息从 rule.triggerEventId / triggerComponentId 读取
  * - steps 是判别联合（action / condition / delay），按 kind 分支
  * - condition 内联 thenSteps / elseSteps，递归执行
+ * - delay 步骤通过 sleep(delayMs) 真实等待，不拆分 rule
  * - 不依赖 planActions，深度截断由编译器在拆分 rule 时处理（truncated 永远为 false）
  */
 
@@ -33,7 +33,7 @@ import type {
  * - 单条规则内步骤按顺序执行
  * - 前一个步骤失败不中断后续独立步骤
  * - dangling 动作跳过并记录
- * - delay 步骤跳过并记录告警（不产生 ActionResult）
+ * - delay 步骤真实等待 delayMs 毫秒后继续（不产生 ActionResult）
  * - condition 步骤按表达式求值结果选择 then/else 分支递归执行
  *
  * @returns 执行日志（用于调试面板）
@@ -97,8 +97,8 @@ async function executeSteps(
       await executeSteps(branch, event, deps, results);
       continue;
     }
-    // delay step：运行时直接跳过，记录告警（不产生 ActionResult）
-    deps.logWarning(`延时步骤 ${step.nodeId} 在运行时被跳过（delayMs=${step.delayMs}）`);
+    // delay step：真实等待 delayMs 毫秒后继续执行后续步骤（不产生 ActionResult）
+    await sleep(step.delayMs);
   }
 }
 
@@ -342,6 +342,11 @@ function toNumber(value: unknown): number | null {
 }
 
 // ===== 工具函数 =====
+
+/** 延时等待指定毫秒 */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function successResult(nodeId: string, actionId: string, start: number): V2ActionResult {
   return { kind: 'success', nodeId, actionId, durationMs: elapsed(start) };

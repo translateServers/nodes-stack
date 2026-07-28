@@ -155,6 +155,8 @@ function getV2NodeLabel(node: BlueprintNodeV2, componentMap: Map<string, ScreenC
           return '请求接口';
         case 'scrollTo':
           return '滚动定位';
+        case 'interval':
+          return '定时触发';
         default:
           return '全局节点';
       }
@@ -293,7 +295,7 @@ function rfNodeToV2BlueprintNode(node: Node): BlueprintNodeV2 {
   const data = node.data as {
     config?: unknown;
     componentId?: string;
-    globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+    globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
   };
   const position = { x: node.position.x, y: node.position.y };
   const rfType = node.type ?? 'component';
@@ -389,7 +391,7 @@ function buildV2ConnectionContext(
   for (const rfNode of rfNodes) {
     const data = rfNode.data as {
       componentId?: string;
-      globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+      globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
     };
     const rfType = rfNode.type ?? 'component';
     const kind: V2NodeIndexEntry['kind'] =
@@ -473,7 +475,7 @@ function createV2NodeFromOption(
         globalType: 'pageLoad',
       };
     }
-    // navigate / requestApi / scrollTo 提供空 config 占位
+    // navigate / requestApi / scrollTo / interval 提供空 config 占位
     let config: GlobalNodeConfig;
     if (globalType === 'navigate') {
       config = { globalType: 'navigate', url: '', target: '_blank' };
@@ -487,6 +489,8 @@ function createV2NodeFromOption(
         secretHeaderKeys: [],
         timeoutMs: 10_000,
       };
+    } else if (globalType === 'interval') {
+      config = { globalType: 'interval', intervalMs: 1000 };
     } else {
       config = { globalType: 'scrollTo', targetComponentId: '' };
     }
@@ -1583,6 +1587,7 @@ function deriveDefaultTargetHandle(node: BlueprintNodeV2): string {
     if (node.globalType === 'navigate') return 'act:navigate';
     if (node.globalType === 'requestApi') return 'act:requestApi';
     if (node.globalType === 'scrollTo') return 'act:scrollTo';
+    // pageLoad / interval 全局节点只有输出锚点，不作为连线目标
     // 普通组件节点：用首个 action（'act:show' 是常见默认）
     return 'act:show';
   }
@@ -1601,6 +1606,7 @@ function deriveFirstEventId(node: Node): string | undefined {
   if (node.type === 'global') {
     const data = node.data as { globalType?: string };
     if (data.globalType === 'pageLoad') return 'pageLoad';
+    if (data.globalType === 'interval') return 'interval';
     return undefined;
   }
   if (node.type === 'component') {

@@ -6,6 +6,7 @@
  *
  * 匹配规则：
  * - pageLoad 事件匹配 triggerEventId === 'pageLoad' 的规则
+ * - interval 事件匹配 triggerEventId === 'interval' 的规则
  * - componentEvent 事件匹配 triggerComponentId === event.componentId
  *   且 triggerEventId === event.eventId 的规则
  *
@@ -33,6 +34,10 @@ export function collectV2Rules(
 function matchesEvent(rule: V2CompiledRule, event: V2TriggerEvent): boolean {
   if (event.kind === 'pageLoad') {
     return rule.triggerEventId === 'pageLoad';
+  }
+
+  if (event.kind === 'interval') {
+    return rule.triggerEventId === 'interval';
   }
 
   // componentEvent：componentId 与 eventId 都必须匹配

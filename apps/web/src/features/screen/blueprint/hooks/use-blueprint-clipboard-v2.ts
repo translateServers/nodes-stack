@@ -49,7 +49,7 @@ interface V2RFNodeData extends Record<string, unknown> {
   config?: unknown;
   componentId?: string;
   componentType?: string;
-  globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+  globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
   label?: string;
   dangling?: boolean;
   inCycle?: boolean;

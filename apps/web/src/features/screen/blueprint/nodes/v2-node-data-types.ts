@@ -15,6 +15,7 @@
 import type {
   CommentNodeConfig,
   ConditionNodeConfig,
+  GlobalIntervalConfig,
   GlobalNavigateConfig,
   GlobalRequestApiConfig,
   GlobalScrollToConfig,
@@ -27,7 +28,7 @@ export interface ComponentNodeData extends Record<string, unknown> {
   /** 组件类型（普通组件必填，用于派生事件/动作锚点；全局节点缺省） */
   componentType?: string;
   /** 全局节点子类型（普通组件缺省） */
-  globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
+  globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
   /** 显示名称（组件名 / 全局节点子类型标签） */
   label: string;
   /** 是否被编译器标记为 dangling（componentId 不存在于项目） */
@@ -53,11 +54,20 @@ export interface GlobalScrollToSummary {
   targetComponentId: string;
 }
 
+/** 全局 interval 节点的配置摘要（用于节点正文展示） */
+export interface GlobalIntervalSummary {
+  intervalMs: number;
+}
+
 /** 全局节点 data（component 节点的子类型，专门用于全局节点） */
 export interface GlobalNodeData extends ComponentNodeData {
-  globalType: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo';
-  /** 全局节点配置（pageLoad 无 config；navigate/requestApi/scrollTo 必填） */
-  config?: GlobalNavigateConfig | GlobalRequestApiConfig | GlobalScrollToConfig;
+  globalType: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
+  /** 全局节点配置（pageLoad 无 config；navigate/requestApi/scrollTo/interval 必填） */
+  config?:
+    | GlobalNavigateConfig
+    | GlobalRequestApiConfig
+    | GlobalScrollToConfig
+    | GlobalIntervalConfig;
 }
 
 /** 延时节点 data */

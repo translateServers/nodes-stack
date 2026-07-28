@@ -41,7 +41,7 @@ interface GlobalSubtypeConfig {
 
 /** 根据 globalType 返回子类型配置 */
 function getGlobalSubtypeConfig(
-  globalType: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo',
+  globalType: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval',
 ): GlobalSubtypeConfig {
   switch (globalType) {
     case 'pageLoad':
@@ -67,6 +67,12 @@ function getGlobalSubtypeConfig(
         typeLabel: '全局 · 滚动定位',
         sourceAnchors: [],
         targetAnchors: [{ id: 'act:scrollTo', label: '滚动定位' }],
+      };
+    case 'interval':
+      return {
+        typeLabel: '全局 · 定时触发',
+        sourceAnchors: [{ id: 'evt:interval', label: '定时触发' }],
+        targetAnchors: [],
       };
   }
 }
@@ -100,6 +106,14 @@ function GlobalNodeSummary({ data }: { data: GlobalNodeData }): JSX.Element | nu
           <div>目标: {config.targetComponentId || '（未设置）'}</div>
         </div>
       );
+    case 'interval': {
+      const cfg = config as { globalType: 'interval'; intervalMs: number };
+      return (
+        <div className="space-y-0.5 text-[11px] text-muted-foreground" data-summary="interval">
+          <div>间隔: {cfg.intervalMs}ms</div>
+        </div>
+      );
+    }
     default:
       return null;
   }

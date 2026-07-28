@@ -358,7 +358,10 @@ export function ScreenCanvas({
    */
   const activeToolRef = useRef(activeTool);
   const interactionStateRef = useRef(interactionState);
-  useEffect(() => {
+  // useLayoutEffect 确保 ref 在 flushSync 同步渲染后立即更新，
+  // 避免 onDragStart 内 dispatchInteraction('start-drag') 触发 Moveable
+  // forceUpdate(flushSync) 时 ref 仍为旧值导致 guard 误判。
+  useLayoutEffect(() => {
     activeToolRef.current = activeTool;
     interactionStateRef.current = interactionState;
   }, [activeTool, interactionState]);
@@ -1254,25 +1257,31 @@ export function ScreenCanvas({
    * 关键优化（参考 light-chaser 的 DesignerMovable）：
    * - 纯点击选中场景下 interactionState 不变（idle/hovering）、componentMap 不变
    *   （无组件 CRUD），handlers 引用稳定 → MoveableContainer 跳过重渲染
-   * - 仅在手势开始（interactionState 变化）或组件数据变化（componentMap 重建）时
-   *   handlers 引用才更新
+   * - 仅在组件数据变化（componentMap 重建）时 handlers 引用才更新
    * - shiftRef / altRef / contentRef / gestureRafThrottlerRef 为 mutable ref，
    *   引用恒定，不放入依赖（ESLint exhaustive-deps 对 ref 容忍）
    *
-   * 依赖项仅 interactionState + componentMap + zustand action 引用：
-   * - interactionState：仲裁手势重入（onDragStart/onResizeStart 等读取）
+   * 依赖项仅 componentMap + zustand action 引用：
    * - componentMap：onDragEnd/onResizeEnd 等按 id 查找组件
    * - dispatchInteraction / updateComponent / updateComponentsBatch /
    *   duplicateSelectedToPosition / setDimension：zustand action，引用稳定
+   *
+   * 注意：interactionState 已从依赖中移除。handlers 内的 guard 改用
+   * interactionStateRef.current（useLayoutEffect 同步更新），避免拖拽启动时
+   * interactionState 从 idle→dragging 变化导致 handlers 引用更新，进而
+   * 在 Moveable forceUpdate(flushSync) 时触发 MoveableContainer 重渲染
+   * （未选中组件同时选中+拖拽时几百毫秒阻塞的根因）。
    */
   const handlers = useMemo<MoveableHandlers>(
     () => ({
       onDragStart: (e) => {
-        // 任务 12.1：拖拽由状态机仲裁，拒绝非法重入
+        // 任务 12.1：拖拽由状态机仲裁，拒绝非法重入。
+        // 使用 interactionStateRef.current 避免 interactionState 变化导致 handlers
+        // useMemo 失效 → MoveableContainer 不必要的重渲染（拖拽启动阻塞根因）。
         if (
-          interactionState !== 'idle' &&
-          interactionState !== 'hovering' &&
-          interactionState !== 'marquee-selecting'
+          interactionStateRef.current !== 'idle' &&
+          interactionStateRef.current !== 'hovering' &&
+          interactionStateRef.current !== 'marquee-selecting'
         ) {
           return false;
         }
@@ -1314,6 +1323,16 @@ export function ScreenCanvas({
         }));
         // 任务 3.3：镜像拖拽开始到交互状态机
         dispatchInteraction('start-drag');
+        // Moveable 内部 dragStart 硬编码 snapRenderInfo = { snap: true, center: true }，
+        // render 函数据此调用 renderSnapPoses 在目标组件上绘制蓝色辅助线
+        // （center→十字，edge→朝移动方向的线）。将 snapRenderInfo 置 null 使
+        // render 函数在入口 if (!snapRenderInfo) return [] 直接返回，不生成任何
+        // snap 视觉元素。实际吸附不受影响——state.guidelines 已在 dragStart 的
+        // checkSnapInfo 中填充，Draggable drag handler 读取它做磁性吸附。
+        const mgr = moveableRef.current?.getManager();
+        if (mgr) {
+          mgr.state.snapRenderInfo = null;
+        }
       },
       onDrag: (e) => {
         const datas = e.datas as unknown as DragDatas;
@@ -1384,7 +1403,7 @@ export function ScreenCanvas({
       },
       onResizeStart: (e) => {
         // 任务 12.1：缩放由状态机仲裁，拒绝非法重入
-        if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+        if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) {
           return false;
         }
         const id = getComponentIdFromTarget(e.target);
@@ -1408,6 +1427,11 @@ export function ScreenCanvas({
         }
         // 任务 3.4：镜像缩放开始到交互状态机
         dispatchInteraction('start-resize');
+        // 同 onDragStart：将 snapRenderInfo 置 null，阻止渲染目标组件蓝色辅助线
+        const mgr = moveableRef.current?.getManager();
+        if (mgr) {
+          mgr.state.snapRenderInfo = null;
+        }
       },
       onResize: (e) => {
         const datas = e.datas as unknown as ResizeDatas;
@@ -1520,7 +1544,7 @@ export function ScreenCanvas({
       },
       onRotateStart: (e) => {
         // 任务 12.1：旋转由状态机仲裁，拒绝非法重入
-        if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+        if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) {
           return false;
         }
         const id = getComponentIdFromTarget(e.target);
@@ -1538,6 +1562,11 @@ export function ScreenCanvas({
         datas.flipY = comp?.style.flipY === true;
         // 任务 3.4：镜像旋转开始到交互状态机
         dispatchInteraction('start-rotate');
+        // 同 onDragStart：将 snapRenderInfo 置 null，阻止渲染目标组件蓝色辅助线
+        const mgr = moveableRef.current?.getManager();
+        if (mgr) {
+          mgr.state.snapRenderInfo = null;
+        }
       },
       onRotate: (e) => {
         const datas = e.datas as unknown as RotateDatas;
@@ -1583,9 +1612,9 @@ export function ScreenCanvas({
         // 任务 12.1：组拖拽由状态机仲裁，拒绝非法重入
         // 允许 marquee-selecting：框选后未释放鼠标即可拖拽（与单组件拖拽行为一致）
         if (
-          interactionState !== 'idle' &&
-          interactionState !== 'hovering' &&
-          interactionState !== 'marquee-selecting'
+          interactionStateRef.current !== 'idle' &&
+          interactionStateRef.current !== 'hovering' &&
+          interactionStateRef.current !== 'marquee-selecting'
         ) {
           return false;
         }
@@ -1720,7 +1749,7 @@ export function ScreenCanvas({
       },
       onResizeGroupStart: (e) => {
         // 任务 12.1：组缩放由状态机仲裁，拒绝非法重入
-        if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+        if (!SELECTO_ALLOWED_STATES.has(interactionStateRef.current)) {
           return false;
         }
         for (const t of e.targets) {
@@ -1800,7 +1829,10 @@ export function ScreenCanvas({
       onChangeTargets: () => {},
     }),
     [
-      interactionState,
+      // interactionState 已移除：handlers 内 guard 改用 interactionStateRef.current，
+      // 避免 interactionState 变化（idle→dragging）导致 handlers 引用更新，
+      // 进而触发 MoveableContainer 在 Moveable forceUpdate(flushSync) 时重渲染
+      // （拖拽启动阻塞根因）。
       componentMap,
       dispatchInteraction,
       updateComponent,
@@ -1998,14 +2030,20 @@ export function ScreenCanvas({
                           groupPid != null && activeGroupId !== groupPid && !isPotentialDoubleClick
                             ? components.filter((c) => c.parentId === groupPid).map((c) => c.id)
                             : [targetId];
-                        // 抽帧根因修复：在 flushSync 内同时更新 selectedComponentIds 和 targets，
-                        // 让一次同步渲染就把 Moveable 的 target 准备好。
-                        // 原本仅 selectComponents，targets 由 useLayoutEffect 二次渲染派生，
-                        // 导致 dragStart 时 Moveable target 还是空数组 → 控制框晚一帧出现。
+                        // 抽帧根因修复：仅 flushSync setTargets（Moveable dragStart 必需的
+                        // 最小同步单元），selectComponents 交给 React 18 自动批处理。
+                        //
+                        // 原版 flushSync(selectComponents + setTargets) 会同步重渲染 8+ 个
+                        // selectedComponentIds 订阅者（PropertyPanel / LayerPanel / BlueprintSheet /
+                        // ContextMenu / StatusBar / ProjectMenubar / ScreenCanvas），造成几百毫秒
+                        // 阻塞。setTargets 仅 MoveableContainer 一个订阅者，同步开销 <1ms。
+                        //
+                        // selectComponents 延迟一帧批处理：组件高亮 outline / elementGuidelines
+                        // / 各面板数据在下一帧更新，由 Moveable 控制框提供即时选中反馈。
                         flushSync(() => {
-                          selectComponents(selectionToApply);
                           setTargets(computeTargetsForIds(selectionToApply));
                         });
+                        selectComponents(selectionToApply);
                         moveableRef.current.dragStart(mouseEvt);
                       }
                     }

@@ -167,9 +167,11 @@ export function useBlueprintSandboxRuntimeV2(
    * 根据 nodeId + eventId 构造 V2 触发事件。
    *
    * - 全局 pageLoad 节点（componentId === 'global' 且 globalType === 'pageLoad'）
-   *   → 返回 pageLoad 事件
-   * - 普通组件节点 → 返回 componentEvent 事件
-   * - 节点不存在 → 返回 null
+   *   -> 返回 pageLoad 事件
+   * - 全局 interval 节点（componentId === 'global' 且 globalType === 'interval'）
+   *   -> 返回 interval 事件
+   * - 普通组件节点 -> 返回 componentEvent 事件
+   * - 节点不存在 -> 返回 null
    */
   const buildEvent = useCallback((nodeId: string, eventId: string): V2TriggerEvent | null => {
     const bp = blueprintRef.current;
@@ -184,6 +186,15 @@ export function useBlueprintSandboxRuntimeV2(
       eventId === 'pageLoad'
     ) {
       return { kind: 'pageLoad' };
+    }
+
+    // 全局 interval 节点
+    if (
+      node.componentId === GLOBAL_COMPONENT_ID &&
+      node.globalType === 'interval' &&
+      eventId === 'interval'
+    ) {
+      return { kind: 'interval' };
     }
 
     // 普通组件节点
@@ -228,6 +239,9 @@ export function useBlueprintSandboxRuntimeV2(
         if (rule.triggerNodeId !== nodeId) return false;
         if (event.kind === 'pageLoad') {
           return rule.triggerEventId === 'pageLoad';
+        }
+        if (event.kind === 'interval') {
+          return rule.triggerEventId === 'interval';
         }
         return (
           rule.triggerEventId === event.eventId && rule.triggerComponentId === event.componentId

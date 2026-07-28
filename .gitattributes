@@ -1,0 +1,3 @@
+# 自动生成文件强制 LF 行尾，避免 core.autocrlf 在 Windows 上转换为 CRLF
+# 导致 pnpm dev 重新生成后 git status 出现误报 diff
+*.gen.ts text eol=lf

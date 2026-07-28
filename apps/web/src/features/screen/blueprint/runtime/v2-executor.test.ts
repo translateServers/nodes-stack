@@ -5,7 +5,7 @@
  * - collectV2Rules 匹配 componentEvent / pageLoad
  * - executeV2Rule 执行 show/hide/toggleVisibility/refreshData/scrollTo/navigate/requestApi
  * - condition 求值选择 then/else 分支
- * - delay step 跳过
+ * - delay step 真实等待后继续执行
  * - dangling 组件跳过
  * - triggerAndExecuteV2 聚合多规则
  */
@@ -13,7 +13,7 @@
 /* eslint-disable @typescript-eslint/unbound-method -- vitest mock 断言需访问 deps.method 引用，unbound-method 为已知误报 */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- 测试构造器中 objectContaining/any(Object) 等匹配器需要灵活类型 */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GlobalNavigateConfig, GlobalRequestApiConfig } from '@nebula/shared';
 import type {
   V2ActionStep,
@@ -740,10 +740,15 @@ describe('executeV2Rule — condition 求值', () => {
   });
 });
 
-// ===== executeV2Rule — delay step 跳过 =====
+// ===== executeV2Rule - delay step 真实等待 =====
 
-describe('executeV2Rule — delay step 跳过', () => {
-  it('delay step 跳过并记录告警，不产生 ActionResult', async () => {
+describe('executeV2Rule - delay step 真实等待', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('delay step 真实等待 delayMs 后继续执行后续步骤，不产生 ActionResult', async () => {
+    vi.useFakeTimers();
     const rule = makeRule({
       triggerNodeId: 'n1',
       triggerEventId: 'click',
@@ -756,22 +761,47 @@ describe('executeV2Rule — delay step 跳过', () => {
     });
     const deps = makeMockDeps();
 
-    const log = await executeV2Rule(
+    const promise = executeV2Rule(
       rule,
       { kind: 'componentEvent', componentId: 'c1', eventId: 'click' },
       deps,
     );
 
-    // delay step 不产生 ActionResult，因此 results 只含 a1 / a2
-    expect(log.results).toHaveLength(2);
-    expect(log.results.map((r) => r.nodeId)).toEqual(['a1', 'a2']);
-    expect(deps.logWarning).toHaveBeenCalledTimes(1);
-    const warningMsg = (deps.logWarning as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(warningMsg).toContain('d1');
-    expect(warningMsg).toContain('500');
+    // a1 立即执行，a2 尚未执行（被 delay 阻塞）
+    await vi.advanceTimersByTimeAsync(0);
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
+    expect(deps.applyVisibility).not.toHaveBeenCalledWith('c3', true);
+
+    // 推进 500ms 后 a2 执行
+    await vi.advanceTimersByTimeAsync(500);
+    await promise;
+
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c3', true);
+    // delay step 不产生 ActionResult，不记录告警
+    expect(deps.logWarning).not.toHaveBeenCalled();
+  });
+
+  it('delayMs=0 不阻塞后续步骤', async () => {
+    vi.useFakeTimers();
+    const rule = makeRule({
+      triggerNodeId: 'n1',
+      triggerEventId: 'click',
+      triggerComponentId: 'c1',
+      steps: [makeDelayStep('d1', 0), makeActionStep('a1', 'c2', { actionId: 'show' })],
+    });
+    const deps = makeMockDeps();
+
+    const promise = executeV2Rule(
+      rule,
+      { kind: 'componentEvent', componentId: 'c1', eventId: 'click' },
+      deps,
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    await promise;
+
+    expect(deps.applyVisibility).toHaveBeenCalledWith('c2', true);
   });
 });
-
 // ===== triggerAndExecuteV2 — 多规则聚合 =====
 
 describe('triggerAndExecuteV2 — 多规则聚合', () => {
