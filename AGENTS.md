@@ -128,6 +128,8 @@ pnpm biome:fix        # Biome 安全自动修复（格式化用这个）
 - 日常代码生成不强制运行 `pnpm typecheck` 和 `pnpm lint`，仅当用户明确要求时才运行
 - 如果验证失败，必须修复后再输出，不允许交付带类型错误或 lint 错误的代码
 - 当用户说"快速实现"或"不用管类型"时，可临时放宽类型检查，但仍遵守 Biome 格式
+- 本地接口调试 Token 从根目录 `.env.local` 的 `DEBUG_BEARER_TOKEN` 读取；该变量已包含 `Bearer` 前缀，可直接作为 `Authorization` 请求头值
+- `.env.local` 仅供本地调试且已被 Git 忽略，禁止在代码、日志、测试快照、文档或提交内容中复制、输出或硬编码 Token
 
 ## 快速模式（Quick Mode）
 
