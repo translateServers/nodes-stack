@@ -1,6 +1,6 @@
 # 大屏设计器拖拽卡顿优化计划
 
-> 状态：生效中 ｜ 最近更新：2026-07-27
+> 状态：生效中 ｜ 最近更新：2026-07-29（2026-07-29 对照代码核对补勾：P0/P1 与 3.1 已落地，见文件末尾说明）
 > 范围：`apps/web/src/features/screen/`（编辑器外壳 + 画布）
 > 类型：性能优化执行计划
 
@@ -80,19 +80,19 @@ Moveable `onDrag` 每帧执行（[screen-canvas.tsx](../../../apps/web/src/featu
 
 ### 阶段 1（P0）：消除选中/取消选中的同步冲刷（对应 S1/S2/S3/S4，用户最敏感）
 
-- [ ] 1.1 **PropertyPanel 对选中态降级**：`selectedComponentIds` 订阅结果用 `useDeferredValue` 包裹（与 [CanvasStatusBar 既有模式](../../../apps/web/src/features/screen/components/canvas-status-bar.tsx#L98-L103) 一致）。点击选中时 ScreenCanvas + MoveableContainer 同步渲染（控制框立即出现），PropertyPanel 的 Schema 表单重建走 transition，下一帧再提交
-- [ ] 1.2 **LayerPanel 对选中态降级**：同 1.1，`selectedComponentIds` 用 `useDeferredValue` 包裹。选中高亮滞后一帧（<50ms 不可感知），但点击响应立即返回
-- [ ] 1.3 **`useEditorSession` 返回值 `useMemo` 化**：依赖项为状态机字段与稳定回调，保证 ScreenEditor 重渲染时 session 引用稳定，memo 消费方不再失效（消除 S4 放大效应）
-- [ ] 1.4 **`EditorLeftPanel` / `EditorRightPanel` 加 `memo`**：两者不接收 props，memo 后 ScreenEditor 重渲染时完全跳过（含 ComponentLibrary / LayerPanel / PropertyPanel 子树）
+- [x] 1.1 **PropertyPanel 对选中态降级**：`selectedComponentIds` 订阅结果用 `useDeferredValue` 包裹（与 [CanvasStatusBar 既有模式](../../../apps/web/src/features/screen/components/canvas-status-bar.tsx#L98-L103) 一致）。点击选中时 ScreenCanvas + MoveableContainer 同步渲染（控制框立即出现），PropertyPanel 的 Schema 表单重建走 transition，下一帧再提交
+- [x] 1.2 **LayerPanel 对选中态降级**：同 1.1，`selectedComponentIds` 用 `useDeferredValue` 包裹。选中高亮滞后一帧（<50ms 不可感知），但点击响应立即返回
+- [x] 1.3 **`useEditorSession` 返回值 `useMemo` 化**：依赖项为状态机字段与稳定回调，保证 ScreenEditor 重渲染时 session 引用稳定，memo 消费方不再失效（消除 S4 放大效应）
+- [x] 1.4 **`EditorLeftPanel` / `EditorRightPanel` 加 `memo`**：两者不接收 props，memo 后 ScreenEditor 重渲染时完全跳过（含 ComponentLibrary / LayerPanel / PropertyPanel 子树）
 
 ### 阶段 2（P1）：消除拖拽中每帧的外壳渲染（对应 R1/R2）
 
-- [ ] 2.1 **尺寸指示器独立化**：从 CanvasStatusBar 拆出 `<DimensionIndicator />` 小组件，仅它订阅 `useDimensionStore`；状态栏其余部分（工具/开关/缩放）不再订阅 dimension。进一步：指示器内部用 `useEffect` + ref 直写 `textContent` 更新数值，**不走 React render**，彻底消除每帧 React 渲染
-- [ ] 2.2 **`CanvasStatusBar` 拆分 dimension 订阅**：拖拽期间状态栏主体不重渲染，仅尺寸数值通过 ref 直写更新
+- [x] 2.1 **尺寸指示器独立化**：从 CanvasStatusBar 拆出 `<DimensionIndicator />` 小组件，仅它订阅 `useDimensionStore`；状态栏其余部分（工具/开关/缩放）不再订阅 dimension。进一步：指示器内部用 `useEffect` + ref 直写 `textContent` 更新数值，**不走 React render**，彻底消除每帧 React 渲染
+- [x] 2.2 **`CanvasStatusBar` 拆分 dimension 订阅**：拖拽期间状态栏主体不重渲染，仅尺寸数值通过 ref 直写更新
 
 ### 阶段 3（P2）：降低松手与平移的外壳渲染（对应 R3/R4/R5）
 
-- [ ] 3.1 **ScreenEditor 细粒度订阅**：移除 `s.project` 整对象订阅（[screen-editor.tsx#L48](../../../apps/web/src/features/screen/components/screen-editor.tsx#L48)）；`handleSave`/`handleExport`/`handlePublish`/`editingComponent` 等改用 `useScreenEditorStore.getState()` 读取；仅保留画布尺寸等真正驱动渲染的字段订阅
+- [x] 3.1 **ScreenEditor 细粒度订阅**：移除 `s.project` 整对象订阅（[screen-editor.tsx#L48](../../../apps/web/src/features/screen/components/screen-editor.tsx#L48)）；`handleSave`/`handleExport`/`handlePublish`/`editingComponent` 等改用 `useScreenEditorStore.getState()` 读取；仅保留画布尺寸等真正驱动渲染的字段订阅
 - [ ] 3.2 **LayerPanel 订阅细化**：`s.project` → 派生图层树所需的最小数据指纹（id/name/type/zIndex/hidden/locked/parentId），避免 props/style 变化也触发重建
 - [ ] 3.3 **视口高频状态隔离**：平移手势期间 `canvasScale`/`canvasOffset` 写入独立高频 store（或 ref + 手势结束写回主 store），ScreenEditor 不再每帧重渲染
 - [ ] 3.4 **CanvasRulers 命令式同步**：rAF 回调中调用 `rulersRef.current?.syncScroll()`（Handle 已存在），标尺脱离 React 每帧渲染链
@@ -117,3 +117,7 @@ Moveable `onDrag` 每帧执行（[screen-canvas.tsx](../../../apps/web/src/featu
 2. 拖拽帧率稳定 ≥ 55fps（1920×1080 画布、50+ 组件场景）
 3. `pnpm typecheck`、`pnpm lint`、`pnpm --filter @nebula/web test` 全绿
 4. 现有 E2E（`pnpm --filter @nebula/web e2e`）无回归
+
+---
+
+> 2026-07-29 核对说明：对照代码库批量补勾——1.1/1.2 依据 `property-panel.tsx` 与 `layer-panel.tsx` 中 `selectedComponentIds` 的 `useDeferredValue` 包裹；1.3 依据 `use-editor-session.ts` 返回值 `useMemo` 化；1.4 依据 `editor-left-panel.tsx` / `editor-right-panel.tsx` 的 `memo`；2.1/2.2 依据 `canvas-status-bar.tsx` 中独立的 `DimensionIndicator`（ref 直写 `textContent`，主体不再订阅 dimension）；3.1 依据 `screen-editor.tsx` 已移除 `s.project` 整对象订阅、回调改用 `useScreenEditorStore.getState()`。未勾选项经核实仍未落地：3.2（`layer-panel.tsx` 仍整订阅 `s.project`）、3.3（无独立视口高频 store，`ScreenEditor` 仍订阅 `canvasScale`/`canvasOffset`）、3.4（`CanvasRulers` 仍随 scale/offset prop 每帧重渲染）、0.x 与 4.x（无性能基线与 E2E 防回归用例，`development-guide.md` 无「性能红线」小节）。
