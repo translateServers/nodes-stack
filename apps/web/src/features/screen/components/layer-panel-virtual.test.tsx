@@ -345,10 +345,11 @@ describe('LayerPanel · 虚拟滚动下右键菜单行为', () => {
 
     render(<LayerPanel />);
 
-    // mock 的 ContextMenuContent 始终渲染（绕过 Radix 开闭），所有菜单 div 按 DOM 顺序排列。
-    // flatRows = [top(0), group-1(1), g-c0(2), ...]，对应菜单顺序：menus[0]=top, menus[1]=group。
-    const menus = screen.getAllByTestId('layer-context-menu');
-    const groupMenu = menus[1];
+    // 单一共享菜单结构：右键分组行后菜单内容才挂载，且命令上下文针对该分组。
+    const groupHeader = screen.getByText('组 1').closest('div');
+    if (!groupHeader) throw new Error('分组头未渲染');
+    fireEvent.contextMenu(groupHeader);
+    const groupMenu = screen.getByTestId('layer-context-menu');
 
     expect(within(groupMenu).queryByTestId('layer-command-rename')).toBeNull();
     expect(within(groupMenu).queryByTestId('layer-command-copy')).toBeNull();

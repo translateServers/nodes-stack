@@ -1,4 +1,13 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { create } from 'zustand';
 import type Moveable from 'react-moveable';
@@ -383,6 +392,18 @@ export function ScreenCanvas({
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
   const canvasOffset = useScreenEditorStore((s) => s.canvasOffset);
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+  /**
+   * 性能优化：渲染态选中集降级为 deferred。
+   *
+   * flushSync 同步冲刷选中（Selecto 点击/框选）时，ScreenCanvas 本次同步渲染仍使用
+   * 旧渲染态选中集 —— 组件高亮 outline、elementGuidelines、isGroupSelect 滞后一帧，
+   * 由 Moveable 控制框（targets store 独立订阅）提供即时选中反馈，用户不可感知。
+   * React 随后在后台帧更新高亮。点击帧只承担函数体执行，避免可见组件树在同步帧内 diff。
+   *
+   * 交互逻辑（Selecto onDragStart 的 includes 判断、targets 派生 useLayoutEffect）
+   * 仍使用原始 selectedComponentIds，保证事件处理器读取最新值。
+   */
+  const deferredSelectedComponentIds = useDeferredValue(selectedComponentIds);
   // 画布元素事件开关：开启时编辑器画布接入蓝图运行时，组件 onClick 派发 componentClick 事件
   const eventsEnabled = useScreenEditorStore((s) => s.eventsEnabled);
 
@@ -487,8 +508,15 @@ export function ScreenCanvas({
     else componentRefs.current.delete(id);
   }, []);
 
-  /** 选中 ID 集合，O(1) 查询选中状态 */
-  const selectedIdSet = useMemo(() => new Set(selectedComponentIds), [selectedComponentIds]);
+  /**
+   * 渲染态选中 ID 集合（deferred），O(1) 查询选中状态。
+   * 仅用于渲染消费（组件高亮 outline / elementGuidelines / isGroupSelect），
+   * 交互逻辑请使用原始 selectedComponentIds。
+   */
+  const renderSelectedIdSet = useMemo(
+    () => new Set(deferredSelectedComponentIds),
+    [deferredSelectedComponentIds],
+  );
 
   /**
    * 同步根据组件 ID 列表查找对应的 DOM 元素数组。
@@ -582,8 +610,8 @@ export function ScreenCanvas({
    * 避免依赖 project?.components 引用变化导致过度更新（如 props/style 变化不需要刷 rect）。
    */
   const selectedGeometryFingerprint = useMemo(() => {
-    if (!project || selectedComponentIds.length === 0) return '';
-    const idSet = new Set(selectedComponentIds);
+    if (!project || deferredSelectedComponentIds.length === 0) return '';
+    const idSet = new Set(deferredSelectedComponentIds);
     return project.components
       .filter((c) => idSet.has(c.id))
       .map(
@@ -591,9 +619,16 @@ export function ScreenCanvas({
           `${c.id}:${c.position.x},${c.position.y},${c.position.width},${c.position.height},${c.position.rotation ?? 0}`,
       )
       .join('|');
-  }, [project, selectedComponentIds]);
+  }, [project, deferredSelectedComponentIds]);
 
-  useEffect(() => {
+  /**
+   * 性能优化：updateRect 用 useLayoutEffect 替代 useEffect。
+   *
+   * 原 useEffect 在浏览器绘制后才执行，选中/属性变更后的第一帧控制框按旧 rect
+   * 绘制一次再纠正，造成"形变控件稍晚出现"的视觉延迟。
+   * useLayoutEffect 在提交后、绘制前同步修正 rect，首帧即正确。
+   */
+  useLayoutEffect(() => {
     if (moveableRef.current) {
       moveableRef.current.updateRect();
     }
@@ -1208,10 +1243,10 @@ export function ScreenCanvas({
   const elementGuidelines = useMemo<HTMLElement[]>(() => {
     if (!smartGuidesEnabled) return [];
     return visibleComponents
-      .filter((c: ScreenComponent) => !selectedIdSet.has(c.id))
+      .filter((c: ScreenComponent) => !renderSelectedIdSet.has(c.id))
       .map((c: ScreenComponent) => componentRefs.current.get(c.id))
       .filter((el): el is HTMLElement => el != null);
-  }, [smartGuidesEnabled, visibleComponents, selectedIdSet]);
+  }, [smartGuidesEnabled, visibleComponents, renderSelectedIdSet]);
 
   /**
    * Moveable 事件 handlers：useMemo 稳定引用，传给 MoveableContainer。
@@ -1777,7 +1812,7 @@ export function ScreenCanvas({
 
   if (!project || !canvas) return null;
 
-  const isGroupSelect = selectedComponentIds.length > 1;
+  const isGroupSelect = deferredSelectedComponentIds.length > 1;
 
   return (
     <BlueprintPreviewProvider value={eventsEnabled ? blueprintContext : null}>
@@ -1837,7 +1872,7 @@ export function ScreenCanvas({
                 <CanvasComponentWrapper
                   key={component.id}
                   component={component}
-                  selected={selectedIdSet.has(component.id)}
+                  selected={renderSelectedIdSet.has(component.id)}
                   showBorderGuides={showBorderGuides}
                   registerRef={registerRef}
                   onComponentClick={handleComponentClick}

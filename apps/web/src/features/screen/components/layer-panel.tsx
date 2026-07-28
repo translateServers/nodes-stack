@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import {
   Eye,
   EyeOff,
@@ -100,6 +100,8 @@ type LayerNode =
   | { kind: 'component'; comp: ScreenComponent; depth: number }
   | { kind: 'group'; groupId: string; label: string; children: ScreenComponent[]; depth: number };
 
+type GroupLayerNode = Extract<LayerNode, { kind: 'group' }>;
+
 /** 将扁平 components 转换为带分组的树结构 */
 function buildLayerTree(components: ScreenComponent[]): LayerNode[] {
   // 按 zIndex 降序（与原渲染顺序保持一致）
@@ -160,7 +162,7 @@ function buildLayerTree(components: ScreenComponent[]): LayerNode[] {
  */
 type FlatLayerRow =
   | { kind: 'component'; key: string; comp: ScreenComponent; depth: number }
-  | { kind: 'group'; key: string; node: Extract<LayerNode, { kind: 'group' }> };
+  | { kind: 'group'; key: string; node: GroupLayerNode };
 
 /** 将树结构扁平化为虚拟滚动所需的行数组 */
 function flattenLayerTree(tree: LayerNode[], collapsed: Set<string>): FlatLayerRow[] {
@@ -181,45 +183,114 @@ function flattenLayerTree(tree: LayerNode[], collapsed: Set<string>): FlatLayerR
 }
 
 /**
- * 图层行右键菜单内容（Phase 2 Slice A）。
+ * 右键菜单目标（性能优化：单一共享菜单）。
  *
- * 基于命令描述符注册表 `LAYER_COMMANDS` 渲染：
- * - `when=false` 的命令不显示
- * - `enabled=false` 的命令置灰
- * - `separatorBefore` 的命令前插入分隔线（首项除外）
- * - `destructive` 命令套 destructive variant
- *
- * 调用方负责构造 LayerCommandContext（包含选区、目标、顶层序列与 store actions 子集）。
+ * 原实现每行一个 ContextMenu：N 行 × 12 命令的描述符求值 + JSX 构建发生在
+ * LayerPanel 每次渲染中，选中变更引发的 flushSync 同步帧里代价被放大，造成右键卡顿。
+ * 现改为整面板共享一个 ContextMenu：行右键时仅记录目标（setMenuTarget），
+ * 菜单内容（LayerCommandItems）仅在菜单真正打开挂载时才执行命令描述符求值。
  */
-function LayerRowMenu({ ctx, children }: { ctx: LayerCommandContext; children: React.ReactNode }) {
+type LayerMenuTarget =
+  | { kind: 'component'; comp: ScreenComponent }
+  | { kind: 'group'; node: GroupLayerNode }
+  | null;
+
+interface LayerCommandItemsProps {
+  target: NonNullable<LayerMenuTarget>;
+  commandStore: LayerCommandStore;
+  onRequestRename: (id: string) => void;
+}
+
+/**
+ * 共享右键菜单的命令项渲染器。
+ *
+ * 关键性能设计：该组件被 ContextMenuContent 包裹，Radix 仅在菜单打开时才挂载内容，
+ * 因此 getVisibleLayerCommands / when / enabled / label / icon 的全部求值
+ * 只在用户真正右键的那个瞬间、针对那一个目标执行一次 —— 而非每行每次渲染都执行。
+ *
+ * 自身订阅 store（原始 selectedComponentIds，非 deferred）：
+ * 右键未选中行会先同步选中再弹菜单，菜单语义必须基于最新选区。
+ */
+const LayerCommandItems = memo(function LayerCommandItems({
+  target,
+  commandStore,
+  onRequestRename,
+}: LayerCommandItemsProps) {
+  const project = useScreenEditorStore((s) => s.project);
+  const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
+
+  const topLevelOrdered = useMemo<readonly ScreenComponent[]>(
+    () =>
+      project
+        ? [...project.components].filter((c) => !c.parentId).sort((a, b) => b.zIndex - a.zIndex)
+        : [],
+    [project],
+  );
+
+  const selectedComponents = useMemo<readonly ScreenComponent[]>(() => {
+    if (!project) return [];
+    const idSet = new Set(selectedComponentIds);
+    return project.components.filter((c) => idSet.has(c.id));
+  }, [project, selectedComponentIds]);
+
+  const ctx = useMemo<LayerCommandContext>(() => {
+    if (target.kind === 'component') {
+      const comp = target.comp;
+      // 行 onContextMenu 已保证选区包含 target；这里做防御性兜底
+      const inSelection = selectedComponentIds.includes(comp.id);
+      return {
+        selectedComponents: inSelection ? selectedComponents : [comp],
+        targetComponent: comp,
+        topLevelOrdered,
+        requestRename: onRequestRename,
+        store: commandStore,
+      };
+    }
+    const children = target.node.children;
+    // 分组行 onContextMenu 已保证选区为子组件集合；此处做防御性兜底
+    const covers =
+      selectedComponents.length === children.length &&
+      children.every((c) => selectedComponentIds.includes(c.id));
+    return {
+      selectedComponents: covers ? selectedComponents : children,
+      targetGroup: { groupId: target.node.groupId, children },
+      topLevelOrdered,
+      store: commandStore,
+    };
+  }, [
+    target,
+    selectedComponentIds,
+    selectedComponents,
+    topLevelOrdered,
+    commandStore,
+    onRequestRename,
+  ]);
+
   const visible = getVisibleLayerCommands(ctx);
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-48" data-testid="layer-context-menu">
-        {visible.map((cmd, idx) => {
-          const label = resolveLayerCommandLabel(cmd, ctx);
-          const Icon = resolveLayerCommandIcon(cmd, ctx);
-          const enabled = isLayerCommandEnabled(cmd, ctx);
-          return (
-            <Fragment key={cmd.id}>
-              {cmd.separatorBefore && idx > 0 && <ContextMenuSeparator />}
-              <ContextMenuItem
-                disabled={!enabled}
-                variant={cmd.destructive ? 'destructive' : 'default'}
-                onSelect={() => cmd.run(ctx)}
-                data-testid={`layer-command-${cmd.id}`}
-              >
-                {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
-                <span className="flex-1 truncate whitespace-nowrap">{label}</span>
-              </ContextMenuItem>
-            </Fragment>
-          );
-        })}
-      </ContextMenuContent>
-    </ContextMenu>
+    <>
+      {visible.map((cmd, idx) => {
+        const label = resolveLayerCommandLabel(cmd, ctx);
+        const Icon = resolveLayerCommandIcon(cmd, ctx);
+        const enabled = isLayerCommandEnabled(cmd, ctx);
+        return (
+          <Fragment key={cmd.id}>
+            {cmd.separatorBefore && idx > 0 && <ContextMenuSeparator />}
+            <ContextMenuItem
+              disabled={!enabled}
+              variant={cmd.destructive ? 'destructive' : 'default'}
+              onSelect={() => cmd.run(ctx)}
+              data-testid={`layer-command-${cmd.id}`}
+            >
+              {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+              <span className="flex-1 truncate whitespace-nowrap">{label}</span>
+            </ContextMenuItem>
+          </Fragment>
+        );
+      })}
+    </>
   );
-}
+});
 
 /**
  * 行内重命名输入框（Phase 2 Slice A）。
@@ -281,24 +352,295 @@ function InlineRenameInput({
   );
 }
 
+/** 组件图层行 props。所有回调均为 LayerPanel 中的稳定引用（useCallback + getState）。 */
+interface ComponentRowProps {
+  comp: ScreenComponent;
+  depth: number;
+  isSelected: boolean;
+  inActiveGroup: boolean;
+  isRenaming: boolean;
+  onRowClick: (comp: ScreenComponent, e: React.MouseEvent) => void;
+  onRowContextMenu: (comp: ScreenComponent) => void;
+  onToggleHidden: (comp: ScreenComponent) => void;
+  onToggleLocked: (comp: ScreenComponent) => void;
+  onReorderToTop: (comp: ScreenComponent) => void;
+  onReorderToBottom: (comp: ScreenComponent) => void;
+  onRenameCommit: (id: string, name: string) => void;
+  onRenameCancel: () => void;
+}
+
+/**
+ * 组件图层行（memo 化）。
+ *
+ * 性能优化核心：选中变更时 LayerPanel 重渲染，但只有 isSelected/isRenaming 等
+ * 布尔 props 实际变化的行才会重新渲染；comp 引用在 store 不可变更新下保持稳定
+ * （未变更的组件对象引用不变），因此绝大多数行在选中帧内完全跳过重渲染，
+ * 同步帧（flushSync 选中冲刷）的工作量从 O(N 行) 降到 O(变更行)。
+ */
+const ComponentRow = memo(function ComponentRow({
+  comp,
+  depth,
+  isSelected,
+  inActiveGroup,
+  isRenaming,
+  onRowClick,
+  onRowContextMenu,
+  onToggleHidden,
+  onToggleLocked,
+  onReorderToTop,
+  onReorderToBottom,
+  onRenameCommit,
+  onRenameCancel,
+}: ComponentRowProps) {
+  const Icon = getIconForType(comp.type);
+  // depth=0（顶层组件）由外层 SortableLayerRow / 虚拟行包装提供 data-testid="layer-row"，
+  // depth>0（分组子组件）无外层包装，在此直接打 testid 供 E2E 定位
+  return (
+    <div
+      data-layer-row
+      data-testid={depth > 0 ? 'layer-row' : undefined}
+      data-component-id={depth > 0 ? comp.id : undefined}
+      className={`group flex cursor-pointer items-center gap-2 border-b border-border/60 py-1.5 pr-3 text-sm transition-colors ${
+        isSelected ? 'bg-primary/10' : 'hover:bg-accent'
+      }`}
+      style={{ paddingLeft: `${12 + depth * 16}px` }}
+      onClick={(e) => onRowClick(comp, e)}
+      onContextMenu={() => onRowContextMenu(comp)}
+    >
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
+      {isRenaming ? (
+        <InlineRenameInput
+          component={comp}
+          onCommit={(name) => onRenameCommit(comp.id, name)}
+          onCancel={onRenameCancel}
+        />
+      ) : (
+        <span
+          className={`flex-1 truncate ${
+            comp.status.hidden ? 'text-muted-foreground/40' : 'text-foreground'
+          }`}
+        >
+          {comp.name}
+        </span>
+      )}
+      {inActiveGroup && (
+        <span className="rounded bg-blue-500/10 px-1 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+          组内
+        </span>
+      )}
+      {!isRenaming && (
+        <div
+          className={`flex items-center gap-0.5 transition-opacity ${
+            comp.status.hidden || comp.status.locked
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={comp.status.hidden ? '显示' : '隐藏'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleHidden(comp);
+                }}
+              >
+                {comp.status.hidden ? <EyeOff /> : <Eye />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{comp.status.hidden ? '显示' : '隐藏'}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={comp.status.locked ? '解锁' : '锁定'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleLocked(comp);
+                }}
+              >
+                {comp.status.locked ? <Lock /> : <Unlock />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{comp.status.locked ? '解锁' : '锁定'}</TooltipContent>
+          </Tooltip>
+          <div className="flex gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="置顶"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReorderToTop(comp);
+                  }}
+                >
+                  <ChevronsUp />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>置顶</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="置底"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReorderToBottom(comp);
+                  }}
+                >
+                  <ChevronsDown />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>置底</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/** 分组头行 props。node 引用随 tree 的 useMemo 稳定，仅在 components 变更时重建。 */
+interface GroupHeaderRowProps {
+  node: GroupLayerNode;
+  isCollapsed: boolean;
+  isActiveGroup: boolean;
+  allSelected: boolean;
+  someSelected: boolean;
+  onGroupClick: (node: GroupLayerNode, e: React.MouseEvent) => void;
+  onGroupContextMenu: (node: GroupLayerNode) => void;
+  onToggleCollapse: (groupId: string) => void;
+  onSetHidden: (ids: string[], hidden: boolean) => void;
+  onSetLocked: (ids: string[], locked: boolean) => void;
+}
+
+/** 分组头行（memo 化）：选中/折叠/活动分组状态变化只影响对应分组行。 */
+const GroupHeaderRow = memo(function GroupHeaderRow({
+  node,
+  isCollapsed,
+  isActiveGroup,
+  allSelected,
+  someSelected,
+  onGroupClick,
+  onGroupContextMenu,
+  onToggleCollapse,
+  onSetHidden,
+  onSetLocked,
+}: GroupHeaderRowProps) {
+  const { groupId, label, children } = node;
+  const allHidden = children.every((c) => c.status.hidden);
+  const allLocked = children.every((c) => c.status.locked);
+
+  return (
+    <div
+      data-layer-row
+      data-group-id={groupId}
+      className={`flex cursor-pointer items-center gap-1 border-b border-border/60 py-2 pr-3 text-sm font-medium transition-colors ${
+        isActiveGroup
+          ? 'border-l-2 border-l-blue-500 bg-blue-500/10'
+          : allSelected
+            ? 'bg-primary/10'
+            : someSelected
+              ? 'bg-primary/5'
+              : 'hover:bg-accent'
+      }`}
+      style={{ paddingLeft: isActiveGroup ? `${10}px` : `${12}px` }}
+      onClick={(e) => onGroupClick(node, e)}
+      onContextMenu={() => onGroupContextMenu(node)}
+    >
+      <button
+        type="button"
+        className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
+        aria-label={isCollapsed ? '展开' : '折叠'}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCollapse(groupId);
+        }}
+      >
+        <ChevronRight
+          className={`size-3.5 text-muted-foreground transition-transform ${
+            isCollapsed ? '' : 'rotate-90'
+          }`}
+        />
+      </button>
+      <GroupIcon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
+      <span
+        className={`flex-1 truncate ${allHidden ? 'text-muted-foreground/40' : 'text-foreground'}`}
+      >
+        {label}
+      </span>
+      {isActiveGroup && (
+        <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
+          编辑中
+        </span>
+      )}
+      <span className="text-xs text-muted-foreground">{children.length}</span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={allHidden ? '显示全部' : '隐藏全部'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSetHidden(
+                children.map((c) => c.id),
+                !allHidden,
+              );
+            }}
+          >
+            {allHidden ? <EyeOff /> : <Eye />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{allHidden ? '显示全部' : '隐藏全部'}</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={allLocked ? '解锁全部' : '锁定全部'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSetLocked(
+                children.map((c) => c.id),
+                !allLocked,
+              );
+            }}
+          >
+            {allLocked ? <Lock /> : <Unlock />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{allLocked ? '解锁全部' : '锁定全部'}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+});
+
 export function LayerPanel() {
   const project = useScreenEditorStore((s) => s.project);
   const rawSelectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
-  const selectComponent = useScreenEditorStore((s) => s.selectComponent);
-  const selectComponents = useScreenEditorStore((s) => s.selectComponents);
+  const groupSelected = useScreenEditorStore((s) => s.groupSelected);
+  const ungroupSelected = useScreenEditorStore((s) => s.ungroupSelected);
+  const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
+  const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
+  const renameComponent = useScreenEditorStore((s) => s.renameComponent);
+  const copySelectedToClipboard = useScreenEditorStore((s) => s.copySelectedToClipboard);
+  const duplicateSelected = useScreenEditorStore((s) => s.duplicateSelected);
   const setLocked = useScreenEditorStore((s) => s.setLocked);
   const setHidden = useScreenEditorStore((s) => s.setHidden);
   const reorderToTop = useScreenEditorStore((s) => s.reorderToTop);
   const reorderToBottom = useScreenEditorStore((s) => s.reorderToBottom);
   const reorderLayerToIndex = useScreenEditorStore((s) => s.reorderLayerToIndex);
-  const groupSelected = useScreenEditorStore((s) => s.groupSelected);
-  const ungroupSelected = useScreenEditorStore((s) => s.ungroupSelected);
-  const renameComponent = useScreenEditorStore((s) => s.renameComponent);
-  const copySelectedToClipboard = useScreenEditorStore((s) => s.copySelectedToClipboard);
-  const duplicateSelected = useScreenEditorStore((s) => s.duplicateSelected);
   const removeSelectedComponents = useScreenEditorStore((s) => s.removeSelectedComponents);
-  const activeGroupId = useScreenEditorStore((s) => s.activeGroupId);
-  const setActiveGroupId = useScreenEditorStore((s) => s.setActiveGroupId);
 
   // 性能优化：选中态响应降级为 transition，避免 flushSync 同步冲刷把图层树重建
   // 塞进点击帧（与 CanvasStatusBar、PropertyPanel useDeferredValue 模式一致）。
@@ -307,6 +649,9 @@ export function LayerPanel() {
 
   // 行内重命名目标（Phase 2 Slice A）：null 表示不在重命名态
   const [renamingId, setRenamingId] = useState<string | null>(null);
+
+  // 共享右键菜单目标：行右键时记录，菜单内容仅在打开时对单个目标求值
+  const [menuTarget, setMenuTarget] = useState<LayerMenuTarget>(null);
 
   // dnd-kit 拖拽传感器：PointerSensor + 8px 激活距离，避免点击误触发拖拽
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -347,16 +692,8 @@ export function LayerPanel() {
     estimateSize: () => ROW_ESTIMATE_SIZE,
     overscan: ROW_OVERSCAN,
   });
-  // 顶层组件按 zIndex 降序（与 buildLayerTree 内部排序一致），供命令描述符计算"上移/下移一层"
-  const topLevelOrdered = useMemo<readonly ScreenComponent[]>(
-    () =>
-      project
-        ? [...project.components].filter((c) => !c.parentId).sort((a, b) => b.zIndex - a.zIndex)
-        : [],
-    [project],
-  );
 
-  // 命令描述符所需的 store actions 子集（保持引用稳定，避免菜单每次渲染重建）
+  // 命令描述符所需的 store actions 子集（zustand actions 引用稳定，useMemo 一次构造）
   const commandStore = useMemo<LayerCommandStore>(
     () => ({
       renameComponent,
@@ -393,14 +730,11 @@ export function LayerPanel() {
     return project.components.some((c) => c.parentId && selectedIdSet.has(c.id));
   })();
 
-  // 选中组件快照：供命令上下文使用
-  const selectedComponents = useMemo<readonly ScreenComponent[]>(() => {
-    if (!project) return [];
-    const idSet = selectedIdSet;
-    return project.components.filter((c) => idSet.has(c.id));
-  }, [project, selectedIdSet]);
-
-  if (!project) return null;
+  /**
+   * 以下行级事件处理器全部使用 useCallback + useScreenEditorStore.getState()：
+   * 处理器引用跨渲染稳定（配合 memo 化的行组件，选中变更不再导致全行重渲染），
+   * 且事件触发时读取最新 store 状态，不受 deferred 选中值的滞后影响。
+   */
 
   /**
    * 点击组件行：根据 activeGroupId 上下文决定选中单个组件还是整组。
@@ -408,10 +742,10 @@ export function LayerPanel() {
    * - comp 在分组中且 activeGroupId === comp.parentId：仅选中该组件（已在组内编辑模式）
    * - comp 在分组中且 activeGroupId !== comp.parentId：选中整个分组，并退出当前活动分组
    */
-  const handleComponentClick = (e: React.MouseEvent, comp: ScreenComponent) => {
+  const handleComponentClick = useCallback((comp: ScreenComponent, e: React.MouseEvent) => {
+    const store = useScreenEditorStore.getState();
     if (e.ctrlKey || e.metaKey) {
       // Ctrl/Cmd+点击：把该组件 ID 加入/移出当前选中
-      const store = useScreenEditorStore.getState();
       const ids = store.selectedComponentIds;
       if (ids.includes(comp.id)) {
         store.selectComponents(ids.filter((sid) => sid !== comp.id));
@@ -421,44 +755,50 @@ export function LayerPanel() {
       return;
     }
 
+    const currentProject = store.project;
+    if (!currentProject) return;
+
     if (!comp.parentId) {
       // 顶层组件：选中它并退出活动分组
-      if (activeGroupId !== null) setActiveGroupId(null);
-      selectComponent(comp.id);
+      if (store.activeGroupId !== null) store.setActiveGroupId(null);
+      store.selectComponent(comp.id);
       return;
     }
 
-    if (activeGroupId === comp.parentId) {
+    if (store.activeGroupId === comp.parentId) {
       // 已在该组内：选中单个子组件
-      selectComponent(comp.id);
+      store.selectComponent(comp.id);
     } else {
       // 不在该组内：选中整个分组并退出旧的活动分组
-      const siblings = project.components.filter((c) => c.parentId === comp.parentId);
-      selectComponents(siblings.map((c) => c.id));
-      if (activeGroupId !== null) setActiveGroupId(null);
+      const siblings = currentProject.components.filter((c) => c.parentId === comp.parentId);
+      store.selectComponents(siblings.map((c) => c.id));
+      if (store.activeGroupId !== null) store.setActiveGroupId(null);
     }
-  };
+  }, []);
 
   /**
    * 右键组件行（Phase 2 Slice A）：实现"右键未选中行 → 先选中该行再弹菜单"的行业惯例。
    * - 若目标组件不在当前选区：单选该组件（避免误对其他组件批量操作）
    * - 若已在选区：保留选区不变（支持多选右键批量操作）
+   * 同时记录共享菜单目标；事件继续冒泡到 ContextMenuTrigger 打开菜单。
    */
-  const handleComponentContextMenu = (comp: ScreenComponent) => {
-    if (!selectedIdSet.has(comp.id)) {
-      selectComponent(comp.id);
+  const handleComponentContextMenu = useCallback((comp: ScreenComponent) => {
+    const store = useScreenEditorStore.getState();
+    if (!store.selectedComponentIds.includes(comp.id)) {
+      store.selectComponent(comp.id);
     }
-  };
+    setMenuTarget({ kind: 'component', comp });
+  }, []);
 
   /**
    * 点击分组行：选中整个分组（所有子组件）。
    */
-  const handleGroupClick = (e: React.MouseEvent, groupId: string, children: ScreenComponent[]) => {
+  const handleGroupClick = useCallback((node: GroupLayerNode, e: React.MouseEvent) => {
+    const store = useScreenEditorStore.getState();
+    const childIds = node.children.map((c) => c.id);
     if (e.ctrlKey || e.metaKey) {
       // Ctrl/Cmd+点击：将所有子组件加入或移出当前选中
-      const store = useScreenEditorStore.getState();
       const current = store.selectedComponentIds;
-      const childIds = children.map((c) => c.id);
       if (childIds.every((id) => current.includes(id))) {
         store.selectComponents(current.filter((id) => !childIds.includes(id)));
       } else {
@@ -467,38 +807,71 @@ export function LayerPanel() {
       return;
     }
     // 普通单击：选中整组，但不改变活动分组状态（用户可能正在编辑某分组）
-    selectComponents(children.map((c) => c.id));
-  };
+    store.selectComponents(childIds);
+  }, []);
 
   /**
    * 右键分组行（Phase 2 Slice A）：先选中所有子组件再弹菜单。
    * 与组件行同理：未选中状态下右键分组行 → 自动选中所有子组件。
    */
-  const handleGroupContextMenu = (children: ScreenComponent[]) => {
-    const childIds = children.map((c) => c.id);
+  const handleGroupContextMenu = useCallback((node: GroupLayerNode) => {
+    const store = useScreenEditorStore.getState();
+    const childIds = node.children.map((c) => c.id);
     // 仅当当前选区不完整覆盖分组子组件时才覆盖选区
-    const allSelected = childIds.every((id) => selectedIdSet.has(id));
+    const allSelected = childIds.every((id) => store.selectedComponentIds.includes(id));
     if (!allSelected) {
-      selectComponents(childIds);
+      store.selectComponents(childIds);
     }
-  };
+    setMenuTarget({ kind: 'group', node });
+  }, []);
+
+  /** 行内按钮：隐藏/锁定/置顶/置底（稳定引用，内部读取最新 store） */
+  const handleToggleHidden = useCallback((comp: ScreenComponent) => {
+    useScreenEditorStore.getState().setHidden([comp.id], !comp.status.hidden);
+  }, []);
+  const handleToggleLocked = useCallback((comp: ScreenComponent) => {
+    useScreenEditorStore.getState().setLocked([comp.id], !comp.status.locked);
+  }, []);
+  const handleReorderToTop = useCallback((comp: ScreenComponent) => {
+    useScreenEditorStore.getState().reorderToTop(comp.id);
+  }, []);
+  const handleReorderToBottom = useCallback((comp: ScreenComponent) => {
+    useScreenEditorStore.getState().reorderToBottom(comp.id);
+  }, []);
+  const handleSetHidden = useCallback((ids: string[], hidden: boolean) => {
+    useScreenEditorStore.getState().setHidden(ids, hidden);
+  }, []);
+  const handleSetLocked = useCallback((ids: string[], locked: boolean) => {
+    useScreenEditorStore.getState().setLocked(ids, locked);
+  }, []);
+
+  /**
+   * 列表空白处右键：清空菜单目标（此时不渲染 ContextMenuContent，菜单不会出现）。
+   * 行上的右键先记录目标，事件冒泡到此处时 closest('[data-layer-row]') 命中，不会误清。
+   */
+  const handleListContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!(e.target as HTMLElement).closest('[data-layer-row]')) {
+      setMenuTarget(null);
+    }
+  }, []);
 
   /**
    * 提交重命名：trim 后为空或与原名相同则忽略；store action 已含相同检查，
    * 此处显式检查可避免空操作进入历史栈（与 store 实现一致，作为防御性兜底）。
    */
-  const handleRenameCommit = (id: string, name: string) => {
+  const handleRenameCommit = useCallback((id: string, name: string) => {
     setRenamingId(null);
     const trimmed = name.trim();
     if (!trimmed) return;
-    const target = project.components.find((c) => c.id === id);
+    const store = useScreenEditorStore.getState();
+    const target = store.project?.components.find((c) => c.id === id);
     if (!target || target.name === trimmed) return;
-    renameComponent(id, trimmed);
-  };
+    store.renameComponent(id, trimmed);
+  }, []);
 
-  const handleRenameCancel = () => {
+  const handleRenameCancel = useCallback(() => {
     setRenamingId(null);
-  };
+  }, []);
 
   /**
    * dnd-kit 拖拽结束：根据 active/over 在顶层组件列表中的索引调用 reorderLayerToIndex。
@@ -515,262 +888,7 @@ export function LayerPanel() {
     reorderLayerToIndex(activeId, toIdx);
   };
 
-  /** 构造单个组件行的 LayerCommandContext */
-  const buildComponentCtx = (comp: ScreenComponent): LayerCommandContext => {
-    // 调用方约定：onContextMenu 已保证选区包含 target；这里做防御性兜底
-    // O(1) 查询复用 selectedIdSet，避免每行渲染线性扫描选中列表
-    const ctxSelected = selectedIdSet.has(comp.id) ? selectedComponents : [comp];
-    return {
-      selectedComponents: ctxSelected,
-      targetComponent: comp,
-      topLevelOrdered,
-      requestRename: setRenamingId,
-      store: commandStore,
-    };
-  };
-
-  /** 构造分组行的 LayerCommandContext */
-  const buildGroupCtx = (groupId: string, children: ScreenComponent[]): LayerCommandContext => {
-    // 分组行 onContextMenu 已保证选区为子组件集合；此处做防御性兜底
-    const ctxSelected =
-      selectedComponents.length === children.length &&
-      children.every((c) => selectedIdSet.has(c.id))
-        ? selectedComponents
-        : children;
-    return {
-      selectedComponents: ctxSelected,
-      targetGroup: { groupId, children },
-      topLevelOrdered,
-      store: commandStore,
-    };
-  };
-
-  /** 渲染单个组件行（不含 key，由外层 SortableLayerRow 或直接 div 提供） */
-  const renderComponent = (comp: ScreenComponent, depth: number) => {
-    const Icon = getIconForType(comp.type);
-    const isSelected = selectedIdSet.has(comp.id);
-    // 在活动分组内的子组件使用更明显的选中态
-    const inActiveGroup = comp.parentId !== null && comp.parentId === activeGroupId;
-    // depth=0（顶层组件）由外层 SortableLayerRow 提供 data-testid="layer-row"，
-    // depth>0（分组子组件）无外层包装，在此直接打 testid 供 E2E 定位
-    const isRenaming = renamingId === comp.id;
-    const row = (
-      <div
-        data-testid={depth > 0 ? 'layer-row' : undefined}
-        data-component-id={depth > 0 ? comp.id : undefined}
-        className={`group flex cursor-pointer items-center gap-2 border-b border-border/60 py-1.5 pr-3 text-sm transition-colors ${
-          isSelected ? 'bg-primary/10' : 'hover:bg-accent'
-        }`}
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
-        onClick={(e) => handleComponentClick(e, comp)}
-        onContextMenu={() => handleComponentContextMenu(comp)}
-      >
-        <Icon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
-        {isRenaming ? (
-          <InlineRenameInput
-            component={comp}
-            onCommit={(name) => handleRenameCommit(comp.id, name)}
-            onCancel={handleRenameCancel}
-          />
-        ) : (
-          <span
-            className={`flex-1 truncate ${
-              comp.status.hidden ? 'text-muted-foreground/40' : 'text-foreground'
-            }`}
-          >
-            {comp.name}
-          </span>
-        )}
-        {inActiveGroup && (
-          <span className="rounded bg-blue-500/10 px-1 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-            组内
-          </span>
-        )}
-        {!isRenaming && (
-          <div
-            className={`flex items-center gap-0.5 transition-opacity ${
-              comp.status.hidden || comp.status.locked
-                ? 'opacity-100'
-                : 'opacity-0 group-hover:opacity-100'
-            }`}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={comp.status.hidden ? '显示' : '隐藏'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setHidden([comp.id], !comp.status.hidden);
-                  }}
-                >
-                  {comp.status.hidden ? <EyeOff /> : <Eye />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{comp.status.hidden ? '显示' : '隐藏'}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={comp.status.locked ? '解锁' : '锁定'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLocked([comp.id], !comp.status.locked);
-                  }}
-                >
-                  {comp.status.locked ? <Lock /> : <Unlock />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{comp.status.locked ? '解锁' : '锁定'}</TooltipContent>
-            </Tooltip>
-            <div className="flex gap-0.5">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="置顶"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      reorderToTop(comp.id);
-                    }}
-                  >
-                    <ChevronsUp />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>置顶</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="置底"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      reorderToBottom(comp.id);
-                    }}
-                  >
-                    <ChevronsDown />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>置底</TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-
-    // Phase 2 Slice A：用 ContextMenu 包裹行，命令描述符驱动菜单内容
-    // key 由调用方（tree.map / renderGroup children.map / SortableLayerRow）通过外层提供
-    return (
-      <LayerRowMenu key={comp.id} ctx={buildComponentCtx(comp)}>
-        {row}
-      </LayerRowMenu>
-    );
-  };
-
-  /** 渲染分组头行（仅分组头，不含子组件；子组件由调用方单独渲染） */
-  const renderGroupHeader = (node: Extract<LayerNode, { kind: 'group' }>) => {
-    const { groupId, label, children } = node;
-    const isCollapsed = collapsed.has(groupId);
-    const allHidden = children.every((c) => c.status.hidden);
-    const allLocked = children.every((c) => c.status.locked);
-    const allSelected = children.every((c) => selectedIdSet.has(c.id));
-    const someSelected = children.some((c) => selectedIdSet.has(c.id));
-    // 当前分组是否处于"编辑中"状态（双击进入）
-    const isActiveGroup = activeGroupId === groupId;
-
-    const groupRow = (
-      <div
-        className={`flex cursor-pointer items-center gap-1 border-b border-border/60 py-2 pr-3 text-sm font-medium transition-colors ${
-          isActiveGroup
-            ? 'border-l-2 border-l-blue-500 bg-blue-500/10'
-            : allSelected
-              ? 'bg-primary/10'
-              : someSelected
-                ? 'bg-primary/5'
-                : 'hover:bg-accent'
-        }`}
-        style={{ paddingLeft: isActiveGroup ? `${10}px` : `${12}px` }}
-        onClick={(e) => handleGroupClick(e, groupId, children)}
-        onContextMenu={() => handleGroupContextMenu(children)}
-      >
-        <button
-          type="button"
-          className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
-          aria-label={isCollapsed ? '展开' : '折叠'}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleGroupCollapse(groupId);
-          }}
-        >
-          <ChevronRight
-            className={`size-3.5 text-muted-foreground transition-transform ${
-              isCollapsed ? '' : 'rotate-90'
-            }`}
-          />
-        </button>
-        <GroupIcon className="h-4 w-4 shrink-0 text-muted-foreground/70" />
-        <span
-          className={`flex-1 truncate ${allHidden ? 'text-muted-foreground/40' : 'text-foreground'}`}
-        >
-          {label}
-        </span>
-        {isActiveGroup && (
-          <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-            编辑中
-          </span>
-        )}
-        <span className="text-xs text-muted-foreground">{children.length}</span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={allHidden ? '显示全部' : '隐藏全部'}
-              onClick={(e) => {
-                e.stopPropagation();
-                setHidden(
-                  children.map((c) => c.id),
-                  !allHidden,
-                );
-              }}
-            >
-              {allHidden ? <EyeOff /> : <Eye />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{allHidden ? '显示全部' : '隐藏全部'}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={allLocked ? '解锁全部' : '锁定全部'}
-              onClick={(e) => {
-                e.stopPropagation();
-                setLocked(
-                  children.map((c) => c.id),
-                  !allLocked,
-                );
-              }}
-            >
-              {allLocked ? <Lock /> : <Unlock />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{allLocked ? '解锁全部' : '锁定全部'}</TooltipContent>
-        </Tooltip>
-      </div>
-    );
-
-    // Phase 2 Slice A：分组行同样用 ContextMenu 包裹，命令描述符的 when/enabled 已适配分组场景
-    return <LayerRowMenu ctx={buildGroupCtx(groupId, children)}>{groupRow}</LayerRowMenu>;
-  };
+  if (!project) return null;
 
   return (
     <TooltipProvider>
@@ -830,74 +948,170 @@ export function LayerPanel() {
             正在编辑分组内部 — 按 Esc 退出
           </div>
         )}
-        <div ref={scrollParentRef} className="flex-1 overflow-y-auto">
-          {enableVirtualization ? (
-            // 虚拟滚动路径：仅渲染视口内 + overscan 的行，禁用 dnd-kit 拖拽排序。
-            // 外层相对定位容器高度 = virtualizer 总尺寸，保持滚动条与实际内容一致；
-            // 每个虚拟行绝对定位，通过 transform: translateY 偏移到目标位置。
-            // 顶层组件行（depth=0）由外层 div 提供 data-testid/data-component-id，
-            // 与非虚拟化路径下 SortableLayerRow 的属性保持一致，便于 E2E/单元测试定位。
+        {/*
+          单一共享右键菜单：ContextMenuTrigger asChild 包裹整个列表容器，
+          行右键时仅记录 menuTarget（与 canvas-context-menu 同一模式）。
+          menuTarget 为 null（空白处右键）时不渲染 Content，菜单不出现。
+        */}
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
             <div
-              style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
-              data-testid="layer-virtual-list"
+              ref={scrollParentRef}
+              className="flex-1 overflow-y-auto"
+              onContextMenu={handleListContextMenu}
             >
-              {rowVirtualizer.getVirtualItems().map((vi) => {
-                const row = flatRows[vi.index];
-                const isTopComponent = row.kind === 'component' && row.depth === 0;
-                return (
-                  <div
-                    key={row.key}
-                    data-index={vi.index}
-                    ref={(el: HTMLElement | null) => {
-                      // jsdom 等环境无 ResizeObserver 时跳过测量，依赖 estimateSize 估算
-                      if (el && typeof ResizeObserver !== 'undefined') {
-                        rowVirtualizer.measureElement(el);
-                      }
-                    }}
-                    data-testid={isTopComponent ? 'layer-row' : undefined}
-                    data-component-id={isTopComponent ? row.comp.id : undefined}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      transform: `translateY(${vi.start}px)`,
-                    }}
-                  >
-                    {row.kind === 'component'
-                      ? renderComponent(row.comp, row.depth)
-                      : renderGroupHeader(row.node)}
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext items={topLevelSortableIds} strategy={verticalListSortingStrategy}>
-                {tree.map((node) => {
-                  if (node.kind === 'group') {
+              {enableVirtualization ? (
+                // 虚拟滚动路径：仅渲染视口内 + overscan 的行，禁用 dnd-kit 拖拽排序。
+                // 外层相对定位容器高度 = virtualizer 总尺寸，保持滚动条与实际内容一致；
+                // 每个虚拟行绝对定位，通过 transform: translateY 偏移到目标位置。
+                // 顶层组件行（depth=0）由外层 div 提供 data-testid/data-component-id，
+                // 与非虚拟化路径下 SortableLayerRow 的属性保持一致，便于 E2E/单元测试定位。
+                <div
+                  style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}
+                  data-testid="layer-virtual-list"
+                >
+                  {rowVirtualizer.getVirtualItems().map((vi) => {
+                    const row = flatRows[vi.index];
+                    const isTopComponent = row.kind === 'component' && row.depth === 0;
                     return (
-                      <Fragment key={node.groupId}>
-                        {renderGroupHeader(node)}
-                        {!collapsed.has(node.groupId) &&
-                          node.children.map((c) => renderComponent(c, 1))}
-                      </Fragment>
+                      <div
+                        key={row.key}
+                        data-index={vi.index}
+                        ref={(el: HTMLElement | null) => {
+                          // jsdom 等环境无 ResizeObserver 时跳过测量，依赖 estimateSize 估算
+                          if (el && typeof ResizeObserver !== 'undefined') {
+                            rowVirtualizer.measureElement(el);
+                          }
+                        }}
+                        data-testid={isTopComponent ? 'layer-row' : undefined}
+                        data-component-id={isTopComponent ? row.comp.id : undefined}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${vi.start}px)`,
+                        }}
+                      >
+                        {row.kind === 'component' ? (
+                          <ComponentRow
+                            comp={row.comp}
+                            depth={row.depth}
+                            isSelected={selectedIdSet.has(row.comp.id)}
+                            inActiveGroup={
+                              row.comp.parentId !== null && row.comp.parentId === activeGroupId
+                            }
+                            isRenaming={renamingId === row.comp.id}
+                            onRowClick={handleComponentClick}
+                            onRowContextMenu={handleComponentContextMenu}
+                            onToggleHidden={handleToggleHidden}
+                            onToggleLocked={handleToggleLocked}
+                            onReorderToTop={handleReorderToTop}
+                            onReorderToBottom={handleReorderToBottom}
+                            onRenameCommit={handleRenameCommit}
+                            onRenameCancel={handleRenameCancel}
+                          />
+                        ) : (
+                          <GroupHeaderRow
+                            node={row.node}
+                            isCollapsed={collapsed.has(row.node.groupId)}
+                            isActiveGroup={activeGroupId === row.node.groupId}
+                            allSelected={row.node.children.every((c) => selectedIdSet.has(c.id))}
+                            someSelected={row.node.children.some((c) => selectedIdSet.has(c.id))}
+                            onGroupClick={handleGroupClick}
+                            onGroupContextMenu={handleGroupContextMenu}
+                            onToggleCollapse={toggleGroupCollapse}
+                            onSetHidden={handleSetHidden}
+                            onSetLocked={handleSetLocked}
+                          />
+                        )}
+                      </div>
                     );
-                  }
-                  return (
-                    <SortableLayerRow key={node.comp.id} id={node.comp.id}>
-                      {renderComponent(node.comp, 0)}
-                    </SortableLayerRow>
-                  );
-                })}
-              </SortableContext>
-            </DndContext>
+                  })}
+                </div>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={topLevelSortableIds}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {tree.map((node) => {
+                      if (node.kind === 'group') {
+                        return (
+                          <Fragment key={node.groupId}>
+                            <GroupHeaderRow
+                              node={node}
+                              isCollapsed={collapsed.has(node.groupId)}
+                              isActiveGroup={activeGroupId === node.groupId}
+                              allSelected={node.children.every((c) => selectedIdSet.has(c.id))}
+                              someSelected={node.children.some((c) => selectedIdSet.has(c.id))}
+                              onGroupClick={handleGroupClick}
+                              onGroupContextMenu={handleGroupContextMenu}
+                              onToggleCollapse={toggleGroupCollapse}
+                              onSetHidden={handleSetHidden}
+                              onSetLocked={handleSetLocked}
+                            />
+                            {!collapsed.has(node.groupId) &&
+                              node.children.map((c) => (
+                                <ComponentRow
+                                  key={c.id}
+                                  comp={c}
+                                  depth={1}
+                                  isSelected={selectedIdSet.has(c.id)}
+                                  inActiveGroup={c.parentId === activeGroupId}
+                                  isRenaming={renamingId === c.id}
+                                  onRowClick={handleComponentClick}
+                                  onRowContextMenu={handleComponentContextMenu}
+                                  onToggleHidden={handleToggleHidden}
+                                  onToggleLocked={handleToggleLocked}
+                                  onReorderToTop={handleReorderToTop}
+                                  onReorderToBottom={handleReorderToBottom}
+                                  onRenameCommit={handleRenameCommit}
+                                  onRenameCancel={handleRenameCancel}
+                                />
+                              ))}
+                          </Fragment>
+                        );
+                      }
+                      return (
+                        <SortableLayerRow key={node.comp.id} id={node.comp.id}>
+                          <ComponentRow
+                            comp={node.comp}
+                            depth={0}
+                            isSelected={selectedIdSet.has(node.comp.id)}
+                            inActiveGroup={false}
+                            isRenaming={renamingId === node.comp.id}
+                            onRowClick={handleComponentClick}
+                            onRowContextMenu={handleComponentContextMenu}
+                            onToggleHidden={handleToggleHidden}
+                            onToggleLocked={handleToggleLocked}
+                            onReorderToTop={handleReorderToTop}
+                            onReorderToBottom={handleReorderToBottom}
+                            onRenameCommit={handleRenameCommit}
+                            onRenameCancel={handleRenameCancel}
+                          />
+                        </SortableLayerRow>
+                      );
+                    })}
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
+          </ContextMenuTrigger>
+          {menuTarget && (
+            <ContextMenuContent className="w-48" data-testid="layer-context-menu">
+              <LayerCommandItems
+                target={menuTarget}
+                commandStore={commandStore}
+                onRequestRename={setRenamingId}
+              />
+            </ContextMenuContent>
           )}
-        </div>
+        </ContextMenu>
       </div>
     </TooltipProvider>
   );
