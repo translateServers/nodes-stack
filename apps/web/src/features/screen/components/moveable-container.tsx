@@ -17,7 +17,7 @@
  * 不从 screen-canvas.tsx 导入任何内容，避免循环依赖。
  * handlers 的创建逻辑（createMoveableHandlers）留在 screen-canvas.tsx。
  */
-import { memo, useRef, type RefObject } from 'react';
+import { memo, useMemo, useRef, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import Moveable, { type MoveableProps } from 'react-moveable';
 
@@ -115,6 +115,11 @@ export const MoveableContainer = memo(function MoveableContainer(props: Moveable
 
   // target 从 store 独立订阅 —— 这是核心优化点
   const targets = useScreenEditorStore((s) => s.targets);
+  const filteredElementGuidelines = useMemo(() => {
+    if (targets.length === 0 || elementGuidelines.length === 0) return elementGuidelines;
+    const targetSet = new Set(targets);
+    return elementGuidelines.filter((element) => !targetSet.has(element));
+  }, [elementGuidelines, targets]);
 
   // 内部 ref 用于同步外部 moveableRef
   const internalRef = useRef<Moveable | null>(null);
@@ -144,7 +149,7 @@ export const MoveableContainer = memo(function MoveableContainer(props: Moveable
       hideChildMoveableDefaultLines={isGroupSelect}
       snapDirections={SNAP_DIRECTIONS}
       elementSnapDirections={ELEMENT_SNAP_DIRECTIONS}
-      elementGuidelines={elementGuidelines}
+      elementGuidelines={filteredElementGuidelines}
       verticalGuidelines={verticalGuidelines}
       horizontalGuidelines={horizontalGuidelines}
       isDisplaySnapDigit={true}

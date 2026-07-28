@@ -1416,7 +1416,7 @@ describe('onDragStart 未选中组件立即选中并启动拖拽', () => {
     return el;
   }
 
-  it('命中未选中组件：立即调用 selectComponents 并启动 dragStart', () => {
+  it('命中未选中组件：立即启动 dragStart，手势结束后再同步面板选中态', () => {
     capturedMoveable = null;
     capturedSelecto = null;
     const dispatchInteraction = vi.fn();
@@ -1424,6 +1424,7 @@ describe('onDragStart 未选中组件立即选中并启动拖拽', () => {
     render(<ScreenCanvas editorSession={session} />);
 
     moveableDragStartSpy.mockClear();
+    dispatchInteraction.mockClear();
 
     // 构造 onDragStart 事件：target 是未选中的 c1 组件
     const target = makeComponentTarget('c1');
@@ -1437,12 +1438,27 @@ describe('onDragStart 未选中组件立即选中并启动拖拽', () => {
       inputEvent: { target },
     });
 
-    // 未选中组件 → 立即选中
-    expect(store.selectComponents).toHaveBeenCalledWith(['c1']);
-    // 立即调用 dragStart（不等 onSelectEnd）
+    expect(store.selectComponents).not.toHaveBeenCalled();
     expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
-    // 阻止 Selecto 继续（Moveable 已接管）
+    expect(dispatchInteraction).not.toHaveBeenCalledWith('pointer-down');
     expect(stopped).toBe(true);
+
+    capturedSelecto!.onSelectEnd!({
+      selected: [target],
+      inputEvent: new MouseEvent('mousedown', { bubbles: true }),
+      isDragStart: true,
+    });
+
+    expect(store.selectComponents).not.toHaveBeenCalled();
+    expect(moveableDragStartSpy).toHaveBeenCalledTimes(1);
+
+    capturedMoveable!.onDragEnd!({
+      datas: { id: 'c1' },
+      isDrag: false,
+      lastEvent: undefined,
+    });
+
+    expect(store.selectComponents).toHaveBeenCalledWith(['c1']);
   });
 
   it('命中已选中组件：仅阻止 Selecto，不重复选中和 dragStart', () => {

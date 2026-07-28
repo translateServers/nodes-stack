@@ -141,6 +141,16 @@ function readAltKey(inputEvent: unknown): boolean {
   return false;
 }
 
+interface MoveableSnapRenderController {
+  getManager?: () => { state: { snapRenderInfo?: unknown } };
+}
+
+function clearMoveableSnapRenderInfo(moveable: Moveable | null): void {
+  const controller = moveable as unknown as MoveableSnapRenderController | null;
+  const manager = controller?.getManager?.();
+  if (manager) manager.state.snapRenderInfo = null;
+}
+
 /**
  * 安全地设置指针捕获。
  *
@@ -557,14 +567,10 @@ export function ScreenCanvas({
    * - 外部 store 变更 selectedComponentIds（如快捷键、撤销重做）
    * - 新组件挂载后 ref 注册延迟
    */
-  const targets = useScreenEditorStore((s) => s.targets);
   const setTargetsAction = useScreenEditorStore((s) => s.setTargets);
-  /**
-   * targets 的 mutable ref，用于 useLayoutEffect 中同步读取最新值做 bail out 判断，
-   * 避免调用 useScreenEditorStore.getState()（在测试中未被 mock）。
-   */
-  const targetsRef = useRef<HTMLElement[]>(targets);
-  targetsRef.current = targets;
+  const targetsRef = useRef<HTMLElement[]>([]);
+  const pendingDragSelectionRef = useRef<string[] | null>(null);
+  const directDragHandoffRef = useRef(false);
   /**
    * 同步更新 targets store + ref。
    * 包装 setTargetsAction 让所有调用点同步更新 ref，避免 useLayoutEffect bail out 失效。
@@ -635,7 +641,7 @@ export function ScreenCanvas({
     if (moveableRef.current) {
       moveableRef.current.updateRect();
     }
-  }, [targets, selectedGeometryFingerprint]);
+  }, [selectedGeometryFingerprint]);
 
   /**
    * 任务 5.2：文字工具点击画布创建文本组件。
@@ -1329,10 +1335,7 @@ export function ScreenCanvas({
         // render 函数在入口 if (!snapRenderInfo) return [] 直接返回，不生成任何
         // snap 视觉元素。实际吸附不受影响——state.guidelines 已在 dragStart 的
         // checkSnapInfo 中填充，Draggable drag handler 读取它做磁性吸附。
-        const mgr = moveableRef.current?.getManager();
-        if (mgr) {
-          mgr.state.snapRenderInfo = null;
-        }
+        clearMoveableSnapRenderInfo(moveableRef.current);
       },
       onDrag: (e) => {
         const datas = e.datas as unknown as DragDatas;
@@ -1367,11 +1370,17 @@ export function ScreenCanvas({
         });
       },
       onDragEnd: (e) => {
+        directDragHandoffRef.current = false;
         // 任务 13.8：手势结束必须无条件恢复交互状态机。
         // 纯点击（零位移）时 Gesto isDrag 为 false，若早退会漏发 pointer-up，
         // 状态机卡在 dragging，后续 Selecto onDragStart 仲裁拒绝一切交互
         //（反复选中/取消数次后出现一次零位移点击即无法选中组件）。
         dispatchInteraction('pointer-up');
+        const pendingSelection = pendingDragSelectionRef.current;
+        if (pendingSelection) {
+          pendingDragSelectionRef.current = null;
+          selectComponents(pendingSelection);
+        }
         // L1：丢弃挂起帧（最终值取自 e.lastEvent），防止延迟任务覆盖 visible:false
         gestureRafThrottlerRef.current?.cancel();
         const datas = e.datas as unknown as Partial<DragDatas>;
@@ -1428,10 +1437,7 @@ export function ScreenCanvas({
         // 任务 3.4：镜像缩放开始到交互状态机
         dispatchInteraction('start-resize');
         // 同 onDragStart：将 snapRenderInfo 置 null，阻止渲染目标组件蓝色辅助线
-        const mgr = moveableRef.current?.getManager();
-        if (mgr) {
-          mgr.state.snapRenderInfo = null;
-        }
+        clearMoveableSnapRenderInfo(moveableRef.current);
       },
       onResize: (e) => {
         const datas = e.datas as unknown as ResizeDatas;
@@ -1563,10 +1569,7 @@ export function ScreenCanvas({
         // 任务 3.4：镜像旋转开始到交互状态机
         dispatchInteraction('start-rotate');
         // 同 onDragStart：将 snapRenderInfo 置 null，阻止渲染目标组件蓝色辅助线
-        const mgr = moveableRef.current?.getManager();
-        if (mgr) {
-          mgr.state.snapRenderInfo = null;
-        }
+        clearMoveableSnapRenderInfo(moveableRef.current);
       },
       onRotate: (e) => {
         const datas = e.datas as unknown as RotateDatas;
@@ -1691,8 +1694,14 @@ export function ScreenCanvas({
         }
       },
       onDragGroupEnd: (e) => {
+        directDragHandoffRef.current = false;
         // 任务 13.8：手势结束必须无条件恢复交互状态机（同 onDragEnd）。
         dispatchInteraction('pointer-up');
+        const pendingSelection = pendingDragSelectionRef.current;
+        if (pendingSelection) {
+          pendingDragSelectionRef.current = null;
+          selectComponents(pendingSelection);
+        }
         const datas = e.datas as unknown as Partial<GroupDragDatas>;
         // Alt+组拖拽复制：零位移或异常结束时也要清理克隆体
         if (datas.isAltCopy && datas.altCopyClones && datas.altCopyClones.length > 0) {
@@ -1838,6 +1847,7 @@ export function ScreenCanvas({
       updateComponent,
       updateComponentsBatch,
       duplicateSelectedToPosition,
+      selectComponents,
       setDimension,
     ],
   );
@@ -1984,8 +1994,6 @@ export function ScreenCanvas({
                 e.stop();
                 return;
               }
-              // 任务 3.5：镜像框选开始到交互状态机（从 idle → marquee-selecting）
-              dispatchInteraction('pointer-down');
               if (moveableRef.current) {
                 // Selecto inputEvent 为 any，可能是 MouseEvent / TouchEvent / PointerEvent。
                 // 通过 instanceof 收敛到 HTMLElement 后再使用，避免 as HTMLElement 越过类型检查
@@ -2030,29 +2038,30 @@ export function ScreenCanvas({
                           groupPid != null && activeGroupId !== groupPid && !isPotentialDoubleClick
                             ? components.filter((c) => c.parentId === groupPid).map((c) => c.id)
                             : [targetId];
-                        // 抽帧根因修复：仅 flushSync setTargets（Moveable dragStart 必需的
-                        // 最小同步单元），selectComponents 交给 React 18 自动批处理。
-                        //
-                        // 原版 flushSync(selectComponents + setTargets) 会同步重渲染 8+ 个
-                        // selectedComponentIds 订阅者（PropertyPanel / LayerPanel / BlueprintSheet /
-                        // ContextMenu / StatusBar / ProjectMenubar / ScreenCanvas），造成几百毫秒
-                        // 阻塞。setTargets 仅 MoveableContainer 一个订阅者，同步开销 <1ms。
-                        //
-                        // selectComponents 延迟一帧批处理：组件高亮 outline / elementGuidelines
-                        // / 各面板数据在下一帧更新，由 Moveable 控制框提供即时选中反馈。
                         flushSync(() => {
                           setTargets(computeTargetsForIds(selectionToApply));
                         });
-                        selectComponents(selectionToApply);
-                        moveableRef.current.dragStart(mouseEvt);
+                        if (clickedComp?.status.locked) {
+                          selectComponents(selectionToApply);
+                        } else {
+                          pendingDragSelectionRef.current = selectionToApply;
+                          directDragHandoffRef.current = true;
+                          moveableRef.current.dragStart(mouseEvt);
+                        }
                       }
                     }
                     e.stop();
+                    return;
                   }
                 }
               }
+              dispatchInteraction('pointer-down');
             }}
             onSelectEnd={(e) => {
+              if (directDragHandoffRef.current) {
+                directDragHandoffRef.current = false;
+                return;
+              }
               const selected = e.selected
                 .map((el) => getComponentIdFromTarget(el))
                 .filter((id): id is string => id != null);
