@@ -106,14 +106,12 @@ function GlobalNodeSummary({ data }: { data: GlobalNodeData }): JSX.Element | nu
           <div>目标: {config.targetComponentId || '（未设置）'}</div>
         </div>
       );
-    case 'interval': {
-      const cfg = config as { globalType: 'interval'; intervalMs: number };
+    case 'interval':
       return (
         <div className="space-y-0.5 text-[11px] text-muted-foreground" data-summary="interval">
-          <div>间隔: {cfg.intervalMs}ms</div>
+          <div>间隔: {config.intervalMs}ms</div>
         </div>
       );
-    }
     default:
       return null;
   }
