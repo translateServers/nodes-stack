@@ -4,7 +4,7 @@
  * VSCode/Figma 风格的 IDE 状态栏，分三段：
  * - 左侧：当前工具 + 选中信息
  * - 中间：画布尺寸（拖拽时 DimensionIndicator 通过 ref 直写 DOM，不走 React render）
- * - 右侧：Snap/Guide 开关 + 缩放百分比
+ * - 右侧：Snap/Guide/Event 开关 + 缩放百分比
  *
  * 高度 28px（h-7），bg-card + border-t，紧凑信息密度。
  */
@@ -228,7 +228,7 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
           />
           <StatusBarToggle
             label="Event"
-            tooltip="画布元素事件（蓝图 componentClick 派发）"
+            tooltip="编辑器画布蓝图运行时（事件、定时器与动作）"
             active={eventsEnabled}
             onClick={toggleEvents}
           />

@@ -244,6 +244,7 @@ interface CanvasComponentWrapperProps {
   selected: boolean;
   showBorderGuides: boolean;
   registerRef: (id: string, el: HTMLElement | null) => void;
+  apiRawDataOverride?: unknown;
   /**
    * 元素点击事件处理器（仅 eventsEnabled 时传入）。
    * - undefined：不派发蓝图事件（默认编辑模式）
@@ -270,6 +271,7 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
   selected,
   showBorderGuides,
   registerRef,
+  apiRawDataOverride,
   onComponentClick,
   onComponentEvent,
 }: CanvasComponentWrapperProps) {
@@ -309,7 +311,7 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
           : undefined
       }
     >
-      <ComponentRenderer component={component} />
+      <ComponentRenderer component={component} apiRawDataOverride={apiRawDataOverride} />
     </div>
   );
 });
@@ -411,8 +413,31 @@ export function ScreenCanvas({
    * 仍使用原始 selectedComponentIds，保证事件处理器读取最新值。
    */
   const deferredSelectedComponentIds = useDeferredValue(selectedComponentIds);
-  // 画布元素事件开关：开启时编辑器画布接入蓝图运行时，组件 onClick 派发 componentClick 事件
+  // 编辑器画布蓝图运行时总开关：统一控制所有触发器和后续动作。
   const eventsEnabled = useScreenEditorStore((s) => s.eventsEnabled);
+  const components = useMemo<ScreenComponent[]>(
+    () => project?.components ?? [],
+    [project?.components],
+  );
+  const canvas = project?.canvas;
+
+  /**
+   * 编辑器画布始终向运行时提供真实蓝图，由 enabled 显式控制执行边界。
+   * 独立预览页不读取该本地偏好，保持完整运行时；蓝图沙盒继续使用隔离的 mock 运行时。
+   */
+  const {
+    contextValue: blueprintContext,
+    onComponentClick,
+    onComponentEvent,
+  } = useBlueprintPreviewRuntime(project?.blueprint, components, { enabled: eventsEnabled });
+  const runtimeVisibilityOverrides = eventsEnabled
+    ? blueprintContext.visibilityOverrides
+    : undefined;
+  const runtimeApiDataOverrides = eventsEnabled ? blueprintContext.apiDataOverrides : undefined;
+  const handleComponentClick = eventsEnabled ? onComponentClick : undefined;
+  // Provider 保持稳定回调：关闭期间的数据事件由运行时丢弃，重开时不会因回调换绑而补发旧状态。
+  const componentEventCallback = onComponentEvent;
+  const handleComponentEvent = eventsEnabled ? onComponentEvent : null;
 
   /**
    * Canvas Pan Optimization：用 ref 镜像 canvasScale / canvasOffset，
@@ -587,17 +612,13 @@ export function ScreenCanvas({
       setTargets([]);
       return;
     }
-    const newTargets = selectedComponentIds
-      .map((id) => {
-        // 优先用 componentRefs（已注册的组件，O(1)）
-        const refEl = componentRefs.current.get(id);
-        if (refEl) return refEl;
-        // fallback：querySelector（新挂载的组件，ref 可能还没注册但 DOM 已存在）
-        return (
-          contentRef.current?.querySelector<HTMLElement>(`[data-component-id="${id}"]`) ?? null
-        );
-      })
-      .filter((el): el is HTMLElement => el != null);
+    const visibleSelectedIds = selectedComponentIds.filter((id) => {
+      const component = components.find((candidate) => candidate.id === id);
+      if (!component) return false;
+      const runtimeVisible = runtimeVisibilityOverrides?.get(id);
+      return runtimeVisible ?? !component.status.hidden;
+    });
+    const newTargets = computeTargetsForIds(visibleSelectedIds);
     // 引用相同时 bail out，避免无谓渲染
     const current = targetsRef.current;
     if (current.length === newTargets.length && current.every((el, i) => el === newTargets[i])) {
@@ -605,7 +626,13 @@ export function ScreenCanvas({
     }
     targetsRef.current = newTargets;
     setTargets(newTargets);
-  }, [selectedComponentIds, project?.components]);
+  }, [
+    selectedComponentIds,
+    components,
+    runtimeVisibilityOverrides,
+    computeTargetsForIds,
+    setTargets,
+  ]);
 
   /**
    * 选中组件的位置/尺寸指纹：当 x/y/width/height/rotation 变化时强制刷新 Moveable rect。
@@ -1126,40 +1153,6 @@ export function ScreenCanvas({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [setCanvasScaleAndOffset, rulersRef]);
 
-  const components = project?.components ?? [];
-  const canvas = project?.canvas;
-
-  /**
-   * 蓝图运行时集成（仅 eventsEnabled=true 时启用）。
-   *
-   * - eventsEnabled=false：传入 undefined 作为 blueprint，hook 内部 compileResult=null、
-   *   isEnabled=false，pageLoad effect 不触发，onComponentClick 调用时直接返回
-   * - eventsEnabled=true：传入实际 blueprint，hook 编译规则并在 mount 时触发 pageLoad，
-   *   组件 onClick 派发 componentClick 事件（与公开预览页一致）
-   *
-   * BlueprintPreviewProvider 在 eventsEnabled=false 时传 null，
-   * 组件回退到既有行为（不消费 Context）。
-   */
-  const blueprintForRuntime = eventsEnabled ? project?.blueprint : undefined;
-  const {
-    contextValue: blueprintContext,
-    onComponentClick,
-    onComponentEvent,
-  } = useBlueprintPreviewRuntime(blueprintForRuntime, components);
-
-  /**
-   * 给 CanvasComponentWrapper 的事件回调。
-   * - eventsEnabled=false：undefined（不绑定 onClick，保持编辑模式行为）
-   * - eventsEnabled=true：包装 onComponentClick，仅对可见组件派发蓝图事件
-   */
-  const handleComponentClick = eventsEnabled ? onComponentClick : undefined;
-  /**
-   * V2 任务 7.1 + 7.2：注入到 BlueprintEventProvider 的事件回调。
-   * - eventsEnabled=false：传 null，组件 useComponentEvent 返回 null（不触发蓝图事件）
-   * - eventsEnabled=true：传 onComponentEvent，组件可在 onClick/onHover 等回调中调用
-   */
-  const componentEventCallback = eventsEnabled ? onComponentEvent : null;
-
   /**
    * H2 性能优化：构建组件 ID → 组件的 Map，替代 12 处 Array.find 查找。
    *
@@ -1186,9 +1179,12 @@ export function ScreenCanvas({
   const visibleComponents = useMemo(
     () =>
       components
-        .filter((c: ScreenComponent) => !c.status.hidden)
+        .filter((c: ScreenComponent) => {
+          const runtimeVisible = runtimeVisibilityOverrides?.get(c.id);
+          return runtimeVisible ?? !c.status.hidden;
+        })
         .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex),
-    [components],
+    [components, runtimeVisibilityOverrides],
   );
 
   /**
@@ -1904,8 +1900,9 @@ export function ScreenCanvas({
                   selected={renderSelectedIdSet.has(component.id)}
                   showBorderGuides={showBorderGuides}
                   registerRef={registerRef}
+                  apiRawDataOverride={runtimeApiDataOverrides?.get(component.id)}
                   onComponentClick={handleComponentClick}
-                  onComponentEvent={componentEventCallback}
+                  onComponentEvent={handleComponentEvent}
                 />
               ))}
 

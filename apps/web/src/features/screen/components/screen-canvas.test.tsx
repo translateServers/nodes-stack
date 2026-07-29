@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach, type Mock } from 'vitest';
-import { render, cleanup, fireEvent } from '@testing-library/react';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
-import type { ComponentStyle, ScreenComponent, ScreenProject } from '@nebula/shared';
+import type {
+  ComponentStyle,
+  EventBlueprintV2,
+  ScreenComponent,
+  ScreenProject,
+} from '@nebula/shared';
+import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import { ScreenCanvas, buildFilterString } from './screen-canvas';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { pickImageFile } from '../lib/image-file-adapter';
@@ -288,6 +294,7 @@ function setupStore(
     selectedComponentIds?: string[];
     canvasScale?: number;
     canvasOffset?: { x: number; y: number };
+    eventsEnabled?: boolean;
   } = {},
 ) {
   const project = makeProject();
@@ -297,6 +304,7 @@ function setupStore(
     canvasScale: overrides.canvasScale ?? 1,
     canvasOffset: overrides.canvasOffset ?? { x: 0, y: 0 },
     selectedComponentIds,
+    eventsEnabled: overrides.eventsEnabled ?? false,
     showBorderGuides: false,
     activeGroupId: null,
     guides: { visible: true, vertical: [], horizontal: [] },
@@ -326,6 +334,87 @@ function setupStore(
   mockUseStore.mockImplementation(<T,>(selector: (s: typeof store) => T): T => selector(store));
   return store;
 }
+
+describe('编辑器画布蓝图运行时总开关', () => {
+  beforeEach(() => {
+    mockUseStore.mockReset();
+  });
+
+  it('关闭时不执行事件，开启时应用动作，重新关闭后恢复项目原始状态', async () => {
+    const store = setupStore({ selectedComponentIds: ['c1'], eventsEnabled: false });
+    const project = store.project as ScreenProject;
+    const componentA = project.components[0];
+    if (!componentA) throw new Error('测试项目缺少触发组件');
+    const componentB: ScreenComponent = {
+      ...componentA,
+      id: 'c2',
+      name: '矩形 2',
+      position: { ...componentA.position, x: 400 },
+      zIndex: 1,
+    };
+    const blueprint: EventBlueprintV2 = {
+      version: EVENT_BLUEPRINT_VERSION_V2,
+      nodes: [
+        {
+          id: 'component-a',
+          kind: 'component',
+          position: { x: 0, y: 0 },
+          componentId: componentA.id,
+        },
+        {
+          id: 'component-b',
+          kind: 'component',
+          position: { x: 200, y: 0 },
+          componentId: componentB.id,
+        },
+      ],
+      edges: [
+        {
+          id: 'edge-click-hide',
+          source: 'component-a',
+          sourceHandle: 'evt:click',
+          target: 'component-b',
+          targetHandle: 'act:hide',
+        },
+      ],
+    };
+    store.project = {
+      ...project,
+      components: [...project.components, componentB],
+      blueprint,
+    };
+    store.selectedComponentIds = [componentB.id];
+
+    const session = makeSession('select', 'idle');
+    const { container, rerender } = render(<ScreenCanvas editorSession={session} />);
+    const getComponent = (id: string): HTMLElement | null =>
+      container.querySelector<HTMLElement>(`[data-component-id="${id}"]`);
+
+    fireEvent.click(getComponent(componentA.id)!);
+    await Promise.resolve();
+    expect(getComponent(componentB.id)).not.toBeNull();
+    expect((store.targets as HTMLElement[])[0]?.getAttribute('data-component-id')).toBe(
+      componentB.id,
+    );
+
+    store.eventsEnabled = true;
+    rerender(<ScreenCanvas editorSession={session} />);
+    fireEvent.click(getComponent(componentA.id)!);
+    await waitFor(() => {
+      expect(getComponent(componentB.id)).toBeNull();
+      expect(store.targets).toEqual([]);
+    });
+
+    store.eventsEnabled = false;
+    rerender(<ScreenCanvas editorSession={session} />);
+    await waitFor(() => {
+      expect(getComponent(componentB.id)).not.toBeNull();
+      expect((store.targets as HTMLElement[])[0]?.getAttribute('data-component-id')).toBe(
+        componentB.id,
+      );
+    });
+  });
+});
 
 /**
  * 构造最小可用的 editorSession。

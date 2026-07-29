@@ -75,10 +75,12 @@ function setupStore(
     selectedComponentIds?: string[];
     snapEnabled?: boolean;
     guidesVisible?: boolean;
+    eventsEnabled?: boolean;
   } = {},
 ): {
   toggleSnap: ReturnType<typeof vi.fn>;
   toggleGuidesVisibility: ReturnType<typeof vi.fn>;
+  toggleEvents: ReturnType<typeof vi.fn>;
   setCanvasScale: ReturnType<typeof vi.fn>;
 } {
   const project = overrides.project === undefined ? makeProject() : overrides.project;
@@ -86,9 +88,11 @@ function setupStore(
   const selectedComponentIds = overrides.selectedComponentIds ?? [];
   const snapEnabled = overrides.snapEnabled ?? true;
   const guidesVisible = overrides.guidesVisible ?? true;
+  const eventsEnabled = overrides.eventsEnabled ?? false;
 
   const toggleSnap = vi.fn();
   const toggleGuidesVisibility = vi.fn();
+  const toggleEvents = vi.fn();
   const setCanvasScale = vi.fn();
 
   const store: Record<string, unknown> = {
@@ -97,14 +101,16 @@ function setupStore(
     selectedComponentIds,
     snapEnabled,
     guides: { visible: guidesVisible },
+    eventsEnabled,
     toggleSnap,
     toggleGuidesVisibility,
+    toggleEvents,
     setCanvasScale,
   };
 
   mockUseStore.mockImplementation(<T,>(selector: (s: typeof store) => T): T => selector(store));
 
-  return { toggleSnap, toggleGuidesVisibility, setCanvasScale };
+  return { toggleSnap, toggleGuidesVisibility, toggleEvents, setCanvasScale };
 }
 
 describe('CanvasStatusBar 任务 1.2：接入统一工具注册表', () => {
@@ -198,6 +204,16 @@ describe('CanvasStatusBar 任务 1.2：接入统一工具注册表', () => {
     const guideBtn = screen.getByRole('switch', { name: /Guide/ });
     fireEvent.click(guideBtn);
     expect(toggleGuidesVisibility).toHaveBeenCalledOnce();
+  });
+
+  it('Event 开关反映编辑器蓝图运行时状态并调用 toggleEvents', () => {
+    const { toggleEvents } = setupStore({ eventsEnabled: false });
+    render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+    const eventToggle = screen.getByRole('switch', { name: 'Event：关闭' });
+
+    expect(eventToggle).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(eventToggle);
+    expect(toggleEvents).toHaveBeenCalledOnce();
   });
 
   it('缩放百分比按钮具有可访问名称（缩放）', () => {

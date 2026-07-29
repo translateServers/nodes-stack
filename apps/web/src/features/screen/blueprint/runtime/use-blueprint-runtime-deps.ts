@@ -8,13 +8,12 @@
  *   - 乱序响应不覆盖：仅最新请求的结果才会通过 onRefreshComplete 回调上报
  *   - 组件卸载时中止所有进行中请求，无浮动 Promise
  * - 提供 navigate / scrollToComponent / hasComponent 等执行器依赖
+ * - 暴露 cancelPendingRequests，供宿主关闭运行时时立即中止进行中的请求
  *
- * 不在这里做的事：
- * - 编辑器画布不调用本 Hook（spec: "编辑器画布不触发蓝图"）
- * - 不改写项目数据，可见性仅作用于预览覆盖表
+ * 不改写项目数据，可见性仅作用于运行时覆盖表。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
 import type {
   RuntimeDeps,
@@ -85,30 +84,38 @@ export function useBlueprintRuntimeDeps(
   deps: RuntimeDeps;
   visibilityOverrides: VisibilityOverrides;
   resetVisibility: () => void;
+  cancelPendingRequests: () => void;
 } {
   const [visibilityOverrides, setVisibilityOverrides] = useState<VisibilityOverrides>(
     () => new Map<string, boolean>(),
   );
   // 保留最新 components 引用，避免 deps 闭包捕获到过期值
   const componentsRef = useRef(components);
-  componentsRef.current = components;
   const onRefreshCompleteRef = useRef(onRefreshComplete);
-  onRefreshCompleteRef.current = onRefreshComplete;
+  useLayoutEffect(() => {
+    componentsRef.current = components;
+    onRefreshCompleteRef.current = onRefreshComplete;
+  }, [components, onRefreshComplete]);
 
   // 每个组件的进行中请求：componentId -> RefreshRequest
   const requestsRef = useRef<Map<string, RefreshRequest>>(new Map());
+  const requestApiControllersRef = useRef<Set<AbortController>>(new Set());
   // 全局序号：递增分配，用于乱序响应检测
   const seqRef = useRef(0);
 
-  // 卸载时中止所有进行中请求（无浮动 Promise）
-  useEffect(() => {
-    return () => {
-      for (const req of requestsRef.current.values()) {
-        req.controller.abort();
-      }
-      requestsRef.current.clear();
-    };
+  const cancelPendingRequests = useCallback((): void => {
+    for (const req of requestsRef.current.values()) {
+      req.controller.abort();
+    }
+    requestsRef.current.clear();
+    for (const controller of requestApiControllersRef.current) {
+      controller.abort();
+    }
+    requestApiControllersRef.current.clear();
   }, []);
+
+  // 卸载时中止所有进行中请求（无浮动 Promise）
+  useEffect(() => cancelPendingRequests, [cancelPendingRequests]);
 
   const hasComponent = useCallback((componentId: string): boolean => {
     return componentsRef.current.some((c) => c.id === componentId);
@@ -227,13 +234,14 @@ export function useBlueprintRuntimeDeps(
   }, []);
 
   const resetVisibility = useCallback((): void => {
-    setVisibilityOverrides(new Map());
+    setVisibilityOverrides((prev) => (prev.size === 0 ? prev : new Map()));
   }, []);
 
   // requestApi 动作运行时实现（任务 10.4）：fetch + timeout 取消协议
   const requestApi = useCallback(
     async (params: RequestApiRuntimeParams): Promise<RequestApiRuntimeResult> => {
       const controller = new AbortController();
+      requestApiControllersRef.current.add(controller);
       const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
       try {
         const response = await fetch(params.url, {
@@ -250,6 +258,7 @@ export function useBlueprintRuntimeDeps(
         };
       } finally {
         clearTimeout(timeoutId);
+        requestApiControllersRef.current.delete(controller);
       }
     },
     [],
@@ -282,5 +291,5 @@ export function useBlueprintRuntimeDeps(
     ],
   );
 
-  return { deps, visibilityOverrides, resetVisibility };
+  return { deps, visibilityOverrides, resetVisibility, cancelPendingRequests };
 }

@@ -3,9 +3,9 @@
  *
  * 验证点（对应 tasks.md 3.5 验证要求）：
  * - 预览集成测试覆盖触发执行：blueprint 存在时组件点击与页面加载触发执行
- * - 编辑器画布无蓝图副作用：无 blueprint 时不触发任何执行
+ * - 宿主总闸门关闭或无 blueprint 时不触发任何执行
  * - 卸载无残留请求：组件卸载后所有进行中请求被中止
- * - 编辑器画布不执行蓝图：本 Hook 不在编辑器调用
+ * - 无 Provider 时预览 Context 返回 null
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,6 +126,7 @@ describe('useBlueprintPreviewRuntime - 触发执行（任务 3.5）', () => {
   it('componentClick 事件触发：点击组件执行动作', async () => {
     const componentA = makeComponent('comp-a');
     const componentB = makeComponent('comp-b');
+    const components = [componentA, componentB];
     const blueprint = makeBlueprint(
       't-click',
       { type: 'componentClick', componentId: 'comp-a' },
@@ -133,9 +134,7 @@ describe('useBlueprintPreviewRuntime - 触发执行（任务 3.5）', () => {
       { type: 'setVisibility', targetComponentId: 'comp-b', visible: 'hide' },
     );
 
-    const { result } = renderHook(() =>
-      useBlueprintPreviewRuntime(blueprint, [componentA, componentB]),
-    );
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, components));
 
     // mount 时 pageLoad 没有规则匹配，不触发任何动作
     await waitFor(() => {
@@ -236,11 +235,118 @@ describe('useBlueprintPreviewRuntime - 编辑器画布无蓝图副作用（任�
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('编辑器画布不调用本 Hook（设计约束：仅预览页使用）', () => {
-    // 这个测试是文档化的约束验证：本 Hook 不应在编辑器画布组件中导入
-    // 通过 useBlueprintPreview 在无 Provider 时返回 null 验证：
+  it('无 BlueprintPreviewProvider 时 Context 返回 null', () => {
     const { result } = renderHook(() => useBlueprintPreview());
     expect(result.current).toBeNull();
+  });
+});
+
+describe('useBlueprintPreviewRuntime - 宿主运行时总闸门', () => {
+  it('有效蓝图在 enabled=false 时仍可编译，但不触发 pageLoad', async () => {
+    const component = makeComponent('comp-target');
+    const pageLoadBlueprint = makeBlueprint('t-page', { type: 'pageLoad' }, 'a-hide', {
+      type: 'setVisibility',
+      targetComponentId: component.id,
+      visible: 'hide',
+    });
+    const { result } = renderHook(() =>
+      useBlueprintPreviewRuntime(pageLoadBlueprint, [component], { enabled: false }),
+    );
+
+    expect(result.current.compiledRules).toHaveLength(1);
+    expect(result.current.isEnabled).toBe(false);
+    await Promise.resolve();
+    expect(result.current.contextValue.visibilityOverrides.size).toBe(0);
+  });
+
+  it('enabled 从 true 切为 false 后清空动作覆盖，旧事件回调也不能再次执行', async () => {
+    const componentA = makeComponent('comp-a');
+    const componentB = makeComponent('comp-b');
+    const blueprint = makeBlueprint(
+      't-click',
+      { type: 'componentClick', componentId: componentA.id },
+      'a-hide',
+      { type: 'setVisibility', targetComponentId: componentB.id, visible: 'hide' },
+    );
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useBlueprintPreviewRuntime(blueprint, [componentA, componentB], { enabled }),
+      { initialProps: { enabled: true } },
+    );
+    const initialClickHandler = result.current.onComponentClick;
+
+    act(() => {
+      initialClickHandler(componentA.id);
+    });
+    await waitFor(() => {
+      expect(result.current.contextValue.visibilityOverrides.get(componentB.id)).toBe(false);
+    });
+
+    rerender({ enabled: false });
+    await waitFor(() => {
+      expect(result.current.isEnabled).toBe(false);
+      expect(result.current.contextValue.visibilityOverrides.size).toBe(0);
+    });
+
+    act(() => {
+      initialClickHandler(componentA.id);
+    });
+    await Promise.resolve();
+    expect(result.current.contextValue.visibilityOverrides.size).toBe(0);
+  });
+
+  it('启停总闸门时组件事件回调引用稳定，避免重开时重放已有数据状态', () => {
+    const component = makeComponent('comp-a');
+    const blueprint = makeBlueprint(
+      't-data',
+      { type: 'dataLoaded', componentId: component.id },
+      'a-show',
+      { type: 'setVisibility', targetComponentId: component.id, visible: 'show' },
+    );
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useBlueprintPreviewRuntime(blueprint, [component], { enabled }),
+      { initialProps: { enabled: true } },
+    );
+    const initialEventHandler = result.current.onComponentEvent;
+
+    rerender({ enabled: false });
+    expect(result.current.onComponentEvent).toBe(initialEventHandler);
+    rerender({ enabled: true });
+    expect(result.current.onComponentEvent).toBe(initialEventHandler);
+  });
+
+  it('关闭运行时会中止已经开始的 refreshDataSource 请求', () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const chart = makeApiComponent('comp-chart');
+    const trigger = makeComponent('comp-trigger');
+    const blueprint = makeBlueprint(
+      't-click',
+      { type: 'componentClick', componentId: trigger.id },
+      'a-refresh',
+      { type: 'refreshDataSource', targetComponentId: chart.id },
+    );
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useBlueprintPreviewRuntime(blueprint, [chart, trigger], { enabled }),
+      { initialProps: { enabled: true } },
+    );
+
+    act(() => {
+      result.current.onComponentClick(trigger.id);
+    });
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(requestInit.signal?.aborted).toBe(false);
+
+    rerender({ enabled: false });
+    expect(requestInit.signal?.aborted).toBe(true);
   });
 });
 
@@ -805,6 +911,50 @@ describe('useBlueprintPreviewRuntime - V1 interval 触发器调度（任务 5-6�
     expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(true);
   });
 
+  it('多条 interval 规则只按各自周期执行，不交叉提前触发', async () => {
+    const componentA = makeComponent('comp-a');
+    const componentB = makeComponent('comp-b');
+    const components = [componentA, componentB];
+    const first = makeBlueprint('interval-a', { type: 'interval', intervalMs: 100 }, 'hide-a', {
+      type: 'setVisibility',
+      targetComponentId: componentA.id,
+      visible: 'hide',
+    });
+    const second = makeBlueprint('interval-b', { type: 'interval', intervalMs: 200 }, 'hide-b', {
+      type: 'setVisibility',
+      targetComponentId: componentB.id,
+      visible: 'hide',
+    });
+    const firstEdge = first.edges[0];
+    const secondEdge = second.edges[0];
+    if (!firstEdge || !secondEdge) throw new Error('测试蓝图缺少连线');
+    const blueprint: EventBlueprint = {
+      version: 1,
+      nodes: [...first.nodes, ...second.nodes],
+      edges: [
+        { ...firstEdge, id: 'edge-a' },
+        { ...secondEdge, id: 'edge-b' },
+      ],
+    };
+    const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, components));
+    expect(
+      result.current.compiledRules.map((rule) =>
+        rule.triggerConfig.type === 'interval' ? rule.triggerConfig.intervalMs : undefined,
+      ),
+    ).toEqual([100, 200]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(result.current.contextValue.visibilityOverrides.get(componentA.id)).toBe(false);
+    expect(result.current.contextValue.visibilityOverrides.get(componentB.id)).toBeUndefined();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(result.current.contextValue.visibilityOverrides.get(componentB.id)).toBe(false);
+  });
+
   it('组件卸载后 setInterval 被清理', () => {
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
     const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
@@ -859,7 +1009,7 @@ describe('useBlueprintPreviewRuntime - V1 interval 触发器调度（任务 5-6�
     expect(result.current.contextValue.visibilityOverrides.get('comp-target')).toBe(true);
   });
 
-  it('V2 蓝图不建立 interval 调度（V2 不支持）', () => {
+  it('不含 interval 规则的 V2 蓝图不建立 interval 调度', () => {
     const v2Blueprint: EventBlueprintV2 = {
       version: 2,
       nodes: [
@@ -893,7 +1043,7 @@ describe('useBlueprintPreviewRuntime - V1 interval 触发器调度（任务 5-6�
 
     renderHook(() => useBlueprintPreviewRuntime(v2Blueprint, [component]));
 
-    // V2 蓝图不应建立任何 setInterval
+    // 仅有 pageLoad 的 V2 蓝图不应建立 setInterval
     expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 

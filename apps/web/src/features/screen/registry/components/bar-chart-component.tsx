@@ -39,8 +39,8 @@ function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
  * - API 数据源：经 useApiDataSource 发起 GET 请求，响应数据传入 useChartData 解析（5.5）
  * - 数据集数据源：经 useDatasetSource 调用后端 /dataset/:id/execute，
  *   后端返回 parsed（已应用 shape.dataPath + fieldMapping + filter）传入 useChartData
- * - apiRawDataOverride（任务 3.4）：预览页蓝图 refreshDataSource 动作完成后写入的覆盖数据，
- *   优先于 hook state；编辑器场景下为 undefined，行为不变
+ * - apiRawDataOverride（任务 3.4）：蓝图 refreshDataSource 动作完成后写入的覆盖数据，
+ *   优先于 hook state；独立预览始终可写入，编辑器画布仅在 Event 总闸门开启时写入
  * 标题与颜色仍取视觉层 props/style，渲染行为不回退。
  * 交互层 interaction.tooltipOnHover 开启时，悬停柱条经 SVG <title> 展示名称与数值
  * （任务 4.5，默认关闭，关闭时视觉与既有行为一致）。
@@ -54,7 +54,7 @@ export function BarChartComponent({
   interaction,
   apiRawDataOverride,
 }: RendererComponentProps) {
-  // 事件蓝图修复：读取组件事件回调（编辑态返回 null，自动短路）
+  // 读取宿主事件回调；编辑器总闸门关闭时回调稳定存在但运行时会丢弃事件。
   const emitEvent = useComponentEvent();
   const gradientId = `bar-chart-gradient-${useId().replaceAll(':', '')}`;
 
@@ -94,7 +94,7 @@ export function BarChartComponent({
 
   // 事件蓝图修复：API 数据源状态变化时派发 dataLoaded / dataError
   // - 仅在 apiRawDataOverride === undefined 时派发（避免 override 与 hook state 双重触发）
-  // - 仅在 emitEvent 非 null 时派发（编辑态短路）
+  // - 仅在 emitEvent 非 null 时派发（无运行时宿主时短路）
   // - 每次 status 变为 success/error 都派发（含定时刷新的重复 success）
   useEffect(() => {
     if (apiRawDataOverride !== undefined) return;
