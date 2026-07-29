@@ -24,6 +24,10 @@ const modifierRefs = vi.hoisted(() => ({
   ctrlRef: { current: false },
 }));
 
+const moveableManager: { state: { snapRenderInfo: unknown } } = vi.hoisted(() => ({
+  state: { snapRenderInfo: null },
+}));
+
 /**
  * ScreenCanvas 交互测试（任务 2.3 ~ 13.8）
  *
@@ -44,6 +48,7 @@ interface CapturedMoveableProps {
   resizable: boolean;
   rotatable: boolean;
   target: unknown;
+  elementGuidelines: HTMLElement[];
   onDragStart?: (e: unknown) => boolean | void;
   onDrag?: (e: unknown) => void;
   onResizeStart?: (e: unknown) => boolean | void;
@@ -143,6 +148,7 @@ vi.mock('react-moveable', () => ({
       resizable: props.resizable,
       rotatable: props.rotatable,
       target: props.target,
+      elementGuidelines: props.elementGuidelines,
       onDragStart: props.onDragStart,
       onDrag: props.onDrag,
       onResizeStart: props.onResizeStart,
@@ -174,6 +180,7 @@ vi.mock('react-moveable', () => ({
           updateTarget: () => {},
           dragEnd: () => {},
           isMoveableElement: () => false,
+          getManager: () => moveableManager,
         }) as unknown as never,
       [],
     );
@@ -1018,6 +1025,20 @@ describe('任务 12.1：拖拽、缩放和旋转由状态机仲裁', () => {
     });
   }
 
+  it('变换开始不覆盖 Moveable 内部辅助线渲染状态', () => {
+    const callbacks: MoveableStartCallback[] = ['onDragStart', 'onResizeStart', 'onRotateStart'];
+
+    for (const callback of callbacks) {
+      renderCanvasWithState('idle');
+      const snapRenderInfo = { snap: true, center: true };
+      moveableManager.state.snapRenderInfo = snapRenderInfo;
+
+      invokeStart(callback, false);
+
+      expect(moveableManager.state.snapRenderInfo, callback).toBe(snapRenderInfo);
+    }
+  });
+
   it('恢复语义：非法状态拒绝后，恢复 idle 仍可正常开始对应交互', () => {
     // dragging 状态下拒绝 resize → 恢复 idle 后 resize 可开始
     let dispatchInteraction = renderCanvasWithState('dragging');
@@ -1459,6 +1480,49 @@ describe('onDragStart 未选中组件立即选中并启动拖拽', () => {
     });
 
     expect(store.selectComponents).toHaveBeenCalledWith(['c1']);
+  });
+
+  it('A→B→A 切换拖拽目标时始终保留另一组件作为吸附参考', () => {
+    mockUseStore.mockReset();
+    store = setupStore({ selectedComponentIds: ['c1'] });
+    const project = store.project as ScreenProject;
+    const componentA = project.components[0];
+    if (!componentA) throw new Error('测试项目缺少组件 A');
+    const componentB: ScreenComponent = {
+      ...componentA,
+      id: 'c2',
+      name: '矩形 2',
+      position: { ...componentA.position, x: 400 },
+      zIndex: 1,
+    };
+    store.project = { ...project, components: [...project.components, componentB] };
+    store.smartGuidesEnabled = true;
+    store.snapEnabled = true;
+
+    const session = makeSession('select', 'idle');
+    const { container, rerender } = render(<ScreenCanvas editorSession={session} />);
+    const componentAElement = container.querySelector<HTMLElement>('[data-component-id="c1"]');
+    const componentBElement = container.querySelector<HTMLElement>('[data-component-id="c2"]');
+    if (!componentAElement || !componentBElement) throw new Error('测试组件 DOM 未挂载');
+
+    const guidelineIds = (): Array<string | null> =>
+      capturedMoveable!.elementGuidelines.map((element) =>
+        element.getAttribute('data-component-id'),
+      );
+
+    expect(guidelineIds()).toEqual(['c2']);
+
+    // mock store 不会像真实 Zustand 一样通知订阅者，调整 zoom 强制 MoveableContainer
+    // 消费新的 targets。selectedComponentIds 故意保持旧的 c1，复现直接拖拽切换时序。
+    (store.setTargets as Mock)([componentBElement]);
+    store.canvasScale = 1.1;
+    rerender(<ScreenCanvas editorSession={session} />);
+    expect(guidelineIds()).toEqual(['c1']);
+
+    (store.setTargets as Mock)([componentAElement]);
+    store.canvasScale = 1.2;
+    rerender(<ScreenCanvas editorSession={session} />);
+    expect(guidelineIds()).toEqual(['c2']);
   });
 
   it('命中已选中组件：仅阻止 Selecto，不重复选中和 dragStart', () => {

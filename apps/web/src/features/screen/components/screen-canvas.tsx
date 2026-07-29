@@ -141,16 +141,6 @@ function readAltKey(inputEvent: unknown): boolean {
   return false;
 }
 
-interface MoveableSnapRenderController {
-  getManager?: () => { state: { snapRenderInfo?: unknown } };
-}
-
-function clearMoveableSnapRenderInfo(moveable: Moveable | null): void {
-  const controller = moveable as unknown as MoveableSnapRenderController | null;
-  const manager = controller?.getManager?.();
-  if (manager) manager.state.snapRenderInfo = null;
-}
-
 /**
  * 安全地设置指针捕获。
  *
@@ -285,9 +275,13 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
 }: CanvasComponentWrapperProps) {
   // Task 6：仅当 filter 非空字符串时应用，避免空 filter 覆盖其他样式
   const filterString = buildFilterString(component.style.filter);
+  const componentRef = useCallback(
+    (element: HTMLElement | null) => registerRef(component.id, element),
+    [component.id, registerRef],
+  );
   return (
     <div
-      ref={(el) => registerRef(component.id, el)}
+      ref={componentRef}
       data-component-id={component.id}
       className="absolute"
       style={{
@@ -467,6 +461,7 @@ export function ScreenCanvas({
   const setDimension = useDimensionStore((s) => s.setDimension);
 
   const componentRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const [componentRefsVersion, setComponentRefsVersion] = useState(0);
   const moveableRef = useRef<Moveable>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -517,13 +512,18 @@ export function ScreenCanvas({
 
   /** 稳定的 ref 注册回调，避免作为 prop 传入 memo 组件时引起重渲染 */
   const registerRef = useCallback((id: string, el: HTMLElement | null) => {
-    if (el) componentRefs.current.set(id, el);
-    else componentRefs.current.delete(id);
+    if (!el) {
+      componentRefs.current.delete(id);
+      return;
+    }
+    if (componentRefs.current.get(id) === el) return;
+    componentRefs.current.set(id, el);
+    setComponentRefsVersion((version) => version + 1);
   }, []);
 
   /**
    * 渲染态选中 ID 集合（deferred），O(1) 查询选中状态。
-   * 仅用于渲染消费（组件高亮 outline / elementGuidelines / isGroupSelect），
+   * 仅用于渲染消费（组件高亮 outline / isGroupSelect），
    * 交互逻辑请使用原始 selectedComponentIds。
    */
   const renderSelectedIdSet = useMemo(
@@ -1240,22 +1240,20 @@ export function ScreenCanvas({
   );
 
   /**
-   * Moveable elementGuidelines：所有可见且未选中的组件 DOM 元素引用。
+   * Moveable elementGuidelines：所有可见组件的 DOM 元素引用。
    *
    * Canvas Drag Optimization：替代自定义 Smart Guides 的 findAlignmentLines 计算，
    * 由 Moveable 内置 snappable + elementGuidelines 完成组件间对齐吸附与辅助线渲染。
-   * 排除当前选中的组件（自身不需要与自己对齐）。
-   *
-   * 注意：componentRefs.current 是 mutable ref，memo 不会感知 ref 注册时机。
-   * 实践中拖拽发生在组件已挂载之后（ref 已注册），一帧滞后不影响功能。
+   * 当前拖拽目标由 MoveableContainer 根据实时 targets 统一排除，避免 deferred 选中态
+   * 与直接拖拽的新 target 分别排除不同组件，导致候选参考元素被全部清空。
+   * componentRefsVersion 确保组件 DOM 在 commit 阶段挂载后重新生成候选列表。
    */
   const elementGuidelines = useMemo<HTMLElement[]>(() => {
     if (!smartGuidesEnabled) return [];
     return visibleComponents
-      .filter((c: ScreenComponent) => !renderSelectedIdSet.has(c.id))
       .map((c: ScreenComponent) => componentRefs.current.get(c.id))
       .filter((el): el is HTMLElement => el != null);
-  }, [smartGuidesEnabled, visibleComponents, renderSelectedIdSet]);
+  }, [smartGuidesEnabled, visibleComponents, componentRefsVersion]);
 
   /**
    * Moveable 事件 handlers：useMemo 稳定引用，传给 MoveableContainer。
@@ -1329,13 +1327,6 @@ export function ScreenCanvas({
         }));
         // 任务 3.3：镜像拖拽开始到交互状态机
         dispatchInteraction('start-drag');
-        // Moveable 内部 dragStart 硬编码 snapRenderInfo = { snap: true, center: true }，
-        // render 函数据此调用 renderSnapPoses 在目标组件上绘制蓝色辅助线
-        // （center→十字，edge→朝移动方向的线）。将 snapRenderInfo 置 null 使
-        // render 函数在入口 if (!snapRenderInfo) return [] 直接返回，不生成任何
-        // snap 视觉元素。实际吸附不受影响——state.guidelines 已在 dragStart 的
-        // checkSnapInfo 中填充，Draggable drag handler 读取它做磁性吸附。
-        clearMoveableSnapRenderInfo(moveableRef.current);
       },
       onDrag: (e) => {
         const datas = e.datas as unknown as DragDatas;
@@ -1436,8 +1427,6 @@ export function ScreenCanvas({
         }
         // 任务 3.4：镜像缩放开始到交互状态机
         dispatchInteraction('start-resize');
-        // 同 onDragStart：将 snapRenderInfo 置 null，阻止渲染目标组件蓝色辅助线
-        clearMoveableSnapRenderInfo(moveableRef.current);
       },
       onResize: (e) => {
         const datas = e.datas as unknown as ResizeDatas;
@@ -1568,8 +1557,6 @@ export function ScreenCanvas({
         datas.flipY = comp?.style.flipY === true;
         // 任务 3.4：镜像旋转开始到交互状态机
         dispatchInteraction('start-rotate');
-        // 同 onDragStart：将 snapRenderInfo 置 null，阻止渲染目标组件蓝色辅助线
-        clearMoveableSnapRenderInfo(moveableRef.current);
       },
       onRotate: (e) => {
         const datas = e.datas as unknown as RotateDatas;
