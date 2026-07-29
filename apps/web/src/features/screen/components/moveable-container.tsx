@@ -75,7 +75,6 @@ interface MoveableContainerProps {
   snapEnabled: boolean;
   keepRatio: boolean;
   throttleRotate: number;
-  isGroupSelect: boolean;
   elementGuidelines: HTMLElement[];
   verticalGuidelines: string[];
   horizontalGuidelines: string[];
@@ -105,7 +104,6 @@ export const MoveableContainer = memo(function MoveableContainer(props: Moveable
     snapEnabled,
     keepRatio,
     throttleRotate,
-    isGroupSelect,
     elementGuidelines,
     verticalGuidelines,
     horizontalGuidelines,
@@ -146,7 +144,7 @@ export const MoveableContainer = memo(function MoveableContainer(props: Moveable
       throttleDrag={1}
       throttleResize={1}
       throttleRotate={throttleRotate}
-      hideChildMoveableDefaultLines={isGroupSelect}
+      hideChildMoveableDefaultLines={targets.length > 1}
       snapDirections={SNAP_DIRECTIONS}
       elementSnapDirections={ELEMENT_SNAP_DIRECTIONS}
       elementGuidelines={filteredElementGuidelines}

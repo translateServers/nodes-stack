@@ -403,7 +403,7 @@ export function ScreenCanvas({
    * 性能优化：渲染态选中集降级为 deferred。
    *
    * flushSync 同步冲刷选中（Selecto 点击/框选）时，ScreenCanvas 本次同步渲染仍使用
-   * 旧渲染态选中集 —— 组件高亮 outline、elementGuidelines、isGroupSelect 滞后一帧，
+   * 旧渲染态选中集 —— 组件高亮 outline、elementGuidelines 滞后一帧，
    * 由 Moveable 控制框（targets store 独立订阅）提供即时选中反馈，用户不可感知。
    * React 随后在后台帧更新高亮。点击帧只承担函数体执行，避免可见组件树在同步帧内 diff。
    *
@@ -523,7 +523,7 @@ export function ScreenCanvas({
 
   /**
    * 渲染态选中 ID 集合（deferred），O(1) 查询选中状态。
-   * 仅用于渲染消费（组件高亮 outline / isGroupSelect），
+   * 仅用于渲染消费（组件高亮 outline），
    * 交互逻辑请使用原始 selectedComponentIds。
    */
   const renderSelectedIdSet = useMemo(
@@ -1841,8 +1841,6 @@ export function ScreenCanvas({
 
   if (!project || !canvas) return null;
 
-  const isGroupSelect = deferredSelectedComponentIds.length > 1;
-
   return (
     <BlueprintPreviewProvider value={eventsEnabled ? blueprintContext : null}>
       <BlueprintEventProvider value={componentEventCallback}>
@@ -1950,7 +1948,6 @@ export function ScreenCanvas({
               snapEnabled={snapEnabled}
               keepRatio={shiftHeld}
               throttleRotate={shiftHeld ? 15 : 0}
-              isGroupSelect={isGroupSelect}
               elementGuidelines={elementGuidelines}
               verticalGuidelines={verticalGuidelines}
               horizontalGuidelines={horizontalGuidelines}
