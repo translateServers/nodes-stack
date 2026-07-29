@@ -169,11 +169,11 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
   const setCanvasScale = useScreenEditorStore((s) => s.setCanvasScale);
   const snapEnabled = useScreenEditorStore((s) => s.snapEnabled);
   const guidesVisible = useScreenEditorStore((s) => s.guides.visible);
-  const eventsEnabled = useScreenEditorStore((s) => s.eventsEnabled);
+  const interactionMode = useScreenEditorStore((s) => s.interactionMode);
 
   const toggleSnap = useScreenEditorStore((s) => s.toggleSnap);
   const toggleGuidesVisibility = useScreenEditorStore((s) => s.toggleGuidesVisibility);
-  const toggleEvents = useScreenEditorStore((s) => s.toggleEvents);
+  const setInteractionMode = useScreenEditorStore((s) => s.setInteractionMode);
 
   const activeTool = editorSession.activeTool;
   const toolDef = getToolById(activeTool);
@@ -226,12 +226,39 @@ export const CanvasStatusBar = memo(function CanvasStatusBar({
             active={guidesVisible}
             onClick={toggleGuidesVisibility}
           />
-          <StatusBarToggle
-            label="Event"
-            tooltip="画布元素事件（蓝图 componentClick 派发）"
-            active={eventsEnabled}
-            onClick={toggleEvents}
-          />
+          <Divider />
+          {/* 画布交互模式切换：设计 / 交互调试 */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={interactionMode === 'interactive'}
+                aria-label={`画布模式：${interactionMode === 'design' ? '设计' : '交互'}。点击切换到${interactionMode === 'design' ? '交互调试' : '设计'}模式`}
+                onClick={() =>
+                  setInteractionMode(interactionMode === 'design' ? 'interactive' : 'design')
+                }
+                className={cn(
+                  'flex cursor-pointer items-center gap-1.5 rounded px-2 py-0.5 text-xs transition-colors duration-150 hover:bg-accent',
+                  interactionMode === 'interactive' ? 'text-amber-500' : 'text-muted-foreground',
+                )}
+                data-testid="interaction-mode-toggle"
+              >
+                <span
+                  className={cn(
+                    'size-1.5 rounded-full',
+                    interactionMode === 'interactive' ? 'bg-amber-500' : 'bg-muted-foreground/40',
+                  )}
+                />
+                {interactionMode === 'design' ? '设计' : '交互'}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              {interactionMode === 'design'
+                ? '设计模式：用于选择和调整组件，组件交互与蓝图事件关闭'
+                : '交互调试：画布编辑暂停，组件交互与蓝图运行时开启'}
+            </TooltipContent>
+          </Tooltip>
           <Divider />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

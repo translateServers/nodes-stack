@@ -20,6 +20,7 @@ import {
   BlueprintPreviewProvider,
   useBlueprintPreviewRuntime,
 } from '../blueprint/runtime';
+import { deriveCapabilities, CanvasInteractionProvider } from '../lib/canvas-interaction-context';
 import {
   resolveComponentContainerStyle,
   composeComponentTransform,
@@ -245,18 +246,25 @@ interface CanvasComponentWrapperProps {
   showBorderGuides: boolean;
   registerRef: (id: string, el: HTMLElement | null) => void;
   /**
-   * 元素点击事件处理器（仅 eventsEnabled 时传入）。
-   * - undefined：不派发蓝图事件（默认编辑模式）
+   * 元素点击事件处理器（仅 interactionMode='interactive' 时传入）。
+   * - undefined：不派发蓝图事件（设计模式）
    * - 函数：派发蓝图 componentClick 事件，用于在编辑器内预览交互效果
    */
   onComponentClick?: (componentId: string) => void;
   /**
-   * V2 任务 7.2：组件事件回调（仅 eventsEnabled 时传入）。
-   * - undefined：不派发蓝图事件（默认编辑模式）
+   * V2 任务 7.2：组件事件回调（仅 interactionMode='interactive' 时传入）。
+   * - undefined：不派发蓝图事件（设计模式）
    * - 函数：在 onMouseEnter 时派发 hover 事件（其他事件由组件内部通过
    *   useComponentEvent 自行触发，如 dataLoaded/dataError）
    */
   onComponentEvent?: ((componentId: string, eventId: string) => void) | null;
+  /**
+   * Spec: introduce-canvas-interaction-modes
+   * API 数据源覆盖（仅交互调试模式下传入）。
+   * - undefined：设计模式，组件使用自身 state
+   * - 已定义值：交互调试模式，组件优先使用此值（refreshDataSource 动作完成后写入）
+   */
+  apiRawDataOverride?: unknown;
 }
 
 /**
@@ -272,6 +280,7 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
   registerRef,
   onComponentClick,
   onComponentEvent,
+  apiRawDataOverride,
 }: CanvasComponentWrapperProps) {
   // Task 6：仅当 filter 非空字符串时应用，避免空 filter 覆盖其他样式
   const filterString = buildFilterString(component.style.filter);
@@ -309,7 +318,7 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
           : undefined
       }
     >
-      <ComponentRenderer component={component} />
+      <ComponentRenderer component={component} apiRawDataOverride={apiRawDataOverride} />
     </div>
   );
 });
@@ -411,8 +420,8 @@ export function ScreenCanvas({
    * 仍使用原始 selectedComponentIds，保证事件处理器读取最新值。
    */
   const deferredSelectedComponentIds = useDeferredValue(selectedComponentIds);
-  // 画布元素事件开关：开启时编辑器画布接入蓝图运行时，组件 onClick 派发 componentClick 事件
-  const eventsEnabled = useScreenEditorStore((s) => s.eventsEnabled);
+  // 画布交互模式：interactive 时编辑器画布接入蓝图运行时，组件 onClick 派发 componentClick 事件
+  const interactionMode = useScreenEditorStore((s) => s.interactionMode);
 
   /**
    * Canvas Pan Optimization：用 ref 镜像 canvasScale / canvasOffset，
@@ -493,11 +502,16 @@ export function ScreenCanvas({
    * 这是从 `editorSession.activeCapabilities` 到 Moveable/Selecto props 的唯一映射点。
    * 当活动工具不具备某项能力时，对应的交互入口被关闭，确保非选择工具不会误触
    * 组件变换。具体工具行为（如抓手平移、文字创建）由后续任务实现。
+   *
+   * Spec: introduce-canvas-interaction-modes
+   * 交互调试模式下，canEditCanvas=false，所有 Moveable/Selecto 编辑能力被禁用，
+   * 无论当前工具是否具备对应能力。
    */
-  const moveableDraggable = capabilities.canDrag;
-  const moveableResizable = capabilities.canResize;
-  const moveableRotatable = capabilities.canRotate;
-  const selectoSelectByClick = capabilities.canSelect;
+  const interactionCapabilities = deriveCapabilities(interactionMode);
+  const moveableDraggable = interactionCapabilities.canEditCanvas && capabilities.canDrag;
+  const moveableResizable = interactionCapabilities.canEditCanvas && capabilities.canResize;
+  const moveableRotatable = interactionCapabilities.canEditCanvas && capabilities.canRotate;
+  const selectoSelectByClick = interactionCapabilities.canEditCanvas && capabilities.canSelect;
 
   /**
    * 任务 2.3：按活动工具派生容器 cursor。
@@ -920,6 +934,9 @@ export function ScreenCanvas({
   const handlePanStart = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
+      // Spec: introduce-canvas-interaction-modes
+      // 交互调试模式下阻止创建工具启动，但保留视口能力（hand 平移、zoom 缩放）
+      if (!interactionCapabilities.canEditCanvas && capabilities.canCreate) return;
       // 任务 5.2：文字工具优先处理点击创建
       if (activeTool === 'text' && capabilities.canCreate) {
         handleCreateText(e);
@@ -968,6 +985,7 @@ export function ScreenCanvas({
       interactionState,
       capabilities.canCreate,
       capabilities.canZoom,
+      interactionCapabilities.canEditCanvas,
       handleCreateText,
       handleCreateShapeStart,
       handleCreateImage,
@@ -1130,35 +1148,53 @@ export function ScreenCanvas({
   const canvas = project?.canvas;
 
   /**
-   * 蓝图运行时集成（仅 eventsEnabled=true 时启用）。
+   * 蓝图运行时集成（仅 interactionMode='interactive' 时启用）。
    *
-   * - eventsEnabled=false：传入 undefined 作为 blueprint，hook 内部 compileResult=null、
+   * - design：传入 undefined 作为 blueprint，hook 内部 compileResult=null、
    *   isEnabled=false，pageLoad effect 不触发，onComponentClick 调用时直接返回
-   * - eventsEnabled=true：传入实际 blueprint，hook 编译规则并在 mount 时触发 pageLoad，
+   * - interactive：传入实际 blueprint，hook 编译规则并在 mount 时触发 pageLoad，
    *   组件 onClick 派发 componentClick 事件（与公开预览页一致）
    *
-   * BlueprintPreviewProvider 在 eventsEnabled=false 时传 null，
+   * BlueprintPreviewProvider 在 design 时传 null，
    * 组件回退到既有行为（不消费 Context）。
    */
-  const blueprintForRuntime = eventsEnabled ? project?.blueprint : undefined;
+  const isInteractive = interactionMode === 'interactive';
+  const blueprintForRuntime = isInteractive ? project?.blueprint : undefined;
   const {
     contextValue: blueprintContext,
     onComponentClick,
     onComponentEvent,
+    resetSession: resetRuntimeSession,
   } = useBlueprintPreviewRuntime(blueprintForRuntime, components);
 
   /**
    * 给 CanvasComponentWrapper 的事件回调。
-   * - eventsEnabled=false：undefined（不绑定 onClick，保持编辑模式行为）
-   * - eventsEnabled=true：包装 onComponentClick，仅对可见组件派发蓝图事件
+   * - design：undefined（不绑定 onClick，保持编辑模式行为）
+   * - interactive：包装 onComponentClick，仅对可见组件派发蓝图事件
    */
-  const handleComponentClick = eventsEnabled ? onComponentClick : undefined;
+  const handleComponentClick = isInteractive ? onComponentClick : undefined;
   /**
    * V2 任务 7.1 + 7.2：注入到 BlueprintEventProvider 的事件回调。
-   * - eventsEnabled=false：传 null，组件 useComponentEvent 返回 null（不触发蓝图事件）
-   * - eventsEnabled=true：传 onComponentEvent，组件可在 onClick/onHover 等回调中调用
+   * - design：传 null，组件 useComponentEvent 返回 null（不触发蓝图事件）
+   * - interactive：传 onComponentEvent，组件可在 onClick/onHover 等回调中调用
    */
-  const componentEventCallback = eventsEnabled ? onComponentEvent : null;
+  const componentEventCallback = isInteractive ? onComponentEvent : null;
+
+  /**
+   * Spec: introduce-canvas-interaction-modes
+   * 退出交互调试时重置运行时会话：
+   * - 清空 visibilityOverrides 与 apiDataOverrides
+   * - 中止进行中的数据刷新请求
+   * - 确保 next session 不会看到上一次会话的临时结果
+   */
+  const prevInteractionModeRef = useRef(interactionMode);
+  useEffect(() => {
+    const prev = prevInteractionModeRef.current;
+    prevInteractionModeRef.current = interactionMode;
+    if (prev === 'interactive' && interactionMode === 'design') {
+      resetRuntimeSession();
+    }
+  }, [interactionMode, resetRuntimeSession]);
 
   /**
    * H2 性能优化：构建组件 ID → 组件的 Map，替代 12 处 Array.find 查找。
@@ -1180,15 +1216,24 @@ export function ScreenCanvas({
 
   /**
    * Memo 化可见组件列表（过滤 + 按 zIndex 排序）。
-   * 避免每次渲染都重新 filter+sort 产生新数组与新 component 引用，
-   * 否则会使 CanvasComponentWrapper 的 memo 失效。
+   *
+   * Spec: introduce-canvas-interaction-modes
+   * 交互调试模式下按 `visibilityOverrides > component.status.hidden` 计算可见性，
+   * 使蓝图 setVisibility 动作在编辑画布中可观察。
+   * 设计模式下 visibilityOverrides 为空 Map（退出时已重置），仅由 status.hidden 决定。
    */
+  const visibilityOverrides = isInteractive ? blueprintContext.visibilityOverrides : undefined;
   const visibleComponents = useMemo(
     () =>
       components
-        .filter((c: ScreenComponent) => !c.status.hidden)
+        .filter((c: ScreenComponent) => {
+          if (visibilityOverrides?.has(c.id)) {
+            return visibilityOverrides.get(c.id) === true;
+          }
+          return !c.status.hidden;
+        })
         .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex),
-    [components],
+    [components, visibilityOverrides],
   );
 
   /**
@@ -1842,333 +1887,366 @@ export function ScreenCanvas({
   if (!project || !canvas) return null;
 
   return (
-    <BlueprintPreviewProvider value={eventsEnabled ? blueprintContext : null}>
+    <BlueprintPreviewProvider value={isInteractive ? blueprintContext : null}>
       <BlueprintEventProvider value={componentEventCallback}>
-        <div
-          ref={containerRef}
-          data-testid="canvas-surface"
-          className="relative h-full w-full overflow-hidden bg-muted"
-          style={{
-            // 任务 4.3：cursor 完全由 activeTool 派生（toolCursor 来自 TOOL_REGISTRY）。
-            // - hand 工具（主或临时）：toolCursor = 'grab'，平移中 = 'grabbing'
-            // - select 工具 + Alt：'copy'（Alt+拖拽复制）
-            // - 其他工具：toolCursor
-            cursor: isPanning ? 'grabbing' : altHeld && capabilities.canDrag ? 'copy' : toolCursor,
-          }}
-          onPointerDown={handlePanStart}
-          onPointerMove={handlePanMove}
-          onPointerUp={handlePanEnd}
-        >
+        <CanvasInteractionProvider value={interactionCapabilities}>
           <div
-            ref={canvasTransformRef}
-            className="absolute"
+            ref={containerRef}
+            data-testid="canvas-surface"
+            className="relative h-full w-full overflow-hidden bg-muted"
             style={{
-              transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${canvasScale})`,
-              transformOrigin: 'top left',
+              // 任务 4.3：cursor 完全由 activeTool 派生（toolCursor 来自 TOOL_REGISTRY）。
+              // - hand 工具（主或临时）：toolCursor = 'grab'，平移中 = 'grabbing'
+              // - select 工具 + Alt：'copy'（Alt+拖拽复制）
+              // - 其他工具：toolCursor
+              cursor: isPanning
+                ? 'grabbing'
+                : altHeld && capabilities.canDrag
+                  ? 'copy'
+                  : toolCursor,
             }}
+            onPointerDown={handlePanStart}
+            onPointerMove={handlePanMove}
+            onPointerUp={handlePanEnd}
           >
             <div
-              ref={contentRef}
-              className="relative"
+              ref={canvasTransformRef}
+              className="absolute"
               style={{
-                width: canvas.width,
-                height: canvas.height,
-                backgroundColor: canvas.backgroundColor,
-                backgroundImage: canvas.backgroundImage
-                  ? `url(${canvas.backgroundImage})`
-                  : undefined,
-                backgroundSize: 'cover',
-              }}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              onMouseDown={(e) => {
-                if (e.target === e.currentTarget) {
-                  // 点击空白画布：退出当前活动分组并清空选中
-                  // 同步 setTargets([]) 让控制框立即隐藏，避免 useLayoutEffect 二次渲染延迟
-                  if (activeGroupId !== null) {
-                    setActiveGroupId(null);
-                  }
-                  flushSync(() => {
-                    clearSelection();
-                    setTargets([]);
-                  });
-                }
+                transform: `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0) scale(${canvasScale})`,
+                transformOrigin: 'top left',
               }}
             >
-              {visibleComponents.map((component: ScreenComponent) => (
-                <CanvasComponentWrapper
-                  key={component.id}
-                  component={component}
-                  selected={renderSelectedIdSet.has(component.id)}
-                  showBorderGuides={showBorderGuides}
-                  registerRef={registerRef}
-                  onComponentClick={handleComponentClick}
-                  onComponentEvent={componentEventCallback}
-                />
-              ))}
+              <div
+                ref={contentRef}
+                className="relative"
+                style={{
+                  width: canvas.width,
+                  height: canvas.height,
+                  backgroundColor: canvas.backgroundColor,
+                  backgroundImage: canvas.backgroundImage
+                    ? `url(${canvas.backgroundImage})`
+                    : undefined,
+                  backgroundSize: 'cover',
+                }}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onMouseDown={(e) => {
+                  if (e.target === e.currentTarget) {
+                    // Spec: introduce-canvas-interaction-modes
+                    // 交互调试模式下不执行选择操作（清空选中/退出分组）
+                    if (!interactionCapabilities.canEditCanvas) return;
+                    // 点击空白画布：退出当前活动分组并清空选中
+                    // 同步 setTargets([]) 让控制框立即隐藏，避免 useLayoutEffect 二次渲染延迟
+                    if (activeGroupId !== null) {
+                      setActiveGroupId(null);
+                    }
+                    flushSync(() => {
+                      clearSelection();
+                      setTargets([]);
+                    });
+                  }
+                }}
+              >
+                {visibleComponents.map((component: ScreenComponent) => (
+                  <CanvasComponentWrapper
+                    key={component.id}
+                    component={component}
+                    selected={renderSelectedIdSet.has(component.id)}
+                    showBorderGuides={showBorderGuides}
+                    registerRef={registerRef}
+                    onComponentClick={handleComponentClick}
+                    onComponentEvent={componentEventCallback}
+                    apiRawDataOverride={
+                      isInteractive
+                        ? blueprintContext.apiDataOverrides.get(component.id)
+                        : undefined
+                    }
+                  />
+                ))}
 
-              {/* 活动分组包围盒：双击进入分组后高亮 */}
-              <ActiveGroupOutline groupId={activeGroupId} components={visibleComponents} />
+                {/* 活动分组包围盒：双击进入分组后高亮 */}
+                <ActiveGroupOutline groupId={activeGroupId} components={visibleComponents} />
 
-              {/* 任务 6.3/6.4：形状拖拽创建预览（与组件同画布坐标系） */}
-              {shapeCreation &&
-                (() => {
-                  const geometry = computeShapeCreation(
-                    shapeCreation.startX,
-                    shapeCreation.startY,
-                    shapeCreation.currentX,
-                    shapeCreation.currentY,
-                  );
-                  return (
-                    <div
-                      className="pointer-events-none absolute"
-                      style={{
-                        left: geometry.rect.x,
-                        top: geometry.rect.y,
-                        width: geometry.rect.width,
-                        height: geometry.rect.height,
-                        backgroundColor:
-                          shapeCreation.tool === 'rect'
-                            ? 'rgba(59, 130, 246, 0.5)'
-                            : 'rgba(16, 185, 129, 0.5)',
-                        border: '1px dashed #ffffff',
-                        borderRadius: shapeCreation.tool === 'ellipse' ? '50%' : 0,
-                      }}
-                    />
-                  );
-                })()}
+                {/* 任务 6.3/6.4：形状拖拽创建预览（与组件同画布坐标系） */}
+                {shapeCreation &&
+                  (() => {
+                    const geometry = computeShapeCreation(
+                      shapeCreation.startX,
+                      shapeCreation.startY,
+                      shapeCreation.currentX,
+                      shapeCreation.currentY,
+                    );
+                    return (
+                      <div
+                        className="pointer-events-none absolute"
+                        style={{
+                          left: geometry.rect.x,
+                          top: geometry.rect.y,
+                          width: geometry.rect.width,
+                          height: geometry.rect.height,
+                          backgroundColor:
+                            shapeCreation.tool === 'rect'
+                              ? 'rgba(59, 130, 246, 0.5)'
+                              : 'rgba(16, 185, 129, 0.5)',
+                          border: '1px dashed #ffffff',
+                          borderRadius: shapeCreation.tool === 'ellipse' ? '50%' : 0,
+                        }}
+                      />
+                    );
+                  })()}
+              </div>
+
+              <MoveableContainer
+                moveableRef={moveableRef}
+                container={contentRef.current}
+                draggable={moveableDraggable}
+                resizable={moveableResizable}
+                rotatable={moveableRotatable}
+                snapEnabled={snapEnabled}
+                keepRatio={shiftHeld}
+                throttleRotate={shiftHeld ? 15 : 0}
+                elementGuidelines={elementGuidelines}
+                verticalGuidelines={verticalGuidelines}
+                horizontalGuidelines={horizontalGuidelines}
+                zoom={1 / canvasScale}
+                handlers={handlers}
+              />
             </div>
 
-            <MoveableContainer
-              moveableRef={moveableRef}
-              container={contentRef.current}
-              draggable={moveableDraggable}
-              resizable={moveableResizable}
-              rotatable={moveableRotatable}
-              snapEnabled={snapEnabled}
-              keepRatio={shiftHeld}
-              throttleRotate={shiftHeld ? 15 : 0}
-              elementGuidelines={elementGuidelines}
-              verticalGuidelines={verticalGuidelines}
-              horizontalGuidelines={horizontalGuidelines}
-              zoom={1 / canvasScale}
-              handlers={handlers}
-            />
-          </div>
-
-          <Selecto
-            dragContainer={containerRef.current}
-            selectableTargets={['[data-component-id]']}
-            selectByClick={selectoSelectByClick}
-            selectFromInside={false}
-            hitRate={0}
-            toggleContinueSelect={['ctrl']}
-            // 任务 4.1：只有允许选择的工具能启动 Selecto。
-            // Selecto 无 disabled prop，通过 onDragStart 中 e.stop() 阻止非选择工具启动框选。
-            onDragStart={(e) => {
-              // 任务 4.1：抓手/创建/缩放工具不允许启动 Selecto
-              if (!capabilities.canSelect) {
-                e.stop();
-                return;
-              }
-              // 任务 12.2：框选由状态机仲裁，拒绝非法重入。
-              // 仅在 idle/hovering 状态下可开始框选，避免与拖拽/缩放/旋转/平移/创建等手势重入。
-              // 拒绝时调用 e.stop() 阻止 Selecto 启动拖拽，状态保持不变以便后续从合法状态继续。
-              if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
-                e.stop();
-                return;
-              }
-              if (moveableRef.current) {
-                // Selecto inputEvent 为 any，可能是 MouseEvent / TouchEvent / PointerEvent。
-                // 通过 instanceof 收敛到 HTMLElement 后再使用，避免 as HTMLElement 越过类型检查
-                const rawTarget = (e.inputEvent as { target?: unknown } | null)?.target;
-                const target = rawTarget instanceof HTMLElement ? rawTarget : null;
-                if (target && moveableRef.current.isMoveableElement(target)) {
+            <Selecto
+              dragContainer={containerRef.current}
+              selectableTargets={['[data-component-id]']}
+              selectByClick={selectoSelectByClick}
+              selectFromInside={false}
+              hitRate={0}
+              toggleContinueSelect={['ctrl']}
+              // 任务 4.1：只有允许选择的工具能启动 Selecto。
+              // Selecto 无 disabled prop，通过 onDragStart 中 e.stop() 阻止非选择工具启动框选。
+              onDragStart={(e) => {
+                // Spec: introduce-canvas-interaction-modes
+                // 交互调试模式下禁止 Selecto 启动框选
+                if (!interactionCapabilities.canEditCanvas) {
                   e.stop();
                   return;
                 }
-                if (target) {
-                  const targetId = getComponentIdFromTarget(target);
-                  if (targetId) {
-                    // 未选中组件：立即选中 + 同步启动 Moveable 拖拽，
-                    // 消除等 onSelectEnd 才启动拖拽导致的抽帧/瞬移感。
-                    // 已选中组件：直接阻止 Selecto，让 Moveable 接管（原有逻辑）。
-                    if (!selectedComponentIds.includes(targetId)) {
-                      const rawEvt: unknown = e.inputEvent;
-                      const mouseEvt =
-                        rawEvt instanceof MouseEvent
-                          ? rawEvt
-                          : new MouseEvent('mousedown', { bubbles: true });
-                      const curState = interactionStateRef.current;
-                      if (
-                        activeToolRef.current === 'select' &&
-                        (curState === 'idle' ||
-                          curState === 'hovering' ||
-                          curState === 'marquee-selecting')
-                      ) {
-                        // 点击分组内组件：未进入该分组时选中整个分组（与 handleSelectEnd
-                        // 分组逻辑一致），已进入分组则选中单个子组件。顶层组件选中自身。
-                        // 双击预判：若为双击的第二次点击，预期 onSelectEnd 会进入分组并选中
-                        // 单个子组件，此处直接选中单个以避免"先整组再收缩到单个"的闪烁。
-                        const clickedComp = componentMap.get(targetId);
-                        const groupPid = clickedComp?.parentId;
-                        const isPotentialDoubleClick = detectDoubleClick(lastClickRef.current, {
-                          id: targetId,
-                          time: Date.now(),
-                          x: mouseEvt.clientX,
-                          y: mouseEvt.clientY,
-                        });
-                        const selectionToApply =
-                          groupPid != null && activeGroupId !== groupPid && !isPotentialDoubleClick
-                            ? components.filter((c) => c.parentId === groupPid).map((c) => c.id)
-                            : [targetId];
-                        flushSync(() => {
-                          setTargets(computeTargetsForIds(selectionToApply));
-                        });
-                        if (clickedComp?.status.locked) {
-                          selectComponents(selectionToApply);
-                        } else {
-                          pendingDragSelectionRef.current = selectionToApply;
-                          directDragHandoffRef.current = true;
-                          moveableRef.current.dragStart(mouseEvt);
-                        }
-                      }
-                    }
+                // 任务 4.1：抓手/创建/缩放工具不允许启动 Selecto
+                if (!capabilities.canSelect) {
+                  e.stop();
+                  return;
+                }
+                // 任务 12.2：框选由状态机仲裁，拒绝非法重入。
+                // 仅在 idle/hovering 状态下可开始框选，避免与拖拽/缩放/旋转/平移/创建等手势重入。
+                // 拒绝时调用 e.stop() 阻止 Selecto 启动拖拽，状态保持不变以便后续从合法状态继续。
+                if (!SELECTO_ALLOWED_STATES.has(interactionState)) {
+                  e.stop();
+                  return;
+                }
+                if (moveableRef.current) {
+                  // Selecto inputEvent 为 any，可能是 MouseEvent / TouchEvent / PointerEvent。
+                  // 通过 instanceof 收敛到 HTMLElement 后再使用，避免 as HTMLElement 越过类型检查
+                  const rawTarget = (e.inputEvent as { target?: unknown } | null)?.target;
+                  const target = rawTarget instanceof HTMLElement ? rawTarget : null;
+                  if (target && moveableRef.current.isMoveableElement(target)) {
                     e.stop();
                     return;
                   }
-                }
-              }
-              dispatchInteraction('pointer-down');
-            }}
-            onSelectEnd={(e) => {
-              if (directDragHandoffRef.current) {
-                directDragHandoffRef.current = false;
-                return;
-              }
-              const selected = e.selected
-                .map((el) => getComponentIdFromTarget(el))
-                .filter((id): id is string => id != null);
-
-              // Selecto 的 inputEvent 可能是 MouseEvent / TouchEvent / PointerEvent。
-              // handleSelectEnd 需要 MouseEvent（读 ctrlKey/metaKey/shiftKey），
-              // 非 MouseEvent 时退化为无修饰键的合成事件，保证类型安全。
-              const rawEvent: unknown = e.inputEvent;
-              const inputEvent: MouseEvent =
-                rawEvent instanceof MouseEvent
-                  ? rawEvent
-                  : new MouseEvent('mousedown', { bubbles: true });
-
-              // 委托纯函数计算决策（归一化 spec.md 热点 5）
-              const result = handleSelectEnd({
-                selected,
-                inputEvent,
-                lastClick: lastClickRef.current,
-                activeGroupId,
-                components,
-                isDragStart: e.isDragStart,
-                clientX: inputEvent.clientX,
-                clientY: inputEvent.clientY,
-              });
-
-              // 应用副作用：lastClick → activeGroupId → selection → Moveable dragStart
-              lastClickRef.current = result.newLastClick;
-              if (result.newActiveGroupId !== activeGroupId) {
-                setActiveGroupId(result.newActiveGroupId);
-              }
-
-              // 任务 5.3：双击文本组件进入编辑，不触发分组进入
-              // 仅在选择工具下生效（其他工具的创建行为由各自处理器负责）
-              if (
-                result.isDoubleClick &&
-                activeTool === 'select' &&
-                result.selection.length === 1
-              ) {
-                const clickedComp = componentMap.get(result.selection[0]);
-                if (clickedComp?.type === 'text') {
-                  // 进入文本编辑态
-                  const content = (clickedComp.props as { content?: unknown }).content;
-                  const initialContent =
-                    typeof content === 'string' ? content : DEFAULT_TEXT_CONTENT;
-                  beginTextEditing({
-                    componentId: clickedComp.id,
-                    initialContent,
-                    isNewlyCreated: false,
-                  });
-                  // 派发到交互状态机：idle → text-editing
-                  dispatchInteraction('double-click');
-                  // 文本双击不进入分组，强制保持 activeGroupId 为 null
-                  if (activeGroupId !== null) {
-                    setActiveGroupId(null);
+                  if (target) {
+                    const targetId = getComponentIdFromTarget(target);
+                    if (targetId) {
+                      // 未选中组件：立即选中 + 同步启动 Moveable 拖拽，
+                      // 消除等 onSelectEnd 才启动拖拽导致的抽帧/瞬移感。
+                      // 已选中组件：直接阻止 Selecto，让 Moveable 接管（原有逻辑）。
+                      if (!selectedComponentIds.includes(targetId)) {
+                        const rawEvt: unknown = e.inputEvent;
+                        const mouseEvt =
+                          rawEvt instanceof MouseEvent
+                            ? rawEvt
+                            : new MouseEvent('mousedown', { bubbles: true });
+                        const curState = interactionStateRef.current;
+                        if (
+                          activeToolRef.current === 'select' &&
+                          (curState === 'idle' ||
+                            curState === 'hovering' ||
+                            curState === 'marquee-selecting')
+                        ) {
+                          // 点击分组内组件：未进入该分组时选中整个分组（与 handleSelectEnd
+                          // 分组逻辑一致），已进入分组则选中单个子组件。顶层组件选中自身。
+                          // 双击预判：若为双击的第二次点击，预期 onSelectEnd 会进入分组并选中
+                          // 单个子组件，此处直接选中单个以避免"先整组再收缩到单个"的闪烁。
+                          const clickedComp = componentMap.get(targetId);
+                          const groupPid = clickedComp?.parentId;
+                          const isPotentialDoubleClick = detectDoubleClick(lastClickRef.current, {
+                            id: targetId,
+                            time: Date.now(),
+                            x: mouseEvt.clientX,
+                            y: mouseEvt.clientY,
+                          });
+                          const selectionToApply =
+                            groupPid != null &&
+                            activeGroupId !== groupPid &&
+                            !isPotentialDoubleClick
+                              ? components.filter((c) => c.parentId === groupPid).map((c) => c.id)
+                              : [targetId];
+                          flushSync(() => {
+                            setTargets(computeTargetsForIds(selectionToApply));
+                          });
+                          if (clickedComp?.status.locked) {
+                            selectComponents(selectionToApply);
+                          } else {
+                            pendingDragSelectionRef.current = selectionToApply;
+                            directDragHandoffRef.current = true;
+                            moveableRef.current.dragStart(mouseEvt);
+                          }
+                        }
+                      }
+                      e.stop();
+                      return;
+                    }
                   }
-                  // 任务 3.5：镜像框选结束到交互状态机
-                  dispatchInteraction('pointer-up');
-                  // 双击文本：仍需同步选中，便于退出编辑后控制框已就位
-                  flushSync(() => {
-                    selectComponents(result.selection);
-                    setTargets(computeTargetsForIds(result.selection));
-                  });
+                }
+                dispatchInteraction('pointer-down');
+              }}
+              onSelectEnd={(e) => {
+                if (directDragHandoffRef.current) {
+                  directDragHandoffRef.current = false;
                   return;
                 }
-              }
+                const selected = e.selected
+                  .map((el) => getComponentIdFromTarget(el))
+                  .filter((id): id is string => id != null);
 
-              if (!result.isDoubleClick && e.isDragStart) {
-                // Moveable dragStart 期望 MouseEvent；TouchEvent 不支持，跳过以避免运行时错误
-                if (inputEvent instanceof MouseEvent) {
-                  // 任务 13.7：同步触发 dragStart 前用 ref 读取最新状态做 guard。
-                  //
-                  // 抽帧根因修复：
-                  // targets 原本由 useLayoutEffect 从 selectedComponentIds 派生（两步渲染），
-                  // 即使 flushSync(selectComponents) 同步完成第一步，useLayoutEffect 内的
-                  // setTargets 触发的第二次渲染无法被同一 flushSync 包裹 → Moveable 的
-                  // target prop 仍是空数组 → dragStart 在空 target 上调用 → 控制框晚一帧。
-                  // 修复：在 flushSync 内同时调用 selectComponents 和 setTargets，让一次
-                  // 同步渲染就把 Moveable 的 target 准备好，然后立即 dragStart。
-                  if (activeToolRef.current !== 'select') {
-                    // 工具切换：仍需同步选中，但跳过 dragStart
+                // Selecto 的 inputEvent 可能是 MouseEvent / TouchEvent / PointerEvent。
+                // handleSelectEnd 需要 MouseEvent（读 ctrlKey/metaKey/shiftKey），
+                // 非 MouseEvent 时退化为无修饰键的合成事件，保证类型安全。
+                const rawEvent: unknown = e.inputEvent;
+                const inputEvent: MouseEvent =
+                  rawEvent instanceof MouseEvent
+                    ? rawEvent
+                    : new MouseEvent('mousedown', { bubbles: true });
+
+                // 委托纯函数计算决策（归一化 spec.md 热点 5）
+                const result = handleSelectEnd({
+                  selected,
+                  inputEvent,
+                  lastClick: lastClickRef.current,
+                  activeGroupId,
+                  components,
+                  isDragStart: e.isDragStart,
+                  clientX: inputEvent.clientX,
+                  clientY: inputEvent.clientY,
+                });
+
+                // 应用副作用：lastClick → activeGroupId → selection → Moveable dragStart
+                lastClickRef.current = result.newLastClick;
+                if (result.newActiveGroupId !== activeGroupId) {
+                  setActiveGroupId(result.newActiveGroupId);
+                }
+
+                // 任务 5.3：双击文本组件进入编辑，不触发分组进入
+                // 仅在选择工具下生效（其他工具的创建行为由各自处理器负责）
+                if (
+                  result.isDoubleClick &&
+                  activeTool === 'select' &&
+                  result.selection.length === 1
+                ) {
+                  const clickedComp = componentMap.get(result.selection[0]);
+                  if (clickedComp?.type === 'text') {
+                    // 进入文本编辑态
+                    const content = (clickedComp.props as { content?: unknown }).content;
+                    const initialContent =
+                      typeof content === 'string' ? content : DEFAULT_TEXT_CONTENT;
+                    beginTextEditing({
+                      componentId: clickedComp.id,
+                      initialContent,
+                      isNewlyCreated: false,
+                    });
+                    // 派发到交互状态机：idle → text-editing
+                    dispatchInteraction('double-click');
+                    // 文本双击不进入分组，强制保持 activeGroupId 为 null
+                    if (activeGroupId !== null) {
+                      setActiveGroupId(null);
+                    }
+                    // 任务 3.5：镜像框选结束到交互状态机
+                    dispatchInteraction('pointer-up');
+                    // 双击文本：仍需同步选中，便于退出编辑后控制框已就位
                     flushSync(() => {
                       selectComponents(result.selection);
                       setTargets(computeTargetsForIds(result.selection));
                     });
-                    dispatchInteraction('pointer-up');
                     return;
                   }
-                  const state = interactionStateRef.current;
-                  if (state !== 'idle' && state !== 'hovering' && state !== 'marquee-selecting') {
-                    // 非允许状态：仅同步选中，跳过 dragStart
+                }
+
+                if (!result.isDoubleClick && e.isDragStart) {
+                  // Moveable dragStart 期望 MouseEvent；TouchEvent 不支持，跳过以避免运行时错误
+                  if (inputEvent instanceof MouseEvent) {
+                    // 任务 13.7：同步触发 dragStart 前用 ref 读取最新状态做 guard。
+                    //
+                    // 抽帧根因修复：
+                    // targets 原本由 useLayoutEffect 从 selectedComponentIds 派生（两步渲染），
+                    // 即使 flushSync(selectComponents) 同步完成第一步，useLayoutEffect 内的
+                    // setTargets 触发的第二次渲染无法被同一 flushSync 包裹 → Moveable 的
+                    // target prop 仍是空数组 → dragStart 在空 target 上调用 → 控制框晚一帧。
+                    // 修复：在 flushSync 内同时调用 selectComponents 和 setTargets，让一次
+                    // 同步渲染就把 Moveable 的 target 准备好，然后立即 dragStart。
+                    if (activeToolRef.current !== 'select') {
+                      // 工具切换：仍需同步选中，但跳过 dragStart
+                      flushSync(() => {
+                        selectComponents(result.selection);
+                        setTargets(computeTargetsForIds(result.selection));
+                      });
+                      dispatchInteraction('pointer-up');
+                      return;
+                    }
+                    const state = interactionStateRef.current;
+                    if (state !== 'idle' && state !== 'hovering' && state !== 'marquee-selecting') {
+                      // 非允许状态：仅同步选中，跳过 dragStart
+                      flushSync(() => {
+                        selectComponents(result.selection);
+                        setTargets(computeTargetsForIds(result.selection));
+                      });
+                      dispatchInteraction('pointer-up');
+                      return;
+                    }
+                    // flushSync 同步完成 selectComponents + setTargets，Moveable target 立即就位
                     flushSync(() => {
                       selectComponents(result.selection);
                       setTargets(computeTargetsForIds(result.selection));
                     });
+                    // 立即同步 dragStart（Moveable target 已就绪，控制框已渲染）
+                    moveableRef.current?.dragStart(inputEvent);
+                    // 任务 3.5：镜像框选结束到交互状态机
+                    // dragStart 已同步触发 onDragStart（其中 dispatchInteraction('start-drag')）
+                    // 此处 pointer-up 在状态机内部按顺序处理：marquee-selecting → idle → dragging
                     dispatchInteraction('pointer-up');
                     return;
                   }
-                  // flushSync 同步完成 selectComponents + setTargets，Moveable target 立即就位
-                  flushSync(() => {
-                    selectComponents(result.selection);
-                    setTargets(computeTargetsForIds(result.selection));
-                  });
-                  // 立即同步 dragStart（Moveable target 已就绪，控制框已渲染）
-                  moveableRef.current?.dragStart(inputEvent);
-                  // 任务 3.5：镜像框选结束到交互状态机
-                  // dragStart 已同步触发 onDragStart（其中 dispatchInteraction('start-drag')）
-                  // 此处 pointer-up 在状态机内部按顺序处理：marquee-selecting → idle → dragging
-                  dispatchInteraction('pointer-up');
-                  return;
                 }
-              }
 
-              // 非拖拽启动场景（如纯点击选中、框选）：同步更新选中与 targets，
-              // 避免 useLayoutEffect 二次渲染导致 Moveable 控制框晚一帧显示
-              flushSync(() => {
-                selectComponents(result.selection);
-                setTargets(computeTargetsForIds(result.selection));
-              });
-              // 任务 3.5：镜像框选结束到交互状态机（marquee-selecting → idle）
-              dispatchInteraction('pointer-up');
-            }}
-          />
-        </div>
+                // 非拖拽启动场景（如纯点击选中、框选）：同步更新选中与 targets，
+                // 避免 useLayoutEffect 二次渲染导致 Moveable 控制框晚一帧显示
+                flushSync(() => {
+                  selectComponents(result.selection);
+                  setTargets(computeTargetsForIds(result.selection));
+                });
+                // 任务 3.5：镜像框选结束到交互状态机（marquee-selecting → idle）
+                dispatchInteraction('pointer-up');
+              }}
+            />
+
+            {/* Spec: introduce-canvas-interaction-modes
+              交互调试模式标识：不遮挡画布内容的角标 */}
+            {isInteractive && (
+              <div
+                className="pointer-events-none absolute right-3 top-3 z-[9999] rounded-md bg-amber-500/90 px-2.5 py-1 text-xs font-medium text-white shadow-lg"
+                data-testid="interactive-mode-badge"
+              >
+                交互调试中 · Esc 退出
+              </div>
+            )}
+          </div>
+        </CanvasInteractionProvider>
       </BlueprintEventProvider>
     </BlueprintPreviewProvider>
   );

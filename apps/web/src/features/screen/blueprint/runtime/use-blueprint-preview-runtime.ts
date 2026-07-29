@@ -38,7 +38,7 @@ export interface BlueprintPreviewRuntime {
   /**
    * V2 组件事件回调（任务 3.3 + 7.1）。
    * - V2 蓝图：按 componentId + eventId 派发到匹配规则
-   * - V1 蓝图：将 eventId 映射为 V1 触发事件类型（click → componentClick, hover → componentHover, ...）
+   * - V1 蓝图：将 eventId 映射为 V1 触发事件类型（click -> componentClick, hover -> componentHover, ...）
    * - 编辑态 / 未启用：no-op
    */
   onComponentEvent: ComponentEventCallback;
@@ -48,6 +48,12 @@ export interface BlueprintPreviewRuntime {
   compiledRules: CompiledRule[];
   /** V2 编译后的规则集（V2 蓝图时有值，V1 时为空数组） */
   compiledRulesV2: V2CompiledRule[];
+  /**
+   * Spec: introduce-canvas-interaction-modes
+   * 重置交互调试运行时会话：清空可见性覆盖、API 数据覆盖、中止进行中请求。
+   * 退出交互调试、切换项目时调用。
+   */
+  resetSession: () => void;
 }
 
 /** V1 trigger 事件类型 → V2 eventId 映射（反向用于 V1 蓝图兼容 V2 事件回调） */
@@ -152,11 +158,11 @@ export function useBlueprintPreviewRuntime(
     [],
   );
 
-  const { deps, visibilityOverrides } = useBlueprintRuntimeDeps(
-    components,
-    onRefreshComplete,
-    getComponentData,
-  );
+  const {
+    deps,
+    visibilityOverrides,
+    resetSession: resetDepsSession,
+  } = useBlueprintRuntimeDeps(components, onRefreshComplete, getComponentData);
 
   // V2 RuntimeDeps 适配器：将 V1 RuntimeDeps 适配为 V2RuntimeDeps
   // 主要差异：getVisibility 返回 boolean（V2 不允许 undefined）；getComponentValue 返回 Record | undefined
@@ -328,6 +334,18 @@ export function useBlueprintPreviewRuntime(
     [isEnabled],
   );
 
+  /**
+   * Spec: introduce-canvas-interaction-modes
+   * 重置交互调试运行时会话：
+   * 1. 清空 visibilityOverrides（来自 useBlueprintRuntimeDeps）
+   * 2. 中止所有进行中的数据刷新请求（来自 useBlueprintRuntimeDeps）
+   * 3. 清空 apiDataOverrides（本 hook 维护的 API 数据覆盖）
+   */
+  const resetSession = useCallback((): void => {
+    resetDepsSession();
+    setApiDataOverrides(new Map());
+  }, [resetDepsSession]);
+
   const contextValue = useMemo<BlueprintPreviewContextValue>(
     () => ({
       visibilityOverrides,
@@ -343,6 +361,7 @@ export function useBlueprintPreviewRuntime(
     isEnabled,
     compiledRules: v1CompiledRules,
     compiledRulesV2: v2CompiledRules,
+    resetSession,
   };
 }
 

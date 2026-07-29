@@ -1476,3 +1476,75 @@ describe('全局变量 API 接入历史栈（Task 8）', () => {
     });
   });
 });
+
+// Spec: introduce-canvas-interaction-modes
+describe('画布交互模式（interactionMode）', () => {
+  function makeProject(id: string): ScreenProject {
+    return {
+      id,
+      name: `project-${id}`,
+      description: null,
+      canvas: {
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#000000',
+        scaleMode: 'fit',
+      },
+      components: [],
+      status: 'draft',
+      thumbnail: null,
+      createdAt: '2024-01-01 00:00:00',
+      updatedAt: '2024-01-01 00:00:00',
+    } as unknown as ScreenProject;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    useScreenEditorStore.getState().loadProject(makeProject('mode-test'));
+  });
+
+  it('默认模式为 design', () => {
+    expect(useScreenEditorStore.getState().interactionMode).toBe('design');
+  });
+
+  it('setInteractionMode 切换到 interactive', () => {
+    useScreenEditorStore.getState().setInteractionMode('interactive');
+    expect(useScreenEditorStore.getState().interactionMode).toBe('interactive');
+  });
+
+  it('setInteractionMode 切换回 design', () => {
+    useScreenEditorStore.getState().setInteractionMode('interactive');
+    useScreenEditorStore.getState().setInteractionMode('design');
+    expect(useScreenEditorStore.getState().interactionMode).toBe('design');
+  });
+
+  it('setInteractionMode 持久化到 localStorage', () => {
+    useScreenEditorStore.getState().setInteractionMode('interactive');
+    const raw = localStorage.getItem('nebula:screen-editor:preferences');
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!) as Record<string, unknown>;
+    expect(parsed.interactionMode).toBe('interactive');
+  });
+
+  it('loadProject 重置 interactionMode 到 design', () => {
+    useScreenEditorStore.getState().setInteractionMode('interactive');
+    expect(useScreenEditorStore.getState().interactionMode).toBe('interactive');
+
+    useScreenEditorStore.getState().loadProject(makeProject('new-project'));
+    expect(useScreenEditorStore.getState().interactionMode).toBe('design');
+  });
+
+  it('相同模式重复调用 setInteractionMode 为 no-op（不写入 localStorage）', () => {
+    useScreenEditorStore.getState().setInteractionMode('design');
+    const rawBefore = localStorage.getItem('nebula:screen-editor:preferences');
+    useScreenEditorStore.getState().setInteractionMode('design');
+    const rawAfter = localStorage.getItem('nebula:screen-editor:preferences');
+    expect(rawAfter).toBe(rawBefore);
+  });
+
+  it('Store 不再公开 eventsEnabled / toggleEvents', () => {
+    const state = useScreenEditorStore.getState();
+    expect(state).not.toHaveProperty('eventsEnabled');
+    expect(state).not.toHaveProperty('toggleEvents');
+  });
+});

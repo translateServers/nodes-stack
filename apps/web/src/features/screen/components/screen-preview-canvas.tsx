@@ -5,6 +5,10 @@ import {
   BlueprintPreviewProvider,
   useBlueprintPreviewRuntime,
 } from '../blueprint/runtime';
+import {
+  CanvasInteractionProvider,
+  INTERACTIVE_CAPABILITIES,
+} from '../lib/canvas-interaction-context';
 import { PreviewComponentRenderer } from './preview-component-renderer';
 import { buildFilterString } from './screen-canvas';
 
@@ -80,50 +84,52 @@ export function PreviewCanvas({ project }: PreviewCanvasProps) {
   return (
     <BlueprintPreviewProvider value={contextValue}>
       <BlueprintEventProvider value={onComponentEvent}>
-        <div className="screen-preview-atmosphere flex h-screen w-screen items-center justify-center overflow-hidden bg-black">
-          <div
-            className="screen-preview-stage"
-            style={{
-              width: canvas.width,
-              height: canvas.height,
-              transform: `scale(${scale})`,
-              transformOrigin: 'center center',
-              backgroundColor: canvas.backgroundColor,
-              backgroundImage: canvas.backgroundImage
-                ? `url(${canvas.backgroundImage})`
-                : undefined,
-              backgroundSize: 'cover',
-              position: 'relative',
-            }}
-          >
-            {components
-              .filter((c) => isComponentVisible(c, contextValue.visibilityOverrides))
-              .sort((a, b) => a.zIndex - b.zIndex)
-              .map((component, index) => (
-                <div
-                  key={component.id}
-                  className="screen-preview-component-enter"
-                  style={{
-                    ...resolveComponentContainerStyle(component),
-                    filter: buildFilterString(component.style.filter) || undefined,
-                    animationDelay: `${Math.min(index, 12) * 90 + 120}ms`,
-                  }}
-                  data-preview-component-id={component.id}
-                  onClick={(e) => {
-                    // 阻止冒泡到父容器（避免画布空白处点击触发组件事件）
-                    e.stopPropagation();
-                    onComponentClick(component.id);
-                  }}
-                  onMouseEnter={() => {
-                    // V2 任务 7.2：派发 hover 事件（V2 蓝图匹配 evt:hover 锚点）
-                    onComponentEvent(component.id, 'hover');
-                  }}
-                >
-                  <PreviewComponentRenderer component={component} />
-                </div>
-              ))}
+        <CanvasInteractionProvider value={INTERACTIVE_CAPABILITIES}>
+          <div className="screen-preview-atmosphere flex h-screen w-screen items-center justify-center overflow-hidden bg-black">
+            <div
+              className="screen-preview-stage"
+              style={{
+                width: canvas.width,
+                height: canvas.height,
+                transform: `scale(${scale})`,
+                transformOrigin: 'center center',
+                backgroundColor: canvas.backgroundColor,
+                backgroundImage: canvas.backgroundImage
+                  ? `url(${canvas.backgroundImage})`
+                  : undefined,
+                backgroundSize: 'cover',
+                position: 'relative',
+              }}
+            >
+              {components
+                .filter((c) => isComponentVisible(c, contextValue.visibilityOverrides))
+                .sort((a, b) => a.zIndex - b.zIndex)
+                .map((component, index) => (
+                  <div
+                    key={component.id}
+                    className="screen-preview-component-enter"
+                    style={{
+                      ...resolveComponentContainerStyle(component),
+                      filter: buildFilterString(component.style.filter) || undefined,
+                      animationDelay: `${Math.min(index, 12) * 90 + 120}ms`,
+                    }}
+                    data-preview-component-id={component.id}
+                    onClick={(e) => {
+                      // 阻止冒泡到父容器（避免画布空白处点击触发组件事件）
+                      e.stopPropagation();
+                      onComponentClick(component.id);
+                    }}
+                    onMouseEnter={() => {
+                      // V2 任务 7.2：派发 hover 事件（V2 蓝图匹配 evt:hover 锚点）
+                      onComponentEvent(component.id, 'hover');
+                    }}
+                  >
+                    <PreviewComponentRenderer component={component} />
+                  </div>
+                ))}
+            </div>
           </div>
-        </div>
+        </CanvasInteractionProvider>
       </BlueprintEventProvider>
     </BlueprintPreviewProvider>
   );

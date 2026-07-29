@@ -85,6 +85,12 @@ export function useBlueprintRuntimeDeps(
   deps: RuntimeDeps;
   visibilityOverrides: VisibilityOverrides;
   resetVisibility: () => void;
+  /**
+   * Spec: introduce-canvas-interaction-modes
+   * 重置交互调试运行时会话：清空可见性覆盖、中止所有进行中请求。
+   * 退出交互调试、切换项目或卸载编辑器时调用，确保不泄漏运行时状态。
+   */
+  resetSession: () => void;
 } {
   const [visibilityOverrides, setVisibilityOverrides] = useState<VisibilityOverrides>(
     () => new Map<string, boolean>(),
@@ -230,6 +236,21 @@ export function useBlueprintRuntimeDeps(
     setVisibilityOverrides(new Map());
   }, []);
 
+  /**
+   * Spec: introduce-canvas-interaction-modes
+   * 重置交互调试运行时会话：
+   * 1. 清空 visibilityOverrides（蓝图 setVisibility 动作的临时覆盖）
+   * 2. 中止所有进行中的数据刷新请求（防止过期响应写回新会话）
+   * 3. 清空请求追踪 Map
+   */
+  const resetSession = useCallback((): void => {
+    setVisibilityOverrides(new Map());
+    for (const req of requestsRef.current.values()) {
+      req.controller.abort();
+    }
+    requestsRef.current.clear();
+  }, []);
+
   // requestApi 动作运行时实现（任务 10.4）：fetch + timeout 取消协议
   const requestApi = useCallback(
     async (params: RequestApiRuntimeParams): Promise<RequestApiRuntimeResult> => {
@@ -282,5 +303,5 @@ export function useBlueprintRuntimeDeps(
     ],
   );
 
-  return { deps, visibilityOverrides, resetVisibility };
+  return { deps, visibilityOverrides, resetVisibility, resetSession };
 }

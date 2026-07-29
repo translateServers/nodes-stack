@@ -52,6 +52,15 @@ vi.mock('../../blueprint/runtime/component-event-context', () => ({
   useComponentEvent: () => mockEmitEventRef.current,
 }));
 
+vi.mock('../../lib/canvas-interaction-context', () => ({
+  useCanvasInteraction: () => ({
+    mode: 'interactive',
+    canEditCanvas: false,
+    canDispatchNativeEvents: true,
+    canDispatchBlueprintEvents: true,
+  }),
+}));
+
 vi.mock('../../hooks/use-dataset-source', () => ({
   useDatasetSource: () => mockDatasetStateRef.current,
 }));

@@ -310,11 +310,17 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
       // 不应触发画布清空选中。虽然 canvasEnabled 在 isEditingText 时为 false，
       // 此处显式判断使防御逻辑显式化，避免未来 canvasEnabled 逻辑变更引入 bug。
       if (isEditingText) return;
+      // Spec: introduce-canvas-interaction-modes
+      // 交互调试模式下 Escape 优先退出到设计模式，不执行其他 Escape 操作
+      const store = getStore();
+      if (store.interactionMode === 'interactive') {
+        store.setInteractionMode('design');
+        return;
+      }
       // 任务 13.2：Escape 键首先派发 escape 事件到交互状态机，恢复任意瞬时状态到 idle。
       // 修复 bug：原实现只操作 store，状态机可能卡在 dragging/resizing/rotating/panning/creating，
       // 导致后续 Selecto onDragStart 仲裁（非 idle/hovering 拒绝）阻塞单击选中。
       dispatchInteraction('escape');
-      const store = getStore();
       // 分层语义：先退出当前活动分组（保留选中），再次 Esc 才清空选中。
       if (store.activeGroupId) {
         store.setActiveGroupId(null);

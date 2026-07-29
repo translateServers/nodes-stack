@@ -5,9 +5,9 @@
  * 注入到组件树，使组件渲染时可在 onClick / onHover 等回调中调用，触发对应蓝图规则。
  *
  * 设计约束：
- * - 编辑态（eventsEnabled=false）不注入 Provider，`useComponentEvent` 返回 undefined，
+ * - 设计模式（interactionMode='design'）不注入 Provider，`useComponentEvent` 返回 undefined，
  *   组件回退到既有行为（不触发蓝图事件）
- * - 预览态注入 Provider，组件通过 `useComponentEvent` 获取回调并绑定到事件
+ * - 交互调试模式 / 预览态注入 Provider，组件通过 `useComponentEvent` 获取回调并绑定到事件
  * - 与 V1 `BlueprintPreviewContext`（visibilityOverrides / apiDataOverrides）并存：
  *   - `BlueprintPreviewContext` 提供运行时副作用产物（组件订阅读取）
  *   - `BlueprintEventContext` 提供事件触发入口（组件写入调用）

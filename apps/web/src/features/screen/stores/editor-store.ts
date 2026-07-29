@@ -12,6 +12,18 @@ import { migrateBlueprintV1ToV2, EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shar
 import { loadPreferences, savePreference, type PreferenceValues } from '../lib/preferences-persist';
 
 /**
+ * 画布交互模式（Spec: introduce-canvas-interaction-modes）。
+ *
+ * - `design`：设计模式（默认）。画布可选择、拖拽、缩放、旋转组件；
+ *   组件业务 click/hover 与事件蓝图运行时关闭。
+ * - `interactive`：交互调试模式。组件原生交互和蓝图运行时启用；
+ *   组件选择、拖拽、缩放、旋转和创建操作不再启动。
+ *
+ * "完整预览"使用独立预览路由，不作为编辑器画布内的第三个模式。
+ */
+export type CanvasInteractionMode = 'design' | 'interactive';
+
+/**
  * 历史栈条目：组件数组 + 画布配置 + 事件蓝图 + 全局变量的四重快照（任务 5.1 / Task 8）。
  * 撤销/重做时同步恢复四者，画布配置、组件编辑、蓝图编辑与全局变量编辑共享同一时间线。
  *
@@ -80,14 +92,14 @@ interface ScreenEditorData {
    */
   gridSize: number;
   /**
-   * 画布元素事件开关：开启后编辑器画布中元素点击会派发蓝图 componentClick 事件，
-   * 用于在编辑器内即时预览交互效果，无需切换到预览页（持久化到 localStorage）。
-   * - false（默认）：编辑器画布仅响应选中/拖拽/缩放等编辑操作，不触发蓝图事件
-   * - true：接入蓝图运行时，组件 onClick 派发到蓝图触发器（与公开预览一致）
-   * 注意：开启后仍保留 Moveable 的编辑能力（拖拽/缩放/旋转），但单击未选中的组件
-   * 会同时触发蓝图事件与选中，需要权衡使用场景。
+   * 画布交互模式（Spec: introduce-canvas-interaction-modes）。
+   * - 'design'（默认）：编辑器画布仅响应选中/拖拽/缩放等编辑操作，
+   *   组件业务交互与蓝图运行时关闭。
+   * - 'interactive'：接入蓝图运行时，组件 click/hover 派发蓝图事件，
+   *   同时暂停冲突的画布编辑能力（拖拽/缩放/旋转/框选/创建）。
+   * 持久化到 localStorage，加载新项目时回到 'design'。
    */
-  eventsEnabled: boolean;
+  interactionMode: CanvasInteractionMode;
   /**
    * UI 可见性开关：控制工具栏 / 侧边栏 / 属性面板等编辑器 UI 的显隐（会话级，不持久化）。
    * 用于 Tab 快捷键切换"全屏画布预览"模式（与 Photoshop 的 Tab 行为一致）。
@@ -262,8 +274,13 @@ interface ScreenEditorActions {
   ungroupSelected: () => void;
   /** 切换吸附开关 */
   toggleSnap: () => void;
-  /** 切换画布元素事件开关（蓝图 componentClick 事件派发） */
-  toggleEvents: () => void;
+  /**
+   * 设置画布交互模式（Spec: introduce-canvas-interaction-modes）。
+   * - 'design'：设计模式，编辑优先
+   * - 'interactive'：交互调试模式，组件交互与蓝图运行时开启，画布编辑暂停
+   * 持久化到 localStorage。
+   */
+  setInteractionMode: (mode: CanvasInteractionMode) => void;
   /** 设置智能对齐线开关（接受显式 value，便于未来接入设置面板） */
   setSmartGuidesEnabled: (value: boolean) => void;
   /** 设置网格吸附开关（接受显式 value，便于未来接入设置面板） */
@@ -294,7 +311,8 @@ const HISTORY_LIMIT = 50;
 
 /**
  * 从 localStorage 加载持久化偏好作为初始值。
- * snapEnabled / guidesVisible / eventsEnabled 持久化，其他字段保持会话级默认值。
+ * snapEnabled / guidesVisible / interactionMode 持久化，其他字段保持会话级默认值。
+ * 旧版 eventsEnabled 无论何值均安全迁移到 design。
  */
 const persistedPreferences: PreferenceValues = loadPreferences();
 
@@ -318,7 +336,7 @@ const initialData: ScreenEditorData = {
   smartGuidesEnabled: true,
   gridEnabled: false,
   gridSize: 10,
-  eventsEnabled: persistedPreferences.eventsEnabled,
+  interactionMode: persistedPreferences.interactionMode,
   uiVisible: true,
   screenMode: 'standard',
   isDirty: false,
@@ -446,6 +464,8 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
             // 加载新项目时关闭事件蓝图 Sheet，避免跨项目残留打开状态
             blueprintSheetOpen: false,
             blueprintFocusComponentId: null,
+            // 加载新项目时回到设计模式，避免自动执行蓝图副作用
+            interactionMode: 'design',
           },
           false,
           'loadProject',
@@ -1361,15 +1381,15 @@ export const useScreenEditorStore = create<ScreenEditorState>()(
         );
       },
 
-      toggleEvents: () => {
+      setInteractionMode: (mode) => {
         set(
           (state: ScreenEditorState) => {
-            const next = !state.eventsEnabled;
-            savePreference('eventsEnabled', next);
-            return { eventsEnabled: next };
+            if (state.interactionMode === mode) return {};
+            savePreference('interactionMode', mode);
+            return { interactionMode: mode };
           },
           false,
-          'toggleEvents',
+          'setInteractionMode',
         );
       },
 

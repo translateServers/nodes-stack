@@ -75,21 +75,25 @@ function setupStore(
     selectedComponentIds?: string[];
     snapEnabled?: boolean;
     guidesVisible?: boolean;
+    interactionMode?: 'design' | 'interactive';
   } = {},
 ): {
   toggleSnap: ReturnType<typeof vi.fn>;
   toggleGuidesVisibility: ReturnType<typeof vi.fn>;
   setCanvasScale: ReturnType<typeof vi.fn>;
+  setInteractionMode: ReturnType<typeof vi.fn>;
 } {
   const project = overrides.project === undefined ? makeProject() : overrides.project;
   const canvasScale = overrides.canvasScale ?? 1;
   const selectedComponentIds = overrides.selectedComponentIds ?? [];
   const snapEnabled = overrides.snapEnabled ?? true;
   const guidesVisible = overrides.guidesVisible ?? true;
+  const interactionMode = overrides.interactionMode ?? 'design';
 
   const toggleSnap = vi.fn();
   const toggleGuidesVisibility = vi.fn();
   const setCanvasScale = vi.fn();
+  const setInteractionMode = vi.fn();
 
   const store: Record<string, unknown> = {
     project,
@@ -97,14 +101,16 @@ function setupStore(
     selectedComponentIds,
     snapEnabled,
     guides: { visible: guidesVisible },
+    interactionMode,
     toggleSnap,
     toggleGuidesVisibility,
     setCanvasScale,
+    setInteractionMode,
   };
 
   mockUseStore.mockImplementation(<T,>(selector: (s: typeof store) => T): T => selector(store));
 
-  return { toggleSnap, toggleGuidesVisibility, setCanvasScale };
+  return { toggleSnap, toggleGuidesVisibility, setCanvasScale, setInteractionMode };
 }
 
 describe('CanvasStatusBar 任务 1.2：接入统一工具注册表', () => {
@@ -213,5 +219,59 @@ describe('CanvasStatusBar 任务 1.2：接入统一工具注册表', () => {
     render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
     // 默认 1920 × 1080
     expect(screen.getByText('1920 × 1080')).toBeInTheDocument();
+  });
+
+  // Spec: introduce-canvas-interaction-modes
+  describe('画布交互模式控制', () => {
+    it('设计模式显示"设计"文案', () => {
+      setupStore({ interactionMode: 'design' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByTestId('interaction-mode-toggle');
+      expect(toggle).toHaveTextContent('设计');
+    });
+
+    it('交互调试模式显示"交互"文案', () => {
+      setupStore({ interactionMode: 'interactive' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByTestId('interaction-mode-toggle');
+      expect(toggle).toHaveTextContent('交互');
+    });
+
+    it('设计模式下点击切换到交互调试调用 setInteractionMode', () => {
+      const { setInteractionMode } = setupStore({ interactionMode: 'design' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByTestId('interaction-mode-toggle');
+      fireEvent.click(toggle);
+      expect(setInteractionMode).toHaveBeenCalledWith('interactive');
+    });
+
+    it('交互调试模式下点击切换回设计调用 setInteractionMode', () => {
+      const { setInteractionMode } = setupStore({ interactionMode: 'interactive' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByTestId('interaction-mode-toggle');
+      fireEvent.click(toggle);
+      expect(setInteractionMode).toHaveBeenCalledWith('design');
+    });
+
+    it('设计模式 tooltip 说明画布可编辑、组件交互与蓝图关闭', () => {
+      setupStore({ interactionMode: 'design' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByTestId('interaction-mode-toggle');
+      expect(toggle).toHaveAttribute('aria-label', expect.stringContaining('设计'));
+    });
+
+    it('交互调试模式 aria-checked 为 true', () => {
+      setupStore({ interactionMode: 'interactive' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByRole('switch', { name: /画布模式/ });
+      expect(toggle).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('设计模式 aria-checked 为 false', () => {
+      setupStore({ interactionMode: 'design' });
+      render(<CanvasStatusBar editorSession={makeEditorSession('select')} />);
+      const toggle = screen.getByRole('switch', { name: /画布模式/ });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
+    });
   });
 });

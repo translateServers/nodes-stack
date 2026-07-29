@@ -14,6 +14,7 @@ import { useChartData } from '../../hooks/use-chart-data';
 import { useApiDataSource } from '../../hooks/use-api-data-source';
 import { useDatasetSource } from '../../hooks/use-dataset-source';
 import { useComponentEvent } from '../../blueprint/runtime/component-event-context';
+import { useCanvasInteraction } from '../../lib/canvas-interaction-context';
 
 /** 将刷新策略的 interval + unit 转换为秒数 */
 function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
@@ -56,6 +57,9 @@ export function BarChartComponent({
 }: RendererComponentProps) {
   // 事件蓝图修复：读取组件事件回调（编辑态返回 null，自动短路）
   const emitEvent = useComponentEvent();
+  // Spec: introduce-canvas-interaction-modes
+  // 设计模式下关闭组件原生交互（tooltip 等），仅交互调试/预览中开启
+  const { canDispatchNativeEvents } = useCanvasInteraction();
   const gradientId = `bar-chart-gradient-${useId().replaceAll(':', '')}`;
 
   // 任务 3.3：无数据层配置时回退遗留 props.data；有数据层时数据层唯一生效
@@ -168,7 +172,7 @@ export function BarChartComponent({
   const data = parseResult.data;
   const barColor = style.backgroundColor || '#3b82f6';
   const padding = { top: title ? 30 : 10, right: 10, bottom: 30, left: 40 };
-  const tooltipOnHover = interaction?.tooltipOnHover ?? false;
+  const tooltipOnHover = canDispatchNativeEvents && (interaction?.tooltipOnHover ?? false);
 
   // L1+L2 性能优化：将原本在 data.map 内每次迭代都重复计算的不变量提到循环外。
   // 原实现每项都重算 chartWidth/chartHeight/barWidth/gap，这些只依赖 data.length
