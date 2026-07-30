@@ -15,9 +15,10 @@ specs 是本文档体系中**最重要的开发依据**。每个 spec 必须包�
 | 数据集管理 | [dataset-management/](./dataset-management/README.md) | 实施中（2026-07-28） | 独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter。第一阶段 MVP 已完成，验收进度见 checklist.md |
 | 事件蓝图重新设计 | [blueprint-redesign/](./blueprint-redesign/spec.md) | 生效中（2026-07-26） | V2 蓝图：组件即节点、锚点即事件、三阶层节点模型、V1→V2 自动迁移（已落地） |
 | 事件蓝图事件触发链路修复 | [blueprint-event-trigger-fix/](./blueprint-event-trigger-fix/spec.md) | 生效中（2026-07-29） | 修复 dataLoaded/dataError/interval 事件触发并明确编辑器画布总闸门（代码已合并，手动验证待确认） |
-| 组件库重设计 | [component-library-redesign/](./component-library-redesign/spec.md) | 生效中（2026-07-26） | 统一注册接口 registerComponent、Map 索引、收藏机制、分类折叠（已全部完成） |
+| 组件库重设计 | [component-library-redesign/](./component-library-redesign/spec.md) | 生效中（2026-07-27） | 统一注册接口 registerComponent、Map 索引、收藏机制、分类折叠（已全部完成） |
 | 统一右侧属性面板分类 | [unified-property-panel-categories/](./unified-property-panel-categories/spec.md) | 生效中（2026-07-28） | 属性/数据/交互/事件四大类统一分类、组件滤镜、全局变量（P0/P1 已全部完成，仅剩 P2 质量门验证项，详见 checklist） |
-| 数据集管理规格修订 | [dataset-management-revision/](./dataset-management-revision/spec.md) | 已归档（2026-07-25） | 一次性修订：dataset-management 规格与契约方案对齐，已全部落地，结果沉淀在原目录 |
+| 大屏画布交互模式与事件管控 | [introduce-canvas-interaction-modes/](./introduce-canvas-interaction-modes/spec.md) | 生效中（2026-07-29） | 设计/交互模式切换、设计模式事件隔离、交互调试运行时会话隔离、预览一致性（P0/P1/P2 功能已落地，screen-editor/README.md 与 architecture/ 同步项待完成，详见 checklist） |
+| 数据集管理规格修订 | [dataset-management-revision/](./dataset-management-revision/spec.md) | 已归档（2026-07-27） | 一次性修订：dataset-management 规格与契约方案对齐，已全部落地，结果沉淀在原目录 |
 | 数据源管理 | _待创建_ | — | 现有 static/api 数据源 + 字段映射 + 逻辑层规格 |
 | 用户与权限 | _待创建_ | — | RBAC 权限体系规格 |
 
