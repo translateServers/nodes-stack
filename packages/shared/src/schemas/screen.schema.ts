@@ -324,10 +324,7 @@ export const BlueprintFieldSchema = z.discriminatedUnion('version', [
 ]);
 export type BlueprintField = EventBlueprint | EventBlueprintV2;
 
-export const ScreenProjectSchema = z.object({
-  id: z.string().describe('项目唯一标识'),
-  name: z.string().min(1).describe('项目名称'),
-  description: z.string().nullable().optional().describe('项目描述'),
+export const ScreenDocumentSchema = z.object({
   canvas: CanvasConfigSchema.describe('画布配置'),
   components: z.array(ScreenComponentSchema).describe('组件实例列表'),
   blueprint: BlueprintFieldSchema.optional().describe(
@@ -337,6 +334,13 @@ export const ScreenProjectSchema = z.object({
     .array(GlobalVariableSchema)
     .default([])
     .describe('项目级全局变量，可在数据源参数与蓝图模板插值中通过 {{globalVars.xxx}} 引用'),
+});
+export type ScreenDocument = z.infer<typeof ScreenDocumentSchema>;
+
+export const ScreenProjectSchema = ScreenDocumentSchema.extend({
+  id: z.string().describe('项目唯一标识'),
+  name: z.string().min(1).describe('项目名称'),
+  description: z.string().nullable().optional().describe('项目描述'),
   status: ScreenProjectStatusSchema.describe('项目状态'),
   thumbnail: z.string().nullable().optional().describe('缩略图'),
   createdAt: DateTimeStringSchema.describe('创建时间'),

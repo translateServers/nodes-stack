@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：设计中
+> 状态：实施中（阶段 2 已完成）
 > 最近更新：2026-07-30
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
@@ -31,37 +31,44 @@
 
 ## 阶段 2：建立包与文档协议
 
-- [ ] Task 4: 创建 `@nebula/screen-sdk` workspace package
-  - [ ] 创建 `packages/screen-sdk/package.json`、tsconfig、Vite、Vitest 与 ESLint 配置
-  - [ ] 配置 `src/index.ts`、`src/auto-register.ts`、`src/contracts/index.ts` 入口
-  - [ ] 配置 ESM build、source map、声明文件 rollup 与 clean
-  - [ ] 将构建 target 固定为 `chrome120`
-  - [ ] workspace 阶段保持 `private: true`
-  - [ ] 将 package 纳入 Turbo build/typecheck/lint/test 流程
+- [x] Task 4: 创建 `@nebula/screen-sdk` workspace package
+  - [x] 创建 `packages/screen-sdk/package.json`、tsconfig、Vite、Vitest 与 ESLint 配置
+  - [x] 配置 `src/index.ts`、`src/auto-register.ts`、`src/contracts/index.ts` 入口
+  - [x] 配置 ESM build、source map、声明文件 rollup 与 clean
+  - [x] 将构建 target 固定为 `chrome120`
+  - [x] workspace 阶段保持 `private: true`
+  - [x] 将 package 纳入 Turbo build/typecheck/lint/test 流程
 
-- [ ] Task 5: 实现版本化文档契约
-  - [ ] 在共享 Schema 层新增通用 `ScreenDocumentSchema`，避免复制既有 Canvas/Component/Blueprint 定义
-  - [ ] 在 SDK 实现 `ScreenDocumentV1Schema` 与 static 分支收窄
-  - [ ] 定义 6 个组件 type 常量、props map 与判别联合 Schema，拒绝未知 type/props
-  - [ ] 实现 `ScreenProjectDraftSchema` 与项目名称校验
-  - [ ] 实现 `ScreenProjectTransferV1Schema`
-  - [ ] 实现 `ScreenProjectEnvelopeInput` 到规范 Envelope 的解析与 id 一致性校验
-  - [ ] 固化导入文件最大 10 MiB 约束
-  - [ ] 实现 `validateScreenSdkCapabilities`
-  - [ ] 实现 V1 蓝图输入到 V2 规范输出的边界迁移
-  - [ ] 导出 TypeScript 类型、Zod Schema 与 JSON Schema
-  - [ ] 测试 API/dataset/global API/requestApi/refreshData 拒绝路径
+- [x] Task 5: 实现版本化文档契约
+  - [x] 在共享 Schema 层新增通用 `ScreenDocumentSchema`，避免复制既有 Canvas/Component/Blueprint 定义
+  - [x] 在 SDK 实现 `ScreenDocumentV1Schema` 与 static 分支收窄
+  - [x] 定义 6 个组件 type 常量、props map 与判别联合 Schema，拒绝未知 type/props
+  - [x] 实现 `ScreenProjectDraftSchema` 与项目名称校验
+  - [x] 实现 `ScreenProjectTransferV1Schema`
+  - [x] 实现 `ScreenProjectEnvelopeInput` 到规范 Envelope 的解析与 id 一致性校验
+  - [x] 固化导入文件最大 10 MiB 约束
+  - [x] 实现 `validateScreenSdkCapabilities`
+  - [x] 实现 V1 蓝图输入到 V2 规范输出的边界迁移
+  - [x] 导出 TypeScript 类型、Zod Schema 与 JSON Schema
+  - [x] 测试 API/dataset/global API/requestApi/refreshData 拒绝路径
 
-- [ ] Task 6: 实现 Adapter 公共类型与错误工具
-  - [ ] 定义 load/save/publish/import/export/snapshot 的完整 input/output 类型
-  - [ ] 实现 Envelope、SnapshotSummary 与 ScreenExportFile 响应 Schema
-  - [ ] 定义 `ScreenAdapterError` 与类型守卫/规范化辅助函数
-  - [ ] 实现 `ScreenPublicError` 安全映射，剥离原始 message/stack/cause/response/自定义字段
-  - [ ] 定义 `ScreenSdkDiagnosticCode` 枚举、路径语义与 diagnostics 透传
-  - [ ] 定义稳定 `ScreenOperation` 联合，禁止 error event 使用任意 operation 字符串
-  - [ ] 定义 capability 派生纯函数
-  - [ ] 为必需方法缺失、可选方法显隐、错误映射、恶意输入修改和 AbortSignal 编写测试
-  - [ ] 为非法快照时间/计数/尺寸、非法 Blob MIME 和不安全文件名编写负例测试
+- [x] Task 6: 实现 Adapter 公共类型与错误工具
+  - [x] 定义 load/save/publish/import/export/snapshot 的完整 input/output 类型
+  - [x] 实现 Envelope、SnapshotSummary 与 ScreenExportFile 响应 Schema
+  - [x] 定义 `ScreenAdapterError` 与类型守卫/规范化辅助函数
+  - [x] 实现 `ScreenPublicError` 安全映射，剥离原始 message/stack/cause/response/自定义字段
+  - [x] 定义 `ScreenSdkDiagnosticCode` 枚举、路径语义与 diagnostics 透传
+  - [x] 定义稳定 `ScreenOperation` 联合，禁止 error event 使用任意 operation 字符串
+  - [x] 定义 capability 派生纯函数
+  - [x] 为必需方法缺失、可选方法显隐、错误映射、恶意输入修改和 AbortSignal 编写测试
+  - [x] 为非法快照时间/计数/尺寸、非法 Blob MIME 和不安全文件名编写负例测试
+
+### 阶段 2 执行记录
+
+- Checkpoint A 已完成：公共类型、错误、能力矩阵和三个包入口可独立构建。
+- SDK 契约测试 40 项通过；shared 既有测试 195 项通过。
+- SDK typecheck、lint、build 与变更范围 Biome 检查通过；声明文件未泄漏 workspace 路径。
+- 全仓 typecheck、lint 通过。根 Biome 仍受既有 CRLF 行尾基线阻断；Web 回归仅既有 ECharts/jsdom 尺寸用例 4 项失败，其余 2467 项通过。
 
 ## 阶段 3：编辑器状态实例化
 

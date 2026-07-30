@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：设计中
+> 状态：实施中（阶段 2 已完成）
 > 最近更新：2026-07-30
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
@@ -19,47 +19,47 @@
 
 ## 2. Package and Contracts
 
-- [ ] `packages/screen-sdk` 已创建并被 pnpm workspace/Turbo 识别
-- [ ] package name 为 `@nebula/screen-sdk`，workspace 阶段 `private: true`
-- [ ] ESM build、source map、声明文件与 clean 正常
-- [ ] build target 固定为 `chrome120`
-- [ ] exports 包含 `.`、`./auto-register`、`./contracts`
-- [ ] `ScreenDocumentV1Schema` 导出且 schemaVersion 固定为 1
-- [ ] component type 只允许 text/bar-chart/rect/ellipse/image/button
-- [ ] 6 个 props 分支按 type 严格校验，未知 props 不被静默 strip
-- [ ] `ScreenProjectDraftSchema` 校验名称、描述与 document
-- [ ] `ScreenProjectEnvelope` 使用不透明非空 revision
-- [ ] `ScreenProjectTransferV1Schema` 含 format 与 formatVersion
-- [ ] `ScreenProjectEnvelopeInput` 可规范化为 V2 Envelope 并校验项目 id
-- [ ] 导入文件最大值固定为 10 MiB
-- [ ] SDK 导出 JSON Schema，后端团队可据此重复校验
-- [ ] declaration rollup 不泄漏 workspace 私有源码路径
-- [ ] 诊断 code 使用 `ScreenSdkDiagnosticCode` 枚举而非任意字符串
-- [ ] API/dataset/global API/requestApi/refreshData 有稳定诊断码和路径
-- [ ] V1 蓝图输入可迁移为规范 V2 输出
-- [ ] 不支持文档不会被静默改写或部分加载
+- [x] `packages/screen-sdk` 已创建并被 pnpm workspace/Turbo 识别
+- [x] package name 为 `@nebula/screen-sdk`，workspace 阶段 `private: true`
+- [x] ESM build、source map、声明文件与 clean 正常
+- [x] build target 固定为 `chrome120`
+- [x] exports 包含 `.`、`./auto-register`、`./contracts`
+- [x] `ScreenDocumentV1Schema` 导出且 schemaVersion 固定为 1
+- [x] component type 只允许 text/bar-chart/rect/ellipse/image/button
+- [x] 6 个 props 分支按 type 严格校验，未知 props 不被静默 strip
+- [x] `ScreenProjectDraftSchema` 校验名称、描述与 document
+- [x] `ScreenProjectEnvelope` 使用不透明非空 revision
+- [x] `ScreenProjectTransferV1Schema` 含 format 与 formatVersion
+- [x] `ScreenProjectEnvelopeInput` 可规范化为 V2 Envelope 并校验项目 id
+- [x] 导入文件最大值固定为 10 MiB
+- [x] SDK 导出 JSON Schema，后端团队可据此重复校验
+- [x] declaration rollup 不泄漏 workspace 私有源码路径
+- [x] 诊断 code 使用 `ScreenSdkDiagnosticCode` 枚举而非任意字符串
+- [x] API/dataset/global API/requestApi/refreshData 有稳定诊断码和路径
+- [x] V1 蓝图输入可迁移为规范 V2 输出
+- [x] 不支持文档不会被静默改写或部分加载
 
 ## 3. Adapter Boundary
 
 - [ ] SDK 只通过 `ScreenHostAdapter` 加载和保存项目
-- [ ] SDK 源码没有固定 API base URL、endpoint 或 Nebula response envelope
-- [ ] SDK 不读取 Token、Cookie 或 auth store
-- [ ] 所有 Adapter 方法接收 AbortSignal
-- [ ] save/publish/import/restore 使用当前 revision
+- [x] SDK 源码没有固定 API base URL、endpoint 或 Nebula response envelope
+- [x] SDK 不读取 Token、Cookie 或 auth store
+- [x] 所有 Adapter 方法接收 AbortSignal
+- [x] save/publish/import/restore 使用当前 revision
 - [ ] 成功操作均用完整返回 Envelope 更新基线
-- [ ] SDK 不把 Store 内部 draft/document/transfer 引用直接交给 Adapter
-- [ ] SDK 向 Adapter 传递 detached clone，恶意 Adapter 修改输入不影响 Store
+- [x] SDK 不把 Store 内部 draft/document/transfer 引用直接交给 Adapter
+- [x] SDK 向 Adapter 传递 detached clone，恶意 Adapter 修改输入不影响 Store
 - [ ] Adapter 缺少 publish 时发布入口隐藏
 - [ ] Adapter 缺少 import/export 时对应文件入口隐藏
 - [ ] Adapter 缺少 snapshots 时快照入口隐藏
-- [ ] HTTP/GraphQL/BizCode 错误可映射到统一 `ScreenAdapterError`
-- [ ] 文档错误通过 error.diagnostics 暴露稳定 code/path 且不含敏感原值
-- [ ] error event 使用 `ScreenPublicError`，不暴露 Adapter 原始 message/stack/cause/response/附加字段
-- [ ] 含模拟 Token/Cookie 的恶意 Adapter Error 脱敏测试通过
-- [ ] error event operation 使用 `ScreenOperation` 稳定联合
-- [ ] SnapshotSummary 校验带时区时间、非负计数和正尺寸
-- [ ] ScreenExportFile 校验 JSON Blob MIME 与安全 basename
-- [ ] Abort 不作为普通错误提示
+- [x] HTTP/GraphQL/BizCode 错误可映射到统一 `ScreenAdapterError`
+- [x] 文档错误通过 error.diagnostics 暴露稳定 code/path 且不含敏感原值
+- [x] error event 使用 `ScreenPublicError`，不暴露 Adapter 原始 message/stack/cause/response/附加字段
+- [x] 含模拟 Token/Cookie 的恶意 Adapter Error 脱敏测试通过
+- [x] error event operation 使用 `ScreenOperation` 稳定联合
+- [x] SnapshotSummary 校验带时区时间、非负计数和正尺寸
+- [x] ScreenExportFile 校验 JSON Blob MIME 与安全 basename
+- [x] Abort 不作为普通错误提示
 
 ## 4. Store and Instance Isolation
 
@@ -215,8 +215,8 @@
 
 ## 13. Tests and Release
 
-- [ ] 文档 Schema 与 capability validator 单测通过
-- [ ] Adapter/error/cancellation 单测通过
+- [x] 文档 Schema 与 capability validator 单测通过
+- [x] Adapter/error/cancellation 单测通过
 - [ ] Store factory 与双实例单测通过
 - [ ] Custom Element 生命周期测试通过
 - [ ] Shadow Portal 与宿主 CSS 隔离测试通过
@@ -225,12 +225,12 @@
 - [ ] 双实例焦点/快捷键 E2E 通过
 - [ ] 保存冲突、导入导出和快照 E2E 通过
 - [ ] 现有画布、工具、属性、历史与蓝图核心测试通过
-- [ ] `pnpm --filter @nebula/screen-sdk typecheck` 通过
-- [ ] `pnpm --filter @nebula/screen-sdk lint` 通过
-- [ ] `pnpm --filter @nebula/screen-sdk test` 通过
-- [ ] `pnpm --filter @nebula/screen-sdk build` 通过
+- [x] `pnpm --filter @nebula/screen-sdk typecheck` 通过
+- [x] `pnpm --filter @nebula/screen-sdk lint` 通过
+- [x] `pnpm --filter @nebula/screen-sdk test` 通过
+- [x] `pnpm --filter @nebula/screen-sdk build` 通过
 - [ ] `pnpm biome:check` 通过
-- [ ] 根 `pnpm typecheck` 与 `pnpm lint` 通过
+- [x] 根 `pnpm typecheck` 与 `pnpm lint` 通过
 - [ ] 首次 gzip 体积基线已记录
 - [ ] `pnpm pack` tarball 内容正确
 - [ ] 空白 Vanilla Vite 项目安装 tarball 后 typecheck/build 通过

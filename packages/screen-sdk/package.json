@@ -1,0 +1,55 @@
+{
+  "name": "@nebula/screen-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./auto-register": {
+      "types": "./dist/auto-register.d.ts",
+      "import": "./dist/auto-register.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    },
+    "./contracts/screen-document.schema.json": "./dist/contracts/screen-document.schema.json",
+    "./contracts/screen-project-draft.schema.json": "./dist/contracts/screen-project-draft.schema.json",
+    "./contracts/screen-project-envelope-input.schema.json": "./dist/contracts/screen-project-envelope-input.schema.json",
+    "./contracts/screen-project-transfer.schema.json": "./dist/contracts/screen-project-transfer.schema.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "./dist/auto-register.js",
+    "./dist/**/*.css"
+  ],
+  "scripts": {
+    "build": "vite build && node ./scripts/generate-json-schemas.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.57.0",
+    "@nebula/eslint-config": "workspace:*",
+    "@nebula/shared": "workspace:*",
+    "@nebula/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.18.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "unplugin-dts": "^1.0.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.9"
+  }
+}
