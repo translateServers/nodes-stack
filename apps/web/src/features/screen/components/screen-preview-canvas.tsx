@@ -69,7 +69,7 @@ interface PreviewCanvasProps {
  * - 启用蓝图运行时（BlueprintPreviewProvider）
  * - 自动 fitScale 按 scaleMode 适配视口
  * - 组件可见性判定（isComponentVisible）
- * - 组件点击派发蓝图 componentClick 事件
+ * - 完整派发蓝图组件事件并调度 pageLoad / interval
  *
  * 调用方负责数据获取与加载/不存在态展示，本组件只接收 project 渲染。
  */
@@ -79,6 +79,7 @@ export function PreviewCanvas({ project }: PreviewCanvasProps) {
   const { contextValue, onComponentClick, onComponentEvent } = useBlueprintPreviewRuntime(
     blueprint,
     components,
+    { enabled: true },
   );
 
   return (

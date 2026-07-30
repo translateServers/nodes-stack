@@ -3,9 +3,7 @@
  *
  * 运行时分为两层：
  * 1. 纯函数层（matcher.ts / plan.ts）：规则匹配与执行计划展开，可单元测试
- * 2. 执行器层（executor.ts）：薄执行器，依赖 DOM / fetch 等副作用，仅用于预览与沙盒
- *
- * 编辑器画布不触发蓝图（见 spec "编辑器画布不触发蓝图"）。
+ * 2. 执行器层（executor.ts）：薄执行器，依赖 DOM / fetch 等副作用，用于运行时宿主与沙盒
  */
 
 import type { CompiledRule } from '../compiler/types.js';

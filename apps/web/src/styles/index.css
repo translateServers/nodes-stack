@@ -246,6 +246,90 @@
   --xy-attribution-background-color: color-mix(in oklch, var(--foreground) 5%, transparent);
 }
 
+/* ============================================================
+ * 事件蓝图：节点 / 连线 交互反馈与沙盒高亮
+ *
+ * 1. 沙盒模拟链路高亮：blueprint-sheet 在模拟触发时给 RF node/edge
+ *    注入 blueprint-node-highlighted / blueprint-edge-highlighted className，
+ *    用 emerald 光晕呈现"执行路径"，与选中态（蓝）/诊断态（红/黄）区分。
+ * 2. 锚点（Handle）反馈：hover 光晕提示可拖出/接入；连线拖拽中
+ *    React Flow 会给悬停 handle 加 connectingto（+ valid）class，
+ *    合法目标 emerald 光晕、非法目标 rose 提示。
+ * 3. 连线预览线：虚线流动动画，强化"正在接线"的过程感。
+ * ============================================================ */
+
+/* --- 沙盒模拟：节点高亮（emerald 脉冲光晕） --- */
+.react-flow__node.blueprint-node-highlighted [data-testid="blueprint-node"] {
+  border-color: rgb(16 185 129 / 0.85);
+  animation: blueprint-node-highlight-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes blueprint-node-highlight-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px rgb(16 185 129 / 0.28),
+      0 0 18px 2px rgb(16 185 129 / 0.22);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgb(16 185 129 / 0.45),
+      0 0 28px 6px rgb(16 185 129 / 0.35);
+  }
+}
+
+/* --- 沙盒模拟：边高亮（emerald 描边，配合 RF animated 流动虚线） --- */
+.react-flow__edge.blueprint-edge-highlighted .react-flow__edge-path {
+  stroke: rgb(16 185 129 / 0.9);
+}
+
+/* --- 锚点：hover 光晕（box-shadow 扩展无布局抖动） --- */
+.react-flow__handle {
+  transition: box-shadow 150ms ease-out;
+}
+
+.react-flow__handle:hover {
+  box-shadow: 0 0 0 4px color-mix(in oklch, var(--ring) 22%, transparent);
+}
+
+/* --- 连线拖拽中：合法目标 emerald 光晕，非法目标 rose 提示 --- */
+.react-flow__handle.connectingto.valid {
+  background-color: rgb(16 185 129) !important;
+  box-shadow:
+    0 0 0 4px rgb(16 185 129 / 0.3),
+    0 0 12px 2px rgb(16 185 129 / 0.45);
+}
+
+.react-flow__handle.connectingto:not(.valid) {
+  background-color: rgb(244 63 94) !important;
+  box-shadow: 0 0 0 4px rgb(244 63 94 / 0.25);
+}
+
+/* --- 连线拖拽预览线：主题色流动虚线 --- */
+.react-flow__connection-path {
+  stroke: color-mix(in oklch, var(--ring) 75%, transparent);
+  stroke-width: 2;
+  stroke-dasharray: 7 5;
+  animation: blueprint-connection-flow 0.6s linear infinite;
+}
+
+@keyframes blueprint-connection-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node.blueprint-node-highlighted [data-testid="blueprint-node"],
+  .react-flow__connection-path {
+    animation: none;
+  }
+
+  .react-flow__handle {
+    transition: none;
+  }
+}
+
 .screen-preview-atmosphere {
   position: relative;
   isolation: isolate;

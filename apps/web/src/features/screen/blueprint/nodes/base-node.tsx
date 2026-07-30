@@ -2,9 +2,10 @@
  * 蓝图节点共享容器
  *
  * 三类节点共享的渲染外壳：
- * - 选中态：蓝色边框高亮
- * - dangling 标记态：红色边框 + 红色阴影
+ * - 选中态：蓝色边框高亮 + 柔和光晕
+ * - dangling 标记态：红色边框 + 红色光晕
  * - cycle 标记态：橙色虚线边框
+ * - 左侧类型色条：不读文字即可识别节点类型
  * - 类型图标容器与标签布局
  * - 深色主题配色
  *
@@ -21,6 +22,12 @@
  * - condition：紫色（purple）
  * - comment：灰色（gray）
  *
+ * 锚点（Handle）语义配色：
+ * - source 输出锚点（事件）：emerald 实心
+ * - target 输入锚点（动作）：sky 实心
+ * - condition then / else：emerald / rose
+ * - 其他静态引脚：muted 中性色
+ *
  * 同时支持：
  * - V1 静态引脚模式（showInputHandle / showOutputHandle / outputHandleMode）
  * - V2 动态锚点模式（dynamicAnchors：传入 events[]/actions[] 数组自动派生 Handle）
@@ -28,6 +35,7 @@
 
 import { useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
+import { cn } from '@/lib/utils';
 
 /**
  * 动态锚点行高（px）。
@@ -114,49 +122,75 @@ interface BaseNodeShellProps {
 
 const COLOR_SCHEMES: Record<
   NodeColorScheme,
-  { bg: string; border: string; text: string; iconBg: string }
+  {
+    /** 卡片底色（极轻类型色染） */
+    bg: string;
+    /** 默认边框色 */
+    border: string;
+    /** 图标与类型标签文字色 */
+    text: string;
+    /** 图标容器底色 */
+    iconBg: string;
+    /** 左侧类型色条 */
+    accentBar: string;
+  }
 > = {
   trigger: {
-    bg: 'bg-amber-500/10 dark:bg-amber-500/15',
-    border: 'border-amber-500/50 dark:border-amber-400/50',
+    bg: 'bg-amber-500/[0.07] dark:bg-amber-500/10',
+    border: 'border-amber-500/40 dark:border-amber-400/40',
     text: 'text-amber-700 dark:text-amber-300',
-    iconBg: 'bg-amber-500/20 dark:bg-amber-500/30',
+    iconBg: 'bg-amber-500/15 dark:bg-amber-500/25',
+    accentBar: 'bg-amber-500',
   },
   action: {
-    bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
-    border: 'border-emerald-500/50 dark:border-emerald-400/50',
+    bg: 'bg-emerald-500/[0.07] dark:bg-emerald-500/10',
+    border: 'border-emerald-500/40 dark:border-emerald-400/40',
     text: 'text-emerald-700 dark:text-emerald-300',
-    iconBg: 'bg-emerald-500/20 dark:bg-emerald-500/30',
+    iconBg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
+    accentBar: 'bg-emerald-500',
   },
   comment: {
-    bg: 'bg-gray-500/10 dark:bg-gray-500/15',
-    border: 'border-gray-500/50 dark:border-gray-400/50',
+    bg: 'bg-gray-500/[0.07] dark:bg-gray-500/10',
+    border: 'border-gray-500/40 dark:border-gray-400/40',
     text: 'text-gray-700 dark:text-gray-300',
-    iconBg: 'bg-gray-500/20 dark:bg-gray-500/30',
+    iconBg: 'bg-gray-500/15 dark:bg-gray-500/25',
+    accentBar: 'bg-gray-400',
   },
   condition: {
-    bg: 'bg-purple-500/10 dark:bg-purple-500/15',
-    border: 'border-purple-500/50 dark:border-purple-400/50',
+    bg: 'bg-purple-500/[0.07] dark:bg-purple-500/10',
+    border: 'border-purple-500/40 dark:border-purple-400/40',
     text: 'text-purple-700 dark:text-purple-300',
-    iconBg: 'bg-purple-500/20 dark:bg-purple-500/30',
+    iconBg: 'bg-purple-500/15 dark:bg-purple-500/25',
+    accentBar: 'bg-purple-500',
   },
   // V2 component 节点：emerald 配色（与 action 一致），与 V1 action 节点视觉延续
   component: {
-    bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
-    border: 'border-emerald-500/50 dark:border-emerald-400/50',
+    bg: 'bg-emerald-500/[0.07] dark:bg-emerald-500/10',
+    border: 'border-emerald-500/40 dark:border-emerald-400/40',
     text: 'text-emerald-700 dark:text-emerald-300',
-    iconBg: 'bg-emerald-500/20 dark:bg-emerald-500/30',
+    iconBg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
+    accentBar: 'bg-emerald-500',
   },
   // V2 delay 节点：amber 配色（与 trigger 一致）
   delay: {
-    bg: 'bg-amber-500/10 dark:bg-amber-500/15',
-    border: 'border-amber-500/50 dark:border-amber-400/50',
+    bg: 'bg-amber-500/[0.07] dark:bg-amber-500/10',
+    border: 'border-amber-500/40 dark:border-amber-400/40',
     text: 'text-amber-700 dark:text-amber-300',
-    iconBg: 'bg-amber-500/20 dark:bg-amber-500/30',
+    iconBg: 'bg-amber-500/15 dark:bg-amber-500/25',
+    accentBar: 'bg-amber-500',
   },
 };
 
-const HANDLE_BASE_CLASS = '!h-2.5 !w-2.5 !border-2 !border-background !bg-muted-foreground';
+/** 锚点基础样式：12px 圆点 + 2px 背景色描边（产生"镂空"层次） */
+const HANDLE_BASE_CLASS = '!h-3 !w-3 !border-2 !border-background transition-shadow';
+/** 输出锚点（事件 / then 分支）：emerald */
+const HANDLE_SOURCE_CLASS = `${HANDLE_BASE_CLASS} !bg-emerald-500`;
+/** 输入锚点（动作）：sky */
+const HANDLE_TARGET_CLASS = `${HANDLE_BASE_CLASS} !bg-sky-500`;
+/** else 分支输出锚点：rose */
+const HANDLE_ELSE_CLASS = `${HANDLE_BASE_CLASS} !bg-rose-500`;
+/** 中性静态引脚（delay in/out、condition in） */
+const HANDLE_NEUTRAL_CLASS = `${HANDLE_BASE_CLASS} !bg-muted-foreground`;
 
 /**
  * 节点共享外壳组件。
@@ -186,15 +220,15 @@ export function BaseNodeShell({
 
   // 边框样式：优先级 dangling > error > warning > cycle > selected > 默认
   const borderClass = dangling
-    ? 'border-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.3)]'
+    ? 'border-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.16)]'
     : diagnosticLevel === 'error'
-      ? 'border-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.3)]'
+      ? 'border-red-500 shadow-[0_0_0_3px_rgba(239,68,68,0.16)]'
       : diagnosticLevel === 'warning'
-        ? 'border-yellow-500 shadow-[0_0_0_2px_rgba(234,179,8,0.3)]'
+        ? 'border-yellow-500 shadow-[0_0_0_3px_rgba(234,179,8,0.16)]'
         : inCycle
           ? 'border-dashed border-orange-500'
           : selected
-            ? 'border-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.3)]'
+            ? 'border-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.16),0_10px_28px_-12px_rgba(59,130,246,0.45)]'
             : dashed
               ? `border-dashed ${scheme.border}`
               : scheme.border;
@@ -236,7 +270,13 @@ export function BaseNodeShell({
   return (
     <div
       ref={nodeRef}
-      className={`relative min-w-[200px] max-w-[280px] rounded-lg border-2 ${scheme.bg} ${borderClass} ${locateClass} px-3 py-2 shadow-sm transition-colors`}
+      className={cn(
+        'group relative min-w-[200px] max-w-[280px] rounded-xl border py-2.5 pl-4 pr-3',
+        'shadow-sm transition-[border-color,box-shadow] duration-150 hover:shadow-md',
+        scheme.bg,
+        borderClass,
+        locateClass,
+      )}
       data-testid="blueprint-node"
       data-node-id={nodeId}
       data-node-kind={colorScheme}
@@ -248,6 +288,12 @@ export function BaseNodeShell({
       data-dashed={dashed || undefined}
       data-dynamic-anchors={useDynamicAnchors || undefined}
     >
+      {/* 左侧类型色条：不读文字即可识别节点类别 */}
+      <span
+        aria-hidden="true"
+        className={cn('absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full', scheme.accentBar)}
+      />
+
       {useDynamicAnchors ? (
         <>
           {/* 动态 target 锚点（左侧）：每个动作一个 Handle，top 与对应行对齐。
@@ -259,7 +305,7 @@ export function BaseNodeShell({
               position={Position.Left}
               id={anchor.id}
               style={{ top: `${getHandleTop(idx)}px` }}
-              className={HANDLE_BASE_CLASS}
+              className={HANDLE_TARGET_CLASS}
             />
           ))}
           {/* 动态 source 锚点（右侧）：每个事件一个 Handle，top 与对应行对齐 */}
@@ -270,14 +316,19 @@ export function BaseNodeShell({
               position={Position.Right}
               id={anchor.id}
               style={{ top: `${getHandleTop(idx)}px` }}
-              className={HANDLE_BASE_CLASS}
+              className={HANDLE_SOURCE_CLASS}
             />
           ))}
         </>
       ) : (
         <>
           {showInputHandle && (
-            <Handle type="target" position={Position.Left} id="in" className={HANDLE_BASE_CLASS} />
+            <Handle
+              type="target"
+              position={Position.Left}
+              id="in"
+              className={HANDLE_NEUTRAL_CLASS}
+            />
           )}
         </>
       )}
@@ -285,15 +336,22 @@ export function BaseNodeShell({
       {/* 头部：图标 + 类型标签 + 节点名称 */}
       <div className="flex items-center gap-2">
         <div
-          className={`flex size-6 shrink-0 items-center justify-center rounded-md ${scheme.iconBg} ${scheme.text}`}
+          className={cn(
+            'flex size-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ring-black/5 dark:ring-white/10',
+            scheme.iconBg,
+            scheme.text,
+          )}
         >
           {icon}
         </div>
         <div className="flex min-w-0 flex-col">
-          <span className={`text-[10px] font-medium uppercase tracking-wide ${scheme.text}`}>
+          <span className={cn('text-[10px] font-medium uppercase tracking-wider', scheme.text)}>
             {typeLabel}
           </span>
-          <span className="truncate text-sm font-semibold text-foreground" title={label}>
+          <span
+            className="truncate text-sm font-semibold leading-tight text-foreground"
+            title={label}
+          >
             {label}
           </span>
         </div>
@@ -304,13 +362,12 @@ export function BaseNodeShell({
        * 每行高度 = ANCHOR_ROW_HEIGHT，Handle 的 top 通过 getHandleTop(idx) 与该行垂直居中对齐。
        *
        * 视觉设计：
-       * - target（动作，左）：蓝色圆点 + 蓝色文字，圆点靠近左侧 Handle
-       * - source（事件，右）：绿色文字 + 绿色圆点，圆点靠近右侧 Handle
-       * - 去除 chip 背景，用纯圆点 + 文字保持简洁
-       * - 行间用 gap 分隔，避免拥挤
+       * - target（动作，左）：sky 圆点 + sky 文字，圆点靠近左侧 Handle
+       * - source（事件，右）：emerald 文字 + emerald 圆点，圆点靠近右侧 Handle
+       * - 行 hover 背景 + crosshair 光标：提示"可从该行拖出/接入连线"
        */}
       {useDynamicAnchors && rowCount > 0 && (
-        <div className="mt-2 border-t border-border/30 pt-1.5">
+        <div className="mt-2 border-t border-border/40 pt-1.5">
           <div ref={anchorListRef}>
             {Array.from({ length: rowCount }).map((_, rowIdx) => {
               const source = sourceAnchors[rowIdx];
@@ -318,7 +375,7 @@ export function BaseNodeShell({
               return (
                 <div
                   key={rowIdx}
-                  className="flex items-center gap-2"
+                  className="-mx-1 flex cursor-crosshair items-center gap-2 rounded px-1 transition-colors hover:bg-accent/60"
                   style={{ height: `${ANCHOR_ROW_HEIGHT}px` }}
                   data-anchor-row={rowIdx}
                 >
@@ -330,8 +387,8 @@ export function BaseNodeShell({
                         data-anchor-id={target.id}
                         data-anchor-side="target"
                       >
-                        <span className="size-1.5 shrink-0 rounded-full bg-blue-500 dark:bg-blue-400" />
-                        <span className="truncate text-xs font-medium text-blue-700 dark:text-blue-300">
+                        <span className="size-1.5 shrink-0 rounded-full bg-sky-500 dark:bg-sky-400" />
+                        <span className="truncate text-xs font-medium text-sky-700 dark:text-sky-300">
                           {target.label}
                         </span>
                       </div>
@@ -359,10 +416,10 @@ export function BaseNodeShell({
         </div>
       )}
 
-      {children && <div className="mt-2 border-t border-border/30 pt-2">{children}</div>}
+      {children && <div className="mt-2 border-t border-border/40 pt-2">{children}</div>}
 
       {!useDynamicAnchors && showOutputHandle && outputHandleMode === 'single' && (
-        <Handle type="source" position={Position.Right} id="out" className={HANDLE_BASE_CLASS} />
+        <Handle type="source" position={Position.Right} id="out" className={HANDLE_NEUTRAL_CLASS} />
       )}
       {!useDynamicAnchors && showOutputHandle && outputHandleMode === 'then-else' && (
         <>
@@ -371,14 +428,14 @@ export function BaseNodeShell({
             position={Position.Right}
             id="then"
             style={{ top: '40%' }}
-            className={HANDLE_BASE_CLASS}
+            className={HANDLE_SOURCE_CLASS}
           />
           <Handle
             type="source"
             position={Position.Right}
             id="else"
             style={{ top: '70%' }}
-            className={HANDLE_BASE_CLASS}
+            className={HANDLE_ELSE_CLASS}
           />
         </>
       )}

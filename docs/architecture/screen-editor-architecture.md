@@ -1,7 +1,7 @@
 # 大屏设计器架构
 
 > 状态：生效中
-> 最近更新：2026-07-26
+> 最近更新：2026-07-29
 > 定位：核心 feature 的架构说明。读完应能理解画布/组件/工具/属性面板/数据层如何协作，以及在哪里扩展
 
 ## 1. 定位与边界
@@ -67,7 +67,7 @@ features/screen/
   clipboard / pasteCount              // 内存剪贴板（不入历史）
   snapEnabled / smartGuidesEnabled / gridEnabled / gridSize
   activeGroupId: string | null        // 当前进入的分组（Figma "Enter Frame" 语义）
-  eventsEnabled: boolean              // 画布是否派发蓝图事件
+  eventsEnabled: boolean              // 主编辑画布蓝图运行时总闸门（本地偏好）
   isDirty: boolean                    // 本地脏状态
   blueprintGesture: { active; baseline }  // 蓝图拖拽手势（高频合并入历史）
 }
@@ -226,6 +226,13 @@ selectoSelectByClick = activeCapabilities.canSelect
 
 - Alt/Ctrl/Cmd+滚轮统一走 `zoomWithBoundary`（边界 [0.1, 5] + 锚点不变性）
 - 缩放工具点击：Alt 反向
+
+### 编辑器画布蓝图运行时
+
+- 底部状态栏 `Event` 控制主编辑画布的完整蓝图运行时，不只控制 `componentClick`
+- 关闭时不调度 `pageLoad` / `interval`、不接收 click/hover/data 事件，并阻断异步链后续动作
+- 开启时 `setVisibility` 与 `refreshDataSource` 的临时覆盖会在编辑画布即时呈现，不写入项目数据或历史栈
+- 重新关闭会中止进行中的请求并恢复项目原始显隐与数据；独立预览页和蓝图沙盒不受此本地偏好影响
 
 ### 性能优化要点
 

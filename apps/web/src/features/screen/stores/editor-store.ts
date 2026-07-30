@@ -94,9 +94,10 @@ interface ScreenEditorData {
   /**
    * 画布交互模式（Spec: introduce-canvas-interaction-modes）。
    * - 'design'（默认）：编辑器画布仅响应选中/拖拽/缩放等编辑操作，
-   *   组件业务交互与蓝图运行时关闭。
+   *   组件业务交互与蓝图运行时关闭（不调度 pageLoad/interval，不派发组件事件）。
    * - 'interactive'：接入蓝图运行时，组件 click/hover 派发蓝图事件，
-   *   同时暂停冲突的画布编辑能力（拖拽/缩放/旋转/框选/创建）。
+   *   同时暂停冲突的画布编辑能力（拖拽/缩放/旋转/框选/创建），
+   *   并应用临时可见性/数据覆盖；该偏好只控制主编辑画布。
    * 持久化到 localStorage，加载新项目时回到 'design'。
    */
   interactionMode: CanvasInteractionMode;

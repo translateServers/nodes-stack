@@ -5,9 +5,10 @@
  * 注入到组件树，使组件渲染时可在 onClick / onHover 等回调中调用，触发对应蓝图规则。
  *
  * 设计约束：
- * - 设计模式（interactionMode='design'）不注入 Provider，`useComponentEvent` 返回 undefined，
- *   组件回退到既有行为（不触发蓝图事件）
- * - 交互调试模式 / 预览态注入 Provider，组件通过 `useComponentEvent` 获取回调并绑定到事件
+ * - 无运行时宿主时不注入 Provider，`useComponentEvent` 返回 null，组件回退到既有行为
+ * - 主编辑画布会保持稳定 Provider，并由运行时 enabled 闸门丢弃关闭期间的事件，
+ *   避免关闭后重开时因回调换绑补发旧 dataLoaded/dataError 状态
+ * - 独立预览注入 Provider，组件通过 `useComponentEvent` 获取回调并绑定到事件
  * - 与 V1 `BlueprintPreviewContext`（visibilityOverrides / apiDataOverrides）并存：
  *   - `BlueprintPreviewContext` 提供运行时副作用产物（组件订阅读取）
  *   - `BlueprintEventContext` 提供事件触发入口（组件写入调用）
@@ -37,7 +38,7 @@ export const BlueprintEventProvider = BlueprintEventContext.Provider;
  * 读取蓝图组件事件回调。
  *
  * - 预览态：返回运行时注入的回调，组件可在 onClick/onHover 等事件中调用
- * - 编辑态：返回 null，组件不触发蓝图事件
+ * - 无运行时宿主：返回 null，组件不触发蓝图事件
  *
  * @returns 事件回调（预览态）或 null（编辑态）
  */

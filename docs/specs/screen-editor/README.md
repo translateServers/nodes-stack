@@ -1,7 +1,7 @@
 # 大屏编辑器功能规格
 
 > 状态：生效中
-> 最近更新：2026-07-28
+> 最近更新：2026-07-29
 > 定位：已实现功能的现状描述（非设计方案）。供新人快速了解"已经有什么"，作为后续需求变更的基线
 
 ## 1. 功能概述
@@ -166,7 +166,7 @@
 
 `TEXT_PROPS_SECTION` 已扩展文本细化配置：字间距 `letterSpacing`、描边宽度 `textStrokeWidth`、描边颜色 `textStrokeColor`。
 
-未选中任何组件时右侧面板不渲染 Schema，改为渲染「画布设置」分区与「全局变量管理面板」（见 [§10.4](#104-全局变量)）。
+未选中任何组件时右侧面板不渲染 Schema，改为渲染「画布设置」分区与「全局变量管理面板」（见 [§10.5](#105-全局变量)）。
 
 ### 5.3 字段控件
 
@@ -336,17 +336,25 @@
 - 在数据源参数与蓝图模板中通过 `{{globalVars.xxx}}` 插值引用，跨组件共享
 - 编辑器 store 提供 `addGlobalVariable` / `updateGlobalVariable` / `removeGlobalVariable` 三个 action，均走历史栈
 
+### 10.6 编辑器画布运行时总闸门
+
+- 底部状态栏 `Event` 是主编辑画布的蓝图运行时总闸门，默认关闭并作为本地偏好持久化
+- 开启后统一启用 pageLoad / interval / click / hover / dataLoaded / dataError 及其动作链
+- `setVisibility` 与 `refreshDataSource` 结果以临时覆盖方式在编辑画布呈现，不写入项目数据
+- 关闭后清理定时器、中止请求、阻断异步链后续动作并恢复项目原始状态
+- 编辑器内预览、公开预览与蓝图沙盒拥有独立运行边界，不读取该开关
+
 ## 11. 预览
 
 ### 11.1 编辑器内预览
 
 - 路由 `/screen-editor-preview/$id`
-- 不触发 pageLoad 事件（仅编辑器画布的 eventsEnabled 控制 componentClick）
+- 与公开预览共享完整运行时，mount 触发 pageLoad，并支持全部组件事件与 interval
 
 ### 11.2 公开预览
 
 - 路由 `/screen-preview/$id`（无鉴权）
-- 完整接入运行时：mount 触发 pageLoad + componentClick 派发
+- 完整接入运行时：mount 触发 pageLoad，并支持全部组件事件与 interval
 - `apiDataOverrides` + `visibilityOverrides` 通过 Context 下发
 
 ## 12. 保存与发布

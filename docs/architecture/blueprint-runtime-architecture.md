@@ -1,7 +1,7 @@
 # 蓝图运行时架构
 
 > 状态：生效中
-> 最近更新：2026-07-26
+> 最近更新：2026-07-29
 > 定位：事件蓝图子系统的架构说明。读完应能理解触发器/动作/条件如何编排，编译器与执行器如何协作
 
 ## 1. 定位与边界
@@ -263,7 +263,7 @@ triggerAndExecute(rules, event, deps)
 ## 8. 预览集成（use-blueprint-preview-runtime.ts）
 
 ```ts
-useBlueprintPreviewRuntime(blueprint, components)
+useBlueprintPreviewRuntime(blueprint, components, { enabled? })
 ```
 
 ### 职责
@@ -271,15 +271,16 @@ useBlueprintPreviewRuntime(blueprint, components)
 1. `compileBlueprint` 编译（memo 化，blueprint 引用变化时重新编译）
 2. 排除带 error 级诊断的触发器
 3. `useBlueprintRuntimeDeps` 构造执行器依赖
-4. mount 时触发 `pageLoad` 事件（浮动 Promise 内部 catch）
-5. `onComponentClick(componentId)` 派发 `componentClick` 事件
-6. `apiDataOverrides` state（refreshDataSource 完成后写入）+ `visibilityOverrides` 通过 `BlueprintPreviewContextValue` 下发
+4. 以宿主传入的 `enabled` 作为运行时总闸门（默认 `true`）
+5. 启用时触发 `pageLoad`、调度 `interval` 并接收组件事件
+6. 关闭时清理定时器、中止请求、阻断异步链后续动作并清空临时覆盖
+7. `apiDataOverrides` state（refreshDataSource 完成后写入）+ `visibilityOverrides` 通过 `BlueprintPreviewContextValue` 下发
 
 ### 关键约束
 
-- **编辑器画布不调用本 Hook**（编辑器画布不触发蓝图）
-- 编辑器画布通过 `eventsEnabled` 开关接入：仅派发 componentClick，不触发 pageLoad
-- 预览页才完整接入运行时
+- **主编辑画布**调用本 Hook，并把状态栏 `eventsEnabled` 作为完整运行时总闸门；开启后临时应用可见性与数据覆盖，不改项目数据
+- **编辑器内预览与公开预览**默认完整启用运行时，不读取编辑器本地偏好
+- **蓝图沙盒**使用独立 mock 运行时，不受主画布总闸门影响，也不产生真实副作用
 
 ## 9. 沙盒运行时（调试）
 
@@ -353,7 +354,7 @@ useBlueprintPreviewRuntime(blueprint, components)
 4. **环检测**：含环的 trigger 不产出规则，环中节点不产 orphan 诊断
 5. **模板插值统一入口**：动作执行前统一插值，支持 trigger/event/globalVars 上下文
 6. **沙盒运行时**：编辑器内可调试，注入 mock deps 不产生真实副作用
-7. **编辑器与预览解耦**：编辑器画布不触发蓝图，预览页才完整接入
+7. **宿主边界明确**：主编辑画布由本地总闸门控制；独立预览常开；沙盒隔离且无真实副作用
 8. **右侧面板派生视图**：QuickEventEditor 从 blueprint 派生当前组件相关规则，写操作复用统一历史栈，无需打开 Sheet 即可快速编辑
 
 ## 14. 扩展指南

@@ -4,8 +4,8 @@
  * 从 BlueprintPreviewContext 读取该组件的 apiRawDataOverride（refreshDataSource 完成后写入），
  * 传给底层 ComponentRenderer。
  *
- * 仅在公开预览页使用；编辑器画布使用 ComponentRenderer（不读取 Context，行为不变）。
- * Context 为 null 时（编辑器场景）回退到 undefined，组件行为与阶段 2 一致。
+ * 独立预览页使用此包装；编辑器画布直接把同一 Context 中的 override 传给
+ * ComponentRenderer。Context 为 null 时回退到 undefined。
  */
 
 import { memo } from 'react';

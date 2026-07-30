@@ -278,9 +278,9 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
   selected,
   showBorderGuides,
   registerRef,
+  apiRawDataOverride,
   onComponentClick,
   onComponentEvent,
-  apiRawDataOverride,
 }: CanvasComponentWrapperProps) {
   // Task 6：仅当 filter 非空字符串时应用，避免空 filter 覆盖其他样式
   const filterString = buildFilterString(component.style.filter);
@@ -422,6 +422,31 @@ export function ScreenCanvas({
   const deferredSelectedComponentIds = useDeferredValue(selectedComponentIds);
   // 画布交互模式：interactive 时编辑器画布接入蓝图运行时，组件 onClick 派发 componentClick 事件
   const interactionMode = useScreenEditorStore((s) => s.interactionMode);
+  const isInteractive = interactionMode === 'interactive';
+  const components = useMemo<ScreenComponent[]>(
+    () => project?.components ?? [],
+    [project?.components],
+  );
+  const canvas = project?.canvas;
+
+  /**
+   * 编辑器画布始终向运行时提供真实蓝图，由 enabled 显式控制执行边界。
+   * 独立预览页不读取该本地偏好，保持完整运行时；蓝图沙盒继续使用隔离的 mock 运行时。
+   * Spec: introduce-canvas-interaction-modes —— enabled 由 interactionMode 派生，
+   * 切回 design 时运行时内部 effect 自动清空 visibility/apiOverrides 并中止请求。
+   */
+  const {
+    contextValue: blueprintContext,
+    onComponentClick,
+    onComponentEvent,
+  } = useBlueprintPreviewRuntime(project?.blueprint, components, { enabled: isInteractive });
+  const runtimeVisibilityOverrides = isInteractive
+    ? blueprintContext.visibilityOverrides
+    : undefined;
+  const runtimeApiDataOverrides = isInteractive ? blueprintContext.apiDataOverrides : undefined;
+  const handleComponentClick = isInteractive ? onComponentClick : undefined;
+  // Provider 保持稳定回调：关闭期间的数据事件由运行时丢弃，重开时不会因回调换绑而补发旧状态。
+  const componentEventCallback = isInteractive ? onComponentEvent : null;
 
   /**
    * Canvas Pan Optimization：用 ref 镜像 canvasScale / canvasOffset，
@@ -601,17 +626,13 @@ export function ScreenCanvas({
       setTargets([]);
       return;
     }
-    const newTargets = selectedComponentIds
-      .map((id) => {
-        // 优先用 componentRefs（已注册的组件，O(1)）
-        const refEl = componentRefs.current.get(id);
-        if (refEl) return refEl;
-        // fallback：querySelector（新挂载的组件，ref 可能还没注册但 DOM 已存在）
-        return (
-          contentRef.current?.querySelector<HTMLElement>(`[data-component-id="${id}"]`) ?? null
-        );
-      })
-      .filter((el): el is HTMLElement => el != null);
+    const visibleSelectedIds = selectedComponentIds.filter((id) => {
+      const component = components.find((candidate) => candidate.id === id);
+      if (!component) return false;
+      const runtimeVisible = runtimeVisibilityOverrides?.get(id);
+      return runtimeVisible ?? !component.status.hidden;
+    });
+    const newTargets = computeTargetsForIds(visibleSelectedIds);
     // 引用相同时 bail out，避免无谓渲染
     const current = targetsRef.current;
     if (current.length === newTargets.length && current.every((el, i) => el === newTargets[i])) {
@@ -619,7 +640,13 @@ export function ScreenCanvas({
     }
     targetsRef.current = newTargets;
     setTargets(newTargets);
-  }, [selectedComponentIds, project?.components]);
+  }, [
+    selectedComponentIds,
+    components,
+    runtimeVisibilityOverrides,
+    computeTargetsForIds,
+    setTargets,
+  ]);
 
   /**
    * 选中组件的位置/尺寸指纹：当 x/y/width/height/rotation 变化时强制刷新 Moveable rect。
@@ -1144,58 +1171,6 @@ export function ScreenCanvas({
     return () => el.removeEventListener('wheel', handleWheel);
   }, [setCanvasScaleAndOffset, rulersRef]);
 
-  const components = project?.components ?? [];
-  const canvas = project?.canvas;
-
-  /**
-   * 蓝图运行时集成（仅 interactionMode='interactive' 时启用）。
-   *
-   * - design：传入 undefined 作为 blueprint，hook 内部 compileResult=null、
-   *   isEnabled=false，pageLoad effect 不触发，onComponentClick 调用时直接返回
-   * - interactive：传入实际 blueprint，hook 编译规则并在 mount 时触发 pageLoad，
-   *   组件 onClick 派发 componentClick 事件（与公开预览页一致）
-   *
-   * BlueprintPreviewProvider 在 design 时传 null，
-   * 组件回退到既有行为（不消费 Context）。
-   */
-  const isInteractive = interactionMode === 'interactive';
-  const blueprintForRuntime = isInteractive ? project?.blueprint : undefined;
-  const {
-    contextValue: blueprintContext,
-    onComponentClick,
-    onComponentEvent,
-    resetSession: resetRuntimeSession,
-  } = useBlueprintPreviewRuntime(blueprintForRuntime, components);
-
-  /**
-   * 给 CanvasComponentWrapper 的事件回调。
-   * - design：undefined（不绑定 onClick，保持编辑模式行为）
-   * - interactive：包装 onComponentClick，仅对可见组件派发蓝图事件
-   */
-  const handleComponentClick = isInteractive ? onComponentClick : undefined;
-  /**
-   * V2 任务 7.1 + 7.2：注入到 BlueprintEventProvider 的事件回调。
-   * - design：传 null，组件 useComponentEvent 返回 null（不触发蓝图事件）
-   * - interactive：传 onComponentEvent，组件可在 onClick/onHover 等回调中调用
-   */
-  const componentEventCallback = isInteractive ? onComponentEvent : null;
-
-  /**
-   * Spec: introduce-canvas-interaction-modes
-   * 退出交互调试时重置运行时会话：
-   * - 清空 visibilityOverrides 与 apiDataOverrides
-   * - 中止进行中的数据刷新请求
-   * - 确保 next session 不会看到上一次会话的临时结果
-   */
-  const prevInteractionModeRef = useRef(interactionMode);
-  useEffect(() => {
-    const prev = prevInteractionModeRef.current;
-    prevInteractionModeRef.current = interactionMode;
-    if (prev === 'interactive' && interactionMode === 'design') {
-      resetRuntimeSession();
-    }
-  }, [interactionMode, resetRuntimeSession]);
-
   /**
    * H2 性能优化：构建组件 ID → 组件的 Map，替代 12 处 Array.find 查找。
    *
@@ -1218,22 +1193,19 @@ export function ScreenCanvas({
    * Memo 化可见组件列表（过滤 + 按 zIndex 排序）。
    *
    * Spec: introduce-canvas-interaction-modes
-   * 交互调试模式下按 `visibilityOverrides > component.status.hidden` 计算可见性，
+   * 交互调试模式下按 `runtimeVisibilityOverrides > component.status.hidden` 计算可见性，
    * 使蓝图 setVisibility 动作在编辑画布中可观察。
-   * 设计模式下 visibilityOverrides 为空 Map（退出时已重置），仅由 status.hidden 决定。
+   * 设计模式下 runtimeVisibilityOverrides 为 undefined，仅由 status.hidden 决定。
    */
-  const visibilityOverrides = isInteractive ? blueprintContext.visibilityOverrides : undefined;
   const visibleComponents = useMemo(
     () =>
       components
         .filter((c: ScreenComponent) => {
-          if (visibilityOverrides?.has(c.id)) {
-            return visibilityOverrides.get(c.id) === true;
-          }
-          return !c.status.hidden;
+          const runtimeVisible = runtimeVisibilityOverrides?.get(c.id);
+          return runtimeVisible ?? !c.status.hidden;
         })
         .sort((a: ScreenComponent, b: ScreenComponent) => a.zIndex - b.zIndex),
-    [components, visibilityOverrides],
+    [components, runtimeVisibilityOverrides],
   );
 
   /**
@@ -1957,11 +1929,7 @@ export function ScreenCanvas({
                     registerRef={registerRef}
                     onComponentClick={handleComponentClick}
                     onComponentEvent={componentEventCallback}
-                    apiRawDataOverride={
-                      isInteractive
-                        ? blueprintContext.apiDataOverrides.get(component.id)
-                        : undefined
-                    }
+                    apiRawDataOverride={runtimeApiDataOverrides?.get(component.id)}
                   />
                 ))}
 

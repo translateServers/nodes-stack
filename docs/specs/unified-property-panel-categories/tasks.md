@@ -97,7 +97,7 @@
 
 - [ ] Task 10: 更新文档与运行根目录质量门
   - [x] SubTask 10.1: 更新 `docs/architecture/screen-editor-architecture.md` 的属性面板章节，说明四大类分类与 tab 容器策略
-  - [x] SubTask 10.2: 更新 `docs/specs/screen-editor/README.md` §7 属性面板与 §10 事件蓝图，说明 QuickEventEditor 派生视图
+  - [x] SubTask 10.2: 更新 `docs/specs/screen-editor/README.md` §5 属性面板与 §10 事件蓝图，说明 QuickEventEditor 派生视图
   - [x] SubTask 10.3: 在 `docs/architecture/blueprint-runtime-architecture.md` 新增章节「右侧面板派生视图」，说明与蓝图的数据共享机制
   - [ ] SubTask 10.4: 运行根目录 `pnpm lint` 确保全项目（含 @nebula/web、@nebula/shared、@nebula/nestjs-server）零错误
   - [ ] SubTask 10.5: 运行根目录 `pnpm typecheck` 与 `pnpm test` 确保无回归

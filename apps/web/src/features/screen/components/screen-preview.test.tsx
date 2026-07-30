@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
 
 /**
@@ -26,7 +26,7 @@ import { useParams } from '@tanstack/react-router';
 import { useScreenPreview } from '../hooks';
 import { resolveComponentContainerStyle } from '../registry/component-container-style';
 import { ScreenPreview } from './screen-preview';
-import type { CanvasConfig, ScreenComponent, ScreenProject } from '@nebula/shared';
+import type { CanvasConfig, EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
 const mockUseScreenPreview = useScreenPreview as unknown as ReturnType<typeof vi.fn>;
@@ -80,6 +80,48 @@ describe('ScreenPreview', () => {
   beforeEach(() => {
     mockUseParams.mockReset();
     mockUseScreenPreview.mockReset();
+    localStorage.clear();
+  });
+
+  it('独立预览不受编辑器 Event 本地偏好影响，始终执行 pageLoad', async () => {
+    localStorage.setItem(
+      'nebula:screen-editor:preferences',
+      JSON.stringify({ interactionMode: 'design' }),
+    );
+    const target = makeComponent({ id: 'target', name: '目标组件' });
+    const blueprint: EventBlueprint = {
+      version: 1,
+      nodes: [
+        {
+          id: 'page-load',
+          kind: 'trigger',
+          position: { x: 0, y: 0 },
+          config: { type: 'pageLoad' },
+        },
+        {
+          id: 'hide-target',
+          kind: 'action',
+          position: { x: 200, y: 0 },
+          config: { type: 'setVisibility', targetComponentId: target.id, visible: 'hide' },
+        },
+      ],
+      edges: [
+        {
+          id: 'page-hide',
+          source: 'page-load',
+          sourceHandle: 'out',
+          target: 'hide-target',
+          targetHandle: 'in',
+        },
+      ],
+    };
+    setProject({ ...makeProject([target]), blueprint });
+
+    render(<ScreenPreview />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('renderer-target')).toBeNull();
+    });
   });
 
   describe('隐藏组件过滤', () => {

@@ -235,6 +235,150 @@ describe('useBlueprintPreviewRuntime - V2 蓝图集成（任务 3.3）', () => {
     });
   });
 
+  it('V2 执行链等待 delay 时关闭后快速重开，旧链后续动作仍不生效', async () => {
+    vi.useFakeTimers();
+    try {
+      const componentA = makeComponent('comp-a');
+      const componentB = makeComponent('comp-b');
+      const components = [componentA, componentB];
+      const blueprint: EventBlueprintV2 = {
+        version: EVENT_BLUEPRINT_VERSION_V2,
+        nodes: [
+          {
+            id: 'node-a',
+            kind: 'component',
+            position: { x: 0, y: 0 },
+            componentId: componentA.id,
+          },
+          {
+            id: 'delay',
+            kind: 'delay',
+            position: { x: 100, y: 0 },
+            config: { delayMs: 100 },
+          },
+          {
+            id: 'node-b',
+            kind: 'component',
+            position: { x: 200, y: 0 },
+            componentId: componentB.id,
+          },
+        ],
+        edges: [
+          {
+            id: 'edge-delay',
+            source: 'node-a',
+            sourceHandle: 'evt:click',
+            target: 'delay',
+            targetHandle: 'in',
+          },
+          {
+            id: 'edge-hide',
+            source: 'delay',
+            sourceHandle: 'out',
+            target: 'node-b',
+            targetHandle: 'act:hide',
+          },
+        ],
+      };
+      const { result, rerender } = renderHook(
+        ({ enabled }: { enabled: boolean }) =>
+          useBlueprintPreviewRuntime(blueprint, components, { enabled }),
+        { initialProps: { enabled: true } },
+      );
+
+      act(() => {
+        result.current.onComponentClick(componentA.id);
+      });
+      rerender({ enabled: false });
+      rerender({ enabled: true });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(result.current.contextValue.visibilityOverrides.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('V2 多条 interval 规则只按各自周期执行', async () => {
+    vi.useFakeTimers();
+    try {
+      const componentA = makeComponent('comp-a');
+      const componentB = makeComponent('comp-b');
+      const components = [componentA, componentB];
+      const blueprint: EventBlueprintV2 = {
+        version: EVENT_BLUEPRINT_VERSION_V2,
+        nodes: [
+          {
+            id: 'interval-a',
+            kind: 'component',
+            position: { x: 0, y: 0 },
+            componentId: GLOBAL_COMPONENT_ID,
+            globalType: 'interval',
+            config: { globalType: 'interval', intervalMs: 100 },
+          },
+          {
+            id: 'target-a',
+            kind: 'component',
+            position: { x: 200, y: 0 },
+            componentId: componentA.id,
+          },
+          {
+            id: 'interval-b',
+            kind: 'component',
+            position: { x: 0, y: 200 },
+            componentId: GLOBAL_COMPONENT_ID,
+            globalType: 'interval',
+            config: { globalType: 'interval', intervalMs: 200 },
+          },
+          {
+            id: 'target-b',
+            kind: 'component',
+            position: { x: 200, y: 200 },
+            componentId: componentB.id,
+          },
+        ],
+        edges: [
+          {
+            id: 'edge-a',
+            source: 'interval-a',
+            sourceHandle: 'evt:interval',
+            target: 'target-a',
+            targetHandle: 'act:hide',
+          },
+          {
+            id: 'edge-b',
+            source: 'interval-b',
+            sourceHandle: 'evt:interval',
+            target: 'target-b',
+            targetHandle: 'act:hide',
+          },
+        ],
+      };
+      const { result } = renderHook(() => useBlueprintPreviewRuntime(blueprint, components));
+      expect(
+        result.current.compiledRulesV2.map((rule) => [rule.triggerNodeId, rule.intervalMs]),
+      ).toEqual([
+        ['interval-a', 100],
+        ['interval-b', 200],
+      ]);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(result.current.contextValue.visibilityOverrides.get(componentA.id)).toBe(false);
+      expect(result.current.contextValue.visibilityOverrides.get(componentB.id)).toBeUndefined();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100);
+      });
+      expect(result.current.contextValue.visibilityOverrides.get(componentB.id)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('V2 蓝图 refreshData 动作触发后写入 apiDataOverrides', async () => {
     const payload = [{ name: 'NEW', value: 1 }];
     const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(payload));

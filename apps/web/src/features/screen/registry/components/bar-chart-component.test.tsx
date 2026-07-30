@@ -625,8 +625,8 @@ describe('BarChartComponent（事件蓝图修复：数据源事件派发）', ()
     expect(emitSpy).toHaveBeenCalledWith(TEST_COMPONENT_ID, 'dataError');
   });
 
-  it('编辑态（useComponentEvent 返回 null）不派发任何事件', async () => {
-    // 编辑态：mockEmitEventRef.current = null（已在 beforeEach 重置）
+  it('无运行时 Provider（useComponentEvent 返回 null）时不派发任何事件', async () => {
+    // 无 Provider：mockEmitEventRef.current = null（已在 beforeEach 重置）
     const emitSpy = vi.fn();
 
     fetchMock.mockResolvedValueOnce({
