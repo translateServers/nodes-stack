@@ -1,5 +1,22 @@
-import { useEffect, useId, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { DataSourceConfig, RefreshIntervalUnit } from '@nebula/shared';
+import { BarChart, type BarSeriesOption } from 'echarts/charts';
+import {
+  GridComponent,
+  type GridComponentOption,
+  TitleComponent,
+  type TitleComponentOption,
+  TooltipComponent,
+  type TooltipComponentOption,
+} from 'echarts/components';
+import {
+  color as echartsColor,
+  init as initECharts,
+  use as useECharts,
+  type ComposeOption,
+  type EChartsType,
+} from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
 import { BarChart3 } from 'lucide-react';
 import type { RendererComponentProps } from '../renderer';
 import {
@@ -15,6 +32,187 @@ import { useApiDataSource } from '../../hooks/use-api-data-source';
 import { useDatasetSource } from '../../hooks/use-dataset-source';
 import { useComponentEvent } from '../../blueprint/runtime/component-event-context';
 import { useCanvasInteraction } from '../../lib/canvas-interaction-context';
+import type { ChartDataItem } from '../../lib/chart-data-parser';
+
+useECharts([BarChart, GridComponent, TitleComponent, TooltipComponent, CanvasRenderer]);
+
+type EChartsBarOption = ComposeOption<
+  BarSeriesOption | GridComponentOption | TitleComponentOption | TooltipComponentOption
+>;
+
+interface EChartsBarRendererProps {
+  data: readonly ChartDataItem[];
+  title: string;
+  barColor: string;
+  labelColor: string;
+  titleColor: string;
+  tooltipEnabled: boolean;
+  interactive: boolean;
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+function EChartsBarRenderer({
+  data,
+  title,
+  barColor,
+  labelColor,
+  titleColor,
+  tooltipEnabled,
+  interactive,
+}: EChartsBarRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<EChartsType | null>(null);
+  const reduceMotion = prefersReducedMotion();
+  const option = useMemo<EChartsBarOption>(
+    () => ({
+      animation: !reduceMotion,
+      animationDuration: 860,
+      animationEasing: 'cubicOut',
+      title: title
+        ? {
+            text: title,
+            left: 'center',
+            top: 2,
+            textStyle: {
+              color: titleColor,
+              fontSize: 14,
+              fontWeight: 500,
+            },
+          }
+        : undefined,
+      tooltip: {
+        show: tooltipEnabled,
+        trigger: 'item',
+        formatter: '{b}: {c}',
+        confine: true,
+      },
+      grid: {
+        top: title ? 44 : 24,
+        right: 16,
+        bottom: 16,
+        left: 16,
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        data: data.map((item) => item.name),
+        axisTick: { show: false },
+        axisLine: {
+          lineStyle: { color: 'rgba(148, 163, 184, 0.28)' },
+        },
+        axisLabel: {
+          color: labelColor,
+          fontSize: 11,
+          hideOverlap: true,
+          margin: 12,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { show: false },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitNumber: 4,
+        splitLine: {
+          lineStyle: {
+            color: 'rgba(148, 163, 184, 0.14)',
+            type: 'dashed',
+          },
+        },
+      },
+      series: [
+        {
+          type: 'bar',
+          name: title || '数值',
+          data: data.map((item) => item.value),
+          silent: !interactive,
+          barWidth: '70%',
+          itemStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: barColor },
+                { offset: 0.58, color: echartsColor.modifyAlpha(barColor, 0.82) },
+                { offset: 1, color: echartsColor.modifyAlpha(barColor, 0.42) },
+              ],
+            },
+            borderRadius: [3, 3, 0, 0],
+            shadowBlur: 8,
+            shadowColor: 'rgba(15, 23, 42, 0.28)',
+            shadowOffsetY: 7,
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 12,
+              shadowColor: 'rgba(15, 23, 42, 0.38)',
+              shadowOffsetY: 9,
+            },
+          },
+          label: {
+            show: true,
+            position: 'top',
+            formatter: '{c}',
+            color: labelColor,
+            fontSize: 10,
+          },
+          animationDelay: (dataIndex: number) => dataIndex * 80 + 100,
+        },
+      ],
+    }),
+    [barColor, data, interactive, labelColor, reduceMotion, title, titleColor, tooltipEnabled],
+  );
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (container === null) return;
+
+    const chart = initECharts(container, undefined, { renderer: 'canvas' });
+    chartRef.current = chart;
+    const resizeChart = () => chart.resize();
+    let resizeObserver: ResizeObserver | undefined;
+
+    if (typeof ResizeObserver === 'function') {
+      resizeObserver = new ResizeObserver(resizeChart);
+      resizeObserver.observe(container);
+    } else {
+      window.addEventListener('resize', resizeChart);
+    }
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', resizeChart);
+      chart.dispose();
+      if (chartRef.current === chart) chartRef.current = null;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    chartRef.current?.setOption(option, { notMerge: true, lazyUpdate: true });
+  }, [option]);
+
+  const accessibleTitle = title.trim() || '柱状图';
+
+  return (
+    <div
+      ref={containerRef}
+      className="nebula-bar-chart"
+      role="img"
+      aria-label={`${accessibleTitle}，共 ${data.length} 项数据`}
+      style={{ pointerEvents: interactive ? 'auto' : 'none' }}
+    />
+  );
+}
 
 /** 将刷新策略的 interval + unit 转换为秒数 */
 function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
@@ -43,8 +241,8 @@ function toSeconds(interval: number, unit: RefreshIntervalUnit): number {
  * - apiRawDataOverride（任务 3.4）：蓝图 refreshDataSource 动作完成后写入的覆盖数据，
  *   优先于 hook state；独立预览始终可写入，编辑器画布仅在 Event 总闸门开启时写入
  * 标题与颜色仍取视觉层 props/style，渲染行为不回退。
- * 交互层 interaction.tooltipOnHover 开启时，悬停柱条经 SVG <title> 展示名称与数值
- * （任务 4.5，默认关闭，关闭时视觉与既有行为一致）。
+ * 交互层 interaction.tooltipOnHover 开启时，悬停柱条经 ECharts tooltip 展示名称与数值
+ * （任务 4.5，默认关闭）。
  */
 export function BarChartComponent({
   componentId,
@@ -60,8 +258,6 @@ export function BarChartComponent({
   // Spec: introduce-canvas-interaction-modes
   // 设计模式下关闭组件原生交互（tooltip 等），仅交互调试/预览中开启
   const { canDispatchNativeEvents } = useCanvasInteraction();
-  const gradientId = `bar-chart-gradient-${useId().replaceAll(':', '')}`;
-
   // 任务 3.3：无数据层配置时回退遗留 props.data；有数据层时数据层唯一生效
   const effectiveDataSource = useMemo<DataSourceConfig | undefined>(() => {
     if (dataSource !== undefined) return dataSource;
@@ -131,7 +327,7 @@ export function BarChartComponent({
       : undefined;
   const apiRawData = apiRawDataOverride !== undefined ? apiRawDataOverride : hookRawData;
   const parseResult = useChartData(effectiveDataSource, logic, apiRawData);
-  const title = (props.title as string) ?? '';
+  const title = typeof props.title === 'string' ? props.title : '';
 
   // 请求进行中：加载态（6.x 统一三态契约前的简化展示）
   // 注意：override 存在时不显示加载态（数据已就绪）
@@ -171,111 +367,20 @@ export function BarChartComponent({
 
   const data = parseResult.data;
   const barColor = style.backgroundColor || '#3b82f6';
-  const padding = { top: title ? 30 : 10, right: 10, bottom: 30, left: 40 };
   const tooltipOnHover = canDispatchNativeEvents && (interaction?.tooltipOnHover ?? false);
-
-  // L1+L2 性能优化：将原本在 data.map 内每次迭代都重复计算的不变量提到循环外。
-  // 原实现每项都重算 chartWidth/chartHeight/barWidth/gap，这些只依赖 data.length
-  // 与 padding，与 item 无关；循环内仅需 barHeight / x / y 这类依赖 item.value 与 i 的值。
-  // 同时缓存 style.color 回退值，避免每次渲染都重算。
-  // 注意：maxValue 不用 useMemo（react-best-practices 规则 rerender-simple-expression-in-memo：
-  // 简单 primitive 表达式不需要 memo 包裹；且 useMemo 不能放在 early return 之后违反 Hooks 规则）
-  const maxValue = Math.max(...data.map((d) => d.value), 1);
-  const chartWidth = 400 - padding.left - padding.right;
-  const chartHeight = 300 - padding.top - padding.bottom;
-  const barWidth = (chartWidth / data.length) * 0.7;
-  const gap = (chartWidth / data.length) * 0.3;
-  const barWidthPlusGap = barWidth + gap;
-  const halfBarWidth = barWidth / 2;
   const labelColor = style.color ?? '#aaa';
   const titleColor = style.color ?? '#fff';
-  const bottomLabelY = 300 - 10;
-  const baselineY = padding.top + chartHeight;
-  const gridLines = [0.25, 0.5, 0.75, 1];
 
   return (
-    <svg
-      className="nebula-bar-chart"
-      width="100%"
-      height="100%"
-      viewBox="0 0 400 300"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={barColor} stopOpacity={1} />
-          <stop offset="58%" stopColor={barColor} stopOpacity={0.82} />
-          <stop offset="100%" stopColor={barColor} stopOpacity={0.42} />
-        </linearGradient>
-      </defs>
-      <g aria-hidden="true">
-        {gridLines.map((ratio) => {
-          const y = padding.top + chartHeight * (1 - ratio);
-          return (
-            <line
-              key={ratio}
-              className="nebula-bar-chart-grid-line"
-              x1={padding.left}
-              x2={400 - padding.right}
-              y1={y}
-              y2={y}
-            />
-          );
-        })}
-        <line
-          className="nebula-bar-chart-baseline"
-          x1={padding.left}
-          x2={400 - padding.right}
-          y1={baselineY}
-          y2={baselineY}
-        />
-      </g>
-      {title && (
-        <text x={200} y={20} textAnchor="middle" fontSize={14} fill={titleColor}>
-          {title}
-        </text>
-      )}
-      {data.map((item, i) => {
-        const barHeight = (item.value / maxValue) * chartHeight;
-        const x = padding.left + i * barWidthPlusGap + gap / 2;
-        const y = padding.top + chartHeight - barHeight;
-
-        return (
-          <g key={item.name}>
-            {tooltipOnHover && <title>{`${item.name}: ${item.value}`}</title>}
-            <rect
-              className="nebula-bar-chart-bar"
-              data-bar-index={i}
-              x={x}
-              y={y}
-              width={barWidth}
-              height={barHeight}
-              fill={`url(#${gradientId})`}
-              rx={3}
-              style={{ animationDelay: `${i * 80 + 100}ms` }}
-            />
-            <text
-              x={x + halfBarWidth}
-              y={bottomLabelY}
-              textAnchor="middle"
-              fontSize={11}
-              fill={labelColor}
-            >
-              {item.name}
-            </text>
-            <text
-              x={x + halfBarWidth}
-              y={y - 4}
-              textAnchor="middle"
-              fontSize={10}
-              fill={labelColor}
-            >
-              {item.value}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <EChartsBarRenderer
+      data={data}
+      title={title}
+      barColor={barColor}
+      labelColor={labelColor}
+      titleColor={titleColor}
+      tooltipEnabled={tooltipOnHover}
+      interactive={canDispatchNativeEvents}
+    />
   );
 }
 

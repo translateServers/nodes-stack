@@ -1,7 +1,7 @@
 # 大屏编辑器功能规格
 
 > 状态：生效中
-> 最近更新：2026-07-29
+> 最近更新：2026-07-30
 > 定位：已实现功能的现状描述（非设计方案）。供新人快速了解"已经有什么"，作为后续需求变更的基线
 
 ## 1. 功能概述
@@ -121,7 +121,7 @@
 | 类型 | 名称 | 类别 | 说明 |
 |---|---|---|---|
 | `text` | 文本 | text | 可配置内容/字号/字色/字重/行高/对齐 |
-| `bar-chart` | 柱状图 | chart | 基于 SVG，支持数据源 + 字段映射 + 逻辑层 + tooltip |
+| `bar-chart` | 柱状图 | chart | 基于 ECharts CanvasRenderer，支持数据源 + 字段映射 + 逻辑层 + tooltip |
 | `rect` | 矩形 | decoration | 可配置背景/边框/圆角 |
 | `ellipse` | 椭圆 | decoration | 可配置背景/边框（容器不应用 backgroundColor/border，避免衬底遮住透明四角） |
 | `image` | 图片 | media | 支持 dataUrl 与 http(s) URL |
