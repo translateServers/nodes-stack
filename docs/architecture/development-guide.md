@@ -459,7 +459,7 @@ export const Route = createFileRoute('/_app/notifications')({
 4. 在 `runtime/use-blueprint-preview-runtime.ts` 添加事件派发接入
 5. 编写测试
 
-详见 [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md) 第 13 节。
+详见 [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md) 第 14 节。
 
 ## 8. 共享包变更
 
