@@ -22,7 +22,6 @@ import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -45,7 +44,7 @@ import {
   type OnNodesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Play, RotateCcw, X } from 'lucide-react';
+import { Cable, Filter, MousePointerClick, Play, RotateCcw, Workflow, X } from 'lucide-react';
 import type {
   BlueprintNodeV2,
   CommentNodeConfig,
@@ -1370,18 +1369,24 @@ function BlueprintSheetV2Inner({
     <BlueprintDiagnosticMapProvider value={diagnosticMap}>
       {/* 顶栏 */}
       <header
-        className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4"
+        className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4"
         data-testid="blueprint-sheet-v2-header"
       >
-        <span className="text-sm font-medium text-foreground">事件蓝图</span>
-        <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-700">
-          V2
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-400">
+            <Workflow className="size-3.5" />
+          </span>
+          <span className="text-sm font-semibold text-foreground">事件蓝图</span>
+          <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-500/25 dark:text-emerald-300">
+            V2
+          </span>
+        </div>
         {isFiltering && (
           <span
-            className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700"
+            className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-inset ring-blue-500/25 dark:text-blue-300"
             data-testid="blueprint-v2-filter-badge"
           >
+            <Filter className="size-3" />
             过滤模式
           </span>
         )}
@@ -1402,6 +1407,7 @@ function BlueprintSheetV2Inner({
           >
             <RotateCcw className="size-4" />
           </ToolbarButton>
+          <div className="mx-1.5 h-5 w-px bg-border" />
           <ViewportToolbar
             zoom={viewport.zoom}
             spacePressed={viewport.spacePressed}
@@ -1411,6 +1417,7 @@ function BlueprintSheetV2Inner({
             onFitViewToSelection={handleFitViewToSelection}
             onReset={() => void viewport.resetViewport()}
           />
+          <div className="mx-1.5 h-5 w-px bg-border" />
           <ToolbarButton
             tooltip="关闭"
             onClick={() => onOpenChange(false)}
@@ -1429,25 +1436,51 @@ function BlueprintSheetV2Inner({
         onDoubleClick={handleDoubleClick}
       >
         {isEmpty && !searchPanelState.visible && !emptyDismissed && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-background">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">蓝图为空</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                双击空白处或右键"添加节点..."开始编排
-              </p>
+          // pointer-events-none：让双击 / 右键直接穿透到画布，仅 CTA 按钮可点
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
+            <div className="flex w-[min(92vw,460px)] flex-col items-center gap-5 rounded-2xl border border-border bg-card/95 px-10 py-8 text-center shadow-xl">
+              <span className="flex size-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-400">
+                <Workflow className="size-7" />
+              </span>
+              <div>
+                <p className="text-base font-semibold text-foreground">蓝图为空</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  通过事件编排，让组件之间产生联动
+                </p>
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2 text-left">
+                <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <MousePointerClick className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                    双击空白处
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    呼出节点搜索面板，快速插入节点
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <Cable className="size-3.5 text-sky-600 dark:text-sky-400" />
+                    拖出锚点连线
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    松手到空白处，连线并创建目标节点
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="pointer-events-auto rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                onClick={() => {
+                  if (!project) return;
+                  updateBlueprint({ version: 2, nodes: [], edges: [] });
+                  setEmptyDismissed(true);
+                }}
+                data-testid="blueprint-v2-start-from-scratch"
+              >
+                从空白开始
+              </button>
             </div>
-            <button
-              type="button"
-              className="rounded border border-border px-3 py-1.5 text-xs text-foreground hover:bg-accent"
-              onClick={() => {
-                if (!project) return;
-                updateBlueprint({ version: 2, nodes: [], edges: [] });
-                setEmptyDismissed(true);
-              }}
-              data-testid="blueprint-v2-start-from-scratch"
-            >
-              从空白开始
-            </button>
           </div>
         )}
         <BlueprintContextMenu
@@ -1496,12 +1529,16 @@ function BlueprintSheetV2Inner({
             className="bg-background"
             data-testid="blueprint-v2-reactflow"
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <Controls showInteractive={false} />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={20}
+              size={1.5}
+              className="opacity-70"
+            />
             <MiniMap
               pannable
               zoomable
-              className="!bg-background"
+              className="!rounded-lg !border !border-border !bg-background !shadow-lg"
               data-testid="blueprint-v2-minimap"
             />
           </ReactFlow>
@@ -1537,7 +1574,7 @@ function BlueprintSheetV2Inner({
 
         {/* 节点参数配置面板 */}
         {showConfigPanel && selectedNode && (
-          <div className="pointer-events-auto absolute right-4 top-4 z-10 max-h-[70%] w-64 overflow-y-auto rounded border border-border bg-background shadow-md">
+          <div className="pointer-events-auto absolute right-4 top-4 z-10 max-h-[70%] w-72 overflow-y-auto rounded-xl border border-border bg-popover/95 shadow-xl backdrop-blur">
             <V2NodeConfigPanel
               node={selectedNode}
               components={components}

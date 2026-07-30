@@ -16,10 +16,27 @@
  *   - skipped：节点 ID + 跳过原因
  *   - failure：节点 ID + 错误信息 + 耗时；红色标记；可点击定位到节点
  *   - 深度截断时末尾追加告警条目
+ *
+ * UI/UX 优化：
+ * - 状态图标系统：CircleCheck / SkipForward / CircleX 替代纯色圆点，扫读更快
+ * - 失败行 hover 显示定位提示（Crosshair），明确可点击性
+ * - 各空态/异常态配图标配色，暗色模式适配（amber / emerald 双主题色）
  */
 
 import { useCallback, type JSX } from 'react';
-import { X } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleX,
+  Crosshair,
+  ListChecks,
+  Loader2,
+  OctagonX,
+  Play,
+  SkipForward,
+  TriangleAlert,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ActionResult, RuleExecutionLog } from '../runtime/types.js';
 
 /** 执行日志面板对外 API */
@@ -45,6 +62,8 @@ interface ResultDisplayConfig {
   textClass: string;
   /** 背景色 Tailwind 类 */
   bgClass: string;
+  /** 状态图标 */
+  Icon: LucideIcon;
   /** 是否可点击定位（failure 为 true） */
   locatable: boolean;
 }
@@ -52,20 +71,23 @@ interface ResultDisplayConfig {
 const RESULT_CONFIG: Record<ActionResult['kind'], ResultDisplayConfig> = {
   success: {
     label: '成功',
-    textClass: 'text-emerald-600',
-    bgClass: 'bg-emerald-600/10',
+    textClass: 'text-emerald-600 dark:text-emerald-400',
+    bgClass: 'bg-emerald-500/10',
+    Icon: CircleCheck,
     locatable: false,
   },
   skipped: {
     label: '跳过',
     textClass: 'text-muted-foreground',
     bgClass: 'bg-muted',
+    Icon: SkipForward,
     locatable: false,
   },
   failure: {
     label: '失败',
     textClass: 'text-destructive',
     bgClass: 'bg-destructive/10',
+    Icon: CircleX,
     locatable: true,
   },
 };
@@ -116,7 +138,7 @@ export function ExecutionLogPanel({
         className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-muted-foreground"
         data-testid="blueprint-execution-log-loading"
       >
-        <span className="inline-block size-2 animate-pulse rounded-full bg-primary" />
+        <Loader2 className="size-3.5 animate-spin text-primary" aria-hidden="true" />
         <span>正在执行模拟...</span>
       </div>
     );
@@ -126,9 +148,10 @@ export function ExecutionLogPanel({
   if (triggerNotFound) {
     return (
       <div
-        className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-yellow-600"
+        className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-amber-600 dark:text-amber-400"
         data-testid="blueprint-execution-log-trigger-not-found"
       >
+        <TriangleAlert className="size-3.5" aria-hidden="true" />
         <span>未找到触发器节点</span>
       </div>
     );
@@ -141,6 +164,7 @@ export function ExecutionLogPanel({
         className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-destructive"
         data-testid="blueprint-execution-log-refused"
       >
+        <OctagonX className="size-3.5 shrink-0" aria-hidden="true" />
         <span>触发器存在错误级诊断，已拒绝执行：{refusalReason}</span>
       </div>
     );
@@ -153,6 +177,7 @@ export function ExecutionLogPanel({
         className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-muted-foreground"
         data-testid="blueprint-execution-log-empty"
       >
+        <Play className="size-3.5 text-muted-foreground/70" aria-hidden="true" />
         <span>尚未执行模拟</span>
       </div>
     );
@@ -166,6 +191,7 @@ export function ExecutionLogPanel({
         className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-muted-foreground"
         data-testid="blueprint-execution-log-empty"
       >
+        <Play className="size-3.5 text-muted-foreground/70" aria-hidden="true" />
         <span>尚未执行模拟</span>
       </div>
     );
@@ -180,29 +206,47 @@ export function ExecutionLogPanel({
     >
       {/* 标题栏 */}
       <header className="flex items-center gap-3 border-b border-border px-4 py-1.5 text-xs font-medium">
-        <span>执行日志</span>
-        <span className="text-muted-foreground" data-testid="execution-log-trigger">
+        <span className="flex items-center gap-1.5">
+          <ListChecks className="size-3.5 text-muted-foreground" aria-hidden="true" />
+          执行日志
+        </span>
+        <span
+          className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+          data-testid="execution-log-trigger"
+        >
           触发器：{latestLog.triggerNodeId}
         </span>
         {counts.success > 0 && (
-          <span className="text-emerald-600" data-testid="execution-log-count-success">
+          <span
+            className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
+            data-testid="execution-log-count-success"
+          >
+            <CircleCheck className="size-3" aria-hidden="true" />
             {counts.success} 成功
           </span>
         )}
         {counts.skipped > 0 && (
-          <span className="text-muted-foreground" data-testid="execution-log-count-skipped">
+          <span
+            className="flex items-center gap-1 text-muted-foreground"
+            data-testid="execution-log-count-skipped"
+          >
+            <SkipForward className="size-3" aria-hidden="true" />
             {counts.skipped} 跳过
           </span>
         )}
         {counts.failure > 0 && (
-          <span className="text-destructive" data-testid="execution-log-count-failure">
+          <span
+            className="flex items-center gap-1 text-destructive"
+            data-testid="execution-log-count-failure"
+          >
+            <CircleX className="size-3" aria-hidden="true" />
             {counts.failure} 失败
           </span>
         )}
         {onClear && (
           <button
             type="button"
-            className="ml-auto inline-flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            className="ml-auto inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             onClick={onClear}
             aria-label="清空日志"
             data-testid="execution-log-clear"
@@ -217,20 +261,22 @@ export function ExecutionLogPanel({
         {latestLog.results.map((result, index) => {
           const config = RESULT_CONFIG[result.kind];
           const isFailure = result.kind === 'failure';
+          const StatusIcon = config.Icon;
           return (
             <li
               key={`${result.nodeId}-${index}`}
-              className={`flex items-start gap-2 px-4 py-1.5 text-sm ${
-                config.locatable ? 'cursor-pointer hover:bg-accent' : ''
+              className={`group flex items-start gap-2 px-4 py-1.5 text-sm transition-colors ${
+                config.locatable ? 'cursor-pointer hover:bg-accent/60' : ''
               } ${isFailure ? 'bg-destructive/5' : ''}`}
               data-testid="execution-log-item"
               data-result-kind={result.kind}
               data-node-id={result.nodeId}
               onClick={config.locatable ? () => handleResultClick(result) : undefined}
             >
-              {/* 状态指示点 */}
-              <span
-                className={`mt-1.5 inline-block size-2 shrink-0 rounded-full ${config.bgClass}`}
+              {/* 状态图标 */}
+              <StatusIcon
+                className={`mt-[3px] size-3.5 shrink-0 ${config.textClass}`}
+                aria-hidden="true"
               />
               {/* 序号 */}
               <span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
@@ -259,11 +305,17 @@ export function ExecutionLogPanel({
                 </span>
               )}
               {result.kind === 'failure' && (
-                <span
-                  className="shrink-0 text-xs text-destructive"
-                  data-testid={`execution-log-error-${index}`}
-                >
-                  {result.error} · {formatDuration(result.durationMs)}
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <span
+                    className="text-xs text-destructive"
+                    data-testid={`execution-log-error-${index}`}
+                  >
+                    {result.error} · {formatDuration(result.durationMs)}
+                  </span>
+                  <Crosshair
+                    className="size-3 text-destructive/60 opacity-0 transition-opacity group-hover:opacity-100"
+                    aria-hidden="true"
+                  />
                 </span>
               )}
             </li>
@@ -273,10 +325,10 @@ export function ExecutionLogPanel({
         {/* 深度截断告警 */}
         {latestLog.truncated && (
           <li
-            className="flex items-center gap-2 px-4 py-1.5 text-sm text-yellow-600"
+            className="flex items-center gap-2 px-4 py-1.5 text-sm text-amber-600 dark:text-amber-400"
             data-testid="execution-log-truncated"
           >
-            <span className="inline-block size-2 shrink-0 rounded-full bg-yellow-600/30" />
+            <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />
             <span>执行因深度超过上限被截断</span>
           </li>
         )}

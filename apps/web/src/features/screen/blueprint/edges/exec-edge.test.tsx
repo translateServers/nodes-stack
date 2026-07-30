@@ -3,28 +3,31 @@
  *
  * 验证点（对应 tasks.md 4.3 验证要求）：
  * - ExecEdge 默认态渲染统一样式（slate-400 描边）
- * - 选中态显示蓝色描边与中点标签
+ * - 选中态显示蓝色描边与中点删除按钮，点击调用 deleteElements 移除该边
  * - 模拟调试态（M2 data.animated=true）显示流动虚线
  *
  * 测试策略：
- * - mock @xyflow/react 的 BaseEdge / getBezierPath / EdgeLabelRenderer，
+ * - mock @xyflow/react 的 BaseEdge / getBezierPath / EdgeLabelRenderer / useReactFlow，
  *   避免 ReactFlowProvider/StoreContext 依赖
  */
 
 import type { CSSProperties, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import type { EdgeProps } from '@xyflow/react';
 import { Position } from '@xyflow/react';
 
 // ===== Mock @xyflow/react =====
-// 仅 mock BaseEdge / EdgeLabelRenderer / getBezierPath，
+// 仅 mock BaseEdge / EdgeLabelRenderer / getBezierPath / useReactFlow，
 // 避免 BaseEdge 内部依赖 useStoreApi 与 react-d3，
+
+const { mockDeleteElements } = vi.hoisted(() => ({ mockDeleteElements: vi.fn() }));
 
 vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
+    useReactFlow: () => ({ deleteElements: mockDeleteElements }),
     BaseEdge: ({
       id,
       path,
@@ -118,14 +121,24 @@ describe('ExecEdge 选中态样式', () => {
     expect(edge?.getAttribute('style')).toContain('stroke-width: 2.5');
   });
 
-  it('选中态显示中点标签（exec 文本）', () => {
+  it('选中态显示中点删除按钮', () => {
     const props = makeEdgeProps({ selected: true });
     const { container } = render(<ExecEdge {...props} />);
 
     const label = container.querySelector('[data-testid="exec-edge-label"]');
     expect(label).not.toBeNull();
-    expect(label?.textContent).toContain('exec');
     expect(label?.getAttribute('data-edge-id')).toBe('e1');
+    expect(label?.querySelector('button[aria-label="删除连线"]')).not.toBeNull();
+  });
+
+  it('点击删除按钮调用 deleteElements 移除该边', () => {
+    const props = makeEdgeProps({ selected: true, id: 'e-del' });
+    const { container } = render(<ExecEdge {...props} />);
+
+    const button = container.querySelector('button[aria-label="删除连线"]');
+    expect(button).not.toBeNull();
+    fireEvent.click(button as HTMLButtonElement);
+    expect(mockDeleteElements).toHaveBeenCalledWith({ edges: [{ id: 'e-del' }] });
   });
 });
 

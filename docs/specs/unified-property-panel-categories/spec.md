@@ -57,7 +57,7 @@
 ## Impact
 
 - **Affected specs**：
-  - `docs/specs/screen-editor/README.md`（§10 事件蓝图、§7 属性面板）
+  - `docs/specs/screen-editor/README.md`（§10 事件蓝图、§5 属性面板）
   - `docs/architecture/blueprint-runtime-architecture.md`（新增右侧面板派生视图说明）
   - `docs/architecture/screen-editor-architecture.md`（属性面板分类）
 - **Affected code**：

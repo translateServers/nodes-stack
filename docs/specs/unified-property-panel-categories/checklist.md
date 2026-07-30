@@ -66,7 +66,7 @@
 ## P2：文档与质量门
 
 - [x] docs/architecture/screen-editor-architecture.md 属性面板章节更新
-- [x] docs/specs/screen-editor/README.md §7 与 §10 更新
+- [x] docs/specs/screen-editor/README.md §5 与 §10 更新
 - [x] docs/architecture/blueprint-runtime-architecture.md 新增「右侧面板派生视图」章节
 - [ ] 根目录 pnpm lint 零错误（含 web/shared/nestjs-server）
 - [ ] 根目录 pnpm typecheck 零错误

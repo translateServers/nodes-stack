@@ -4,18 +4,27 @@
  * ExecEdge 是事件蓝图编辑器中执行流的统一边样式：
  * - 平滑贝塞尔曲线（React Flow 默认 BezierEdge）
  * - 带方向箭头（markerEnd）
- * - 选中态：蓝色高亮 + 加粗
- * - 默认态：slate 灰色（与编辑器深色主题一致）
- * - 模拟调试态（M2）：animated=true 时显示流动光点
+ * - hover 态：描边加深，提示可点选
+ * - 选中态：蓝色高亮 + 加粗，中点浮出「删除连线」按钮（点击即删）
+ * - 模拟调试态（M2）：animated=true 时显示流动虚线
  *
  * 设计要点：
  * - 不在边渲染层做兼容判定（由 React Flow isValidConnection 回调处理）
  * - 边选中态由 React Flow 通过 selected prop 注入
+ * - 删除通过 useReactFlow().deleteElements 触发，走标准 onEdgesChange 链路，
+ *   V1 / V2 sheet 均无需额外接线
  */
 
-import type { JSX } from 'react';
+import type { JSX, MouseEvent } from 'react';
 import type { Edge, EdgeMarker, EdgeProps } from '@xyflow/react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, MarkerType } from '@xyflow/react';
+import {
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+  MarkerType,
+  useReactFlow,
+} from '@xyflow/react';
+import { X } from 'lucide-react';
 
 /** 执行流边 data（M2 模拟调试时通过 data 注入 animated 标志） */
 export interface ExecEdgeData extends Record<string, unknown> {
@@ -53,6 +62,8 @@ export function ExecEdge({
   data,
   markerEnd,
 }: EdgeProps<ExecEdge>): JSX.Element {
+  const { deleteElements } = useReactFlow();
+
   // 是否在模拟调试中（M2 通过 data 注入）
   const animated = Boolean(data?.animated);
 
@@ -65,9 +76,16 @@ export function ExecEdge({
     targetPosition,
   });
 
-  // 默认颜色 slate-400（深色主题），选中态 blue-500
-  const strokeClass = selected ? 'stroke-blue-500' : 'stroke-slate-400';
+  // 默认颜色 slate-400（深色主题），hover 加深；选中态 blue-500
+  const strokeClass = selected
+    ? 'stroke-blue-500'
+    : 'stroke-slate-400 transition-[stroke] duration-150 hover:stroke-slate-600 dark:hover:stroke-slate-300';
   const strokeWidth = selected ? 2.5 : 1.5;
+
+  const handleDelete = (event: MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation();
+    void deleteElements({ edges: [{ id }] });
+  };
 
   return (
     <>
@@ -82,7 +100,7 @@ export function ExecEdge({
         }}
       />
       <EdgeLabelRenderer>
-        {/* 选中态下在边中点显示删除按钮（M2 可扩展） */}
+        {/* 选中态下在边中点浮出删除按钮 */}
         {selected && (
           <div
             style={{
@@ -90,11 +108,19 @@ export function ExecEdge({
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               pointerEvents: 'all',
             }}
-            className="rounded bg-blue-500 px-1.5 py-0.5 text-[10px] text-white shadow"
+            className="nodrag nopan"
             data-testid="exec-edge-label"
             data-edge-id={id}
           >
-            exec
+            <button
+              type="button"
+              aria-label="删除连线"
+              title="删除连线"
+              className="flex size-5 cursor-pointer items-center justify-center rounded-full border border-blue-500/50 bg-background text-blue-500 shadow-md transition-colors hover:bg-blue-500 hover:text-white"
+              onClick={handleDelete}
+            >
+              <X className="size-3" strokeWidth={2.5} />
+            </button>
           </div>
         )}
       </EdgeLabelRenderer>
