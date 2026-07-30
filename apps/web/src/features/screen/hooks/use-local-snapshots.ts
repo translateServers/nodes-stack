@@ -27,6 +27,14 @@ export interface SnapshotMeta {
   canvasHeight: number;
 }
 
+export interface SnapshotService {
+  snapshots: SnapshotMeta[];
+  createSnapshot(project: ScreenProject): void;
+  restoreSnapshot(timestamp: number): ScreenProject | null;
+  deleteSnapshot(timestamp: number): void;
+  clearAllSnapshots(): void;
+}
+
 interface SnapshotEntry extends SnapshotMeta {
   data: ScreenProject;
 }
@@ -94,7 +102,7 @@ function evictOldest(projectId: string): void {
   localStorage.removeItem(buildKey(projectId, oldest.timestamp));
 }
 
-export function useLocalSnapshots(projectId: string | undefined) {
+export function useLocalSnapshots(projectId: string | undefined): SnapshotService {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
 
   const refresh = useCallback(() => {

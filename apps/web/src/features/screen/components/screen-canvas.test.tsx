@@ -226,6 +226,11 @@ vi.mock('react-selecto', () => ({
 
 vi.mock('../stores/editor-store', () => ({
   useScreenEditorStore: vi.fn(),
+  useDimensionStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      dimension: { x: 0, y: 0, w: 0, h: 0, rotate: 0, visible: false },
+      setDimension: vi.fn(),
+    }),
 }));
 
 vi.mock('../hooks/use-modifier-keys', () => ({

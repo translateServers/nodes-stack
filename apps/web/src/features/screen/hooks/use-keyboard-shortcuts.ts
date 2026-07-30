@@ -17,7 +17,7 @@
 
 import { useCallback, useRef } from 'react';
 import { useHotkeys, type Options } from 'react-hotkeys-hook';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { useScreenEditorStoreApi } from '../stores/editor-store';
 import { getShortcutById, type ShortcutDefinition } from './shortcuts-registry';
 import { isFormElementFocused } from './use-modifier-keys';
 import type { EditorSessionApi } from './use-editor-session';
@@ -85,6 +85,7 @@ function getAllKeys(entry: ShortcutDefinition): string {
 }
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
+  const editorStore = useScreenEditorStoreApi();
   const { editorSession, suspended = false } = options;
   const { setTool, pushTemporaryTool, popTemporaryTool, isEditingText, dispatchInteraction } =
     editorSession;
@@ -95,7 +96,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   const fitToScreenRef = useLatestRef(options.onFitToScreen);
   const showHelpRef = useLatestRef(options.onShowHelp);
 
-  const getStore = useCallback(() => useScreenEditorStore.getState(), []);
+  const getStore = useCallback(() => editorStore.getState(), [editorStore]);
   // 任务 5.4：全局作用域 —— 弹层打开时挂起所有快捷键
   const globalEnabled = useCallback(() => !suspended, [suspended]);
   // canvas 作用域：非文本编辑态且非弹层挂起时才触发画布相关快捷键

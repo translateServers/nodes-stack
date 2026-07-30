@@ -8,8 +8,10 @@ import type {
   ScreenProject,
 } from '@nebula/shared';
 
-import { useScreenEditorStore, withHistory } from './editor-store';
+import { createScreenEditorStore, withHistory } from './editor-store';
 import type { ScreenEditorState } from './editor-store';
+
+const useScreenEditorStore = createScreenEditorStore();
 
 /**
  * 创建一个最小的 ScreenEditorState 用于测试（actions 字段用 noop 占位，测试中不会被调用）。
@@ -1520,7 +1522,7 @@ describe('画布交互模式（interactionMode）', () => {
 
   it('setInteractionMode 持久化到 localStorage', () => {
     useScreenEditorStore.getState().setInteractionMode('interactive');
-    const raw = localStorage.getItem('nebula:screen-editor:preferences');
+    const raw = localStorage.getItem('nebula:screen-sdk:v1:preferences');
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw!) as Record<string, unknown>;
     expect(parsed.interactionMode).toBe('interactive');
@@ -1536,9 +1538,9 @@ describe('画布交互模式（interactionMode）', () => {
 
   it('相同模式重复调用 setInteractionMode 为 no-op（不写入 localStorage）', () => {
     useScreenEditorStore.getState().setInteractionMode('design');
-    const rawBefore = localStorage.getItem('nebula:screen-editor:preferences');
+    const rawBefore = localStorage.getItem('nebula:screen-sdk:v1:preferences');
     useScreenEditorStore.getState().setInteractionMode('design');
-    const rawAfter = localStorage.getItem('nebula:screen-editor:preferences');
+    const rawAfter = localStorage.getItem('nebula:screen-sdk:v1:preferences');
     expect(rawAfter).toBe(rawBefore);
   });
 

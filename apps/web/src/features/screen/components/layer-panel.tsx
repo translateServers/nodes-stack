@@ -22,7 +22,7 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ScreenComponent } from '@nebula/shared';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { useScreenEditorStore, useScreenEditorStoreApi } from '../stores/editor-store';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -626,6 +626,7 @@ const GroupHeaderRow = memo(function GroupHeaderRow({
 });
 
 export function LayerPanel() {
+  const editorStore = useScreenEditorStoreApi();
   const project = useScreenEditorStore((s) => s.project);
   const rawSelectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const groupSelected = useScreenEditorStore((s) => s.groupSelected);
@@ -742,39 +743,42 @@ export function LayerPanel() {
    * - comp 在分组中且 activeGroupId === comp.parentId：仅选中该组件（已在组内编辑模式）
    * - comp 在分组中且 activeGroupId !== comp.parentId：选中整个分组，并退出当前活动分组
    */
-  const handleComponentClick = useCallback((comp: ScreenComponent, e: React.MouseEvent) => {
-    const store = useScreenEditorStore.getState();
-    if (e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd+点击：把该组件 ID 加入/移出当前选中
-      const ids = store.selectedComponentIds;
-      if (ids.includes(comp.id)) {
-        store.selectComponents(ids.filter((sid) => sid !== comp.id));
-      } else {
-        store.selectComponents([...ids, comp.id]);
+  const handleComponentClick = useCallback(
+    (comp: ScreenComponent, e: React.MouseEvent) => {
+      const store = editorStore.getState();
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl/Cmd+点击：把该组件 ID 加入/移出当前选中
+        const ids = store.selectedComponentIds;
+        if (ids.includes(comp.id)) {
+          store.selectComponents(ids.filter((sid) => sid !== comp.id));
+        } else {
+          store.selectComponents([...ids, comp.id]);
+        }
+        return;
       }
-      return;
-    }
 
-    const currentProject = store.project;
-    if (!currentProject) return;
+      const currentProject = store.project;
+      if (!currentProject) return;
 
-    if (!comp.parentId) {
-      // 顶层组件：选中它并退出活动分组
-      if (store.activeGroupId !== null) store.setActiveGroupId(null);
-      store.selectComponent(comp.id);
-      return;
-    }
+      if (!comp.parentId) {
+        // 顶层组件：选中它并退出活动分组
+        if (store.activeGroupId !== null) store.setActiveGroupId(null);
+        store.selectComponent(comp.id);
+        return;
+      }
 
-    if (store.activeGroupId === comp.parentId) {
-      // 已在该组内：选中单个子组件
-      store.selectComponent(comp.id);
-    } else {
-      // 不在该组内：选中整个分组并退出旧的活动分组
-      const siblings = currentProject.components.filter((c) => c.parentId === comp.parentId);
-      store.selectComponents(siblings.map((c) => c.id));
-      if (store.activeGroupId !== null) store.setActiveGroupId(null);
-    }
-  }, []);
+      if (store.activeGroupId === comp.parentId) {
+        // 已在该组内：选中单个子组件
+        store.selectComponent(comp.id);
+      } else {
+        // 不在该组内：选中整个分组并退出旧的活动分组
+        const siblings = currentProject.components.filter((c) => c.parentId === comp.parentId);
+        store.selectComponents(siblings.map((c) => c.id));
+        if (store.activeGroupId !== null) store.setActiveGroupId(null);
+      }
+    },
+    [editorStore],
+  );
 
   /**
    * 右键组件行（Phase 2 Slice A）：实现"右键未选中行 → 先选中该行再弹菜单"的行业惯例。
@@ -782,68 +786,95 @@ export function LayerPanel() {
    * - 若已在选区：保留选区不变（支持多选右键批量操作）
    * 同时记录共享菜单目标；事件继续冒泡到 ContextMenuTrigger 打开菜单。
    */
-  const handleComponentContextMenu = useCallback((comp: ScreenComponent) => {
-    const store = useScreenEditorStore.getState();
-    if (!store.selectedComponentIds.includes(comp.id)) {
-      store.selectComponent(comp.id);
-    }
-    setMenuTarget({ kind: 'component', comp });
-  }, []);
+  const handleComponentContextMenu = useCallback(
+    (comp: ScreenComponent) => {
+      const store = editorStore.getState();
+      if (!store.selectedComponentIds.includes(comp.id)) {
+        store.selectComponent(comp.id);
+      }
+      setMenuTarget({ kind: 'component', comp });
+    },
+    [editorStore],
+  );
 
   /**
    * 点击分组行：选中整个分组（所有子组件）。
    */
-  const handleGroupClick = useCallback((node: GroupLayerNode, e: React.MouseEvent) => {
-    const store = useScreenEditorStore.getState();
-    const childIds = node.children.map((c) => c.id);
-    if (e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd+点击：将所有子组件加入或移出当前选中
-      const current = store.selectedComponentIds;
-      if (childIds.every((id) => current.includes(id))) {
-        store.selectComponents(current.filter((id) => !childIds.includes(id)));
-      } else {
-        store.selectComponents([...current, ...childIds.filter((id) => !current.includes(id))]);
+  const handleGroupClick = useCallback(
+    (node: GroupLayerNode, e: React.MouseEvent) => {
+      const store = editorStore.getState();
+      const childIds = node.children.map((c) => c.id);
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl/Cmd+点击：将所有子组件加入或移出当前选中
+        const current = store.selectedComponentIds;
+        if (childIds.every((id) => current.includes(id))) {
+          store.selectComponents(current.filter((id) => !childIds.includes(id)));
+        } else {
+          store.selectComponents([...current, ...childIds.filter((id) => !current.includes(id))]);
+        }
+        return;
       }
-      return;
-    }
-    // 普通单击：选中整组，但不改变活动分组状态（用户可能正在编辑某分组）
-    store.selectComponents(childIds);
-  }, []);
+      // 普通单击：选中整组，但不改变活动分组状态（用户可能正在编辑某分组）
+      store.selectComponents(childIds);
+    },
+    [editorStore],
+  );
 
   /**
    * 右键分组行（Phase 2 Slice A）：先选中所有子组件再弹菜单。
    * 与组件行同理：未选中状态下右键分组行 → 自动选中所有子组件。
    */
-  const handleGroupContextMenu = useCallback((node: GroupLayerNode) => {
-    const store = useScreenEditorStore.getState();
-    const childIds = node.children.map((c) => c.id);
-    // 仅当当前选区不完整覆盖分组子组件时才覆盖选区
-    const allSelected = childIds.every((id) => store.selectedComponentIds.includes(id));
-    if (!allSelected) {
-      store.selectComponents(childIds);
-    }
-    setMenuTarget({ kind: 'group', node });
-  }, []);
+  const handleGroupContextMenu = useCallback(
+    (node: GroupLayerNode) => {
+      const store = editorStore.getState();
+      const childIds = node.children.map((c) => c.id);
+      // 仅当当前选区不完整覆盖分组子组件时才覆盖选区
+      const allSelected = childIds.every((id) => store.selectedComponentIds.includes(id));
+      if (!allSelected) {
+        store.selectComponents(childIds);
+      }
+      setMenuTarget({ kind: 'group', node });
+    },
+    [editorStore],
+  );
 
   /** 行内按钮：隐藏/锁定/置顶/置底（稳定引用，内部读取最新 store） */
-  const handleToggleHidden = useCallback((comp: ScreenComponent) => {
-    useScreenEditorStore.getState().setHidden([comp.id], !comp.status.hidden);
-  }, []);
-  const handleToggleLocked = useCallback((comp: ScreenComponent) => {
-    useScreenEditorStore.getState().setLocked([comp.id], !comp.status.locked);
-  }, []);
-  const handleReorderToTop = useCallback((comp: ScreenComponent) => {
-    useScreenEditorStore.getState().reorderToTop(comp.id);
-  }, []);
-  const handleReorderToBottom = useCallback((comp: ScreenComponent) => {
-    useScreenEditorStore.getState().reorderToBottom(comp.id);
-  }, []);
-  const handleSetHidden = useCallback((ids: string[], hidden: boolean) => {
-    useScreenEditorStore.getState().setHidden(ids, hidden);
-  }, []);
-  const handleSetLocked = useCallback((ids: string[], locked: boolean) => {
-    useScreenEditorStore.getState().setLocked(ids, locked);
-  }, []);
+  const handleToggleHidden = useCallback(
+    (comp: ScreenComponent) => {
+      editorStore.getState().setHidden([comp.id], !comp.status.hidden);
+    },
+    [editorStore],
+  );
+  const handleToggleLocked = useCallback(
+    (comp: ScreenComponent) => {
+      editorStore.getState().setLocked([comp.id], !comp.status.locked);
+    },
+    [editorStore],
+  );
+  const handleReorderToTop = useCallback(
+    (comp: ScreenComponent) => {
+      editorStore.getState().reorderToTop(comp.id);
+    },
+    [editorStore],
+  );
+  const handleReorderToBottom = useCallback(
+    (comp: ScreenComponent) => {
+      editorStore.getState().reorderToBottom(comp.id);
+    },
+    [editorStore],
+  );
+  const handleSetHidden = useCallback(
+    (ids: string[], hidden: boolean) => {
+      editorStore.getState().setHidden(ids, hidden);
+    },
+    [editorStore],
+  );
+  const handleSetLocked = useCallback(
+    (ids: string[], locked: boolean) => {
+      editorStore.getState().setLocked(ids, locked);
+    },
+    [editorStore],
+  );
 
   /**
    * 列表空白处右键：清空菜单目标（此时不渲染 ContextMenuContent，菜单不会出现）。
@@ -859,15 +890,18 @@ export function LayerPanel() {
    * 提交重命名：trim 后为空或与原名相同则忽略；store action 已含相同检查，
    * 此处显式检查可避免空操作进入历史栈（与 store 实现一致，作为防御性兜底）。
    */
-  const handleRenameCommit = useCallback((id: string, name: string) => {
-    setRenamingId(null);
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const store = useScreenEditorStore.getState();
-    const target = store.project?.components.find((c) => c.id === id);
-    if (!target || target.name === trimmed) return;
-    store.renameComponent(id, trimmed);
-  }, []);
+  const handleRenameCommit = useCallback(
+    (id: string, name: string) => {
+      setRenamingId(null);
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const store = editorStore.getState();
+      const target = store.project?.components.find((c) => c.id === id);
+      if (!target || target.name === trimmed) return;
+      store.renameComponent(id, trimmed);
+    },
+    [editorStore],
+  );
 
   const handleRenameCancel = useCallback(() => {
     setRenamingId(null);

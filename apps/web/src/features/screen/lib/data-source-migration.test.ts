@@ -11,7 +11,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DataSourceConfig, ScreenComponent, ScreenProject } from '@nebula/shared';
 import { buildDataSourceMigration } from './data-source-migration';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { createScreenEditorStore } from '../stores/editor-store';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 
 const LEGACY_DATA = [
   { name: '旧A', value: 10 },

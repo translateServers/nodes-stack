@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 2 已完成）
+> 状态：实施中（阶段 3 暂停，Task 7 已完成，Task 8 待收尾）
 > 最近更新：2026-07-30
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
@@ -72,22 +72,28 @@
 
 ## 阶段 3：编辑器状态实例化
 
-- [ ] Task 7: 将主编辑器 Store 改为实例工厂
-  - [ ] 把模块单例改为 `createScreenEditorStore(initialOptions)`
-  - [ ] 新增 Store Context、Provider 与 selector hook
-  - [ ] 迁移所有直接 `useScreenEditorStore` 引用
-  - [ ] 把偏好读取移到实例创建时，使用带 namespace 的 key
-  - [ ] 移除固定 `window.__screenEditorStore`，改为显式 debug 选项
-  - [ ] 保持历史栈、dirty、蓝图迁移和现有操作语义
-  - [ ] 改造并迁移 editor-store 测试
+- [x] Task 7: 将主编辑器 Store 改为实例工厂
+  - [x] 把模块单例改为 `createScreenEditorStore(initialOptions)`
+  - [x] 新增 Store Context、Provider 与 selector hook
+  - [x] 迁移所有直接 `useScreenEditorStore` 引用
+  - [x] 把偏好读取移到实例创建时，使用带 namespace 的 key
+  - [x] 移除固定 `window.__screenEditorStore`，改为显式 debug 选项
+  - [x] 保持历史栈、dirty、蓝图迁移和现有操作语义
+  - [x] 改造并迁移 editor-store 测试
 
 - [ ] Task 8: 实例化辅助状态与缓存
-  - [ ] 将 `useDimensionStore` 改为实例 Store
-  - [ ] 将 `useAlignmentLinesStore` 改为实例 Store
-  - [ ] 将 blueprint viewport module cache 改为实例状态
-  - [ ] 收藏、最近使用和面板宽度 key 加 SDK namespace
+  - [x] 将 `useDimensionStore` 改为实例 Store
+  - [x] 将 `useAlignmentLinesStore` 改为实例 Store
+  - [x] 将 blueprint viewport module cache 改为实例状态
+  - [x] 收藏、最近使用和面板宽度 key 加 SDK namespace
   - [ ] 快照从 localStorage hook 脱离，改走 Host Adapter
-  - [ ] 编写同页双实例状态隔离测试
+  - [x] 编写同页双实例状态隔离测试
+
+### 阶段 3 暂停记录
+
+- 已完成主 Store、辅助 Store、蓝图视口缓存和本地偏好 key 的实例隔离。
+- 已增加项目、选中态、历史栈、dirty、画布视口及辅助 Store 的双实例隔离测试。
+- 暂停点：快照仍由 Nebula 宿主的 `useLocalSnapshots` 提供；恢复实施后应结合阶段 5 Host Adapter 工作流完成迁移。
 
 ## 阶段 4：抽离无宿主依赖的编辑器工作台
 

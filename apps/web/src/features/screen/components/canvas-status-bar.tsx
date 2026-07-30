@@ -10,11 +10,14 @@
  */
 
 import { memo, useDeferredValue, useEffect, useRef } from 'react';
-import { useScreenEditorStore } from '../stores/editor-store';
+import {
+  useDimensionStore,
+  useDimensionStoreApi,
+  useScreenEditorStore,
+  type DimensionInfo,
+} from '../stores/editor-store';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
-import { useDimensionStore } from './screen-canvas';
-import type { DimensionInfo } from './screen-canvas';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -96,6 +99,7 @@ const DimensionIndicator = memo(function DimensionIndicator({
   canvasHeight: number;
 }) {
   const dimensionRef = useRef<HTMLSpanElement>(null);
+  const dimensionStore = useDimensionStoreApi();
   // 仅订阅 visible（布尔值，引用稳定），拖拽开始/结束时才触发组件 render
   const dimensionVisible = useDimensionStore((s) => s.dimension.visible);
 
@@ -118,17 +122,17 @@ const DimensionIndicator = memo(function DimensionIndicator({
     };
 
     // 初始同步一次
-    updateText(useDimensionStore.getState().dimension);
+    updateText(dimensionStore.getState().dimension);
 
     // 订阅后续变化
-    const unsubscribe = useDimensionStore.subscribe((state, prev) => {
+    const unsubscribe = dimensionStore.subscribe((state, prev) => {
       if (state.dimension !== prev.dimension) {
         updateText(state.dimension);
       }
     });
 
     return unsubscribe;
-  }, [canvasWidth, canvasHeight]);
+  }, [canvasWidth, canvasHeight, dimensionStore]);
 
   return (
     <span

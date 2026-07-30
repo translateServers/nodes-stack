@@ -17,7 +17,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CanvasConfig, EventBlueprintV2, ScreenProject } from '@nebula/shared';
 
-import { useScreenEditorStore } from '../../stores/editor-store';
+import { createScreenEditorStore } from '../../stores/editor-store';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 import {
   alignNodes,
   applyAlignResultToNodes,

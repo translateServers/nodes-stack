@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, SearchX, Star } from 'lucide-react';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { useScreenEditorPreferenceNamespace, useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, ComponentDefinition } from '@nebula/shared';
 import {
   COMPONENT_DEFINITIONS,
@@ -12,12 +12,14 @@ import { categoryLabel } from '../registry/category-meta';
 import { getIconByName } from '../registry/icons';
 import {
   getFavoriteComponents,
+  getFavoriteComponentsEventName,
   toggleFavorite,
   type FavoriteEntry,
 } from '../registry/favorite-components';
 import {
   DEFAULT_RECENT_LIMIT,
   getRecentComponents,
+  getRecentComponentsEventName,
   recordComponentUsage,
   type RecentComponentEntry,
 } from '../registry/recent-components';
@@ -30,6 +32,7 @@ import { cn } from '@/lib/utils';
 const CATEGORIES = [...new Set(COMPONENT_DEFINITIONS.map((d) => d.category))];
 
 export function ComponentLibrary() {
+  const preferenceNamespace = useScreenEditorPreferenceNamespace();
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [recent, setRecent] = useState<RecentComponentEntry[]>([]);
@@ -47,36 +50,41 @@ export function ComponentLibrary() {
 
   // 初次挂载、窗口聚焦、组件成功新增到画布时刷新最近使用
   useEffect(() => {
-    const refresh = () => setRecent(getRecentComponents(DEFAULT_RECENT_LIMIT));
+    const refresh = () => setRecent(getRecentComponents(DEFAULT_RECENT_LIMIT, preferenceNamespace));
+    const eventName = getRecentComponentsEventName(preferenceNamespace);
     refresh();
     window.addEventListener('focus', refresh);
-    window.addEventListener('recent-components:updated', refresh);
+    window.addEventListener(eventName, refresh);
     return () => {
       window.removeEventListener('focus', refresh);
-      window.removeEventListener('recent-components:updated', refresh);
+      window.removeEventListener(eventName, refresh);
     };
-  }, []);
+  }, [preferenceNamespace]);
 
   // 收藏列表：初次挂载、窗口聚焦、收藏变更时刷新
   useEffect(() => {
-    const refresh = () => setFavorites(getFavoriteComponents());
+    const refresh = () => setFavorites(getFavoriteComponents(preferenceNamespace));
+    const eventName = getFavoriteComponentsEventName(preferenceNamespace);
     refresh();
     window.addEventListener('focus', refresh);
-    window.addEventListener('favorite-components:updated', refresh);
+    window.addEventListener(eventName, refresh);
     return () => {
       window.removeEventListener('focus', refresh);
-      window.removeEventListener('favorite-components:updated', refresh);
+      window.removeEventListener(eventName, refresh);
     };
-  }, []);
+  }, [preferenceNamespace]);
 
   const handleDragStart = useCallback((e: React.DragEvent, type: string) => {
     e.dataTransfer.setData('component-type', type);
     e.dataTransfer.effectAllowed = 'copy';
   }, []);
 
-  const handleToggleFavorite = useCallback((type: string) => {
-    toggleFavorite(type);
-  }, []);
+  const handleToggleFavorite = useCallback(
+    (type: string) => {
+      toggleFavorite(type, Date.now(), preferenceNamespace);
+    },
+    [preferenceNamespace],
+  );
 
   const collapseAll = useCallback(() => {
     setDefaultOpen(false);
@@ -362,6 +370,7 @@ function FavoriteComponentsList({
 }
 
 export function useCanvasDrop() {
+  const preferenceNamespace = useScreenEditorPreferenceNamespace();
   const project = useScreenEditorStore((s) => s.project);
   const addComponent = useScreenEditorStore((s) => s.addComponent);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
@@ -384,10 +393,10 @@ export function useCanvasDrop() {
       if (instance) {
         addComponent(instance);
         // 组件成功新增到画布后才记录最近使用
-        recordComponentUsage(type);
+        recordComponentUsage(type, Date.now(), preferenceNamespace);
       }
     },
-    [project, addComponent, canvasScale],
+    [project, addComponent, canvasScale, preferenceNamespace],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

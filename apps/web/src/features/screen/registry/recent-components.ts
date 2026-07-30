@@ -17,7 +17,15 @@
  * 读取时按 lastUsedAt 倒序取前 N 条（默认 8）。
  */
 
-const STORAGE_KEY = 'nebula:recent-components';
+import { DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE } from '../lib/preferences-persist';
+
+function getStorageKey(namespace: string): string {
+  return `${namespace}:recent-components`;
+}
+
+export function getRecentComponentsEventName(namespace: string): string {
+  return `${namespace}:recent-components:updated`;
+}
 
 /**
  * 「最近使用」分区默认展示条数。
@@ -41,10 +49,10 @@ export interface RecentComponentEntry {
 
 type RecentMap = Record<string, RecentComponentEntry>;
 
-function safeRead(): RecentMap {
+function safeRead(namespace: string): RecentMap {
   if (typeof window === 'undefined') return {};
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(getStorageKey(namespace));
     if (raw === null) return {};
     const parsed: unknown = JSON.parse(raw);
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
@@ -55,10 +63,10 @@ function safeRead(): RecentMap {
   }
 }
 
-function safeWrite(map: RecentMap): void {
+function safeWrite(map: RecentMap, namespace: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    window.localStorage.setItem(getStorageKey(namespace), JSON.stringify(map));
   } catch {
     // 写入失败（隐私模式 / 配额满）静默忽略，不阻塞创建流程
   }
@@ -70,8 +78,12 @@ function safeWrite(map: RecentMap): void {
  * @param type 组件 type
  * @param now 时间戳（默认 Date.now()，参数化便于测试）
  */
-export function recordComponentUsage(type: string, now: number = Date.now()): void {
-  const map = safeRead();
+export function recordComponentUsage(
+  type: string,
+  now: number = Date.now(),
+  namespace: string = DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
+): void {
+  const map = safeRead(namespace);
   const prev = map[type];
   map[type] = {
     type,
@@ -85,13 +97,13 @@ export function recordComponentUsage(type: string, now: number = Date.now()): vo
     for (const entry of entries.slice(0, MAX_ENTRIES)) {
       trimmed[entry.type] = entry;
     }
-    safeWrite(trimmed);
+    safeWrite(trimmed, namespace);
   } else {
-    safeWrite(map);
+    safeWrite(map, namespace);
   }
   // 派发自定义事件，让监听方（如 ComponentLibrary）刷新最近使用列表
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('recent-components:updated'));
+    window.dispatchEvent(new CustomEvent(getRecentComponentsEventName(namespace)));
   }
 }
 
@@ -101,8 +113,11 @@ export function recordComponentUsage(type: string, now: number = Date.now()): vo
  * @param limit 返回条目数上限（默认 DEFAULT_RECENT_LIMIT = 8）
  * @returns 按最近使用倒序排列的 entry 数组
  */
-export function getRecentComponents(limit: number = DEFAULT_RECENT_LIMIT): RecentComponentEntry[] {
-  const map = safeRead();
+export function getRecentComponents(
+  limit: number = DEFAULT_RECENT_LIMIT,
+  namespace: string = DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
+): RecentComponentEntry[] {
+  const map = safeRead(namespace);
   return Object.values(map)
     .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
     .slice(0, limit);
@@ -111,20 +126,25 @@ export function getRecentComponents(limit: number = DEFAULT_RECENT_LIMIT): Recen
 /**
  * 清空最近使用记录（用于测试 / 用户手动清除）。
  */
-export function clearRecentComponents(): void {
+export function clearRecentComponents(
+  namespace: string = DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
+): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(getStorageKey(namespace));
   } catch {
     // 同上：静默忽略
   }
 }
 
 /** 用于测试：直接覆写存储内容 */
-export function __setRecentComponentsForTest(entries: RecentComponentEntry[]): void {
+export function __setRecentComponentsForTest(
+  entries: RecentComponentEntry[],
+  namespace: string = DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
+): void {
   const map: RecentMap = {};
   for (const entry of entries) {
     map[entry.type] = entry;
   }
-  safeWrite(map);
+  safeWrite(map, namespace);
 }

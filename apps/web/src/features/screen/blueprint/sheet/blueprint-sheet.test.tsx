@@ -206,10 +206,20 @@ vi.mock('../../components/ui-primitives', () => ({
   ),
 }));
 
-import { BlueprintSheet } from './blueprint-sheet';
-import { useScreenEditorStore } from '../../stores/editor-store';
+import { BlueprintSheet as BlueprintSheetContent } from './blueprint-sheet';
+import { createScreenEditorStore, ScreenEditorStoreProvider } from '../../stores/editor-store';
 import type { EventBlueprint, ScreenProject } from '@nebula/shared';
 import { EVENT_BLUEPRINT_VERSION } from '@nebula/shared';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
+
+function BlueprintSheet(props: React.ComponentProps<typeof BlueprintSheetContent>) {
+  return (
+    <ScreenEditorStoreProvider store={useScreenEditorStore}>
+      <BlueprintSheetContent {...props} />
+    </ScreenEditorStoreProvider>
+  );
+}
 
 // ===== 工厂 =====
 

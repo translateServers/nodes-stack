@@ -1,4 +1,5 @@
-import { create } from 'zustand';
+import type { StoreApi } from 'zustand';
+import { createStore } from 'zustand/vanilla';
 import { devtools } from 'zustand/middleware';
 import type {
   ScreenProject,
@@ -9,7 +10,34 @@ import type {
   GlobalVariable,
 } from '@nebula/shared';
 import { migrateBlueprintV1ToV2, EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
-import { loadPreferences, savePreference, type PreferenceValues } from '../lib/preferences-persist';
+import {
+  createPreferenceRepository,
+  DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
+  type PreferenceRepository,
+  type PreferenceValues,
+} from '../lib/preferences-persist';
+export {
+  ScreenEditorStoreProvider,
+  useAlignmentLinesStore,
+  useAlignmentLinesStoreApi,
+  useDimensionStore,
+  useDimensionStoreApi,
+  useOptionalBlueprintViewportCache,
+  useScreenEditorDebugHandle,
+  useScreenEditorPreferenceNamespace,
+  useScreenEditorStore,
+  useScreenEditorStoreApi,
+} from './editor-store-context';
+export type { BlueprintViewportCache } from './editor-store-context';
+export {
+  createAlignmentLinesStore,
+  createDimensionStore,
+  type AlignmentLinesState,
+  type AlignmentLinesStore,
+  type DimensionInfo,
+  type DimensionState,
+  type DimensionStore,
+} from './auxiliary-stores';
 
 /**
  * 画布交互模式（Spec: introduce-canvas-interaction-modes）。
@@ -307,6 +335,13 @@ interface ScreenEditorActions {
 }
 
 export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
+export type ScreenEditorStore = StoreApi<ScreenEditorState>;
+
+export interface CreateScreenEditorStoreOptions {
+  instanceId?: string;
+  persistPreferences?: boolean;
+  preferenceNamespace?: string;
+}
 
 const HISTORY_LIMIT = 50;
 
@@ -315,37 +350,37 @@ const HISTORY_LIMIT = 50;
  * snapEnabled / guidesVisible / interactionMode 持久化，其他字段保持会话级默认值。
  * 旧版 eventsEnabled 无论何值均安全迁移到 design。
  */
-const persistedPreferences: PreferenceValues = loadPreferences();
-
-const initialData: ScreenEditorData = {
-  project: null,
-  selectedComponentIds: [],
-  canvasScale: 1,
-  canvasOffset: { x: 0, y: 0 },
-  showBorderGuides: false,
-  guides: {
-    vertical: [],
-    horizontal: [],
-    visible: persistedPreferences.guidesVisible,
-    locked: false,
-  },
-  history: { past: [], future: [] },
-  clipboard: null,
-  pasteCount: 0,
-  snapEnabled: persistedPreferences.snapEnabled,
-  activeGroupId: null,
-  smartGuidesEnabled: true,
-  gridEnabled: false,
-  gridSize: 10,
-  interactionMode: persistedPreferences.interactionMode,
-  uiVisible: true,
-  screenMode: 'standard',
-  isDirty: false,
-  blueprintGesture: { active: false, baseline: undefined },
-  blueprintSheetOpen: false,
-  blueprintFocusComponentId: null,
-  targets: [],
-};
+function createInitialData(persistedPreferences: PreferenceValues): ScreenEditorData {
+  return {
+    project: null,
+    selectedComponentIds: [],
+    canvasScale: 1,
+    canvasOffset: { x: 0, y: 0 },
+    showBorderGuides: false,
+    guides: {
+      vertical: [],
+      horizontal: [],
+      visible: persistedPreferences.guidesVisible,
+      locked: false,
+    },
+    history: { past: [], future: [] },
+    clipboard: null,
+    pasteCount: 0,
+    snapEnabled: persistedPreferences.snapEnabled,
+    activeGroupId: null,
+    smartGuidesEnabled: true,
+    gridEnabled: false,
+    gridSize: 10,
+    interactionMode: persistedPreferences.interactionMode,
+    uiVisible: true,
+    screenMode: 'standard',
+    isDirty: false,
+    blueprintGesture: { active: false, baseline: undefined },
+    blueprintSheetOpen: false,
+    blueprintFocusComponentId: null,
+    targets: [],
+  };
+}
 
 /**
  * Zustand set 函数类型（兼容 devtools actionName 标签）。
@@ -440,1030 +475,1026 @@ export function normalizeBlueprintToV2(blueprint: EventBlueprint | EventBlueprin
   };
 }
 
-export const useScreenEditorStore = create<ScreenEditorState>()(
-  devtools(
-    (set, get) => ({
-      ...initialData,
+export function createScreenEditorStore(
+  options: CreateScreenEditorStoreOptions = {},
+): ScreenEditorStore {
+  const preferences: PreferenceRepository = createPreferenceRepository({
+    namespace: options.preferenceNamespace ?? DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
+    persist: options.persistPreferences ?? true,
+  });
+  const initialData = createInitialData(preferences.load());
+  return createStore<ScreenEditorState>()(
+    devtools(
+      (set, get) => ({
+        ...initialData,
 
-      loadProject: (project) => {
-        // 任务 8.1：项目加载时自动迁移 V1 蓝图 → V2，编辑器内存始终为 V2
-        // 迁移 warnings 当前静默处理（仅在控制台 debug），后续可在 UI 提示
-        const { blueprint: v2Blueprint, warnings } = normalizeBlueprintToV2(project.blueprint);
-        if (warnings.length > 0) {
-          console.debug('[blueprint] V1→V2 migration warnings:', warnings);
-        }
-        const normalizedProject: ScreenProject =
-          v2Blueprint === project.blueprint ? project : { ...project, blueprint: v2Blueprint };
-        set(
-          {
-            project: normalizedProject,
-            selectedComponentIds: [],
-            history: { past: [], future: [] },
-            isDirty: false,
-            // 加载新项目时重置蓝图手势，避免跨项目残留手势态
-            blueprintGesture: { active: false, baseline: undefined },
-            // 加载新项目时关闭事件蓝图 Sheet，避免跨项目残留打开状态
-            blueprintSheetOpen: false,
-            blueprintFocusComponentId: null,
-            // 加载新项目时回到设计模式，避免自动执行蓝图副作用
-            interactionMode: 'design',
-          },
-          false,
-          'loadProject',
-        );
-      },
-
-      renameProject: (name) => {
-        const trimmed = name.trim();
-        set(
-          (state) => {
-            if (!state.project || !trimmed || trimmed === state.project.name) return {};
-            return {
-              project: { ...state.project, name: trimmed },
-              isDirty: true,
-            };
-          },
-          false,
-          'renameProject',
-        );
-      },
-
-      selectComponent: (id) => {
-        set({ selectedComponentIds: id ? [id] : [] }, false, 'selectComponent');
-      },
-
-      selectComponents: (ids) => {
-        set({ selectedComponentIds: ids }, false, 'selectComponents');
-      },
-
-      clearSelection: () => {
-        set({ selectedComponentIds: [], targets: [] }, false, 'clearSelection');
-      },
-
-      setTargets: (targets) => {
-        set({ targets }, false, 'setTargets');
-      },
-
-      addComponent: (component) => {
-        withHistory(set, 'addComponent', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: [...state.project.components, component],
+        loadProject: (project) => {
+          // 任务 8.1：项目加载时自动迁移 V1 蓝图 → V2，编辑器内存始终为 V2
+          // 迁移 warnings 当前静默处理（仅在控制台 debug），后续可在 UI 提示
+          const { blueprint: v2Blueprint, warnings } = normalizeBlueprintToV2(project.blueprint);
+          if (warnings.length > 0) {
+            console.debug('[blueprint] V1→V2 migration warnings:', warnings);
+          }
+          const normalizedProject: ScreenProject =
+            v2Blueprint === project.blueprint ? project : { ...project, blueprint: v2Blueprint };
+          set(
+            {
+              project: normalizedProject,
+              selectedComponentIds: [],
+              history: { past: [], future: [] },
+              isDirty: false,
+              // 加载新项目时重置蓝图手势，避免跨项目残留手势态
+              blueprintGesture: { active: false, baseline: undefined },
+              // 加载新项目时关闭事件蓝图 Sheet，避免跨项目残留打开状态
+              blueprintSheetOpen: false,
+              blueprintFocusComponentId: null,
+              // 加载新项目时回到设计模式，避免自动执行蓝图副作用
+              interactionMode: 'design',
             },
-          };
-        });
-      },
-
-      renameComponent: (id, name) => {
-        const trimmed = name.trim();
-        if (!trimmed) return;
-        withHistory(set, 'renameComponent', (state) => {
-          if (!state.project) return {};
-          const target = state.project.components.find((c) => c.id === id);
-          if (!target || target.name === trimmed) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                c.id === id ? { ...c, name: trimmed } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      updateComponent: (id, updates) => {
-        withHistory(set, 'updateComponent', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                c.id === id ? { ...c, ...updates } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      updateComponentsBatch: (updates) => {
-        withHistory(set, 'updateComponentsBatch', (state) => {
-          if (!state.project) return {};
-          const updateMap = new Map(
-            updates.map((u: { id: string; changes: Partial<ScreenComponent> }) => [
-              u.id,
-              u.changes,
-            ]),
+            false,
+            'loadProject',
           );
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) => {
-                const changes = updateMap.get(c.id);
-                return changes ? { ...c, ...changes } : c;
-              }),
-            },
-          };
-        });
-      },
+        },
 
-      removeComponent: (id) => {
-        withHistory(set, 'removeComponent', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.filter((c: ScreenComponent) => c.id !== id),
-            },
-            selectedComponentIds: state.selectedComponentIds.filter((sid: string) => sid !== id),
-          };
-        });
-      },
-
-      removeSelectedComponents: () => {
-        const ids = get().selectedComponentIds;
-        if (ids.length === 0) return;
-        withHistory(set, 'removeSelectedComponents', (state) => {
-          if (!state.project) return {};
-          const idSet = new Set(ids);
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.filter((c: ScreenComponent) => !idSet.has(c.id)),
-            },
-            selectedComponentIds: [],
-          };
-        });
-      },
-
-      updateCanvas: (updates) => {
-        const { project } = get();
-        if (!project) return;
-        // 无实际变化时不入栈也不置脏（任务 8.2/8.3：一次业务修改只产生一条历史，
-        // 无变化提交不产生空历史记录或错误脏状态）
-        const hasChange = (Object.keys(updates) as Array<keyof CanvasConfig>).some(
-          (key) => updates[key] !== project.canvas[key],
-        );
-        if (!hasChange) return;
-        withHistory(set, 'updateCanvas', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              canvas: { ...state.project.canvas, ...updates },
-            },
-          };
-        });
-      },
-
-      updateBlueprint: (blueprint) => {
-        const { project, blueprintGesture } = get();
-        if (!project) return;
-        // 任务 8.1：接受 V1 或 V2 蓝图，内部归一化为 V2 后再写入。
-        // 这样 V1 调用方（如旧版本快照回放、外部程序化插入）也能正常工作。
-        const { blueprint: v2Blueprint } = normalizeBlueprintToV2(blueprint);
-        // 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
-        // undefined === undefined 或同引用即无变化
-        if (project.blueprint === v2Blueprint) return;
-        // 深比较：内容相同也不入栈（避免空提交）
-        if (
-          project.blueprint &&
-          v2Blueprint &&
-          JSON.stringify(project.blueprint) === JSON.stringify(v2Blueprint)
-        ) {
-          return;
-        }
-        // 手势进行中（任务 5.2）：只更新数据与脏标记，不入历史栈。
-        // 拖拽等连续编辑会高频调用 updateBlueprint，合并到手势结束时统一入栈。
-        if (blueprintGesture.active) {
+        renameProject: (name) => {
+          const trimmed = name.trim();
           set(
             (state) => {
-              if (!state.project) return {};
+              if (!state.project || !trimmed || trimmed === state.project.name) return {};
               return {
-                project: { ...state.project, blueprint: v2Blueprint },
+                project: { ...state.project, name: trimmed },
                 isDirty: true,
               };
             },
             false,
-            'updateBlueprintGesture',
+            'renameProject',
           );
-          return;
-        }
-        withHistory(set, 'updateBlueprint', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              blueprint: v2Blueprint,
-            },
-          };
-        });
-      },
+        },
 
-      beginBlueprintGesture: () => {
-        const { project, blueprintGesture } = get();
-        // 无项目或手势已激活时幂等返回（不重置 baseline，保证嵌套/重复调用安全）
-        if (!project || blueprintGesture.active) return;
-        set(
-          { blueprintGesture: { active: true, baseline: project.blueprint } },
-          false,
-          'beginBlueprintGesture',
-        );
-      },
+        selectComponent: (id) => {
+          set({ selectedComponentIds: id ? [id] : [] }, false, 'selectComponent');
+        },
 
-      endBlueprintGesture: () => {
-        const { project, blueprintGesture } = get();
-        if (!blueprintGesture.active) return;
-        const baseline = blueprintGesture.baseline;
-        const current = project?.blueprint;
-        // 先退出手势态，再决定是否补历史（避免补历史期间被误判为手势中）
-        set(
-          { blueprintGesture: { active: false, baseline: undefined } },
-          false,
-          'endBlueprintGesture',
-        );
-        if (!project) return;
-        // 手势期间无净变化则不补历史（与"无变化不入栈"语义一致）
-        const unchanged =
-          baseline === current ||
-          (baseline !== undefined &&
-            current !== undefined &&
-            JSON.stringify(baseline) === JSON.stringify(current));
-        if (unchanged) return;
-        // 补入一条历史：快照的 blueprint 取手势起点 baseline，使 undo 回到手势前；
-        // 组件/画布取当前值（手势仅改动蓝图，二者在手势期间不变）。
-        // globalVariables 同样取当前值（手势不影响全局变量，但需快照以保持 undo/redo 一致性）。
-        set(
-          (state) => {
+        selectComponents: (ids) => {
+          set({ selectedComponentIds: ids }, false, 'selectComponents');
+        },
+
+        clearSelection: () => {
+          set({ selectedComponentIds: [], targets: [] }, false, 'clearSelection');
+        },
+
+        setTargets: (targets) => {
+          set({ targets }, false, 'setTargets');
+        },
+
+        addComponent: (component) => {
+          withHistory(set, 'addComponent', (state) => {
             if (!state.project) return {};
             return {
-              history: {
-                past: [
-                  ...state.history.past,
-                  {
-                    components: [...state.project.components],
-                    canvas: { ...state.project.canvas },
-                    ...(baseline ? { blueprint: { ...baseline } } : {}),
-                    ...(state.project.globalVariables
-                      ? { globalVariables: [...state.project.globalVariables] }
-                      : {}),
-                  },
-                ].slice(-HISTORY_LIMIT),
-                future: [],
+              project: {
+                ...state.project,
+                components: [...state.project.components, component],
               },
             };
-          },
-          false,
-          'endBlueprintGestureCommit',
-        );
-      },
+          });
+        },
 
-      addGlobalVariable: (variable) => {
-        withHistory(set, 'addGlobalVariable', (state) => {
-          if (!state.project) return {};
-          const newVariable: GlobalVariable = {
-            ...variable,
-            id: crypto.randomUUID(),
-          };
-          return {
-            project: {
-              ...state.project,
-              globalVariables: [...(state.project.globalVariables ?? []), newVariable],
-            },
-          };
-        });
-      },
+        renameComponent: (id, name) => {
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          withHistory(set, 'renameComponent', (state) => {
+            if (!state.project) return {};
+            const target = state.project.components.find((c) => c.id === id);
+            if (!target || target.name === trimmed) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  c.id === id ? { ...c, name: trimmed } : c,
+                ),
+              },
+            };
+          });
+        },
 
-      updateGlobalVariable: (id, updates) => {
-        const { project } = get();
-        // 找不到目标 id 时为空操作（不入栈、不置脏），与 updateCanvas "无变化不入栈" 语义一致
-        const exists = (project?.globalVariables ?? []).some((v: GlobalVariable) => v.id === id);
-        if (!exists) return;
-        withHistory(set, 'updateGlobalVariable', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              globalVariables: (state.project.globalVariables ?? []).map((v: GlobalVariable) =>
-                v.id === id ? { ...v, ...updates } : v,
-              ),
-            },
-          };
-        });
-      },
+        updateComponent: (id, updates) => {
+          withHistory(set, 'updateComponent', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  c.id === id ? { ...c, ...updates } : c,
+                ),
+              },
+            };
+          });
+        },
 
-      removeGlobalVariable: (id) => {
-        const { project } = get();
-        // 找不到目标 id 时为空操作（不入栈、不置脏），与 updateGlobalVariable 语义一致
-        const exists = (project?.globalVariables ?? []).some((v: GlobalVariable) => v.id === id);
-        if (!exists) return;
-        withHistory(set, 'removeGlobalVariable', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              globalVariables: (state.project.globalVariables ?? []).filter(
-                (v: GlobalVariable) => v.id !== id,
-              ),
-            },
-          };
-        });
-      },
+        updateComponentsBatch: (updates) => {
+          withHistory(set, 'updateComponentsBatch', (state) => {
+            if (!state.project) return {};
+            const updateMap = new Map(
+              updates.map((u: { id: string; changes: Partial<ScreenComponent> }) => [
+                u.id,
+                u.changes,
+              ]),
+            );
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) => {
+                  const changes = updateMap.get(c.id);
+                  return changes ? { ...c, ...changes } : c;
+                }),
+              },
+            };
+          });
+        },
 
-      setCanvasScale: (scale) => {
-        set({ canvasScale: scale }, false, 'setCanvasScale');
-      },
+        removeComponent: (id) => {
+          withHistory(set, 'removeComponent', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.filter((c: ScreenComponent) => c.id !== id),
+              },
+              selectedComponentIds: state.selectedComponentIds.filter((sid: string) => sid !== id),
+            };
+          });
+        },
 
-      setCanvasOffset: (offset) => {
-        set({ canvasOffset: offset }, false, 'setCanvasOffset');
-      },
+        removeSelectedComponents: () => {
+          const ids = get().selectedComponentIds;
+          if (ids.length === 0) return;
+          withHistory(set, 'removeSelectedComponents', (state) => {
+            if (!state.project) return {};
+            const idSet = new Set(ids);
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.filter(
+                  (c: ScreenComponent) => !idSet.has(c.id),
+                ),
+              },
+              selectedComponentIds: [],
+            };
+          });
+        },
 
-      setCanvasScaleAndOffset: (scale, offset) => {
-        set({ canvasScale: scale, canvasOffset: offset }, false, 'setCanvasScaleAndOffset');
-      },
-
-      resetViewport: () => {
-        set({ canvasScale: 1, canvasOffset: { x: 0, y: 0 } }, false, 'resetViewport');
-      },
-
-      reorderComponent: (id, newZIndex) => {
-        withHistory(set, 'reorderComponent', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                c.id === id ? { ...c, zIndex: newZIndex } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      reorderLayerToIndex: (id, toIndex) => {
-        withHistory(set, 'reorderLayerToIndex', (state) => {
-          if (!state.project) return {};
-          // 仅在顶层组件（无 parentId）中重排，与 layer-panel 树结构一致
-          const topLevel = state.project.components
-            .filter((c: ScreenComponent) => !c.parentId)
-            .sort((a: ScreenComponent, b: ScreenComponent) => b.zIndex - a.zIndex);
-          const fromIdx = topLevel.findIndex((c) => c.id === id);
-          if (fromIdx === -1) return {};
-          const clampedTo = Math.max(0, Math.min(topLevel.length - 1, toIndex));
-          if (fromIdx === clampedTo) return {};
-          // 移除源并插入到目标位置
-          const [moved] = topLevel.splice(fromIdx, 1);
-          topLevel.splice(clampedTo, 0, moved);
-          // 重新分配顶层 zIndex：index 0 = 最高 zIndex（与原 maxZ 对齐，避免越界）
-          const maxZ = state.project.components.reduce(
-            (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
-            0,
+        updateCanvas: (updates) => {
+          const { project } = get();
+          if (!project) return;
+          // 无实际变化时不入栈也不置脏（任务 8.2/8.3：一次业务修改只产生一条历史，
+          // 无变化提交不产生空历史记录或错误脏状态）
+          const hasChange = (Object.keys(updates) as Array<keyof CanvasConfig>).some(
+            (key) => updates[key] !== project.canvas[key],
           );
-          const newZByCompId = new Map<string, number>();
-          topLevel.forEach((c, idx) => newZByCompId.set(c.id, maxZ - idx));
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                newZByCompId.has(c.id) ? { ...c, zIndex: newZByCompId.get(c.id)! } : c,
-              ),
-            },
-          };
-        });
-      },
+          if (!hasChange) return;
+          withHistory(set, 'updateCanvas', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                canvas: { ...state.project.canvas, ...updates },
+              },
+            };
+          });
+        },
 
-      reorderToTop: (id) => {
-        withHistory(set, 'reorderToTop', (state) => {
-          if (!state.project) return {};
-          const maxZ = state.project.components.reduce(
-            (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
-            0,
-          );
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                c.id === id ? { ...c, zIndex: maxZ + 1 } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      reorderToBottom: (id) => {
-        withHistory(set, 'reorderToBottom', (state) => {
-          if (!state.project) return {};
-          const minZ = state.project.components.reduce(
-            (min: number, c: ScreenComponent) => Math.min(min, c.zIndex),
-            Number.POSITIVE_INFINITY,
-          );
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                c.id === id ? { ...c, zIndex: minZ - 1 } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      duplicateSelected: () => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length === 0 || !project) return;
-        const selectedSet = new Set(selectedComponentIds);
-        const newComponents: ScreenComponent[] = [];
-        for (const c of project.components) {
-          if (selectedSet.has(c.id)) {
-            newComponents.push({
-              ...structuredClone(c),
-              id: crypto.randomUUID(),
-              name: `${c.name} 副本`,
-              position: { ...c.position, x: c.position.x + 20, y: c.position.y + 20 },
-            });
+        updateBlueprint: (blueprint) => {
+          const { project, blueprintGesture } = get();
+          if (!project) return;
+          // 任务 8.1：接受 V1 或 V2 蓝图，内部归一化为 V2 后再写入。
+          // 这样 V1 调用方（如旧版本快照回放、外部程序化插入）也能正常工作。
+          const { blueprint: v2Blueprint } = normalizeBlueprintToV2(blueprint);
+          // 无实际变化时不入栈也不置脏（与 updateCanvas 语义一致）
+          // undefined === undefined 或同引用即无变化
+          if (project.blueprint === v2Blueprint) return;
+          // 深比较：内容相同也不入栈（避免空提交）
+          if (
+            project.blueprint &&
+            v2Blueprint &&
+            JSON.stringify(project.blueprint) === JSON.stringify(v2Blueprint)
+          ) {
+            return;
           }
-        }
-        withHistory(set, 'duplicateSelected', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: [...state.project.components, ...newComponents],
-            },
-            selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
-          };
-        });
-      },
-
-      duplicateSelectedToPosition: (x, y) => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length === 0 || !project) return;
-        // M3 优化：用 Set 替代 Array.includes，O(N+M) → O(N)，避免组件数与选中数
-        // 同时较多时的 O(N×M) 累积开销
-        const selectedSet = new Set(selectedComponentIds);
-        const selectedComps = project.components.filter((c) => selectedSet.has(c.id));
-        if (selectedComps.length === 0) return;
-        // 以选中组件边界框左上角为基准，整体平移到 (x, y)，保持组件间相对位置
-        const minX = Math.min(...selectedComps.map((c) => c.position.x));
-        const minY = Math.min(...selectedComps.map((c) => c.position.y));
-        const offsetX = x - minX;
-        const offsetY = y - minY;
-        const newComponents: ScreenComponent[] = selectedComps.map((c) => ({
-          ...structuredClone(c),
-          id: crypto.randomUUID(),
-          name: `${c.name} 副本`,
-          position: { ...c.position, x: c.position.x + offsetX, y: c.position.y + offsetY },
-        }));
-        withHistory(set, 'duplicateSelectedToPosition', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: [...state.project.components, ...newComponents],
-            },
-            selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
-          };
-        });
-      },
-
-      nudgeSelected: (dx, dy) => {
-        const { selectedComponentIds } = get();
-        if (selectedComponentIds.length === 0) return;
-        const idSet = new Set(selectedComponentIds);
-        withHistory(set, 'nudgeSelected', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                idSet.has(c.id) && !c.status.locked
-                  ? {
-                      ...c,
-                      position: { ...c.position, x: c.position.x + dx, y: c.position.y + dy },
-                    }
-                  : c,
-              ),
-            },
-          };
-        });
-      },
-
-      adjustBorderWidth: (delta) => {
-        const { selectedComponentIds } = get();
-        if (selectedComponentIds.length === 0) return;
-        const idSet = new Set(selectedComponentIds);
-        withHistory(set, 'adjustBorderWidth', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) => {
-                if (!idSet.has(c.id) || c.status.locked) return c;
-                // 文本类型不依赖边框语义，忽略 [/] 调整
-                if (c.type === 'text') return c;
-                const current = c.style.borderWidth ?? 0;
-                const next = Math.max(0, Math.min(20, current + delta));
+          // 手势进行中（任务 5.2）：只更新数据与脏标记，不入历史栈。
+          // 拖拽等连续编辑会高频调用 updateBlueprint，合并到手势结束时统一入栈。
+          if (blueprintGesture.active) {
+            set(
+              (state) => {
+                if (!state.project) return {};
                 return {
-                  ...c,
-                  style: { ...c.style, borderWidth: next },
+                  project: { ...state.project, blueprint: v2Blueprint },
+                  isDirty: true,
                 };
-              }),
-            },
-          };
-        });
-      },
-
-      setLocked: (ids, locked) => {
-        const idSet = new Set(ids);
-        withHistory(set, 'setLocked', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                idSet.has(c.id) ? { ...c, status: { ...c.status, locked } } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      setHidden: (ids, hidden) => {
-        const idSet = new Set(ids);
-        withHistory(set, 'setHidden', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                idSet.has(c.id) ? { ...c, status: { ...c.status, hidden } } : c,
-              ),
-            },
-          };
-        });
-      },
-
-      toggleBorderGuides: () => {
-        set(
-          (state: ScreenEditorState) => ({ showBorderGuides: !state.showBorderGuides }),
-          false,
-          'toggleBorderGuides',
-        );
-      },
-
-      addGuide: (orientation, position) => {
-        set(
-          (state: ScreenEditorState) => ({
-            guides: {
-              ...state.guides,
-              [orientation]: [...state.guides[orientation], position].sort((a, b) => a - b),
-            },
-          }),
-          false,
-          'addGuide',
-        );
-      },
-
-      updateGuide: (orientation, index, position) => {
-        set(
-          (state: ScreenEditorState) => {
-            const list = [...state.guides[orientation]];
-            if (index < 0 || index >= list.length) return {};
-            list[index] = position;
-            list.sort((a, b) => a - b);
-            return { guides: { ...state.guides, [orientation]: list } };
-          },
-          false,
-          'updateGuide',
-        );
-      },
-
-      removeGuide: (orientation, index) => {
-        set(
-          (state: ScreenEditorState) => ({
-            guides: {
-              ...state.guides,
-              [orientation]: state.guides[orientation].filter((_, i) => i !== index),
-            },
-          }),
-          false,
-          'removeGuide',
-        );
-      },
-
-      clearGuides: () => {
-        set(
-          (state: ScreenEditorState) => ({
-            guides: { ...state.guides, vertical: [], horizontal: [] },
-          }),
-          false,
-          'clearGuides',
-        );
-      },
-
-      toggleGuidesVisibility: () => {
-        set(
-          (state: ScreenEditorState) => {
-            const nextVisible = !state.guides.visible;
-            savePreference('guidesVisible', nextVisible);
-            return { guides: { ...state.guides, visible: nextVisible } };
-          },
-          false,
-          'toggleGuidesVisibility',
-        );
-      },
-
-      toggleGuidesLock: () => {
-        set(
-          (state: ScreenEditorState) => ({
-            guides: { ...state.guides, locked: !state.guides.locked },
-          }),
-          false,
-          'toggleGuidesLock',
-        );
-      },
-
-      undo: () => {
-        const { history, project } = get();
-        if (history.past.length === 0 || !project) return;
-        const previous = history.past[history.past.length - 1];
-        set(
-          (state: ScreenEditorState) => {
+              },
+              false,
+              'updateBlueprintGesture',
+            );
+            return;
+          }
+          withHistory(set, 'updateBlueprint', (state) => {
             if (!state.project) return {};
             return {
               project: {
                 ...state.project,
-                components: previous.components,
-                canvas: previous.canvas,
-                // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
-                blueprint: previous.blueprint ? { ...previous.blueprint } : undefined,
-                // globalVariables 可选：旧快照无此字段时按 [] 恢复（与 schema default 一致）
-                globalVariables: previous.globalVariables ? [...previous.globalVariables] : [],
+                blueprint: v2Blueprint,
               },
-              selectedComponentIds: [],
-              history: {
-                past: state.history.past.slice(0, -1),
-                // 浅拷贝当前快照存入 future（同 pushHistory 的 immutable 前提）
-                future: [
-                  {
-                    components: [...state.project.components],
-                    canvas: { ...state.project.canvas },
-                    ...(state.project.blueprint
-                      ? { blueprint: { ...state.project.blueprint } }
-                      : {}),
-                    ...(state.project.globalVariables
-                      ? { globalVariables: [...state.project.globalVariables] }
-                      : {}),
-                  },
-                  ...state.history.future,
-                ],
-              },
-              isDirty: true,
             };
-          },
-          false,
-          'undo',
-        );
-      },
+          });
+        },
 
-      redo: () => {
-        const { history, project } = get();
-        if (history.future.length === 0 || !project) return;
-        const next = history.future[0];
-        set(
-          (state: ScreenEditorState) => {
+        beginBlueprintGesture: () => {
+          const { project, blueprintGesture } = get();
+          // 无项目或手势已激活时幂等返回（不重置 baseline，保证嵌套/重复调用安全）
+          if (!project || blueprintGesture.active) return;
+          set(
+            { blueprintGesture: { active: true, baseline: project.blueprint } },
+            false,
+            'beginBlueprintGesture',
+          );
+        },
+
+        endBlueprintGesture: () => {
+          const { project, blueprintGesture } = get();
+          if (!blueprintGesture.active) return;
+          const baseline = blueprintGesture.baseline;
+          const current = project?.blueprint;
+          // 先退出手势态，再决定是否补历史（避免补历史期间被误判为手势中）
+          set(
+            { blueprintGesture: { active: false, baseline: undefined } },
+            false,
+            'endBlueprintGesture',
+          );
+          if (!project) return;
+          // 手势期间无净变化则不补历史（与"无变化不入栈"语义一致）
+          const unchanged =
+            baseline === current ||
+            (baseline !== undefined &&
+              current !== undefined &&
+              JSON.stringify(baseline) === JSON.stringify(current));
+          if (unchanged) return;
+          // 补入一条历史：快照的 blueprint 取手势起点 baseline，使 undo 回到手势前；
+          // 组件/画布取当前值（手势仅改动蓝图，二者在手势期间不变）。
+          // globalVariables 同样取当前值（手势不影响全局变量，但需快照以保持 undo/redo 一致性）。
+          set(
+            (state) => {
+              if (!state.project) return {};
+              return {
+                history: {
+                  past: [
+                    ...state.history.past,
+                    {
+                      components: [...state.project.components],
+                      canvas: { ...state.project.canvas },
+                      ...(baseline ? { blueprint: { ...baseline } } : {}),
+                      ...(state.project.globalVariables
+                        ? { globalVariables: [...state.project.globalVariables] }
+                        : {}),
+                    },
+                  ].slice(-HISTORY_LIMIT),
+                  future: [],
+                },
+              };
+            },
+            false,
+            'endBlueprintGestureCommit',
+          );
+        },
+
+        addGlobalVariable: (variable) => {
+          withHistory(set, 'addGlobalVariable', (state) => {
+            if (!state.project) return {};
+            const newVariable: GlobalVariable = {
+              ...variable,
+              id: crypto.randomUUID(),
+            };
+            return {
+              project: {
+                ...state.project,
+                globalVariables: [...(state.project.globalVariables ?? []), newVariable],
+              },
+            };
+          });
+        },
+
+        updateGlobalVariable: (id, updates) => {
+          const { project } = get();
+          // 找不到目标 id 时为空操作（不入栈、不置脏），与 updateCanvas "无变化不入栈" 语义一致
+          const exists = (project?.globalVariables ?? []).some((v: GlobalVariable) => v.id === id);
+          if (!exists) return;
+          withHistory(set, 'updateGlobalVariable', (state) => {
             if (!state.project) return {};
             return {
               project: {
                 ...state.project,
-                components: next.components,
-                canvas: next.canvas,
-                // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
-                blueprint: next.blueprint ? { ...next.blueprint } : undefined,
-                // globalVariables 可选：旧快照无此字段时按 [] 恢复（与 schema default 一致）
-                globalVariables: next.globalVariables ? [...next.globalVariables] : [],
+                globalVariables: (state.project.globalVariables ?? []).map((v: GlobalVariable) =>
+                  v.id === id ? { ...v, ...updates } : v,
+                ),
               },
-              selectedComponentIds: [],
-              history: {
-                past: [
-                  ...state.history.past,
-                  {
-                    components: [...state.project.components],
-                    canvas: { ...state.project.canvas },
-                    ...(state.project.blueprint
-                      ? { blueprint: { ...state.project.blueprint } }
-                      : {}),
-                    ...(state.project.globalVariables
-                      ? { globalVariables: [...state.project.globalVariables] }
-                      : {}),
-                  },
-                ],
-                future: state.history.future.slice(1),
-              },
-              isDirty: true,
             };
-          },
-          false,
-          'redo',
-        );
-      },
+          });
+        },
 
-      canUndo: () => get().history.past.length > 0,
-      canRedo: () => get().history.future.length > 0,
+        removeGlobalVariable: (id) => {
+          const { project } = get();
+          // 找不到目标 id 时为空操作（不入栈、不置脏），与 updateGlobalVariable 语义一致
+          const exists = (project?.globalVariables ?? []).some((v: GlobalVariable) => v.id === id);
+          if (!exists) return;
+          withHistory(set, 'removeGlobalVariable', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                globalVariables: (state.project.globalVariables ?? []).filter(
+                  (v: GlobalVariable) => v.id !== id,
+                ),
+              },
+            };
+          });
+        },
 
-      getProject: () => get().project,
-      getSelectedComponents: () => {
-        const { project, selectedComponentIds } = get();
-        if (!project) return [];
-        const idSet = new Set(selectedComponentIds);
-        return project.components.filter((c: ScreenComponent) => idSet.has(c.id));
-      },
+        setCanvasScale: (scale) => {
+          set({ canvasScale: scale }, false, 'setCanvasScale');
+        },
 
-      copySelectedToClipboard: () => {
-        const selected = get().getSelectedComponents();
-        if (selected.length === 0) return;
-        // 深拷贝避免后续修改剪贴板内容影响已粘贴的组件
-        set(
-          { clipboard: structuredClone(selected), pasteCount: 0 },
-          false,
-          'copySelectedToClipboard',
-        );
-      },
+        setCanvasOffset: (offset) => {
+          set({ canvasOffset: offset }, false, 'setCanvasOffset');
+        },
 
-      pasteFromClipboard: () => {
-        const { clipboard, pasteCount, project } = get();
-        if (!clipboard || clipboard.length === 0 || !project) return;
-        // 每次粘贴偏移累加 20px，避免连续粘贴重叠
-        const offset = (pasteCount + 1) * 20;
-        const newComponents: ScreenComponent[] = clipboard.map((c: ScreenComponent) => ({
-          ...structuredClone(c),
-          id: crypto.randomUUID(),
-          name: c.name,
-          position: {
-            ...c.position,
-            x: c.position.x + offset,
-            y: c.position.y + offset,
-          },
-        }));
-        withHistory(set, 'pasteFromClipboard', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: [...state.project.components, ...newComponents],
+        setCanvasScaleAndOffset: (scale, offset) => {
+          set({ canvasScale: scale, canvasOffset: offset }, false, 'setCanvasScaleAndOffset');
+        },
+
+        resetViewport: () => {
+          set({ canvasScale: 1, canvasOffset: { x: 0, y: 0 } }, false, 'resetViewport');
+        },
+
+        reorderComponent: (id, newZIndex) => {
+          withHistory(set, 'reorderComponent', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  c.id === id ? { ...c, zIndex: newZIndex } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        reorderLayerToIndex: (id, toIndex) => {
+          withHistory(set, 'reorderLayerToIndex', (state) => {
+            if (!state.project) return {};
+            // 仅在顶层组件（无 parentId）中重排，与 layer-panel 树结构一致
+            const topLevel = state.project.components
+              .filter((c: ScreenComponent) => !c.parentId)
+              .sort((a: ScreenComponent, b: ScreenComponent) => b.zIndex - a.zIndex);
+            const fromIdx = topLevel.findIndex((c) => c.id === id);
+            if (fromIdx === -1) return {};
+            const clampedTo = Math.max(0, Math.min(topLevel.length - 1, toIndex));
+            if (fromIdx === clampedTo) return {};
+            // 移除源并插入到目标位置
+            const [moved] = topLevel.splice(fromIdx, 1);
+            topLevel.splice(clampedTo, 0, moved);
+            // 重新分配顶层 zIndex：index 0 = 最高 zIndex（与原 maxZ 对齐，避免越界）
+            const maxZ = state.project.components.reduce(
+              (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
+              0,
+            );
+            const newZByCompId = new Map<string, number>();
+            topLevel.forEach((c, idx) => newZByCompId.set(c.id, maxZ - idx));
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  newZByCompId.has(c.id) ? { ...c, zIndex: newZByCompId.get(c.id)! } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        reorderToTop: (id) => {
+          withHistory(set, 'reorderToTop', (state) => {
+            if (!state.project) return {};
+            const maxZ = state.project.components.reduce(
+              (max: number, c: ScreenComponent) => Math.max(max, c.zIndex),
+              0,
+            );
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  c.id === id ? { ...c, zIndex: maxZ + 1 } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        reorderToBottom: (id) => {
+          withHistory(set, 'reorderToBottom', (state) => {
+            if (!state.project) return {};
+            const minZ = state.project.components.reduce(
+              (min: number, c: ScreenComponent) => Math.min(min, c.zIndex),
+              Number.POSITIVE_INFINITY,
+            );
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  c.id === id ? { ...c, zIndex: minZ - 1 } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        duplicateSelected: () => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length === 0 || !project) return;
+          const selectedSet = new Set(selectedComponentIds);
+          const newComponents: ScreenComponent[] = [];
+          for (const c of project.components) {
+            if (selectedSet.has(c.id)) {
+              newComponents.push({
+                ...structuredClone(c),
+                id: crypto.randomUUID(),
+                name: `${c.name} 副本`,
+                position: { ...c.position, x: c.position.x + 20, y: c.position.y + 20 },
+              });
+            }
+          }
+          withHistory(set, 'duplicateSelected', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: [...state.project.components, ...newComponents],
+              },
+              selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+            };
+          });
+        },
+
+        duplicateSelectedToPosition: (x, y) => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length === 0 || !project) return;
+          // M3 优化：用 Set 替代 Array.includes，O(N+M) → O(N)，避免组件数与选中数
+          // 同时较多时的 O(N×M) 累积开销
+          const selectedSet = new Set(selectedComponentIds);
+          const selectedComps = project.components.filter((c) => selectedSet.has(c.id));
+          if (selectedComps.length === 0) return;
+          // 以选中组件边界框左上角为基准，整体平移到 (x, y)，保持组件间相对位置
+          const minX = Math.min(...selectedComps.map((c) => c.position.x));
+          const minY = Math.min(...selectedComps.map((c) => c.position.y));
+          const offsetX = x - minX;
+          const offsetY = y - minY;
+          const newComponents: ScreenComponent[] = selectedComps.map((c) => ({
+            ...structuredClone(c),
+            id: crypto.randomUUID(),
+            name: `${c.name} 副本`,
+            position: { ...c.position, x: c.position.x + offsetX, y: c.position.y + offsetY },
+          }));
+          withHistory(set, 'duplicateSelectedToPosition', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: [...state.project.components, ...newComponents],
+              },
+              selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+            };
+          });
+        },
+
+        nudgeSelected: (dx, dy) => {
+          const { selectedComponentIds } = get();
+          if (selectedComponentIds.length === 0) return;
+          const idSet = new Set(selectedComponentIds);
+          withHistory(set, 'nudgeSelected', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) && !c.status.locked
+                    ? {
+                        ...c,
+                        position: { ...c.position, x: c.position.x + dx, y: c.position.y + dy },
+                      }
+                    : c,
+                ),
+              },
+            };
+          });
+        },
+
+        adjustBorderWidth: (delta) => {
+          const { selectedComponentIds } = get();
+          if (selectedComponentIds.length === 0) return;
+          const idSet = new Set(selectedComponentIds);
+          withHistory(set, 'adjustBorderWidth', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) => {
+                  if (!idSet.has(c.id) || c.status.locked) return c;
+                  // 文本类型不依赖边框语义，忽略 [/] 调整
+                  if (c.type === 'text') return c;
+                  const current = c.style.borderWidth ?? 0;
+                  const next = Math.max(0, Math.min(20, current + delta));
+                  return {
+                    ...c,
+                    style: { ...c.style, borderWidth: next },
+                  };
+                }),
+              },
+            };
+          });
+        },
+
+        setLocked: (ids, locked) => {
+          const idSet = new Set(ids);
+          withHistory(set, 'setLocked', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) ? { ...c, status: { ...c.status, locked } } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        setHidden: (ids, hidden) => {
+          const idSet = new Set(ids);
+          withHistory(set, 'setHidden', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) ? { ...c, status: { ...c.status, hidden } } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        toggleBorderGuides: () => {
+          set(
+            (state: ScreenEditorState) => ({ showBorderGuides: !state.showBorderGuides }),
+            false,
+            'toggleBorderGuides',
+          );
+        },
+
+        addGuide: (orientation, position) => {
+          set(
+            (state: ScreenEditorState) => ({
+              guides: {
+                ...state.guides,
+                [orientation]: [...state.guides[orientation], position].sort((a, b) => a - b),
+              },
+            }),
+            false,
+            'addGuide',
+          );
+        },
+
+        updateGuide: (orientation, index, position) => {
+          set(
+            (state: ScreenEditorState) => {
+              const list = [...state.guides[orientation]];
+              if (index < 0 || index >= list.length) return {};
+              list[index] = position;
+              list.sort((a, b) => a - b);
+              return { guides: { ...state.guides, [orientation]: list } };
             },
-            selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
-            pasteCount: state.pasteCount + 1,
-          };
-        });
-      },
+            false,
+            'updateGuide',
+          );
+        },
 
-      alignSelectedHorizontal: (alignment) => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length < 2 || !project) return;
-        const idSet = new Set(selectedComponentIds);
-        const selected = project.components.filter((c: ScreenComponent) => idSet.has(c.id));
-        if (selected.length < 2) return;
+        removeGuide: (orientation, index) => {
+          set(
+            (state: ScreenEditorState) => ({
+              guides: {
+                ...state.guides,
+                [orientation]: state.guides[orientation].filter((_, i) => i !== index),
+              },
+            }),
+            false,
+            'removeGuide',
+          );
+        },
 
-        const xs = selected.map((c: ScreenComponent) => c.position.x);
-        const rights = selected.map((c: ScreenComponent) => c.position.x + c.position.width);
-        const minX = Math.min(...xs);
-        const maxRight = Math.max(...rights);
-        const centerX = (minX + maxRight) / 2;
+        clearGuides: () => {
+          set(
+            (state: ScreenEditorState) => ({
+              guides: { ...state.guides, vertical: [], horizontal: [] },
+            }),
+            false,
+            'clearGuides',
+          );
+        },
 
-        const updates = selected.map((c: ScreenComponent) => {
-          let x: number;
-          if (alignment === 'left') x = minX;
-          else if (alignment === 'right') x = maxRight - c.position.width;
-          else x = centerX - c.position.width / 2;
-          return {
-            id: c.id,
-            changes: { position: { ...c.position, x: Math.round(x) } },
-          };
-        });
-        // updateComponentsBatch 内部已 pushHistory
-        get().updateComponentsBatch(updates);
-      },
-
-      alignSelectedVertical: (alignment) => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length < 2 || !project) return;
-        const idSet = new Set(selectedComponentIds);
-        const selected = project.components.filter((c: ScreenComponent) => idSet.has(c.id));
-        if (selected.length < 2) return;
-
-        const ys = selected.map((c: ScreenComponent) => c.position.y);
-        const bottoms = selected.map((c: ScreenComponent) => c.position.y + c.position.height);
-        const minY = Math.min(...ys);
-        const maxBottom = Math.max(...bottoms);
-        const centerY = (minY + maxBottom) / 2;
-
-        const updates = selected.map((c: ScreenComponent) => {
-          let y: number;
-          if (alignment === 'top') y = minY;
-          else if (alignment === 'bottom') y = maxBottom - c.position.height;
-          else y = centerY - c.position.height / 2;
-          return {
-            id: c.id,
-            changes: { position: { ...c.position, y: Math.round(y) } },
-          };
-        });
-        get().updateComponentsBatch(updates);
-      },
-
-      distributeSelectedHorizontal: () => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length < 3 || !project) return;
-        const idSet = new Set(selectedComponentIds);
-        const selected = project.components
-          .filter((c: ScreenComponent) => idSet.has(c.id))
-          .sort((a: ScreenComponent, b: ScreenComponent) => a.position.x - b.position.x);
-        if (selected.length < 3) return;
-
-        const first = selected[0];
-        const last = selected[selected.length - 1];
-        const minX = first.position.x;
-        const maxRight = last.position.x + last.position.width;
-        const totalWidth = selected.reduce(
-          (sum: number, c: ScreenComponent) => sum + c.position.width,
-          0,
-        );
-        const gap = (maxRight - minX - totalWidth) / (selected.length - 1);
-
-        let cursor = minX;
-        const updates = selected.map((c: ScreenComponent) => {
-          const newX = cursor;
-          cursor += c.position.width + gap;
-          return {
-            id: c.id,
-            changes: { position: { ...c.position, x: Math.round(newX) } },
-          };
-        });
-        get().updateComponentsBatch(updates);
-      },
-
-      distributeSelectedVertical: () => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length < 3 || !project) return;
-        const idSet = new Set(selectedComponentIds);
-        const selected = project.components
-          .filter((c: ScreenComponent) => idSet.has(c.id))
-          .sort((a: ScreenComponent, b: ScreenComponent) => a.position.y - b.position.y);
-        if (selected.length < 3) return;
-
-        const first = selected[0];
-        const last = selected[selected.length - 1];
-        const minY = first.position.y;
-        const maxBottom = last.position.y + last.position.height;
-        const totalHeight = selected.reduce(
-          (sum: number, c: ScreenComponent) => sum + c.position.height,
-          0,
-        );
-        const gap = (maxBottom - minY - totalHeight) / (selected.length - 1);
-
-        let cursor = minY;
-        const updates = selected.map((c: ScreenComponent) => {
-          const newY = cursor;
-          cursor += c.position.height + gap;
-          return {
-            id: c.id,
-            changes: { position: { ...c.position, y: Math.round(newY) } },
-          };
-        });
-        get().updateComponentsBatch(updates);
-      },
-
-      groupSelected: () => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length < 2 || !project) return;
-        const groupId = `group-${crypto.randomUUID()}`;
-        const idSet = new Set(selectedComponentIds);
-        withHistory(set, 'groupSelected', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                idSet.has(c.id) ? { ...c, parentId: groupId } : c,
-              ),
+        toggleGuidesVisibility: () => {
+          set(
+            (state: ScreenEditorState) => {
+              const nextVisible = !state.guides.visible;
+              preferences.save('guidesVisible', nextVisible);
+              return { guides: { ...state.guides, visible: nextVisible } };
             },
-          };
-        });
-      },
+            false,
+            'toggleGuidesVisibility',
+          );
+        },
 
-      ungroupSelected: () => {
-        const { selectedComponentIds, project } = get();
-        if (selectedComponentIds.length === 0 || !project) return;
-        const idSet = new Set(selectedComponentIds);
-        withHistory(set, 'ungroupSelected', (state) => {
-          if (!state.project) return {};
-          return {
-            project: {
-              ...state.project,
-              components: state.project.components.map((c: ScreenComponent) =>
-                idSet.has(c.id) ? { ...c, parentId: null } : c,
-              ),
+        toggleGuidesLock: () => {
+          set(
+            (state: ScreenEditorState) => ({
+              guides: { ...state.guides, locked: !state.guides.locked },
+            }),
+            false,
+            'toggleGuidesLock',
+          );
+        },
+
+        undo: () => {
+          const { history, project } = get();
+          if (history.past.length === 0 || !project) return;
+          const previous = history.past[history.past.length - 1];
+          set(
+            (state: ScreenEditorState) => {
+              if (!state.project) return {};
+              return {
+                project: {
+                  ...state.project,
+                  components: previous.components,
+                  canvas: previous.canvas,
+                  // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
+                  blueprint: previous.blueprint ? { ...previous.blueprint } : undefined,
+                  // globalVariables 可选：旧快照无此字段时按 [] 恢复（与 schema default 一致）
+                  globalVariables: previous.globalVariables ? [...previous.globalVariables] : [],
+                },
+                selectedComponentIds: [],
+                history: {
+                  past: state.history.past.slice(0, -1),
+                  // 浅拷贝当前快照存入 future（同 pushHistory 的 immutable 前提）
+                  future: [
+                    {
+                      components: [...state.project.components],
+                      canvas: { ...state.project.canvas },
+                      ...(state.project.blueprint
+                        ? { blueprint: { ...state.project.blueprint } }
+                        : {}),
+                      ...(state.project.globalVariables
+                        ? { globalVariables: [...state.project.globalVariables] }
+                        : {}),
+                    },
+                    ...state.history.future,
+                  ],
+                },
+                isDirty: true,
+              };
             },
-          };
-        });
-      },
+            false,
+            'undo',
+          );
+        },
 
-      toggleSnap: () => {
-        set(
-          (state: ScreenEditorState) => {
-            const next = !state.snapEnabled;
-            savePreference('snapEnabled', next);
-            return { snapEnabled: next };
-          },
-          false,
-          'toggleSnap',
-        );
-      },
+        redo: () => {
+          const { history, project } = get();
+          if (history.future.length === 0 || !project) return;
+          const next = history.future[0];
+          set(
+            (state: ScreenEditorState) => {
+              if (!state.project) return {};
+              return {
+                project: {
+                  ...state.project,
+                  components: next.components,
+                  canvas: next.canvas,
+                  // blueprint 可选：旧快照无此字段时按 undefined 恢复（清空当前 blueprint）
+                  blueprint: next.blueprint ? { ...next.blueprint } : undefined,
+                  // globalVariables 可选：旧快照无此字段时按 [] 恢复（与 schema default 一致）
+                  globalVariables: next.globalVariables ? [...next.globalVariables] : [],
+                },
+                selectedComponentIds: [],
+                history: {
+                  past: [
+                    ...state.history.past,
+                    {
+                      components: [...state.project.components],
+                      canvas: { ...state.project.canvas },
+                      ...(state.project.blueprint
+                        ? { blueprint: { ...state.project.blueprint } }
+                        : {}),
+                      ...(state.project.globalVariables
+                        ? { globalVariables: [...state.project.globalVariables] }
+                        : {}),
+                    },
+                  ],
+                  future: state.history.future.slice(1),
+                },
+                isDirty: true,
+              };
+            },
+            false,
+            'redo',
+          );
+        },
 
-      setInteractionMode: (mode) => {
-        set(
-          (state: ScreenEditorState) => {
-            if (state.interactionMode === mode) return {};
-            savePreference('interactionMode', mode);
-            return { interactionMode: mode };
-          },
-          false,
-          'setInteractionMode',
-        );
-      },
+        canUndo: () => get().history.past.length > 0,
+        canRedo: () => get().history.future.length > 0,
 
-      setSmartGuidesEnabled: (value) => {
-        set({ smartGuidesEnabled: value }, false, 'setSmartGuidesEnabled');
-      },
+        getProject: () => get().project,
+        getSelectedComponents: () => {
+          const { project, selectedComponentIds } = get();
+          if (!project) return [];
+          const idSet = new Set(selectedComponentIds);
+          return project.components.filter((c: ScreenComponent) => idSet.has(c.id));
+        },
 
-      setGridEnabled: (value) => {
-        set({ gridEnabled: value }, false, 'setGridEnabled');
-      },
+        copySelectedToClipboard: () => {
+          const selected = get().getSelectedComponents();
+          if (selected.length === 0) return;
+          // 深拷贝避免后续修改剪贴板内容影响已粘贴的组件
+          set(
+            { clipboard: structuredClone(selected), pasteCount: 0 },
+            false,
+            'copySelectedToClipboard',
+          );
+        },
 
-      setGridSize: (size) => {
-        set({ gridSize: size }, false, 'setGridSize');
-      },
+        pasteFromClipboard: () => {
+          const { clipboard, pasteCount, project } = get();
+          if (!clipboard || clipboard.length === 0 || !project) return;
+          // 每次粘贴偏移累加 20px，避免连续粘贴重叠
+          const offset = (pasteCount + 1) * 20;
+          const newComponents: ScreenComponent[] = clipboard.map((c: ScreenComponent) => ({
+            ...structuredClone(c),
+            id: crypto.randomUUID(),
+            name: c.name,
+            position: {
+              ...c.position,
+              x: c.position.x + offset,
+              y: c.position.y + offset,
+            },
+          }));
+          withHistory(set, 'pasteFromClipboard', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: [...state.project.components, ...newComponents],
+              },
+              selectedComponentIds: newComponents.map((c: ScreenComponent) => c.id),
+              pasteCount: state.pasteCount + 1,
+            };
+          });
+        },
 
-      toggleUI: () => {
-        set((state: ScreenEditorState) => ({ uiVisible: !state.uiVisible }), false, 'toggleUI');
-      },
+        alignSelectedHorizontal: (alignment) => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length < 2 || !project) return;
+          const idSet = new Set(selectedComponentIds);
+          const selected = project.components.filter((c: ScreenComponent) => idSet.has(c.id));
+          if (selected.length < 2) return;
 
-      cycleScreenMode: () => {
-        set(
-          (state: ScreenEditorState) => ({
-            screenMode:
-              state.screenMode === 'standard'
-                ? 'withMenu'
-                : state.screenMode === 'withMenu'
-                  ? 'fullscreen'
-                  : 'standard',
-          }),
-          false,
-          'cycleScreenMode',
-        );
-      },
+          const xs = selected.map((c: ScreenComponent) => c.position.x);
+          const rights = selected.map((c: ScreenComponent) => c.position.x + c.position.width);
+          const minX = Math.min(...xs);
+          const maxRight = Math.max(...rights);
+          const centerX = (minX + maxRight) / 2;
 
-      setActiveGroupId: (groupId) => {
-        set({ activeGroupId: groupId }, false, 'setActiveGroupId');
-      },
+          const updates = selected.map((c: ScreenComponent) => {
+            let x: number;
+            if (alignment === 'left') x = minX;
+            else if (alignment === 'right') x = maxRight - c.position.width;
+            else x = centerX - c.position.width / 2;
+            return {
+              id: c.id,
+              changes: { position: { ...c.position, x: Math.round(x) } },
+            };
+          });
+          // updateComponentsBatch 内部已 pushHistory
+          get().updateComponentsBatch(updates);
+        },
 
-      openBlueprintSheet: (options) => {
-        const focusComponentId = options?.focusComponentId;
-        set(
-          {
-            blueprintSheetOpen: true,
-            blueprintFocusComponentId: focusComponentId ?? null,
-          },
-          false,
-          'openBlueprintSheet',
-        );
-      },
+        alignSelectedVertical: (alignment) => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length < 2 || !project) return;
+          const idSet = new Set(selectedComponentIds);
+          const selected = project.components.filter((c: ScreenComponent) => idSet.has(c.id));
+          if (selected.length < 2) return;
 
-      closeBlueprintSheet: () => {
-        set(
-          { blueprintSheetOpen: false, blueprintFocusComponentId: null },
-          false,
-          'closeBlueprintSheet',
-        );
-      },
-    }),
-    { name: 'ScreenEditorStore' },
-  ),
-);
+          const ys = selected.map((c: ScreenComponent) => c.position.y);
+          const bottoms = selected.map((c: ScreenComponent) => c.position.y + c.position.height);
+          const minY = Math.min(...ys);
+          const maxBottom = Math.max(...bottoms);
+          const centerY = (minY + maxBottom) / 2;
 
-/**
- * E2E 测试辅助：在开发模式下将 store 暴露到 window，供 Playwright 通过 page.evaluate 直接调用
- * store actions（如 duplicateSelectedToPosition / reorderLayerToIndex）。
- * 仅在 import.meta.env.DEV 为 true 时生效，生产构建无副作用。
- */
-declare global {
-  interface Window {
-    __screenEditorStore?: typeof useScreenEditorStore;
-  }
-}
+          const updates = selected.map((c: ScreenComponent) => {
+            let y: number;
+            if (alignment === 'top') y = minY;
+            else if (alignment === 'bottom') y = maxBottom - c.position.height;
+            else y = centerY - c.position.height / 2;
+            return {
+              id: c.id,
+              changes: { position: { ...c.position, y: Math.round(y) } },
+            };
+          });
+          get().updateComponentsBatch(updates);
+        },
 
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  window.__screenEditorStore = useScreenEditorStore;
+        distributeSelectedHorizontal: () => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length < 3 || !project) return;
+          const idSet = new Set(selectedComponentIds);
+          const selected = project.components
+            .filter((c: ScreenComponent) => idSet.has(c.id))
+            .sort((a: ScreenComponent, b: ScreenComponent) => a.position.x - b.position.x);
+          if (selected.length < 3) return;
+
+          const first = selected[0];
+          const last = selected[selected.length - 1];
+          const minX = first.position.x;
+          const maxRight = last.position.x + last.position.width;
+          const totalWidth = selected.reduce(
+            (sum: number, c: ScreenComponent) => sum + c.position.width,
+            0,
+          );
+          const gap = (maxRight - minX - totalWidth) / (selected.length - 1);
+
+          let cursor = minX;
+          const updates = selected.map((c: ScreenComponent) => {
+            const newX = cursor;
+            cursor += c.position.width + gap;
+            return {
+              id: c.id,
+              changes: { position: { ...c.position, x: Math.round(newX) } },
+            };
+          });
+          get().updateComponentsBatch(updates);
+        },
+
+        distributeSelectedVertical: () => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length < 3 || !project) return;
+          const idSet = new Set(selectedComponentIds);
+          const selected = project.components
+            .filter((c: ScreenComponent) => idSet.has(c.id))
+            .sort((a: ScreenComponent, b: ScreenComponent) => a.position.y - b.position.y);
+          if (selected.length < 3) return;
+
+          const first = selected[0];
+          const last = selected[selected.length - 1];
+          const minY = first.position.y;
+          const maxBottom = last.position.y + last.position.height;
+          const totalHeight = selected.reduce(
+            (sum: number, c: ScreenComponent) => sum + c.position.height,
+            0,
+          );
+          const gap = (maxBottom - minY - totalHeight) / (selected.length - 1);
+
+          let cursor = minY;
+          const updates = selected.map((c: ScreenComponent) => {
+            const newY = cursor;
+            cursor += c.position.height + gap;
+            return {
+              id: c.id,
+              changes: { position: { ...c.position, y: Math.round(newY) } },
+            };
+          });
+          get().updateComponentsBatch(updates);
+        },
+
+        groupSelected: () => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length < 2 || !project) return;
+          const groupId = `group-${crypto.randomUUID()}`;
+          const idSet = new Set(selectedComponentIds);
+          withHistory(set, 'groupSelected', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) ? { ...c, parentId: groupId } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        ungroupSelected: () => {
+          const { selectedComponentIds, project } = get();
+          if (selectedComponentIds.length === 0 || !project) return;
+          const idSet = new Set(selectedComponentIds);
+          withHistory(set, 'ungroupSelected', (state) => {
+            if (!state.project) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((c: ScreenComponent) =>
+                  idSet.has(c.id) ? { ...c, parentId: null } : c,
+                ),
+              },
+            };
+          });
+        },
+
+        toggleSnap: () => {
+          set(
+            (state: ScreenEditorState) => {
+              const next = !state.snapEnabled;
+              preferences.save('snapEnabled', next);
+              return { snapEnabled: next };
+            },
+            false,
+            'toggleSnap',
+          );
+        },
+
+        setInteractionMode: (mode) => {
+          set(
+            (state: ScreenEditorState) => {
+              if (state.interactionMode === mode) return {};
+              preferences.save('interactionMode', mode);
+              return { interactionMode: mode };
+            },
+            false,
+            'setInteractionMode',
+          );
+        },
+
+        setSmartGuidesEnabled: (value) => {
+          set({ smartGuidesEnabled: value }, false, 'setSmartGuidesEnabled');
+        },
+
+        setGridEnabled: (value) => {
+          set({ gridEnabled: value }, false, 'setGridEnabled');
+        },
+
+        setGridSize: (size) => {
+          set({ gridSize: size }, false, 'setGridSize');
+        },
+
+        toggleUI: () => {
+          set((state: ScreenEditorState) => ({ uiVisible: !state.uiVisible }), false, 'toggleUI');
+        },
+
+        cycleScreenMode: () => {
+          set(
+            (state: ScreenEditorState) => ({
+              screenMode:
+                state.screenMode === 'standard'
+                  ? 'withMenu'
+                  : state.screenMode === 'withMenu'
+                    ? 'fullscreen'
+                    : 'standard',
+            }),
+            false,
+            'cycleScreenMode',
+          );
+        },
+
+        setActiveGroupId: (groupId) => {
+          set({ activeGroupId: groupId }, false, 'setActiveGroupId');
+        },
+
+        openBlueprintSheet: (options) => {
+          const focusComponentId = options?.focusComponentId;
+          set(
+            {
+              blueprintSheetOpen: true,
+              blueprintFocusComponentId: focusComponentId ?? null,
+            },
+            false,
+            'openBlueprintSheet',
+          );
+        },
+
+        closeBlueprintSheet: () => {
+          set(
+            { blueprintSheetOpen: false, blueprintFocusComponentId: null },
+            false,
+            'closeBlueprintSheet',
+          );
+        },
+      }),
+      { name: `ScreenEditorStore:${options.instanceId ?? 'anonymous'}` },
+    ),
+  );
 }

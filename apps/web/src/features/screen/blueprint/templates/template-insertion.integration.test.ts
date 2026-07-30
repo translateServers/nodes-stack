@@ -17,9 +17,11 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { CanvasConfig, ScreenProject } from '@nebula/shared';
-import { useScreenEditorStore } from '../../stores/editor-store';
+import { createScreenEditorStore } from '../../stores/editor-store';
 import { buildValidatedTemplate } from './build-validated-template';
 import type { BlueprintTemplateId } from './template-definitions';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 
 function makeMockCanvas(overrides: Partial<CanvasConfig> = {}): CanvasConfig {
   return {

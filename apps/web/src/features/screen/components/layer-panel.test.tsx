@@ -18,9 +18,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
  *   渲染与命令执行，Radix 自身的开闭行为由其单元测试覆盖
  */
 
-vi.mock('../stores/editor-store', () => ({
-  useScreenEditorStore: vi.fn(),
-}));
+vi.mock('../stores/editor-store', () => {
+  const useScreenEditorStore = Object.assign(vi.fn(), { getState: () => ({}) });
+  return {
+    useScreenEditorStore,
+    useScreenEditorStoreApi: () => ({ getState: () => useScreenEditorStore.getState() }),
+  };
+});
 
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

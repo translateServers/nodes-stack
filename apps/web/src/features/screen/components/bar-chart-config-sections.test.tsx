@@ -19,7 +19,9 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 import { BarChartConfigSections, inferFieldsFromSample } from './bar-chart-config-sections';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { createScreenEditorStore } from '../stores/editor-store';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 
 function asInput(el: HTMLElement): HTMLInputElement {
   return el as HTMLInputElement;

@@ -17,7 +17,9 @@ vi.mock('./api', () => ({
 
 import * as api from './api';
 import { useUpdateScreenProject, usePublishScreenProject } from './hooks';
-import { useScreenEditorStore } from './stores/editor-store';
+import { createScreenEditorStore } from './stores/editor-store';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 
 const mockedUpdateScreenProject = vi.mocked(api.updateScreenProject);
 const mockedPublishScreenProject = vi.mocked(api.publishScreenProject);

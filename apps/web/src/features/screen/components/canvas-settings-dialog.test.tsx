@@ -3,8 +3,18 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import type { ScreenProject } from '@nebula/shared';
 
-import { useScreenEditorStore } from '../stores/editor-store';
-import { CanvasSettingsDialog } from './canvas-settings-dialog';
+import { createScreenEditorStore, ScreenEditorStoreProvider } from '../stores/editor-store';
+import { CanvasSettingsDialog as CanvasSettingsDialogContent } from './canvas-settings-dialog';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
+
+function CanvasSettingsDialog(props: React.ComponentProps<typeof CanvasSettingsDialogContent>) {
+  return (
+    <ScreenEditorStoreProvider store={useScreenEditorStore}>
+      <CanvasSettingsDialogContent {...props} />
+    </ScreenEditorStoreProvider>
+  );
+}
 
 /** 创建一个最小可用的 ScreenProject mock */
 function makeProject(): ScreenProject {

@@ -48,7 +48,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ScreenComponent } from '@nebula/shared';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { useScreenEditorStore, useScreenEditorStoreApi } from '../stores/editor-store';
 import type { InteractionState } from '../hooks/use-interaction-state-machine';
 import { CONTEXT_MENU_ALLOWED_STATES } from '../hooks/use-interaction-state-machine';
 import { ShortcutBadge } from './shortcut-badge';
@@ -350,6 +350,7 @@ export function CanvasContextMenu({
   dispatchInteraction,
   interactionState,
 }: CanvasContextMenuProps) {
+  const editorStore = useScreenEditorStoreApi();
   const [mode, setMode] = useState<'component' | 'canvas'>('canvas');
   const [open, setOpen] = useState(false);
   const [menuKey, setMenuKey] = useState(0);
@@ -403,7 +404,7 @@ export function CanvasContextMenu({
       const compId =
         getComponentIdFromElement(e.target as HTMLElement) ??
         findComponentIdAtPoint(e.clientX, e.clientY);
-      const currentSelected = useScreenEditorStore.getState().selectedComponentIds;
+      const currentSelected = editorStore.getState().selectedComponentIds;
 
       if (compId) {
         if (!currentSelected.includes(compId)) {
@@ -415,7 +416,7 @@ export function CanvasContextMenu({
         setMode('canvas');
       }
     },
-    [selectComponent, clearSelection],
+    [selectComponent, clearSelection, editorStore],
   );
 
   // 解决"菜单已打开时再次右键，菜单停留在旧位置/旧mode"的问题。

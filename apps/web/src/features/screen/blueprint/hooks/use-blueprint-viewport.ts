@@ -25,6 +25,7 @@ import {
   type OnMoveEnd,
   type Viewport,
 } from '@xyflow/react';
+import { useOptionalBlueprintViewportCache } from '../../stores/editor-store';
 
 /** 缩放下限（M1 规格：0.25x） */
 export const MIN_ZOOM = 0.25;
@@ -32,15 +33,6 @@ export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 2;
 /** 单次缩放步长（zoomIn / zoomOut 按钮） */
 export const ZOOM_STEP = 0.2;
-
-/**
- * 模块级 viewport 缓存：跨 BlueprintSheet 挂载/卸载周期保留视口位置。
- *
- * BlueprintSheet 在 open=false 时直接 return null 卸载整棵树，
- * ReactFlow 实例随之销毁，viewport 状态丢失。
- * 用模块级变量在卸载前快照、挂载后恢复，避免每次打开都回到 {0,0,1}。
- */
-let cachedViewport: Viewport | null = null;
 
 export interface UseBlueprintViewportOptions {
   /** 初始是否启用 Space 平移（默认 true） */
@@ -114,6 +106,9 @@ export function useBlueprintViewport(
 
   // 标记是否已恢复过缓存的视口（仅恢复一次，避免覆盖用户操作）
   const restoredRef = useRef(false);
+  const instanceCache = useOptionalBlueprintViewportCache();
+  const localCacheRef = useRef<Viewport | null>(null);
+  const cachedViewportRef = instanceCache ?? localCacheRef;
 
   // Space 平移：监听 Space 按键，按下时切换 panOnDrag
   // rerender-derived-state-no-effect：直接在 render 期派生 isSpacePanning，
@@ -226,26 +221,29 @@ export function useBlueprintViewport(
   }, [reactFlow, minZoom, maxZoom]);
 
   // 视口变化结束时缓存快照（pan/zoom 后）
-  const onMoveEnd: OnMoveEnd = useCallback((_, vp) => {
-    cachedViewport = vp;
-  }, []);
+  const onMoveEnd: OnMoveEnd = useCallback(
+    (_, vp) => {
+      cachedViewportRef.current = vp;
+    },
+    [cachedViewportRef],
+  );
 
   // 恢复上次缓存的视口（组件挂载后调用一次）
   const restoreViewport = useCallback(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
-    if (cachedViewport) {
-      void reactFlow.setViewport(cachedViewport, { duration: 0 });
+    if (cachedViewportRef.current) {
+      void reactFlow.setViewport(cachedViewportRef.current, { duration: 0 });
     }
-  }, [reactFlow]);
+  }, [cachedViewportRef, reactFlow]);
 
   // 卸载时缓存当前视口，供下次打开恢复
   // 依赖空数组：通过 viewportRef 读取最新 viewport，避免每次视口变化都重新注册 effect
   useEffect(() => {
     return () => {
-      cachedViewport = viewportRef.current;
+      cachedViewportRef.current = viewportRef.current;
     };
-  }, []);
+  }, [cachedViewportRef]);
 
   return {
     config,

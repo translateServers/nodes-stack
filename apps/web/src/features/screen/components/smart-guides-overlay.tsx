@@ -1,14 +1,7 @@
-import { create } from 'zustand';
 import { memo } from 'react';
 
-import type { AlignmentLine, AlignmentRect } from '../lib/smart-guides';
-
-interface AlignmentLinesState {
-  lines: AlignmentLine[];
-  movedRect: AlignmentRect | null;
-  setLines: (lines: AlignmentLine[], movedRect: AlignmentRect | null) => void;
-  clear: () => void;
-}
+import type { AlignmentRect } from '../lib/smart-guides';
+import { useAlignmentLinesStore } from '../stores/editor-store';
 
 /**
  * 独立的 Smart Guides 状态 store。
@@ -19,13 +12,6 @@ interface AlignmentLinesState {
  * ScreenCanvas 仅获取 setLines / clear（稳定函数引用），不订阅 lines 值。
  * SmartGuidesOverlay 直接订阅 lines，自行重渲染。
  */
-export const useAlignmentLinesStore = create<AlignmentLinesState>((set) => ({
-  lines: [],
-  movedRect: null,
-  setLines: (lines, movedRect) => set({ lines, movedRect }),
-  clear: () => set({ lines: [], movedRect: null }),
-}));
-
 interface SmartGuidesOverlayProps {
   /** 画布宽度（用于水平线长度，画布坐标系） */
   canvasWidth: number;

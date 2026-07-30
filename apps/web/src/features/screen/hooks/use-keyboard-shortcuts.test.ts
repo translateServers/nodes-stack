@@ -36,11 +36,15 @@ vi.mock('react-hotkeys-hook', () => ({
   }),
 }));
 
-vi.mock('../stores/editor-store', () => ({
-  useScreenEditorStore: Object.assign(vi.fn(), {
+vi.mock('../stores/editor-store', () => {
+  const useScreenEditorStore = Object.assign(vi.fn(), {
     getState: vi.fn(() => ({})),
-  }),
-}));
+  });
+  return {
+    useScreenEditorStore,
+    useScreenEditorStoreApi: () => ({ getState: useScreenEditorStore.getState }),
+  };
+});
 
 // 任务 4.3：mock use-modifier-keys 的 isFormElementFocused，验证 Space 临时抓手在表单元素中不抢占
 vi.mock('./use-modifier-keys', () => ({

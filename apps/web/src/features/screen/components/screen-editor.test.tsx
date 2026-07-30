@@ -125,8 +125,8 @@ vi.mock('./code-editor-sheet', () => ({
 
 import { useParams } from '@tanstack/react-router';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
-import { ScreenEditor } from './screen-editor';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { ScreenEditor as ScreenEditorContent } from './screen-editor';
+import { createScreenEditorStore } from '../stores/editor-store';
 import { type Diagnostic } from '../blueprint/compiler';
 import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
 import { toast } from 'sonner';
@@ -136,6 +136,11 @@ const mockUseScreenProject = useScreenProject as unknown as ReturnType<typeof vi
 const mockUseUpdateScreenProject = useUpdateScreenProject as unknown as ReturnType<typeof vi.fn>;
 const mockUsePublishScreenProject = usePublishScreenProject as unknown as ReturnType<typeof vi.fn>;
 const mockCompileBlueprintV2 = compileBlueprintV2 as unknown as ReturnType<typeof vi.fn>;
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
+
+function ScreenEditor() {
+  return <ScreenEditorContent store={useScreenEditorStore} debug={false} />;
+}
 
 const BASELINE_UPDATED_AT = '2025-06-01 10:30:45';
 

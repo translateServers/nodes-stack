@@ -8,14 +8,14 @@
  * - 列表：每条显示时间戳 + 组件数 + 画布尺寸 + 恢复/删除操作
  * - 恢复时二次确认（会覆盖当前未保存内容）
  *
- * 数据存储在 localStorage，与服务端保存隔离。
+ * 数据操作由宿主注入的 SnapshotService 提供。
  */
 
 import { useCallback, useState } from 'react';
 import { History, RotateCcw, Trash2, Plus, Inbox } from 'lucide-react';
 import { toast } from 'sonner';
 import { useScreenEditorStore } from '../stores/editor-store';
-import { useLocalSnapshots, type SnapshotMeta } from '../hooks/use-local-snapshots';
+import type { SnapshotMeta, SnapshotService } from '../hooks/use-local-snapshots';
 import {
   Dialog,
   DialogContent,
@@ -39,7 +39,7 @@ import { Separator } from '@/components/ui/separator';
 interface SnapshotManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  projectId: string | undefined;
+  service: SnapshotService;
 }
 
 /** 格式化时间戳为本地可读字符串 */
@@ -54,15 +54,10 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-export function SnapshotManagerDialog({
-  open,
-  onOpenChange,
-  projectId,
-}: SnapshotManagerDialogProps) {
+export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotManagerDialogProps) {
   const storeProject = useScreenEditorStore((s) => s.project);
   const loadProject = useScreenEditorStore((s) => s.loadProject);
-  const { snapshots, createSnapshot, restoreSnapshot, deleteSnapshot, clearAllSnapshots } =
-    useLocalSnapshots(projectId);
+  const snapshots = service.snapshots;
 
   // 待确认的恢复目标（null 表示无 AlertDialog 显示）
   const [pendingRestore, setPendingRestore] = useState<SnapshotMeta | null>(null);
@@ -72,16 +67,16 @@ export function SnapshotManagerDialog({
   const handleCreate = useCallback(() => {
     if (!storeProject) return;
     try {
-      createSnapshot(storeProject);
+      service.createSnapshot(storeProject);
       toast.success('已创建本地快照');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '快照创建失败');
     }
-  }, [storeProject, createSnapshot]);
+  }, [service, storeProject]);
 
   const handleRestoreConfirm = useCallback(() => {
     if (!pendingRestore) return;
-    const data = restoreSnapshot(pendingRestore.timestamp);
+    const data = service.restoreSnapshot(pendingRestore.timestamp);
     if (!data) {
       toast.error('快照数据已损坏或被删除');
       setPendingRestore(null);
@@ -91,21 +86,21 @@ export function SnapshotManagerDialog({
     toast.success(`已恢复至 ${formatTimestamp(pendingRestore.timestamp)} 的快照`);
     setPendingRestore(null);
     onOpenChange(false);
-  }, [pendingRestore, restoreSnapshot, loadProject, onOpenChange]);
+  }, [pendingRestore, service, loadProject, onOpenChange]);
 
   const handleDelete = useCallback(
     (ts: number) => {
-      deleteSnapshot(ts);
+      service.deleteSnapshot(ts);
       toast.success('快照已删除');
     },
-    [deleteSnapshot],
+    [service],
   );
 
   const handleClearAll = useCallback(() => {
-    clearAllSnapshots();
+    service.clearAllSnapshots();
     setShowClearConfirm(false);
     toast.success('已清空所有本地快照');
-  }, [clearAllSnapshots]);
+  }, [service]);
 
   return (
     <>

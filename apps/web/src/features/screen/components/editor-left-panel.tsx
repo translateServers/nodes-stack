@@ -12,6 +12,7 @@ import { ComponentLibrary } from './component-library';
 import { LayerPanel } from './layer-panel';
 import { PanelResizeHandle, ToolbarButton, useResizablePanel } from './ui-primitives';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useScreenEditorPreferenceNamespace } from '../stores/editor-store';
 
 type LeftPanelTab = 'library' | 'layers';
 
@@ -19,13 +20,14 @@ type LeftPanelTab = 'library' | 'layers';
 // （如选中态变化、视口状态变化）完全跳过左侧面板子树（含 ComponentLibrary、
 // LayerPanel），避免不必要的重渲染。
 export const EditorLeftPanel = memo(function EditorLeftPanel() {
+  const preferenceNamespace = useScreenEditorPreferenceNamespace();
   const [tab, setTab] = useState<LeftPanelTab>('library');
   const [collapsed, setCollapsed] = useState(false);
   const { width, isDragging, handlePointerDown, handleDoubleClick } = useResizablePanel({
     defaultWidth: 240,
     minWidth: 200,
     maxWidth: 400,
-    storageKey: 'screen-editor:left-panel-width',
+    storageKey: `${preferenceNamespace}:left-panel-width`,
     direction: 'right',
   });
 

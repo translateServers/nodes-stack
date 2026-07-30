@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 2 已完成）
+> 状态：实施中（阶段 3 暂停，Store 实例化主体已完成）
 > 最近更新：2026-07-30
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
@@ -63,16 +63,16 @@
 
 ## 4. Store and Instance Isolation
 
-- [ ] 主编辑器 Store 由 factory 创建，不再是模块单例
-- [ ] React 组件通过实例 Context 订阅 Store
-- [ ] dimension Store 按实例创建
-- [ ] alignment Store 按实例创建
-- [ ] blueprint viewport cache 按实例创建
-- [ ] localStorage preference key 包含 SDK namespace
-- [ ] 固定 `window.__screenEditorStore` 已移除或改为显式实例 debug API
-- [ ] 两个实例项目内容互不影响
-- [ ] 两个实例选中状态互不影响
-- [ ] 两个实例 undo/redo 历史互不影响
+- [x] 主编辑器 Store 由 factory 创建，不再是模块单例
+- [x] React 组件通过实例 Context 订阅 Store
+- [x] dimension Store 按实例创建
+- [x] alignment Store 按实例创建
+- [x] blueprint viewport cache 按实例创建
+- [x] localStorage preference key 包含 SDK namespace
+- [x] 固定 `window.__screenEditorStore` 已移除或改为显式实例 debug API
+- [x] 两个实例项目内容互不影响
+- [x] 两个实例选中状态互不影响
+- [x] 两个实例 undo/redo 历史互不影响
 - [ ] 两个实例临时工具和画布视口互不影响
 
 ## 5. Workbench Extraction

@@ -18,6 +18,17 @@ import { TOOL_REGISTRY, getToolById } from '../hooks/tool-registry';
 
 vi.mock('../stores/editor-store', () => ({
   useScreenEditorStore: vi.fn(),
+  useDimensionStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      dimension: { x: 0, y: 0, w: 0, h: 0, rotate: 0, visible: false },
+      setDimension: vi.fn(),
+    }),
+  useDimensionStoreApi: () => ({
+    getState: () => ({
+      dimension: { x: 0, y: 0, w: 0, h: 0, rotate: 0, visible: false },
+    }),
+    subscribe: () => vi.fn(),
+  }),
 }));
 
 const mockUseStore = useScreenEditorStore as unknown as ReturnType<typeof vi.fn>;

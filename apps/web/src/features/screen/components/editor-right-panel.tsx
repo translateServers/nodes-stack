@@ -9,17 +9,19 @@ import { memo, useState } from 'react';
 import { PanelRightOpen, SlidersHorizontal } from 'lucide-react';
 import { PropertyPanel } from './property-panel';
 import { PanelResizeHandle, ToolbarButton, useResizablePanel } from './ui-primitives';
+import { useScreenEditorPreferenceNamespace } from '../stores/editor-store';
 
 // 性能优化：memo 化右侧面板。该组件不接收外部 props，ScreenEditor 重渲染时
 // （如选中态变化、视口状态变化）完全跳过右侧面板子树（含 PropertyPanel），
 // 避免不必要的重渲染（已有 contain: layout style paint 进一步隔离布局/绘制）。
 export const EditorRightPanel = memo(function EditorRightPanel() {
+  const preferenceNamespace = useScreenEditorPreferenceNamespace();
   const [collapsed, setCollapsed] = useState(false);
   const { width, isDragging, handlePointerDown, handleDoubleClick } = useResizablePanel({
     defaultWidth: 288,
     minWidth: 240,
     maxWidth: 480,
-    storageKey: 'screen-editor:right-panel-width',
+    storageKey: `${preferenceNamespace}:right-panel-width`,
     direction: 'left',
   });
 

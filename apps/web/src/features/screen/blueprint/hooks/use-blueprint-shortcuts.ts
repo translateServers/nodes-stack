@@ -18,7 +18,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { Node, Edge } from '@xyflow/react';
-import { useScreenEditorStore } from '../../stores/editor-store';
+import { useScreenEditorStoreApi } from '../../stores/editor-store';
 import { isFormElementFocused } from '../../hooks/use-modifier-keys';
 
 interface UseBlueprintShortcutsOptions {
@@ -45,6 +45,7 @@ interface UseBlueprintShortcutsOptions {
 }
 
 export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): void {
+  const editorStore = useScreenEditorStoreApi();
   // P0 优化：render 期同步最新 options 到 ref，keydown 监听只注册一次
   // advanced-event-handler-refs：避免 effect 依赖多个非 primitive 值导致监听频繁重注册
   // client-event-listeners：effect deps 为空数组，全局监听只挂载/卸载一次
@@ -59,7 +60,7 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
       // Ctrl+Z / Ctrl+Shift+Z：全局 undo/redo
       if (isCtrl && e.key === 'z') {
         e.preventDefault();
-        const store = useScreenEditorStore.getState();
+        const store = editorStore.getState();
         if (e.shiftKey) {
           store.redo();
         } else {
@@ -146,7 +147,7 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, []);
+  }, [editorStore]);
 }
 
 export type { UseBlueprintShortcutsOptions };

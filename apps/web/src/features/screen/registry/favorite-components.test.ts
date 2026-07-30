@@ -8,7 +8,8 @@ import {
   type FavoriteEntry,
 } from './favorite-components';
 
-const STORAGE_KEY = 'nebula:favorite-components';
+const STORAGE_KEY = 'nebula:screen-sdk:v1:favorite-components';
+const UPDATED_EVENT = 'nebula:screen-sdk:v1:favorite-components:updated';
 
 /** localStorage 仅在 jsdom 环境下可用；预清空避免测试间干扰 */
 function resetStorage() {
@@ -40,7 +41,7 @@ describe('registry · favorite-components', () => {
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       const event = dispatchSpy.mock.calls[0]?.[0];
       expect(event).toBeInstanceOf(CustomEvent);
-      expect((event as CustomEvent).type).toBe('favorite-components:updated');
+      expect((event as CustomEvent).type).toBe(UPDATED_EVENT);
     });
 
     it('取消已有收藏：从 localStorage 移除并派发事件', () => {
@@ -57,7 +58,7 @@ describe('registry · favorite-components', () => {
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       const event = dispatchSpy.mock.calls[0]?.[0];
       expect(event).toBeInstanceOf(CustomEvent);
-      expect((event as CustomEvent).type).toBe('favorite-components:updated');
+      expect((event as CustomEvent).type).toBe(UPDATED_EVENT);
     });
 
     it('切换多次后状态在收藏 / 未收藏间交替', () => {
@@ -125,7 +126,7 @@ describe('registry · favorite-components', () => {
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
       const event = dispatchSpy.mock.calls[0]?.[0];
       expect(event).toBeInstanceOf(CustomEvent);
-      expect((event as CustomEvent).type).toBe('favorite-components:updated');
+      expect((event as CustomEvent).type).toBe(UPDATED_EVENT);
     });
 
     it('空存储调用清空不报错', () => {

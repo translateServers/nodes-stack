@@ -47,33 +47,34 @@ vi.mock('@/components/ui/context-menu', () => ({
   ),
 }));
 
-vi.mock('../stores/editor-store', () => ({
-  useScreenEditorStore: (selector: (s: unknown) => unknown) => {
-    const state = {
-      selectedComponentIds: [],
-      project: { components: [] },
-      clipboard: null,
-      selectComponent: vi.fn(),
-      clearSelection: vi.fn(),
-      selectComponents: vi.fn(),
-      pasteFromClipboard: vi.fn(),
-      copySelectedToClipboard: vi.fn(),
-      duplicateSelected: vi.fn(),
-      removeSelectedComponents: vi.fn(),
-      setLocked: vi.fn(),
-      setHidden: vi.fn(),
-      reorderToTop: vi.fn(),
-      reorderToBottom: vi.fn(),
-      alignSelectedHorizontal: vi.fn(),
-      alignSelectedVertical: vi.fn(),
-      distributeSelectedHorizontal: vi.fn(),
-      distributeSelectedVertical: vi.fn(),
-      groupSelected: vi.fn(),
-      ungroupSelected: vi.fn(),
-    };
-    return selector(state);
-  },
-}));
+vi.mock('../stores/editor-store', () => {
+  const state = {
+    selectedComponentIds: [],
+    project: { components: [] },
+    clipboard: null,
+    selectComponent: vi.fn(),
+    clearSelection: vi.fn(),
+    selectComponents: vi.fn(),
+    pasteFromClipboard: vi.fn(),
+    copySelectedToClipboard: vi.fn(),
+    duplicateSelected: vi.fn(),
+    removeSelectedComponents: vi.fn(),
+    setLocked: vi.fn(),
+    setHidden: vi.fn(),
+    reorderToTop: vi.fn(),
+    reorderToBottom: vi.fn(),
+    alignSelectedHorizontal: vi.fn(),
+    alignSelectedVertical: vi.fn(),
+    distributeSelectedHorizontal: vi.fn(),
+    distributeSelectedVertical: vi.fn(),
+    groupSelected: vi.fn(),
+    ungroupSelected: vi.fn(),
+  };
+  return {
+    useScreenEditorStore: (selector: (value: typeof state) => unknown) => selector(state),
+    useScreenEditorStoreApi: () => ({ getState: () => state }),
+  };
+});
 
 vi.mock('../lib/canvas-event-router', () => ({
   attachContextMenuRedistributor: () => () => {},

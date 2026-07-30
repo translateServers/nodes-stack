@@ -9,11 +9,10 @@ import {
   useState,
 } from 'react';
 import { flushSync } from 'react-dom';
-import { create } from 'zustand';
 import type Moveable from 'react-moveable';
 import Selecto from 'react-selecto';
 import type { ComponentStyle, ScreenComponent } from '@nebula/shared';
-import { useScreenEditorStore } from '../stores/editor-store';
+import { useDimensionStore, useScreenEditorStore } from '../stores/editor-store';
 import { useModifierKeys } from '../hooks/use-modifier-keys';
 import {
   BlueprintEventProvider,
@@ -38,17 +37,6 @@ import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
 import { MoveableContainer, type MoveableHandlers } from './moveable-container';
 import type { RulersHandle } from './canvas-rulers';
-
-export interface DimensionInfo {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  rotate: number;
-  visible: boolean;
-  /** 模式提示（如 Alt 中心变换），空时不显示 */
-  mode?: string;
-}
 
 /**
  * Moveable 事件 datas 袋的类型化描述。
@@ -181,29 +169,6 @@ export function buildFilterString(filter: ComponentStyle['filter']): string {
   if (filter.grayscale !== 0) parts.push(`grayscale(${filter.grayscale}%)`);
   return parts.join(' ');
 }
-
-const initialDimension: DimensionInfo = {
-  x: 0,
-  y: 0,
-  w: 0,
-  h: 0,
-  rotate: 0,
-  visible: false,
-  mode: undefined,
-};
-
-/**
- * 独立的 dimension 状态 store。
- * 将拖拽过程中的尺寸/位置提示信息从画布主组件中剥离，
- * 避免 onDrag 高频回调触发整个画布重渲染导致拖拽抖动。
- */
-export const useDimensionStore = create<{
-  dimension: DimensionInfo;
-  setDimension: (updater: (d: DimensionInfo) => DimensionInfo) => void;
-}>((set) => ({
-  dimension: initialDimension,
-  setDimension: (updater) => set((state) => ({ dimension: updater(state.dimension) })),
-}));
 
 interface ActiveGroupOutlineProps {
   groupId: string | null;

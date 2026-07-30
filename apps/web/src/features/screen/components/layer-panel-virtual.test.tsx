@@ -18,9 +18,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
  * - mock editor-store / @dnd-kit / context-menu 与 layer-panel.test.tsx 保持一致。
  */
 
-vi.mock('../stores/editor-store', () => ({
-  useScreenEditorStore: vi.fn(),
-}));
+vi.mock('../stores/editor-store', () => {
+  const useScreenEditorStore = Object.assign(vi.fn(), { getState: () => ({}) });
+  return {
+    useScreenEditorStore,
+    useScreenEditorStoreApi: () => ({ getState: () => useScreenEditorStore.getState() }),
+  };
+});
 
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

@@ -2,7 +2,14 @@ import { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import type { TextEditExitKind } from '../lib/text-editing-contract';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
-import { useScreenEditorStore } from '../stores/editor-store';
+import {
+  createScreenEditorStore,
+  ScreenEditorStoreProvider,
+  useScreenEditorStore,
+  useScreenEditorStoreApi,
+  useScreenEditorDebugHandle,
+  type ScreenEditorStore,
+} from '../stores/editor-store';
 import { ScreenCanvas } from '../components/screen-canvas';
 import { TextEditorOverlay } from '../components/text-editor-overlay';
 import { useCanvasDrop } from '../components/component-library';
@@ -27,6 +34,7 @@ import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
 import type { BaseDiagnostic } from '../blueprint/hooks';
 import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import { useCanvasFlash } from '../hooks/use-canvas-flash';
+import { useLocalSnapshots } from '../hooks/use-local-snapshots';
 import { CanvasFlashOverlay } from './canvas-flash-overlay';
 import { CodeEditorSheet } from './code-editor-sheet';
 import { SaveConflictDialog } from './save-conflict-dialog';
@@ -36,13 +44,49 @@ import { Spinner } from '@/components/ui/spinner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
-export function ScreenEditor() {
+export interface ScreenEditorProps {
+  debug?: boolean;
+  instanceId?: string;
+  persistPreferences?: boolean;
+  preferenceNamespace?: string;
+  store?: ScreenEditorStore;
+}
+
+export function ScreenEditor({
+  debug = import.meta.env.DEV,
+  instanceId = 'nebula-web-screen-editor',
+  persistPreferences = true,
+  preferenceNamespace,
+  store: providedStore,
+}: ScreenEditorProps = {}) {
+  const storeRef = useRef<ScreenEditorStore | null>(null);
+  if (storeRef.current === null) {
+    storeRef.current =
+      providedStore ??
+      createScreenEditorStore({ instanceId, persistPreferences, preferenceNamespace });
+  }
+  return (
+    <ScreenEditorStoreProvider
+      store={storeRef.current}
+      debug={debug}
+      instanceId={instanceId}
+      preferenceNamespace={preferenceNamespace}
+    >
+      <ScreenEditorContent />
+    </ScreenEditorStoreProvider>
+  );
+}
+
+function ScreenEditorContent() {
   const { id } = useParams({ from: '/_app/screen/$id' });
   const navigate = useNavigate();
+  const store = useScreenEditorStoreApi();
+  const debugHandle = useScreenEditorDebugHandle();
 
   const { data: project, isLoading, refetch } = useScreenProject(id);
   const updateMutation = useUpdateScreenProject();
   const publishMutation = usePublishScreenProject();
+  const snapshotService = useLocalSnapshots(id);
 
   const loadProject = useScreenEditorStore((s) => s.loadProject);
   // 性能优化：细粒度订阅，仅订阅渲染真正需要的字段，避免整个 project 对象变化（如拖拽结束
@@ -217,12 +261,8 @@ export function ScreenEditor() {
   // 仅在 DEV 环境暴露，供 E2E 测试直接调用以进入文本编辑态。
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    (
-      window as unknown as { __startTextEditing?: (componentId: string) => void }
-    ).__startTextEditing = (componentId: string) => {
-      const comp = useScreenEditorStore
-        .getState()
-        .project?.components.find((c) => c.id === componentId);
+    const startTextEditing = (componentId: string): void => {
+      const comp = store.getState().project?.components.find((c) => c.id === componentId);
       if (!comp || comp.type !== 'text') return;
       const content = (comp.props as { content?: unknown }).content;
       const initialContent = typeof content === 'string' ? content : '请输入文本';
@@ -233,13 +273,14 @@ export function ScreenEditor() {
       });
       editorSession.dispatchInteraction('double-click');
     };
+    if (debugHandle !== null) debugHandle.startTextEditing = startTextEditing;
     return () => {
-      delete (window as unknown as { __startTextEditing?: unknown }).__startTextEditing;
+      if (debugHandle?.startTextEditing === startTextEditing) delete debugHandle.startTextEditing;
     };
-  }, [editorSession]);
+  }, [debugHandle, editorSession, store]);
 
   const handleSave = useCallback(() => {
-    const currentProject = useScreenEditorStore.getState().project;
+    const currentProject = store.getState().project;
     if (!currentProject) return;
     updateMutation.mutate(
       {
@@ -266,7 +307,7 @@ export function ScreenEditor() {
         },
       },
     );
-  }, [updateMutation, loadProject]);
+  }, [updateMutation, loadProject, store]);
 
   // 重新加载服务端版本：放弃本地未保存修改，用服务端最新项目整体替换 Store 项目、基线、选中态和本地历史
   // 重新加载失败时（refetch 抛出异常或 result.data 为空）保持本地内容，不关闭对话框，用户可重试或取消
@@ -287,7 +328,7 @@ export function ScreenEditor() {
   }, [refetch, loadProject]);
 
   const doPublish = useCallback(() => {
-    const currentProject = useScreenEditorStore.getState().project;
+    const currentProject = store.getState().project;
     if (!currentProject) return;
     publishMutation.mutate(
       {
@@ -305,12 +346,12 @@ export function ScreenEditor() {
         },
       },
     );
-  }, [publishMutation, loadProject]);
+  }, [publishMutation, loadProject, store]);
 
   const handlePublish = useCallback(() => {
-    const currentProject = useScreenEditorStore.getState().project;
+    const currentProject = store.getState().project;
     if (!currentProject) return;
-    if (useScreenEditorStore.getState().isDirty) {
+    if (store.getState().isDirty) {
       toast.warning('请先保存修改后再发布');
       return;
     }
@@ -329,7 +370,7 @@ export function ScreenEditor() {
       }
     }
     doPublish();
-  }, [doPublish]);
+  }, [doPublish, store]);
 
   const handlePublishConfirm = useCallback(() => {
     setShowPublishConfirm(false);
@@ -344,7 +385,7 @@ export function ScreenEditor() {
 
   /** 导出当前项目为 JSON 文件，由浏览器直接触发下载 */
   const handleExport = useCallback(() => {
-    const currentProject = useScreenEditorStore.getState().project;
+    const currentProject = store.getState().project;
     if (!currentProject) return;
     try {
       const json = JSON.stringify(currentProject, null, 2);
@@ -361,7 +402,7 @@ export function ScreenEditor() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '导出失败');
     }
-  }, []);
+  }, [store]);
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
 
@@ -372,31 +413,29 @@ export function ScreenEditor() {
   const textEditing = editorSession.textEditing;
   const editingComponent = useMemo(() => {
     if (!textEditing) return undefined;
-    return useScreenEditorStore
-      .getState()
-      .project?.components.find((c) => c.id === textEditing.componentId);
-  }, [textEditing]);
+    return store.getState().project?.components.find((c) => c.id === textEditing.componentId);
+  }, [store, textEditing]);
 
   /**
    * CanvasFlashOverlay 所需 components：flashingComponentId 为低频事件（蓝图跳转），
    * 直接从 store 读取最新值，不订阅 components 引用。
    */
   const flashComponents = useMemo(
-    () => (flashingComponentId ? useScreenEditorStore.getState().project?.components : undefined),
-    [flashingComponentId],
+    () => (flashingComponentId ? store.getState().project?.components : undefined),
+    [flashingComponentId, store],
   );
 
   // P0 优化：用 getState() 读取 canvasScale，避免 callback 依赖 canvasScale 导致每次缩放重建
   const handleZoomIn = useCallback(() => {
-    setCanvasScale(Math.min(5, useScreenEditorStore.getState().canvasScale + 0.1));
-  }, [setCanvasScale]);
+    setCanvasScale(Math.min(5, store.getState().canvasScale + 0.1));
+  }, [setCanvasScale, store]);
 
   const handleZoomOut = useCallback(() => {
-    setCanvasScale(Math.max(0.1, useScreenEditorStore.getState().canvasScale - 0.1));
-  }, [setCanvasScale]);
+    setCanvasScale(Math.max(0.1, store.getState().canvasScale - 0.1));
+  }, [setCanvasScale, store]);
 
   const handleFitToScreen = useCallback(() => {
-    const currentProject = useScreenEditorStore.getState().project;
+    const currentProject = store.getState().project;
     if (!canvasContainerRef.current || !currentProject) return;
     const rect = canvasContainerRef.current.getBoundingClientRect();
     const canvas = currentProject.canvas;
@@ -406,7 +445,7 @@ export function ScreenEditor() {
     const offsetX = (rect.width - canvas.width * fitScale) / 2;
     const offsetY = (rect.height - canvas.height * fitScale) / 2;
     setCanvasScaleAndOffset(fitScale, { x: offsetX, y: offsetY });
-  }, [setCanvasScaleAndOffset]);
+  }, [setCanvasScaleAndOffset, store]);
 
   useKeyboardShortcuts({
     onSave: handleSave,
@@ -428,8 +467,6 @@ export function ScreenEditor() {
 
   const canvasWidth = canvasConfig?.width ?? 1920;
   const canvasHeight = canvasConfig?.height ?? 1080;
-  const currentProjectId = useScreenEditorStore.getState().project?.id;
-
   return (
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-background text-foreground">
@@ -534,7 +571,7 @@ export function ScreenEditor() {
       <SnapshotManagerDialog
         open={showSnapshotManager}
         onOpenChange={setShowSnapshotManager}
-        projectId={currentProjectId}
+        service={snapshotService}
       />
       <BlueprintSheetV2
         open={showEventBlueprint || blueprintSheetOpen}

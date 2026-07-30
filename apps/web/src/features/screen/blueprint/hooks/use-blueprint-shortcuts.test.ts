@@ -1,8 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook as testingRenderHook, act } from '@testing-library/react';
+import { createElement, type ReactNode } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import { useBlueprintShortcuts } from './use-blueprint-shortcuts';
-import { useScreenEditorStore } from '../../stores/editor-store';
+import { createScreenEditorStore, ScreenEditorStoreProvider } from '../../stores/editor-store';
+
+const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
+
+function renderHook<Result>(callback: () => Result) {
+  return testingRenderHook(callback, {
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(ScreenEditorStoreProvider, { store: useScreenEditorStore, children }),
+  });
+}
 
 function makeNode(overrides: Partial<Node> = {}): Node {
   return {

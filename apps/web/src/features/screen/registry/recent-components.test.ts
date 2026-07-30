@@ -6,7 +6,7 @@ import {
   type RecentComponentEntry,
 } from './recent-components';
 
-const STORAGE_KEY = 'nebula:recent-components';
+const STORAGE_KEY = 'nebula:screen-sdk:v1:recent-components';
 
 /** localStorage 仅在 jsdom 环境下可用；预清空避免测试间干扰 */
 function resetStorage() {
