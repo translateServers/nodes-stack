@@ -42,7 +42,7 @@ export interface AlignDistributeToolbarProps {
 
 /** 工具条按钮公共样式 */
 const buttonClassName =
-  'inline-flex h-8 w-8 items-center justify-center rounded text-slate-300 transition-colors hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
+  'inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent';
 
 /** 工具条按钮配置 */
 interface AlignButtonConfig {
@@ -105,7 +105,7 @@ export function AlignDistributeToolbar({
   return (
     <div
       className={cn(
-        'flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/95 p-1 shadow-lg backdrop-blur',
+        'flex items-center gap-1 rounded-lg border border-border bg-popover/95 p-1 shadow-lg backdrop-blur',
         className,
       )}
       data-testid="align-distribute-toolbar"
@@ -134,7 +134,7 @@ export function AlignDistributeToolbar({
         </button>
       ))}
 
-      <div className="mx-1 h-5 w-px bg-slate-700" />
+      <div className="mx-1 h-5 w-px bg-border" />
 
       {DISTRIBUTE_BUTTONS.map(({ mode, label, Icon }) => (
         <button
