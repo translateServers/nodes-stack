@@ -10,6 +10,7 @@
  */
 
 import { useCallback } from 'react';
+import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from 'lucide-react';
 import type { Diagnostic } from '../compiler';
 
 interface ProblemsPanelProps {
@@ -22,21 +23,27 @@ interface ProblemsPanelProps {
 
 const SEVERITY_ORDER = ['error', 'warning', 'info'] as const;
 
-const SEVERITY_CONFIG: Record<string, { label: string; colorClass: string; bgClass: string }> = {
+const SEVERITY_CONFIG: Record<
+  string,
+  { label: string; colorClass: string; dotClass: string; Icon: LucideIcon }
+> = {
   error: {
     label: '错误',
     colorClass: 'text-destructive',
-    bgClass: 'bg-destructive/10',
+    dotClass: 'bg-destructive',
+    Icon: CircleAlert,
   },
   warning: {
     label: '警告',
-    colorClass: 'text-yellow-600',
-    bgClass: 'bg-yellow-600/10',
+    colorClass: 'text-yellow-600 dark:text-yellow-500',
+    dotClass: 'bg-yellow-500',
+    Icon: TriangleAlert,
   },
   info: {
     label: '信息',
     colorClass: 'text-muted-foreground',
-    bgClass: 'bg-muted',
+    dotClass: 'bg-muted-foreground/60',
+    Icon: Info,
   },
 };
 
@@ -62,6 +69,7 @@ export function ProblemsPanel({
         className="flex items-center gap-2 border-t border-border bg-background px-4 py-2 text-sm text-muted-foreground"
         data-testid="blueprint-problems-empty"
       >
+        <CircleCheck className="size-3.5 text-emerald-500" />
         <span>无问题</span>
       </div>
     );
@@ -85,17 +93,29 @@ export function ProblemsPanel({
       <header className="flex items-center gap-3 border-b border-border px-4 py-1.5 text-xs font-medium">
         <span>问题</span>
         {errorCount > 0 && (
-          <span className="text-destructive" data-testid="problem-count-error">
+          <span
+            className="flex items-center gap-1 text-destructive"
+            data-testid="problem-count-error"
+          >
+            <CircleAlert className="size-3" />
             {errorCount} 错误
           </span>
         )}
         {warningCount > 0 && (
-          <span className="text-yellow-600" data-testid="problem-count-warning">
+          <span
+            className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500"
+            data-testid="problem-count-warning"
+          >
+            <TriangleAlert className="size-3" />
             {warningCount} 警告
           </span>
         )}
         {infoCount > 0 && (
-          <span className="text-muted-foreground" data-testid="problem-count-info">
+          <span
+            className="flex items-center gap-1 text-muted-foreground"
+            data-testid="problem-count-info"
+          >
+            <Info className="size-3" />
             {infoCount} 信息
           </span>
         )}
@@ -105,15 +125,15 @@ export function ProblemsPanel({
           group.items.map((diagnostic, index) => (
             <li
               key={`${diagnostic.code}-${diagnostic.nodeId ?? diagnostic.edgeId ?? index}`}
-              className={`flex cursor-pointer items-start gap-2 px-4 py-1.5 text-sm hover:bg-accent ${
-                diagnostic.nodeId ? '' : 'cursor-default'
+              className={`flex items-start gap-2 px-4 py-1.5 text-sm transition-colors ${
+                diagnostic.nodeId ? 'cursor-pointer hover:bg-accent/60' : 'cursor-default'
               }`}
               data-testid="problem-item"
               data-severity={diagnostic.level}
               onClick={() => handleClick(diagnostic)}
             >
               <span
-                className={`mt-0.5 inline-block size-2 shrink-0 rounded-full ${group.config.bgClass}`}
+                className={`mt-1.5 inline-block size-2 shrink-0 rounded-full ${group.config.dotClass}`}
               />
               <span className={`flex-1 ${group.config.colorClass}`}>{diagnostic.message}</span>
               {diagnostic.nodeId && (

@@ -15,10 +15,16 @@
  * 写回通过 V2NodeConfigChange 判别联合，调用方按 kind 分发更新 node.data 字段。
  *
  * 从 blueprint-sheet-v2.tsx 抽出以独立测试，符合 spec 任务 5.6 的「重写 panels/node-config-panel」目标。
+ *
+ * UI/UX 优化：
+ * - 容器透明化：自身不再携带 border/background，由外层浮动卡片（sheet-v2）统一承载视觉
+ * - 头部带节点类型徽章（与节点卡片配色体系一致），快速确认当前配置对象
+ * - 表单控件统一 focus ring / transition / hover，提高可用性
  */
 
 import type { JSX, ChangeEvent } from 'react';
 import type { Node } from '@xyflow/react';
+import { Settings2 } from 'lucide-react';
 import type {
   CommentNodeConfig,
   ConditionNodeConfig,
@@ -48,6 +54,36 @@ export interface V2NodeConfigPanelProps {
   onChange: (next: V2NodeConfigChange) => void;
 }
 
+/** 表单控件统一类名：聚焦环 + 过渡 + hover */
+const controlClassName =
+  'w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm transition-colors hover:border-border focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40';
+
+/** 节点类型徽章元信息（与节点卡片配色体系一致） */
+const KIND_BADGE: Record<string, { label: string; className: string }> = {
+  component: {
+    label: '组件节点',
+    className: 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/20',
+  },
+  global: {
+    label: '全局节点',
+    className:
+      'bg-amber-500/10 text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400',
+  },
+  condition: {
+    label: '条件分支',
+    className: 'bg-sky-500/10 text-sky-600 ring-1 ring-inset ring-sky-500/20 dark:text-sky-400',
+  },
+  delay: {
+    label: '延时节点',
+    className:
+      'bg-violet-500/10 text-violet-600 ring-1 ring-inset ring-violet-500/20 dark:text-violet-400',
+  },
+  comment: {
+    label: '注释节点',
+    className: 'bg-muted text-muted-foreground ring-1 ring-inset ring-border',
+  },
+};
+
 /**
  * V2 节点配置面板：根据节点 kind 与 globalType 分发渲染对应表单。
  */
@@ -62,16 +98,27 @@ export function V2NodeConfigPanel({
     config?: unknown;
   };
   const rfType = node.type ?? 'component';
+  const kindBadge = KIND_BADGE[rfType] ?? KIND_BADGE.component;
 
   return (
     <div
-      className="border-t border-border bg-background px-3 py-3"
+      className="px-3 py-3"
       data-testid="v2-node-config-panel"
       data-node-kind={rfType}
       data-node-global-type={data.globalType}
     >
-      <h3 className="mb-2 text-xs font-medium text-foreground">节点配置</h3>
-      <div className="space-y-2">
+      {/* 头部：图标 + 标题 + 节点类型徽章 */}
+      <div className="mb-2.5 flex items-center gap-1.5">
+        <Settings2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        <h3 className="text-xs font-medium text-foreground">节点配置</h3>
+        <span
+          className={`ml-auto inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${kindBadge.className}`}
+          data-testid="v2-node-config-kind-badge"
+        >
+          {kindBadge.label}
+        </span>
+      </div>
+      <div className="space-y-2.5">
         {rfType === 'component' && (
           <ComponentIdSelect
             value={data.componentId ?? ''}
@@ -81,7 +128,9 @@ export function V2NodeConfigPanel({
         )}
 
         {rfType === 'global' && data.globalType === 'pageLoad' && (
-          <p className="text-xs text-muted-foreground">页面加载触发器无需配置。</p>
+          <p className="rounded-md bg-muted/50 px-2.5 py-2 text-xs text-muted-foreground">
+            页面加载触发器无需配置。
+          </p>
         )}
 
         {rfType === 'global' && data.globalType === 'navigate' && (
@@ -160,7 +209,7 @@ function ComponentIdSelect({
       <select
         value={value}
         onChange={(e: ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
-        className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        className={controlClassName}
         data-testid="v2-config-component-id"
       >
         <option value="">请选择组件</option>
@@ -184,7 +233,7 @@ function NavigateConfigForm({
   onChange: (next: GlobalNavigateConfig) => void;
 }): JSX.Element {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-muted-foreground">
           目标 URL（仅 http/https）
@@ -196,7 +245,7 @@ function NavigateConfigForm({
             onChange({ ...config, url: e.target.value })
           }
           placeholder="https://example.com"
-          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          className={controlClassName}
           data-testid="v2-config-navigate-url"
         />
       </label>
@@ -207,7 +256,7 @@ function NavigateConfigForm({
           onChange={(e: ChangeEvent<HTMLSelectElement>) =>
             onChange({ ...config, target: e.target.value as '_blank' | '_self' })
           }
-          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          className={controlClassName}
           data-testid="v2-config-navigate-target"
         >
           <option value="_blank">新窗口</option>
@@ -227,7 +276,7 @@ function RequestApiConfigForm({
   onChange: (next: GlobalRequestApiConfig) => void;
 }): JSX.Element {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-muted-foreground">HTTP 方法</span>
         <select
@@ -235,7 +284,7 @@ function RequestApiConfigForm({
           onChange={(e: ChangeEvent<HTMLSelectElement>) =>
             onChange({ ...config, method: e.target.value as GlobalRequestApiConfig['method'] })
           }
-          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          className={controlClassName}
           data-testid="v2-config-request-api-method"
         >
           <option value="GET">GET</option>
@@ -256,11 +305,11 @@ function RequestApiConfigForm({
             onChange({ ...config, url: e.target.value })
           }
           placeholder="https://api.example.com"
-          className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+          className={controlClassName}
           data-testid="v2-config-request-api-url"
         />
       </label>
-      <p className="text-[10px] text-muted-foreground">
+      <p className="rounded-md bg-muted/50 px-2.5 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
         高级字段（headers / body / 脱敏键名 / 超时）请通过代码编辑器配置。
       </p>
     </div>
@@ -285,7 +334,7 @@ function ScrollToConfigForm({
         onChange={(e: ChangeEvent<HTMLSelectElement>) =>
           onChange({ ...config, targetComponentId: e.target.value })
         }
-        className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        className={controlClassName}
         data-testid="v2-config-scroll-to-target"
       >
         <option value="">请选择组件</option>
@@ -322,7 +371,7 @@ function IntervalConfigForm({
           if (Number.isNaN(value)) return;
           onChange({ ...config, intervalMs: value });
         }}
-        className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        className={controlClassName}
         data-testid="v2-config-interval-ms"
       />
     </label>
@@ -352,7 +401,7 @@ function DelayConfigForm({
           if (Number.isNaN(value)) return;
           onChange({ delayMs: value });
         }}
-        className="w-full rounded border border-border bg-background px-2 py-1 text-sm"
+        className={controlClassName}
         data-testid="v2-config-delay-ms"
       />
     </label>
@@ -375,7 +424,7 @@ function CommentConfigForm({
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => onChange({ text: e.target.value })}
         placeholder="输入注释..."
         rows={3}
-        className="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm"
+        className={`${controlClassName} resize-y`}
         data-testid="v2-config-comment-text"
       />
     </label>
