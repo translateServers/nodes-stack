@@ -56,6 +56,11 @@ export interface UseAnchorSnapOptions {
    * 调用方在此处执行 setEdges(addEdge(...))，与 onConnect 路径一致。
    */
   onSnapConnect: (conn: V2ConnectionCandidate) => void;
+  /**
+   * DOM 查询根节点：限定磁吸 handle 查询范围，避免多实例互相干扰。
+   * 返回 null 时回退到 document（保留向后兼容行为）。
+   */
+  getRoot?: () => ParentNode | null;
 }
 
 /** Hook 返回值 */
@@ -112,12 +117,14 @@ function buildSnapContext(
  * 在 DOM 中查找距离鼠标最近的兼容目标 handle。
  *
  * 查找规则：
- * - 遍历所有 `.react-flow__handle` 元素
+ * - 遍历 root 下所有 `.react-flow__handle` 元素
  * - 跳过无 data-nodeid / data-handleid 的元素
  * - 跳过 handleId 不是输入锚点的元素（act:* / in）
  * - 跳过源节点自身（避免逻辑节点自环；组件节点自环虽合法但磁吸不感知，由用户手动连线）
  * - 用 isConnectionValidV2 做完整兼容性校验（含重复边检测）
  * - 计算鼠标到 handle 中心点的欧氏距离，返回 20px 内最近者
+ *
+ * root 默认为 document，多实例场景应传入实例容器 ref 以限定查询范围。
  */
 function findNearestCompatibleHandle(
   event: MouseEvent,
@@ -125,8 +132,9 @@ function findNearestCompatibleHandle(
   sourceHandle: string,
   nodeIndex: V2NodeIndex,
   existingEdges: readonly V2Edge[],
+  root: ParentNode = document,
 ): { nodeId: string; handleId: string } | null {
-  const handles = document.querySelectorAll<HTMLElement>('.react-flow__handle');
+  const handles = root.querySelectorAll<HTMLElement>('.react-flow__handle');
   let nearest: { nodeId: string; handleId: string; distance: number } | null = null;
 
   for (const handle of handles) {
@@ -160,12 +168,12 @@ function findNearestCompatibleHandle(
 }
 
 /**
- * 移除所有 handle 上的磁吸高亮 class。
+ * 移除 root 下所有 handle 上的磁吸高亮 class。
  *
  * 卸载、状态重置、命中变化时调用，防止残留高亮。
  */
-function clearAllSnapHighlights(): void {
-  const highlighted = document.querySelectorAll<HTMLElement>(`.${SNAP_HIGHLIGHT_CLASS}`);
+function clearAllSnapHighlights(root: ParentNode = document): void {
+  const highlighted = root.querySelectorAll<HTMLElement>(`.${SNAP_HIGHLIGHT_CLASS}`);
   for (const el of highlighted) {
     el.classList.remove(SNAP_HIGHLIGHT_CLASS);
   }
@@ -174,10 +182,10 @@ function clearAllSnapHighlights(): void {
 /**
  * 给指定 handle DOM 添加高亮 class（先清理其他高亮，确保唯一）。
  */
-function highlightHandle(nodeId: string, handleId: string): void {
-  clearAllSnapHighlights();
+function highlightHandle(nodeId: string, handleId: string, root: ParentNode = document): void {
+  clearAllSnapHighlights(root);
   const selector = `.react-flow__handle[data-nodeid="${nodeId}"][data-handleid="${handleId}"]`;
-  const target = document.querySelector<HTMLElement>(selector);
+  const target = root.querySelector<HTMLElement>(selector);
   if (target) {
     target.classList.add(SNAP_HIGHLIGHT_CLASS);
   }
@@ -193,6 +201,7 @@ export function useAnchorSnap({
   getNodes,
   getEdges,
   onSnapConnect,
+  getRoot,
 }: UseAnchorSnapOptions): UseAnchorSnapResult {
   const [snapState, setSnapState] = useState<AnchorSnapState>({
     activeSourceNodeId: null,
@@ -207,27 +216,37 @@ export function useAnchorSnap({
   const onSnapConnectRef = useRef(onSnapConnect);
   onSnapConnectRef.current = onSnapConnect;
 
-  /** 内部：更新 snapped state + DOM 高亮 */
-  const updateSnapped = useCallback((next: { nodeId: string; handleId: string } | null): void => {
-    const prev = snappedRef.current;
-    // 命中未变化时跳过 state 更新（高频 mousemove 优化）
-    if (prev && next && prev.nodeId === next.nodeId && prev.handleId === next.handleId) {
-      return;
-    }
-    if (!prev && !next) return;
+  /** 读取当前 DOM 查询根：getRoot 返回 null 时回退到 document */
+  const resolveRoot = useCallback((): ParentNode => {
+    const root = getRoot?.();
+    return root ?? document;
+  }, [getRoot]);
 
-    snappedRef.current = next;
-    if (next) {
-      highlightHandle(next.nodeId, next.handleId);
-    } else {
-      clearAllSnapHighlights();
-    }
-    setSnapState((s) => ({
-      ...s,
-      snappedTargetNodeId: next?.nodeId ?? null,
-      snappedTargetHandle: next?.handleId ?? null,
-    }));
-  }, []);
+  /** 内部：更新 snapped state + DOM 高亮 */
+  const updateSnapped = useCallback(
+    (next: { nodeId: string; handleId: string } | null): void => {
+      const prev = snappedRef.current;
+      // 命中未变化时跳过 state 更新（高频 mousemove 优化）
+      if (prev && next && prev.nodeId === next.nodeId && prev.handleId === next.handleId) {
+        return;
+      }
+      if (!prev && !next) return;
+
+      snappedRef.current = next;
+      const root = resolveRoot();
+      if (next) {
+        highlightHandle(next.nodeId, next.handleId, root);
+      } else {
+        clearAllSnapHighlights(root);
+      }
+      setSnapState((s) => ({
+        ...s,
+        snappedTargetNodeId: next?.nodeId ?? null,
+        snappedTargetHandle: next?.handleId ?? null,
+      }));
+    },
+    [resolveRoot],
+  );
 
   /** 容器级别 mousemove：连线拖拽时查找磁吸目标 */
   const handleMouseMove = useCallback(
@@ -241,10 +260,11 @@ export function useAnchorSnap({
         source.handleId,
         nodeIndex,
         existingEdges,
+        resolveRoot(),
       );
       updateSnapped(next);
     },
-    [getNodes, getEdges, updateSnapped],
+    [getNodes, getEdges, updateSnapped, resolveRoot],
   );
 
   /** 包装 onConnectStart：记录源信息 */
@@ -266,63 +286,68 @@ export function useAnchorSnap({
   }, []);
 
   /** 包装 onConnectEnd：若有磁吸命中则建立连线，否则回退到现有行为 */
-  const wrapConnectEnd = useCallback((existing?: OnConnectEnd): OnConnectEnd => {
-    return (event, connectionState) => {
-      const snapped = snappedRef.current;
-      const source = sourceRef.current;
+  const wrapConnectEnd = useCallback(
+    (existing?: OnConnectEnd): OnConnectEnd => {
+      return (event, connectionState) => {
+        const snapped = snappedRef.current;
+        const source = sourceRef.current;
+        const root = resolveRoot();
 
-      // 清理磁吸状态（无论是否命中，连线结束都重置）
-      sourceRef.current = null;
-      snappedRef.current = null;
-      clearAllSnapHighlights();
-      setSnapState({
-        activeSourceNodeId: null,
-        activeSourceHandle: null,
-        snappedTargetNodeId: null,
-        snappedTargetHandle: null,
-      });
-
-      // 若 RF 已识别到目标节点（用户直接命中 handle），走原有 onConnect 路径
-      if (connectionState.toNode) {
-        existing?.(event, connectionState);
-        return;
-      }
-
-      // 磁吸命中：手动建立连线
-      if (snapped && source) {
-        onSnapConnectRef.current({
-          source: source.nodeId,
-          sourceHandle: source.handleId,
-          target: snapped.nodeId,
-          targetHandle: snapped.handleId,
+        // 清理磁吸状态（无论是否命中，连线结束都重置）
+        sourceRef.current = null;
+        snappedRef.current = null;
+        clearAllSnapHighlights(root);
+        setSnapState({
+          activeSourceNodeId: null,
+          activeSourceHandle: null,
+          snappedTargetNodeId: null,
+          snappedTargetHandle: null,
         });
-        return;
-      }
 
-      // 未命中：回退到原有行为（如打开搜索面板）
-      existing?.(event, connectionState);
-    };
-  }, []);
+        // 若 RF 已识别到目标节点（用户直接命中 handle），走原有 onConnect 路径
+        if (connectionState.toNode) {
+          existing?.(event, connectionState);
+          return;
+        }
+
+        // 磁吸命中：手动建立连线
+        if (snapped && source) {
+          onSnapConnectRef.current({
+            source: source.nodeId,
+            sourceHandle: source.handleId,
+            target: snapped.nodeId,
+            targetHandle: snapped.handleId,
+          });
+          return;
+        }
+
+        // 未命中：回退到原有行为（如打开搜索面板）
+        existing?.(event, connectionState);
+      };
+    },
+    [resolveRoot],
+  );
 
   /** 重置磁吸状态（外部清理用） */
   const resetSnap = useCallback((): void => {
     sourceRef.current = null;
     snappedRef.current = null;
-    clearAllSnapHighlights();
+    clearAllSnapHighlights(resolveRoot());
     setSnapState({
       activeSourceNodeId: null,
       activeSourceHandle: null,
       snappedTargetNodeId: null,
       snappedTargetHandle: null,
     });
-  }, []);
+  }, [resolveRoot]);
 
   // 卸载时清理 DOM 高亮 class，防止残留
   useEffect((): (() => void) => {
+    const root = resolveRoot();
     return () => {
-      clearAllSnapHighlights();
+      clearAllSnapHighlights(root);
     };
-  }, []);
+  }, [resolveRoot]);
 
   return {
     snapState,

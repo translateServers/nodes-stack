@@ -42,6 +42,12 @@ interface UseBlueprintShortcutsOptions {
   onShowHelp?: () => void;
   /** 全选节点与边（Ctrl+A，ReactFlow 无内置全选） */
   onSelectAll?: () => void;
+  /**
+   * 当前实例是否处于活跃状态（拥有焦点）。
+   * 多实例场景下，仅活跃实例的蓝图快捷键响应键盘事件。
+   * 默认为 () => true，保留单实例向后兼容行为。
+   */
+  isActive?: () => boolean;
 }
 
 export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): void {
@@ -55,6 +61,9 @@ export function useBlueprintShortcuts(options: UseBlueprintShortcutsOptions): vo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const opts = optionsRef.current;
+      // 多实例焦点仲裁：非活跃实例不响应快捷键。
+      // isActive 未提供时默认放行，保留单实例向后兼容行为。
+      if (opts.isActive !== undefined && !opts.isActive()) return;
       const isCtrl = e.ctrlKey || e.metaKey;
 
       // Ctrl+Z / Ctrl+Shift+Z：全局 undo/redo

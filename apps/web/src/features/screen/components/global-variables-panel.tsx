@@ -15,7 +15,7 @@
  * 写回方式：editor-store 的三个 globalVariable actions（入历史栈，支持 undo/redo）
  */
 
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useId, useMemo, useState, type JSX } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import type { GlobalVariable, GlobalVariableType } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
@@ -387,6 +387,15 @@ function GlobalVariableFormDialog({
 }: GlobalVariableFormDialogProps): JSX.Element {
   const initialForm = initial ? deriveFormState(initial) : EMPTY_FORM_STATE;
   const [form, setForm] = useState<FormState>(initialForm);
+  // 实例级唯一 id 前缀，避免多实例下 Label htmlFor 与表单控件 id 冲突
+  const fieldId = useId();
+  const nameId = `${fieldId}-name`;
+  const typeId = `${fieldId}-type`;
+  const valueId = `${fieldId}-value`;
+  const urlId = `${fieldId}-url`;
+  const methodId = `${fieldId}-method`;
+  const refreshId = `${fieldId}-refresh`;
+  const expressionId = `${fieldId}-expression`;
 
   // 每次 open 切换或 initial 变化时重置表单，避免上次输入残留
   useEffect(() => {
@@ -419,9 +428,9 @@ function GlobalVariableFormDialog({
         <div className="space-y-3">
           {/* 名称（必填） */}
           <div className="space-y-1">
-            <Label htmlFor="gv-name">名称</Label>
+            <Label htmlFor={nameId}>名称</Label>
             <Input
-              id="gv-name"
+              id={nameId}
               value={form.name}
               onChange={(e) => update('name', e.target.value)}
               placeholder="如 apiBaseUrl"
@@ -431,13 +440,13 @@ function GlobalVariableFormDialog({
 
           {!staticOnly && (
             <div className="space-y-1">
-              <Label htmlFor="gv-type">类型</Label>
+              <Label htmlFor={typeId}>类型</Label>
               <Select
                 value={form.type}
                 onValueChange={(v) => update('type', v as GlobalVariableType)}
               >
                 <SelectTrigger
-                  id="gv-type"
+                  id={typeId}
                   className="w-full"
                   data-testid="global-variables-form-type"
                 >
@@ -461,9 +470,9 @@ function GlobalVariableFormDialog({
           {/* 根据类型动态显示字段 */}
           {form.type === 'static' && (
             <div className="space-y-1" data-testid="global-variables-form-static-fields">
-              <Label htmlFor="gv-value">值（支持 JSON 或字符串）</Label>
+              <Label htmlFor={valueId}>值（支持 JSON 或字符串）</Label>
               <textarea
-                id="gv-value"
+                id={valueId}
                 className="min-h-[72px] w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 value={form.valueText}
                 onChange={(e) => update('valueText', e.target.value)}
@@ -476,9 +485,9 @@ function GlobalVariableFormDialog({
           {!staticOnly && form.type === 'api' && (
             <div className="space-y-2" data-testid="global-variables-form-api-fields">
               <div className="space-y-1">
-                <Label htmlFor="gv-url">URL</Label>
+                <Label htmlFor={urlId}>URL</Label>
                 <Input
-                  id="gv-url"
+                  id={urlId}
                   value={form.url}
                   onChange={(e) => update('url', e.target.value)}
                   placeholder="https://api.example.com/data"
@@ -486,13 +495,13 @@ function GlobalVariableFormDialog({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="gv-method">请求方法</Label>
+                <Label htmlFor={methodId}>请求方法</Label>
                 <Select
                   value={form.method}
                   onValueChange={(v) => update('method', v as 'GET' | 'POST')}
                 >
                   <SelectTrigger
-                    id="gv-method"
+                    id={methodId}
                     className="w-full"
                     data-testid="global-variables-form-method"
                   >
@@ -509,9 +518,9 @@ function GlobalVariableFormDialog({
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="gv-refresh">刷新间隔（秒，0 = 不刷新）</Label>
+                <Label htmlFor={refreshId}>刷新间隔（秒，0 = 不刷新）</Label>
                 <Input
-                  id="gv-refresh"
+                  id={refreshId}
                   type="number"
                   min={0}
                   value={form.refreshIntervalSec}
@@ -524,9 +533,9 @@ function GlobalVariableFormDialog({
 
           {!staticOnly && form.type === 'computed' && (
             <div className="space-y-1" data-testid="global-variables-form-computed-fields">
-              <Label htmlFor="gv-expression">表达式</Label>
+              <Label htmlFor={expressionId}>表达式</Label>
               <textarea
-                id="gv-expression"
+                id={expressionId}
                 className="min-h-[72px] w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                 value={form.expression}
                 onChange={(e) => update('expression', e.target.value)}

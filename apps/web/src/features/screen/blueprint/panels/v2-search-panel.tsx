@@ -23,7 +23,7 @@ import type {
   JSX,
   PointerEvent as ReactPointerEvent,
 } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CornerDownLeft, FileQuestion, Search, X } from 'lucide-react';
 import {
   V2_NODE_OPTIONS,
@@ -114,6 +114,10 @@ export function V2SearchPanel({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const activeItemRef = useRef<HTMLLIElement>(null);
+  // 实例级唯一 id 前缀，避免多实例下 list id 与 option id 冲突
+  const panelFieldId = useId();
+  const listId = `${panelFieldId}-list`;
+  const optionId = (id: string) => `${panelFieldId}-option-${id}`;
 
   // connect 模式下自动过滤为可连线目标
   const effectiveOptions = useMemo(() => {
@@ -251,10 +255,10 @@ export function V2SearchPanel({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索节点（名称或描述）..."
           aria-label="搜索节点"
-          aria-controls="v2-search-panel-list"
+          aria-controls={listId}
           aria-expanded="true"
           aria-activedescendant={
-            filtered[activeIndex] ? `v2-option-${filtered[activeIndex].id}` : undefined
+            filtered[activeIndex] ? optionId(filtered[activeIndex].id) : undefined
           }
           className="w-full rounded-md border border-input bg-background py-1.5 pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
           data-testid="v2-search-panel-input"
@@ -271,7 +275,7 @@ export function V2SearchPanel({
       {/* 选项列表 */}
       <ul
         ref={listRef}
-        id="v2-search-panel-list"
+        id={listId}
         role="listbox"
         aria-label="可选节点"
         className="max-h-80 overflow-y-auto px-1.5 pb-1.5"
@@ -309,7 +313,7 @@ export function V2SearchPanel({
                   return (
                     <li
                       key={option.id}
-                      id={`v2-option-${option.id}`}
+                      id={optionId(option.id)}
                       ref={isActive ? activeItemRef : undefined}
                       role="option"
                       aria-selected={isActive}

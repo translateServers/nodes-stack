@@ -36,7 +36,7 @@ export default defineConfig({
         replacement: resolve(import.meta.dirname, './src/index.ts'),
       },
       {
-        find: '@',
+        find: '@/',
         replacement: resolve(import.meta.dirname, '../../apps/web/src'),
       },
     ],
@@ -55,29 +55,10 @@ export default defineConfig({
       fileName: (_format, entryName) => `${entryName}.js`,
     },
     rollupOptions: {
-      external: [
-        'class-variance-authority',
-        '@dnd-kit/core',
-        '@dnd-kit/sortable',
-        '@dnd-kit/utilities',
-        '@scena/react-ruler',
-        '@tanstack/react-virtual',
-        '@xyflow/react',
-        'clsx',
-        'echarts',
-        'lucide-react',
-        'radix-ui',
-        'react',
-        'react-dom',
-        'react/jsx-runtime',
-        'react-hotkeys-hook',
-        'react-moveable',
-        'react-selecto',
-        'tailwind-merge',
-        'zustand',
-        'zustand/middleware',
-        'zustand/vanilla',
-      ],
+      // spec 13: React、ReactDOM、Zustand、Radix、Moveable、Selecto 等实现依赖
+      // 打入 SDK，避免宿主 React 版本冲突。@nebula/shared 类型由 dts bundle,
+      // 运行时由 Vite 内联，consumer 不需要安装任何 peer/runtime 依赖。
+      external: [],
       output: {
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',

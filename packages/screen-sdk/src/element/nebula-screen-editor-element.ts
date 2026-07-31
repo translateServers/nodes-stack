@@ -40,6 +40,10 @@ function cloneOptions(options: ScreenEditorOptions | undefined): ScreenEditorOpt
   return structuredClone(options);
 }
 
+function rejectWithError(error: unknown): Promise<never> {
+  return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+}
+
 export class NebulaScreenEditorElement extends HTMLElement {
   static readonly observedAttributes = ['project-id', 'readonly', 'theme'];
 
@@ -151,23 +155,39 @@ export class NebulaScreenEditorElement extends HTMLElement {
   }
 
   whenReady(): Promise<void> {
-    return this.#requireRuntime().whenReady();
+    try {
+      return this.#requireRuntime().whenReady();
+    } catch (error) {
+      return rejectWithError(error);
+    }
   }
 
   reload(options?: { discardChanges?: boolean }): Promise<void> {
-    return this.#requireRuntime().reload(options);
+    try {
+      return this.#requireRuntime().reload(options);
+    } catch (error) {
+      return rejectWithError(error);
+    }
   }
 
   save(): Promise<ScreenProjectEnvelope> {
-    return this.#requireRuntime()
-      .save()
-      .then((envelope) => structuredClone(envelope));
+    try {
+      return this.#requireRuntime()
+        .save()
+        .then((envelope) => structuredClone(envelope));
+    } catch (error) {
+      return rejectWithError(error);
+    }
   }
 
   publish(): Promise<ScreenProjectEnvelope> {
-    return this.#requireRuntime()
-      .publish()
-      .then((envelope) => structuredClone(envelope));
+    try {
+      return this.#requireRuntime()
+        .publish()
+        .then((envelope) => structuredClone(envelope));
+    } catch (error) {
+      return rejectWithError(error);
+    }
   }
 
   getDraft(): ScreenProjectDraft | null {
@@ -280,9 +300,9 @@ export class NebulaScreenEditorElement extends HTMLElement {
     });
     this.#resizeObserver.observe(this);
   }
-}
 
-export interface NebulaScreenEditorElement {
+  // Typed event listener overloads — declared on the class to provide
+  // compile-time event names without unsafe declaration merging.
   addEventListener<EventName extends keyof NebulaScreenEditorEventMap>(
     type: EventName,
     listener: (
@@ -296,6 +316,14 @@ export interface NebulaScreenEditorElement {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | AddEventListenerOptions,
   ): void;
+  addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    if (listener !== null) super.addEventListener(type, listener, options);
+  }
+
   removeEventListener<EventName extends keyof NebulaScreenEditorEventMap>(
     type: EventName,
     listener: (
@@ -309,6 +337,13 @@ export interface NebulaScreenEditorElement {
     listener: EventListenerOrEventListenerObject | null,
     options?: boolean | EventListenerOptions,
   ): void;
+  removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    if (listener !== null) super.removeEventListener(type, listener, options);
+  }
 }
 
 declare global {

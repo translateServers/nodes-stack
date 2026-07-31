@@ -220,6 +220,12 @@ interface UseBlueprintClipboardV2Options {
   edges: Edge[];
   setNodes: (updater: (nds: Node[]) => Node[]) => void;
   setEdges: (updater: (eds: Edge[]) => Edge[]) => void;
+  /**
+   * 当前实例是否处于活跃状态（拥有焦点）。
+   * 多实例场景下，仅活跃实例的蓝图剪贴板响应键盘快捷键。
+   * 默认为 () => true，保留单实例向后兼容行为。
+   */
+  isActive?: () => boolean;
 }
 
 interface UseBlueprintClipboardV2Result {
@@ -238,9 +244,11 @@ interface UseBlueprintClipboardV2Result {
 export function useBlueprintClipboardV2(
   options: UseBlueprintClipboardV2Options,
 ): UseBlueprintClipboardV2Result {
-  const { nodes, edges, setNodes, setEdges } = options;
+  const { nodes, edges, setNodes, setEdges, isActive = () => true } = options;
   const { notify } = useScreenEditorNotifications();
   const staticOnly = useOptionalScreenEditorEnvironment()?.capabilityProfile === 'static';
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -362,6 +370,7 @@ export function useBlueprintClipboardV2(
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
+      if (!isActiveRef.current()) return;
       const isCtrl = e.ctrlKey || e.metaKey;
       if (!isCtrl) return;
       if (isFormElementFocused()) return;

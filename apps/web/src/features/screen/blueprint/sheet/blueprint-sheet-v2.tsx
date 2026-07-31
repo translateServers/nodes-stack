@@ -818,6 +818,7 @@ function BlueprintSheetV2Inner({
     getNodes: () => nodesRef.current,
     getEdges: () => edgesRef.current,
     onSnapConnect: handleSnapConnect,
+    getRoot: () => containerRef.current,
   });
 
   // 包装后的连线事件处理器：先经磁吸 hook，再回退到原有行为

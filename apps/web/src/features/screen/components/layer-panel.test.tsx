@@ -163,12 +163,6 @@ function setStoreState(state: StoreState): void {
   mockUseStore.getState = () => state;
 }
 
-let originalGetElementById: typeof document.getElementById;
-
-beforeEach(() => {
-  originalGetElementById = document.getElementById.bind(document);
-});
-
 /** 触发右键菜单：在 jsdom 中通过 fireEvent.contextMenu 触发 onContextMenu 回调 */
 function openContextMenuOnRow(row: HTMLElement): void {
   fireEvent.contextMenu(row);
@@ -317,19 +311,13 @@ describe('LayerPanel · 命令执行接入', () => {
     });
     setStoreState(store);
 
-    // document.getElementById 被 InlineRenameInput 用于读取当前值
-    document.getElementById = vi.fn((id: string) => {
-      if (id === 'layer-rename-input-a') {
-        return { value: '新名称' } as HTMLInputElement;
-      }
-      return originalGetElementById.call(document, id);
-    });
-
     render(<LayerPanel />);
     const menu = openMenuOnRowWithText('原始名');
     fireEvent.click(within(menu).getByTestId('layer-command-rename'));
 
     const input = screen.getByTestId('layer-rename-input');
+    // InlineRenameInput 通过 ref 读取输入值，直接修改 input.value 后触发 change
+    fireEvent.change(input, { target: { value: '新名称' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(store.renameComponent).toHaveBeenCalledWith('a', '新名称');
@@ -364,17 +352,12 @@ describe('LayerPanel · 命令执行接入', () => {
     });
     setStoreState(store);
 
-    document.getElementById = vi.fn((id: string) => {
-      if (id === 'layer-rename-input-a') {
-        return { value: '   ' } as HTMLInputElement;
-      }
-      return originalGetElementById.call(document, id);
-    });
-
     render(<LayerPanel />);
     const menu = openMenuOnRowWithText('原始名');
     fireEvent.click(within(menu).getByTestId('layer-command-rename'));
-    fireEvent.keyDown(screen.getByTestId('layer-rename-input'), { key: 'Enter' });
+    const input = screen.getByTestId('layer-rename-input');
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(store.renameComponent).not.toHaveBeenCalled();
   });

@@ -30,7 +30,7 @@
     "./dist/**/*.css"
   ],
   "scripts": {
-    "build": "pnpm check:boundaries && vite build && node ./scripts/generate-json-schemas.mjs",
+    "build": "pnpm check:boundaries && vite build && node ./scripts/generate-json-schemas.mjs && node ./scripts/strip-virtual-module.mjs",
     "check:boundaries": "node ./scripts/check-boundaries.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint .",

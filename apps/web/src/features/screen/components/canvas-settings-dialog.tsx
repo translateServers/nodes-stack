@@ -7,7 +7,7 @@
  * 编辑过程中维护本地副本，避免直接修改 store 导致每次按键都触发画布重渲染。
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import type { CanvasConfig } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
@@ -93,6 +93,8 @@ export function CanvasSettingsDialog({ open, onOpenChange }: CanvasSettingsDialo
 
   // 本地副本：仅在 open 切换为 true 时同步 store
   const [draft, setDraft] = useState<CanvasConfig | null>(null);
+  // 实例级唯一 id，避免多实例下 Label htmlFor 与 Switch id 冲突
+  const gridSwitchId = useId();
 
   useEffect(() => {
     if (open && canvas) {
@@ -183,11 +185,11 @@ export function CanvasSettingsDialog({ open, onOpenChange }: CanvasSettingsDialo
           {/* 网格吸附：会话级配置，直接读写 store，无需 draft */}
           <div className="space-y-2 border-t pt-3">
             <div className="flex items-center justify-between">
-              <Label htmlFor="grid-enabled" className="text-sm">
+              <Label htmlFor={gridSwitchId} className="text-sm">
                 网格吸附
               </Label>
               <Switch
-                id="grid-enabled"
+                id={gridSwitchId}
                 checked={gridEnabled}
                 onCheckedChange={(checked) => setGridEnabled(checked === true)}
               />

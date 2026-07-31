@@ -15,7 +15,7 @@
  * testid / 可访问名称遵循 baseline.md §0.3 的 E2E 定位契约。
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   type ApiDataSourceConfig,
   DataSourceConfigSchema,
@@ -837,6 +837,11 @@ export function BarChartDataSourceSection({ component, onUpdate }: SectionProps)
   const shownType = staticOnly ? 'static' : (draftType ?? effectiveType);
   // API 请求测试响应样本（任务 5.4：供字段映射推断可选字段）
   const [apiSample, setApiSample] = useState<unknown>(null);
+  // 实例级唯一 id 前缀，避免多实例下 RadioGroupItem 与 label htmlFor 冲突
+  const dsFieldId = useId();
+  const staticRadioId = `${dsFieldId}-static`;
+  const apiRadioId = `${dsFieldId}-api`;
+  const datasetRadioId = `${dsFieldId}-dataset`;
 
   const handleTypeChange = (value: string) => {
     const next = (['static', 'api', 'dataset'] as const).find((t) => t === value) ?? 'static';
@@ -853,20 +858,20 @@ export function BarChartDataSourceSection({ component, onUpdate }: SectionProps)
           aria-label="数据源类型"
         >
           <div className="flex items-center gap-1.5">
-            <RadioGroupItem value="static" aria-label="静态数据" id="datasource-type-static" />
-            <label htmlFor="datasource-type-static" className="text-xs text-foreground">
+            <RadioGroupItem value="static" aria-label="静态数据" id={staticRadioId} />
+            <label htmlFor={staticRadioId} className="text-xs text-foreground">
               静态数据
             </label>
           </div>
           <div className="flex items-center gap-1.5">
-            <RadioGroupItem value="api" aria-label="API" id="datasource-type-api" />
-            <label htmlFor="datasource-type-api" className="text-xs text-foreground">
+            <RadioGroupItem value="api" aria-label="API" id={apiRadioId} />
+            <label htmlFor={apiRadioId} className="text-xs text-foreground">
               API
             </label>
           </div>
           <div className="flex items-center gap-1.5">
-            <RadioGroupItem value="dataset" aria-label="数据集" id="datasource-type-dataset" />
-            <label htmlFor="datasource-type-dataset" className="text-xs text-foreground">
+            <RadioGroupItem value="dataset" aria-label="数据集" id={datasetRadioId} />
+            <label htmlFor={datasetRadioId} className="text-xs text-foreground">
               数据集
             </label>
           </div>

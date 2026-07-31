@@ -13,6 +13,7 @@
     "src/**/*.tsx",
     "test/**/*.ts",
     "test/**/*.tsx",
+    "types/**/*.d.ts",
     "scripts/**/*.mjs",
     "runtime-plugin.ts",
     "vite.config.ts",

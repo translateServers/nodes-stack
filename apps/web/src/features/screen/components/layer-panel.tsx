@@ -311,22 +311,20 @@ function InlineRenameInput({
   onCancel: () => void;
 }) {
   const cancelledRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const commit = () => {
     if (cancelledRef.current) {
       cancelledRef.current = false;
       return;
     }
-    const input = document.getElementById(
-      `layer-rename-input-${component.id}`,
-    ) as HTMLInputElement | null;
-    const value = input?.value ?? '';
+    const value = inputRef.current?.value ?? '';
     onCommit(value);
   };
 
   return (
     <Input
-      id={`layer-rename-input-${component.id}`}
+      ref={inputRef}
       type="text"
       defaultValue={component.name}
       autoFocus
