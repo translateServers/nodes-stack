@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { screenEditorRuntimePlugin } from './runtime-plugin';
 
 export default defineConfig({
+  plugins: [screenEditorRuntimePlugin('test')],
   test: {
     globals: true,
     environment: 'jsdom',

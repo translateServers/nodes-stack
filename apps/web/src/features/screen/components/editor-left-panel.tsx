@@ -19,7 +19,13 @@ type LeftPanelTab = 'library' | 'layers';
 // 性能优化：memo 化左侧面板。该组件不接收外部 props，ScreenEditor 重渲染时
 // （如选中态变化、视口状态变化）完全跳过左侧面板子树（含 ComponentLibrary、
 // LayerPanel），避免不必要的重渲染。
-export const EditorLeftPanel = memo(function EditorLeftPanel() {
+interface EditorLeftPanelProps {
+  readonly?: boolean;
+}
+
+export const EditorLeftPanel = memo(function EditorLeftPanel({
+  readonly = false,
+}: EditorLeftPanelProps) {
   const preferenceNamespace = useScreenEditorPreferenceNamespace();
   const [tab, setTab] = useState<LeftPanelTab>('library');
   const [collapsed, setCollapsed] = useState(false);
@@ -89,10 +95,18 @@ export const EditorLeftPanel = memo(function EditorLeftPanel() {
           </ToolbarButton>
         </div>
         <TabsContent value="library" className="min-h-0 flex-1 overflow-y-auto">
-          {tab === 'library' && <ComponentLibrary />}
+          {tab === 'library' && (
+            <div className={readonly ? 'pointer-events-none opacity-60' : undefined}>
+              <ComponentLibrary />
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="layers" className="min-h-0 flex-1 overflow-y-auto">
-          {tab === 'layers' && <LayerPanel />}
+          {tab === 'layers' && (
+            <div className={readonly ? 'pointer-events-none opacity-80' : undefined}>
+              <LayerPanel />
+            </div>
+          )}
         </TabsContent>
       </Tabs>
       <PanelResizeHandle

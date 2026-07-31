@@ -50,7 +50,11 @@ export function useResizablePanel({
   );
   const [isDragging, setIsDragging] = useState(false);
   // 拖拽起点：初始指针 x 与初始宽度
-  const dragStartRef = useRef<{ pointerX: number; width: number } | null>(null);
+  const dragStartRef = useRef<{
+    ownerWindow: Window;
+    pointerX: number;
+    width: number;
+  } | null>(null);
 
   // P0 优化：render 期同步 width 到 ref，handlePointerDown 依赖空数组稳定
   // advanced-event-handler-refs：避免 handlePointerDown 依赖 width 频繁重建
@@ -76,7 +80,9 @@ export function useResizablePanel({
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    dragStartRef.current = { pointerX: e.clientX, width: widthRef.current };
+    const ownerWindow = e.currentTarget.ownerDocument.defaultView;
+    if (ownerWindow === null) return;
+    dragStartRef.current = { ownerWindow, pointerX: e.clientX, width: widthRef.current };
     setIsDragging(true);
   }, []);
 
@@ -106,11 +112,12 @@ export function useResizablePanel({
     };
 
     // client-passive-event-listeners：拖拽场景不调用 preventDefault，passive 提升滚动性能
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    window.addEventListener('pointerup', handlePointerUp, { passive: true });
+    const ownerWindow = dragStartRef.current?.ownerWindow ?? window;
+    ownerWindow.addEventListener('pointermove', handlePointerMove, { passive: true });
+    ownerWindow.addEventListener('pointerup', handlePointerUp, { passive: true });
     return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
+      ownerWindow.removeEventListener('pointermove', handlePointerMove);
+      ownerWindow.removeEventListener('pointerup', handlePointerUp);
     };
   }, [isDragging, clamp, direction, persistWidth]);
 

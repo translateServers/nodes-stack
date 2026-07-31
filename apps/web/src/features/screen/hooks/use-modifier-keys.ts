@@ -26,9 +26,14 @@ import { useHotkeys } from 'react-hotkeys-hook';
  * react-hotkeys-hook 的 enableOnFormTags 选项只覆盖 input/textarea/select，
  * 不覆盖 contenteditable 元素，因此需要此函数补充判断。
  */
-export function isFormElementFocused(): boolean {
-  if (typeof document === 'undefined') return false;
-  const el = document.activeElement;
+export function isFormElementFocused(root?: Document | ShadowRoot): boolean {
+  const fallbackDocument = typeof document === 'undefined' ? undefined : document;
+  let el = (root ?? fallbackDocument)?.activeElement ?? null;
+  while (el instanceof HTMLElement) {
+    const nestedActiveElement = el.shadowRoot?.activeElement;
+    if (nestedActiveElement === null || nestedActiveElement === undefined) break;
+    el = nestedActiveElement;
+  }
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
   return (
@@ -52,7 +57,13 @@ export interface ModifierKeysApi {
   ctrlHeld: boolean;
 }
 
-export function useModifierKeys(): ModifierKeysApi {
+interface UseModifierKeysOptions {
+  focusRoot?: Document | ShadowRoot;
+  isActive?: () => boolean;
+  ownerWindow?: Window;
+}
+
+export function useModifierKeys(options: UseModifierKeysOptions = {}): ModifierKeysApi {
   const spaceRef = useRef(false);
   const shiftRef = useRef(false);
   const altRef = useRef(false);
@@ -75,9 +86,12 @@ export function useModifierKeys(): ModifierKeysApi {
       setAltHeld(false);
       setCtrlHeld(false);
     };
-    window.addEventListener('blur', handleBlur);
-    return () => window.removeEventListener('blur', handleBlur);
-  }, []);
+    const ownerWindow = options.ownerWindow ?? window;
+    ownerWindow.addEventListener('blur', handleBlur);
+    return () => ownerWindow.removeEventListener('blur', handleBlur);
+  }, [options.ownerWindow]);
+
+  const enabled = () => options.isActive?.() ?? true;
 
   // Space：keydown 压栈，keyup 出栈
   // 在表单/contenteditable 中不阻止默认行为，让用户正常输入空格；
@@ -86,12 +100,12 @@ export function useModifierKeys(): ModifierKeysApi {
   useHotkeys(
     'space',
     (e) => {
-      if (isFormElementFocused()) return;
+      if (isFormElementFocused(options.focusRoot)) return;
       e.preventDefault();
       spaceRef.current = true;
       setSpaceHeld(true);
     },
-    { keydown: true, keyup: false, enableOnFormTags: false },
+    { keydown: true, keyup: false, enableOnFormTags: false, enabled },
   );
   useHotkeys(
     'space',
@@ -99,7 +113,7 @@ export function useModifierKeys(): ModifierKeysApi {
       spaceRef.current = false;
       setSpaceHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false },
+    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
   );
 
   // Shift
@@ -109,7 +123,7 @@ export function useModifierKeys(): ModifierKeysApi {
       shiftRef.current = true;
       setShiftHeld(true);
     },
-    { keydown: true, keyup: false, enableOnFormTags: false },
+    { keydown: true, keyup: false, enableOnFormTags: false, enabled },
   );
   useHotkeys(
     'shift',
@@ -117,7 +131,7 @@ export function useModifierKeys(): ModifierKeysApi {
       shiftRef.current = false;
       setShiftHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false },
+    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
   );
 
   // Alt
@@ -127,7 +141,7 @@ export function useModifierKeys(): ModifierKeysApi {
       altRef.current = true;
       setAltHeld(true);
     },
-    { keydown: true, keyup: false, enableOnFormTags: false },
+    { keydown: true, keyup: false, enableOnFormTags: false, enabled },
   );
   useHotkeys(
     'alt',
@@ -135,7 +149,7 @@ export function useModifierKeys(): ModifierKeysApi {
       altRef.current = false;
       setAltHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false },
+    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
   );
 
   // Ctrl（Mac 上 cmd 由 mod 处理，这里单独管 ctrl）
@@ -145,7 +159,7 @@ export function useModifierKeys(): ModifierKeysApi {
       ctrlRef.current = true;
       setCtrlHeld(true);
     },
-    { keydown: true, keyup: false, enableOnFormTags: false },
+    { keydown: true, keyup: false, enableOnFormTags: false, enabled },
   );
   useHotkeys(
     'ctrl',
@@ -153,7 +167,7 @@ export function useModifierKeys(): ModifierKeysApi {
       ctrlRef.current = false;
       setCtrlHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false },
+    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
   );
 
   return {

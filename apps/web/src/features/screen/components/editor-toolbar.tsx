@@ -195,7 +195,7 @@ function ZoomControls({
 }
 
 interface EditorToolbarProps {
-  onSave: () => void;
+  onSave?: () => void;
   onPublish?: () => void;
   onPreview: () => void;
   onZoomIn: () => void;
@@ -293,16 +293,18 @@ export const EditorToolbar = memo(function EditorToolbar({
           <Eye />
           预览
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onSave}
-          disabled={isSaving}
-          className="cursor-pointer"
-        >
-          {isSaving ? <LoaderCircle className="animate-spin" /> : <Save />}
-          保存
-        </Button>
+        {onSave !== undefined && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onSave}
+            disabled={isSaving}
+            className="cursor-pointer"
+          >
+            {isSaving ? <LoaderCircle className="animate-spin" /> : <Save />}
+            保存
+          </Button>
+        )}
         {onPublish !== undefined && (
           <Button
             size="sm"

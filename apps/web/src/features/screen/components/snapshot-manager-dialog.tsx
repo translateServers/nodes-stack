@@ -34,6 +34,7 @@ interface SnapshotManagerDialogProps {
   adapter?: ScreenSnapshotHostAdapter;
   hostController?: ScreenHostController;
   onConflict?: () => void;
+  readonly?: boolean;
 }
 
 type SnapshotOperation = 'list' | 'create' | 'restore' | 'remove' | 'clear';
@@ -56,6 +57,7 @@ export function SnapshotManagerDialog({
   adapter,
   hostController,
   onConflict,
+  readonly = false,
 }: SnapshotManagerDialogProps) {
   const storeProject = useScreenEditorStore((s) => s.project);
   const loadProject = useScreenEditorStore((s) => s.loadProject);
@@ -296,30 +298,32 @@ export function SnapshotManagerDialog({
             <DialogDescription>快照由当前宿主提供，可用于保存和恢复编辑状态。</DialogDescription>
           </DialogHeader>
 
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => void handleCreate()}
-              disabled={!storeProject || isBusy}
-            >
-              {operation === 'create' ? (
-                <LoaderCircle className="size-3.5 animate-spin" />
-              ) : (
-                <Plus className="size-3.5" />
-              )}
-              创建快照
-            </Button>
-            <div className="flex-1" />
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowClearConfirm(true)}
-              disabled={snapshots.length === 0 || isBusy}
-            >
-              <Trash2 className="size-3.5" />
-              清空全部
-            </Button>
-          </div>
+          {!readonly && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => void handleCreate()}
+                disabled={!storeProject || isBusy}
+              >
+                {operation === 'create' ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <Plus className="size-3.5" />
+                )}
+                创建快照
+              </Button>
+              <div className="flex-1" />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowClearConfirm(true)}
+                disabled={snapshots.length === 0 || isBusy}
+              >
+                <Trash2 className="size-3.5" />
+                清空全部
+              </Button>
+            </div>
+          )}
 
           <Separator />
 
@@ -349,24 +353,28 @@ export function SnapshotManagerDialog({
                       {snap.componentCount} 个组件 · {snap.canvasWidth}×{snap.canvasHeight}
                     </div>
                   </div>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="恢复快照"
-                    onClick={() => setPendingRestore(snap)}
-                    disabled={isBusy}
-                  >
-                    <RotateCcw className="size-3.5" />
-                  </Button>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="删除快照"
-                    onClick={() => void handleDelete(snap.id)}
-                    disabled={isBusy}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {!readonly && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="恢复快照"
+                      onClick={() => setPendingRestore(snap)}
+                      disabled={isBusy}
+                    >
+                      <RotateCcw className="size-3.5" />
+                    </Button>
+                  )}
+                  {!readonly && (
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="删除快照"
+                      onClick={() => void handleDelete(snap.id)}
+                      disabled={isBusy}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
                 </div>
               ))
             )}

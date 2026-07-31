@@ -24,6 +24,7 @@ import type { EditorSessionApi } from './use-editor-session';
 import type { ScreenComponent } from '@nebula/shared';
 
 interface KeyboardShortcutsOptions {
+  isActive?: () => boolean;
   onSave: () => void;
   /** 放大画布（Ctrl/Cmd + =） */
   onZoomIn?: () => void;
@@ -53,6 +54,8 @@ interface KeyboardShortcutsOptions {
    * 由弹层自身的快捷键分层接管（Ctrl+Z/Undo、Esc 分层等）。
    */
   suspended?: boolean;
+  readonly?: boolean;
+  focusRoot?: Document | ShadowRoot;
 }
 
 /** 用 ref 包裹外部回调，使 useHotkeys 的 callback 始终调用最新值 */
@@ -86,7 +89,7 @@ function getAllKeys(entry: ShortcutDefinition): string {
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   const editorStore = useScreenEditorStoreApi();
-  const { editorSession, suspended = false } = options;
+  const { editorSession, isActive = () => true, suspended = false } = options;
   const { setTool, pushTemporaryTool, popTemporaryTool, isEditingText, dispatchInteraction } =
     editorSession;
 
@@ -98,10 +101,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
 
   const getStore = useCallback(() => editorStore.getState(), [editorStore]);
   // 任务 5.4：全局作用域 —— 弹层打开时挂起所有快捷键
-  const globalEnabled = useCallback(() => !suspended, [suspended]);
+  const globalEnabled = useCallback(() => isActive() && !suspended, [isActive, suspended]);
   // canvas 作用域：非文本编辑态且非弹层挂起时才触发画布相关快捷键
   // 任务 12.4：isEditingText 唯一来源是会话控制器（派生自交互状态机 'text-editing' 状态）
-  const canvasEnabled = useCallback(() => !isEditingText && !suspended, [isEditingText, suspended]);
+  const canvasEnabled = useCallback(
+    () => isActive() && !isEditingText && !suspended,
+    [isActive, isEditingText, suspended],
+  );
 
   // ===== 文件 =====
   const saveEntry = getShortcutById('save')!;
@@ -594,7 +600,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     getAllKeys(toolHandTempEntry),
     (e) => {
       // contenteditable 等 enableOnFormTags 未覆盖的表单元素中不抢占 Space
-      if (isFormElementFocused()) return;
+      if (isFormElementFocused(options.focusRoot)) return;
       e.preventDefault();
       pushTemporaryTool('hand');
     },
@@ -609,7 +615,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     () => {
       // 在表单元素内按下 Space 时 keydown 已提前返回，
       // keyup 若仍触发则不应 pop（临时工具从未 push），防止状态机栈被破坏
-      if (isFormElementFocused()) return;
+      if (isFormElementFocused(options.focusRoot)) return;
       popTemporaryTool('hand');
     },
     {

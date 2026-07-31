@@ -47,7 +47,11 @@ export interface ToolStateMachineApi {
  * 这里用 state + ref 双轨：ref 在回调中读取避免闭包陈旧，
  * state 触发 UI 重渲染。
  */
-export function useToolStateMachine(): ToolStateMachineApi {
+interface UseToolStateMachineOptions {
+  ownerWindow?: Window;
+}
+
+export function useToolStateMachine(options: UseToolStateMachineOptions = {}): ToolStateMachineApi {
   const [currentTool, setCurrentTool] = useState<EditorTool>('select');
   const [temporaryTop, setTemporaryTop] = useState<EditorTool | null>(null);
 
@@ -110,11 +114,12 @@ export function useToolStateMachine(): ToolStateMachineApi {
     const handleBlur = () => {
       clearTemporaryTools();
     };
-    window.addEventListener('blur', handleBlur);
+    const ownerWindow = options.ownerWindow ?? window;
+    ownerWindow.addEventListener('blur', handleBlur);
     return () => {
-      window.removeEventListener('blur', handleBlur);
+      ownerWindow.removeEventListener('blur', handleBlur);
     };
-  }, [clearTemporaryTools]);
+  }, [clearTemporaryTools, options.ownerWindow]);
 
   const activeTool = useMemo<EditorTool>(
     () => temporaryTop ?? currentTool,

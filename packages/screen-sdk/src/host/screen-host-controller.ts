@@ -328,7 +328,7 @@ export class ScreenHostController {
       this.currentEnvelope = structuredClone(envelope);
       this.emitDirtyIfChanged();
       this.dispatch('nebula-publish-success', { projectId: binding.projectId, envelope });
-      return envelope;
+      return structuredClone(envelope);
     });
   }
 
@@ -398,7 +398,7 @@ export class ScreenHostController {
         operation: 'import',
         envelope,
       });
-      return envelope;
+      return structuredClone(envelope);
     });
   }
 
@@ -495,7 +495,7 @@ export class ScreenHostController {
         operation: 'snapshot-restore',
         envelope,
       });
-      return envelope;
+      return structuredClone(envelope);
     });
   }
 
@@ -718,7 +718,7 @@ export class ScreenHostController {
       this.currentEnvelope = structuredClone(envelope);
       this.emitDirtyIfChanged();
       this.dispatch('nebula-save-success', { projectId: binding.projectId, envelope });
-      return envelope;
+      return structuredClone(envelope);
     });
   }
 

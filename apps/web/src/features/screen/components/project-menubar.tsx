@@ -60,7 +60,7 @@ import { useScreenEditorEnvironment } from './screen-editor-environment';
 
 interface ProjectMenubarProps {
   /** 文件级操作回调（在父组件接入 mutation） */
-  onSave: () => void;
+  onSave?: () => void;
   onPublish?: () => void;
   onPreview: () => void;
   onShowImport?: () => void;
@@ -171,9 +171,11 @@ export const ProjectMenubar = memo(function ProjectMenubar({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
           <DropdownMenuGroup>
-            <DropdownMenuItem onSelect={onSave} disabled={isSaving}>
-              <MenuItemContent icon={Save} label="保存项目" shortcutId="save" />
-            </DropdownMenuItem>
+            {onSave !== undefined && (
+              <DropdownMenuItem onSelect={onSave} disabled={isSaving}>
+                <MenuItemContent icon={Save} label="保存项目" shortcutId="save" />
+              </DropdownMenuItem>
+            )}
             {onPublish !== undefined && (
               <DropdownMenuItem onSelect={onPublish} disabled={isPublishing}>
                 <Upload className="size-4 text-muted-foreground" />

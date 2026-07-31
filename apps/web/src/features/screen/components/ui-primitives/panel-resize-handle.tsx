@@ -5,7 +5,7 @@
  * 拖拽期间给 body 加 col-resize 光标并禁用文本选择。
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { cn } from '@nebula/screen-sdk';
 
 interface PanelResizeHandleProps {
@@ -20,19 +20,23 @@ export function PanelResizeHandle({
   onPointerDown,
   onDoubleClick,
 }: PanelResizeHandleProps) {
+  const handleRef = useRef<HTMLDivElement>(null);
   // 拖拽期间全局光标 + 禁用文本选择
   useEffect(() => {
     if (!isDragging) return;
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+    const body = handleRef.current?.ownerDocument.body;
+    if (body === undefined) return;
+    body.style.cursor = 'col-resize';
+    body.style.userSelect = 'none';
     return () => {
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      body.style.cursor = '';
+      body.style.userSelect = '';
     };
   }, [isDragging]);
 
   return (
     <div
+      ref={handleRef}
       role="separator"
       aria-orientation="vertical"
       onPointerDown={onPointerDown}

@@ -354,7 +354,13 @@ export interface InteractionStateMachineApi {
  * 暂未接入画布（仅提供 API），阶段 2 后续任务会逐步替换 screen-canvas.tsx
  * 中散落的 isPanning / isDragging 等局部状态。
  */
-export function useInteractionStateMachine(): InteractionStateMachineApi {
+interface UseInteractionStateMachineOptions {
+  ownerWindow?: Window;
+}
+
+export function useInteractionStateMachine(
+  options: UseInteractionStateMachineOptions = {},
+): InteractionStateMachineApi {
   const [state, setState] = useState<InteractionState>('idle');
 
   const dispatch = useCallback((event: InteractionEvent, payload?: InteractionEventPayload) => {
@@ -372,11 +378,12 @@ export function useInteractionStateMachine(): InteractionStateMachineApi {
     const handleBlur = () => {
       setState((prev) => transition(prev, 'window-blur'));
     };
-    window.addEventListener('blur', handleBlur);
+    const ownerWindow = options.ownerWindow ?? window;
+    ownerWindow.addEventListener('blur', handleBlur);
     return () => {
-      window.removeEventListener('blur', handleBlur);
+      ownerWindow.removeEventListener('blur', handleBlur);
     };
-  }, []);
+  }, [options.ownerWindow]);
 
   /**
    * 任务 3.8：开发环境诊断 - 组件卸载时检测交互状态是否恢复到 idle。

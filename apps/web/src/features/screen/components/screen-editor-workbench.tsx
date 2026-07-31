@@ -14,12 +14,15 @@ import {
 } from '@nebula/screen-sdk';
 import {
   lazy,
+  forwardRef,
   Suspense,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
+  type Ref,
   type RefObject,
 } from 'react';
 import type { ScreenSnapshotHostAdapter } from '../adapters/screen-editor-host-adapter';
@@ -110,20 +113,35 @@ export type { ScreenEditorWorkbenchEnvelope } from '../lib/screen-editor-workben
 export interface ScreenEditorWorkbenchProps {
   operations: ScreenEditorWorkbenchOperationController;
   capabilityProfile?: ScreenEditorCapabilityProfile;
+  isActive?: () => boolean;
   portalRoot?: HTMLElement | null;
   project: ScreenEditorWorkbenchEnvelope | null | undefined;
+  readonly?: boolean;
   setTheme: (theme: ScreenEditorTheme) => void;
   theme: ScreenEditorTheme;
 }
 
-export function ScreenEditorWorkbench({
-  operations,
-  portalRoot = null,
-  project,
-  setTheme,
-  theme,
-  capabilityProfile = 'static',
-}: ScreenEditorWorkbenchProps) {
+export interface ScreenEditorWorkbenchHandle {
+  fitToScreen(): void;
+  focusComponent(componentId: string): boolean;
+}
+
+export const ScreenEditorWorkbench = forwardRef<
+  ScreenEditorWorkbenchHandle,
+  ScreenEditorWorkbenchProps
+>(function ScreenEditorWorkbench(
+  {
+    operations,
+    isActive = () => true,
+    portalRoot = null,
+    project,
+    readonly = false,
+    setTheme,
+    theme,
+    capabilityProfile = 'static',
+  },
+  ref,
+) {
   const eventTargetRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     operations.host?.controller.setEventTarget(eventTargetRef.current ?? undefined);
@@ -148,7 +166,9 @@ export function ScreenEditorWorkbench({
     <ScreenSdkPortalRootProvider portalRoot={portalRoot}>
       <ScreenEditorEnvironmentProvider
         capabilityProfile={capabilityProfile}
+        isActive={isActive}
         portalRoot={portalRoot}
+        readonly={readonly}
         requestNavigate={requestNavigate}
         setTheme={setTheme}
         theme={theme}
@@ -157,6 +177,7 @@ export function ScreenEditorWorkbench({
           <div ref={eventTargetRef} className="h-full min-h-0 w-full">
             <ScreenEditorWorkbenchContent
               eventTarget={eventTargetRef}
+              imperativeRef={ref}
               operations={operations}
               project={project}
             />
@@ -165,23 +186,25 @@ export function ScreenEditorWorkbench({
       </ScreenEditorEnvironmentProvider>
     </ScreenSdkPortalRootProvider>
   );
-}
+});
 
 interface ScreenEditorWorkbenchContentProps {
   eventTarget: RefObject<HTMLDivElement | null>;
+  imperativeRef: Ref<ScreenEditorWorkbenchHandle>;
   operations: ScreenEditorWorkbenchOperationController;
   project: ScreenEditorWorkbenchEnvelope | null | undefined;
 }
 
 function ScreenEditorWorkbenchContent({
   eventTarget,
+  imperativeRef,
   operations,
   project,
 }: ScreenEditorWorkbenchContentProps) {
   const store = useScreenEditorStoreApi();
   const debugHandle = useScreenEditorDebugHandle();
   const { notify } = useScreenEditorNotifications();
-  const { capabilityProfile } = useScreenEditorEnvironment();
+  const { capabilityProfile, isActive, portalRoot, readonly } = useScreenEditorEnvironment();
   const loadProject = useScreenEditorStore((state) => state.loadProject);
   const loadedProject = useScreenEditorStore((state) => state.project);
   const canvasConfig = useScreenEditorStore((state) => state.project?.canvas);
@@ -215,8 +238,9 @@ function ScreenEditorWorkbenchContent({
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishDiagnostics, setPublishDiagnostics] = useState<BaseDiagnostic[]>([]);
   const { flashingComponentId, flashComponent } = useCanvasFlash();
-  const toolStateMachine = useToolStateMachine();
-  const interactionStateMachine = useInteractionStateMachine();
+  const ownerWindow = portalRoot?.ownerDocument.defaultView ?? undefined;
+  const toolStateMachine = useToolStateMachine({ ownerWindow });
+  const interactionStateMachine = useInteractionStateMachine({ ownerWindow });
   const editorSession = useEditorSession({ toolStateMachine, interactionStateMachine });
 
   useEffect(() => {
@@ -413,7 +437,7 @@ function ScreenEditorWorkbenchContent({
     if (operations.host !== undefined) {
       void operations.host.controller.exportProject().then(
         (file) => {
-          downloadScreenExportFile(file);
+          downloadScreenExportFile(file, eventTarget.current?.ownerDocument);
           notify('success', `已导出 ${file.fileName}`);
         },
         (error: unknown) => notify('error', toScreenPublicError(error).message),
@@ -488,15 +512,38 @@ function ScreenEditorWorkbenchContent({
     });
   }, [setCanvasScaleAndOffset, store]);
 
+  useImperativeHandle(
+    imperativeRef,
+    () => ({
+      fitToScreen: handleFitToScreen,
+      focusComponent: (componentId) => {
+        const component = store
+          .getState()
+          .project?.components.find((candidate) => candidate.id === componentId);
+        if (component === undefined) return false;
+        store.getState().selectComponent(componentId);
+        const element = Array.from(
+          eventTarget.current?.querySelectorAll<HTMLElement>('[data-component-id]') ?? [],
+        ).find((candidate) => candidate.dataset['componentId'] === componentId);
+        element?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        return true;
+      },
+    }),
+    [eventTarget, handleFitToScreen, store],
+  );
+
   const hostState = operations.host?.state;
   const hostMutationPending = (hostState?.pendingMutations.length ?? 0) > 0;
   useKeyboardShortcuts({
-    onSave: handleSave,
+    onSave: readonly ? () => undefined : handleSave,
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
     onFitToScreen: handleFitToScreen,
     onShowHelp: () => setShowHelp(true),
     editorSession,
+    isActive,
+    readonly,
+    focusRoot: portalRoot?.getRootNode() as Document | ShadowRoot | undefined,
     suspended: showEventBlueprint || blueprintSheetOpen || showCodeEditor || hostMutationPending,
   });
 
@@ -550,11 +597,14 @@ function ScreenEditorWorkbenchContent({
 
   return (
     <TooltipProvider>
-      <div className="relative flex h-full min-h-0 w-full flex-col bg-background text-foreground">
+      <div
+        className="relative flex h-full min-h-0 w-full flex-col bg-background text-foreground"
+        data-nebula-readonly={readonly ? '' : undefined}
+      >
         {showToolbar && (
           <EditorToolbar
-            onSave={handleSave}
-            onPublish={canPublish === true ? handlePublish : undefined}
+            onSave={readonly ? undefined : handleSave}
+            onPublish={!readonly && canPublish === true ? handlePublish : undefined}
             onPreview={handlePreview}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
@@ -564,7 +614,7 @@ function ScreenEditorWorkbenchContent({
             lastSavedAt={lastSavedAt}
             editorSession={editorSession}
             menubarProps={{
-              onShowImport: canImport === true ? () => setShowImport(true) : undefined,
+              onShowImport: !readonly && canImport === true ? () => setShowImport(true) : undefined,
               onExport: canExport === true ? handleExport : undefined,
               onShowSnapshotManager:
                 canUseSnapshots === true ? () => setShowSnapshotManager(true) : undefined,
@@ -577,7 +627,7 @@ function ScreenEditorWorkbenchContent({
         )}
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          {showPanels && <EditorLeftPanel />}
+          {showPanels && <EditorLeftPanel readonly={readonly} />}
           <CanvasContextMenu
             onShowCanvasSettings={() => setShowCanvasSettings(true)}
             onZoomIn={handleZoomIn}
@@ -605,6 +655,7 @@ function ScreenEditorWorkbenchContent({
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   editorSession={editorSession}
+                  readonly={readonly}
                   rulersRef={rulersRef}
                 />
               </div>
@@ -630,7 +681,7 @@ function ScreenEditorWorkbenchContent({
               )}
             </div>
           </CanvasContextMenu>
-          {showPanels && <EditorRightPanel />}
+          {showPanels && <EditorRightPanel readonly={readonly} />}
         </div>
         {showPanels && <CanvasStatusBar editorSession={editorSession} />}
         {hostState?.phase === 'loading' && hostState.retainedProject && (
@@ -661,6 +712,7 @@ function ScreenEditorWorkbenchContent({
           onOpenChange={setShowSnapshotManager}
           projectId={operations.projectId}
           onConflict={() => setShowConflictDialog(true)}
+          readonly={readonly}
           {...(operations.snapshots === undefined ? {} : { adapter: operations.snapshots })}
           {...(operations.host === undefined ? {} : { hostController: operations.host.controller })}
         />

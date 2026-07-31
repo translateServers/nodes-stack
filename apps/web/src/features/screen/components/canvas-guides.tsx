@@ -227,11 +227,12 @@ export function CanvasGuides({ containerRef, canvasWidth, canvasHeight }: Canvas
       setHoverPos(null);
     };
 
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
+    const ownerWindow = containerRef.current?.ownerDocument.defaultView ?? window;
+    ownerWindow.addEventListener('pointermove', handleMove);
+    ownerWindow.addEventListener('pointerup', handleUp);
     return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
+      ownerWindow.removeEventListener('pointermove', handleMove);
+      ownerWindow.removeEventListener('pointerup', handleUp);
     };
   }, [
     dragging,

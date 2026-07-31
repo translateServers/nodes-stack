@@ -69,6 +69,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from '@nebula/screen-sdk';
+import { useScreenEditorEnvironment } from './screen-editor-environment';
 
 interface CanvasContextMenuProps {
   onShowCanvasSettings: () => void;
@@ -351,6 +352,8 @@ export function CanvasContextMenu({
   interactionState,
 }: CanvasContextMenuProps) {
   const editorStore = useScreenEditorStoreApi();
+  const { portalRoot } = useScreenEditorEnvironment();
+  const eventRoot = portalRoot?.getRootNode() as Document | ShadowRoot | undefined;
   const [mode, setMode] = useState<'component' | 'canvas'>('canvas');
   const [open, setOpen] = useState(false);
   const [menuKey, setMenuKey] = useState(0);
@@ -403,7 +406,7 @@ export function CanvasContextMenu({
       // 回退到基于坐标的 hit-test 找到真实组件。
       const compId =
         getComponentIdFromElement(e.target as HTMLElement) ??
-        findComponentIdAtPoint(e.clientX, e.clientY);
+        findComponentIdAtPoint(e.clientX, e.clientY, eventRoot);
       const currentSelected = editorStore.getState().selectedComponentIds;
 
       if (compId) {
@@ -416,7 +419,7 @@ export function CanvasContextMenu({
         setMode('canvas');
       }
     },
-    [selectComponent, clearSelection, editorStore],
+    [selectComponent, clearSelection, editorStore, eventRoot],
   );
 
   // 解决"菜单已打开时再次右键，菜单停留在旧位置/旧mode"的问题。
@@ -457,9 +460,10 @@ export function CanvasContextMenu({
           if (dispatchInteraction) dispatchInteraction('open-context-menu');
         });
       },
+      root: eventRoot,
     });
     return cleanup;
-  }, [dispatchInteraction]);
+  }, [dispatchInteraction, eventRoot]);
 
   const child = (isValidElement(children) ? children : <div>{children}</div>) as ReactElement<{
     onContextMenu?: MouseEventHandler<HTMLDivElement>;

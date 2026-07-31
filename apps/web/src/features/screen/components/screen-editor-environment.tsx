@@ -5,7 +5,9 @@ export type ScreenEditorCapabilityProfile = 'dynamic' | 'static';
 
 interface ScreenEditorEnvironmentValue {
   capabilityProfile: ScreenEditorCapabilityProfile;
+  isActive: () => boolean;
   portalRoot: HTMLElement | null;
+  readonly: boolean;
   requestNavigate: (url: string, target: '_blank' | '_self') => void;
   setTheme: (theme: ScreenEditorTheme) => void;
   theme: ScreenEditorTheme;
@@ -13,21 +15,33 @@ interface ScreenEditorEnvironmentValue {
 
 const ScreenEditorEnvironmentContext = createContext<ScreenEditorEnvironmentValue | null>(null);
 
-interface ScreenEditorEnvironmentProviderProps extends ScreenEditorEnvironmentValue {
+interface ScreenEditorEnvironmentProviderProps
+  extends Omit<ScreenEditorEnvironmentValue, 'isActive' | 'readonly'>,
+    Partial<Pick<ScreenEditorEnvironmentValue, 'isActive' | 'readonly'>> {
   children: ReactNode;
 }
 
 export function ScreenEditorEnvironmentProvider({
   children,
   capabilityProfile,
+  isActive = () => true,
   portalRoot,
+  readonly = false,
   requestNavigate,
   setTheme,
   theme,
 }: ScreenEditorEnvironmentProviderProps) {
   return (
     <ScreenEditorEnvironmentContext.Provider
-      value={{ capabilityProfile, portalRoot, requestNavigate, setTheme, theme }}
+      value={{
+        capabilityProfile,
+        isActive,
+        portalRoot,
+        readonly,
+        requestNavigate,
+        setTheme,
+        theme,
+      }}
     >
       {children}
     </ScreenEditorEnvironmentContext.Provider>

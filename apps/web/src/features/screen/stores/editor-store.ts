@@ -359,6 +359,7 @@ export type ApplyProjectEnvelopeInput =
 
 export interface CreateScreenEditorStoreOptions {
   instanceId?: string;
+  isReadonly?: () => boolean;
   persistPreferences?: boolean;
   preferenceNamespace?: string;
 }
@@ -604,7 +605,7 @@ export function createScreenEditorStore(
     persist: options.persistPreferences ?? true,
   });
   const initialData = createInitialData(preferences.load());
-  return createStore<ScreenEditorState>()(
+  const store = createStore<ScreenEditorState>()(
     devtools(
       (set, get) => ({
         ...initialData,
@@ -1685,4 +1686,110 @@ export function createScreenEditorStore(
       { name: `ScreenEditorStore:${options.instanceId ?? 'anonymous'}` },
     ),
   );
+  const isReadonly = options.isReadonly;
+  if (isReadonly === undefined) return store;
+
+  const actions = store.getState();
+  store.setState({
+    renameProject: (name) => {
+      if (!isReadonly()) actions.renameProject(name);
+    },
+    addComponent: (component) => {
+      if (!isReadonly()) actions.addComponent(component);
+    },
+    renameComponent: (id, name) => {
+      if (!isReadonly()) actions.renameComponent(id, name);
+    },
+    updateComponent: (id, updates) => {
+      if (!isReadonly()) actions.updateComponent(id, updates);
+    },
+    updateComponentsBatch: (updates) => {
+      if (!isReadonly()) actions.updateComponentsBatch(updates);
+    },
+    removeComponent: (id) => {
+      if (!isReadonly()) actions.removeComponent(id);
+    },
+    removeSelectedComponents: () => {
+      if (!isReadonly()) actions.removeSelectedComponents();
+    },
+    updateCanvas: (updates) => {
+      if (!isReadonly()) actions.updateCanvas(updates);
+    },
+    updateBlueprint: (blueprint) => {
+      if (!isReadonly()) actions.updateBlueprint(blueprint);
+    },
+    beginBlueprintGesture: () => {
+      if (!isReadonly()) actions.beginBlueprintGesture();
+    },
+    endBlueprintGesture: () => {
+      if (!isReadonly()) actions.endBlueprintGesture();
+    },
+    addGlobalVariable: (variable) => {
+      if (!isReadonly()) actions.addGlobalVariable(variable);
+    },
+    updateGlobalVariable: (id, updates) => {
+      if (!isReadonly()) actions.updateGlobalVariable(id, updates);
+    },
+    removeGlobalVariable: (id) => {
+      if (!isReadonly()) actions.removeGlobalVariable(id);
+    },
+    reorderComponent: (id, newZIndex) => {
+      if (!isReadonly()) actions.reorderComponent(id, newZIndex);
+    },
+    reorderLayerToIndex: (id, toIndex) => {
+      if (!isReadonly()) actions.reorderLayerToIndex(id, toIndex);
+    },
+    reorderToTop: (id) => {
+      if (!isReadonly()) actions.reorderToTop(id);
+    },
+    reorderToBottom: (id) => {
+      if (!isReadonly()) actions.reorderToBottom(id);
+    },
+    duplicateSelected: () => {
+      if (!isReadonly()) actions.duplicateSelected();
+    },
+    duplicateSelectedToPosition: (x, y) => {
+      if (!isReadonly()) actions.duplicateSelectedToPosition(x, y);
+    },
+    adjustBorderWidth: (delta) => {
+      if (!isReadonly()) actions.adjustBorderWidth(delta);
+    },
+    nudgeSelected: (dx, dy) => {
+      if (!isReadonly()) actions.nudgeSelected(dx, dy);
+    },
+    setLocked: (ids, locked) => {
+      if (!isReadonly()) actions.setLocked(ids, locked);
+    },
+    setHidden: (ids, hidden) => {
+      if (!isReadonly()) actions.setHidden(ids, hidden);
+    },
+    undo: () => {
+      if (!isReadonly()) actions.undo();
+    },
+    redo: () => {
+      if (!isReadonly()) actions.redo();
+    },
+    pasteFromClipboard: () => {
+      if (!isReadonly()) actions.pasteFromClipboard();
+    },
+    alignSelectedHorizontal: (alignment) => {
+      if (!isReadonly()) actions.alignSelectedHorizontal(alignment);
+    },
+    alignSelectedVertical: (alignment) => {
+      if (!isReadonly()) actions.alignSelectedVertical(alignment);
+    },
+    distributeSelectedHorizontal: () => {
+      if (!isReadonly()) actions.distributeSelectedHorizontal();
+    },
+    distributeSelectedVertical: () => {
+      if (!isReadonly()) actions.distributeSelectedVertical();
+    },
+    groupSelected: () => {
+      if (!isReadonly()) actions.groupSelected();
+    },
+    ungroupSelected: () => {
+      if (!isReadonly()) actions.ungroupSelected();
+    },
+  });
+  return store;
 }

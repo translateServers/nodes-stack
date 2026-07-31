@@ -303,6 +303,7 @@ export function ScreenCanvas({
   onDrop,
   onDragOver,
   editorSession,
+  readonly = false,
   rulersRef,
 }: {
   onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -318,6 +319,7 @@ export function ScreenCanvas({
     | 'endTextEditing'
     | 'isEditingText'
   >;
+  readonly?: boolean;
   rulersRef?: React.RefObject<RulersHandle | null>;
 }) {
   const { activeTool, activeCapabilities: capabilities } = editorSession;
@@ -490,7 +492,11 @@ export function ScreenCanvas({
   // spaceRef/spaceHeld 不再被画布消费，保留修饰键 hook 供未来其他用途。
   // altHeld 用于切换 copy 光标（Alt+拖拽复制，适配表 #12），仅在允许拖拽的工具下生效。
   // altRef 用于 onResize/onResizeEnd 实时读取 Alt 状态，实现 PS 风格的即时中心变换切换。
-  const { shiftRef, altRef, shiftHeld, altHeld } = useModifierKeys();
+  const { shiftRef, altRef, shiftHeld, altHeld } = useModifierKeys({
+    focusRoot: editorEnvironment?.portalRoot?.getRootNode() as Document | ShadowRoot | undefined,
+    isActive: editorEnvironment?.isActive,
+    ownerWindow: editorEnvironment?.portalRoot?.ownerDocument.defaultView ?? undefined,
+  });
 
   /**
    * 任务 2.3：按活动工具能力派生 Moveable/Selecto 启用状态。
@@ -504,10 +510,14 @@ export function ScreenCanvas({
    * 无论当前工具是否具备对应能力。
    */
   const interactionCapabilities = deriveCapabilities(interactionMode);
-  const moveableDraggable = interactionCapabilities.canEditCanvas && capabilities.canDrag;
-  const moveableResizable = interactionCapabilities.canEditCanvas && capabilities.canResize;
-  const moveableRotatable = interactionCapabilities.canEditCanvas && capabilities.canRotate;
-  const selectoSelectByClick = interactionCapabilities.canEditCanvas && capabilities.canSelect;
+  const moveableDraggable =
+    !readonly && interactionCapabilities.canEditCanvas && capabilities.canDrag;
+  const moveableResizable =
+    !readonly && interactionCapabilities.canEditCanvas && capabilities.canResize;
+  const moveableRotatable =
+    !readonly && interactionCapabilities.canEditCanvas && capabilities.canRotate;
+  const selectoSelectByClick =
+    !readonly && interactionCapabilities.canEditCanvas && capabilities.canSelect;
 
   /**
    * 任务 2.3：按活动工具派生容器 cursor。
@@ -828,7 +838,7 @@ export function ScreenCanvas({
       dispatchInteraction('start-create');
       let imageResult: ImageFileResult | null;
       try {
-        imageResult = await pickImageFile();
+        imageResult = await pickImageFile(contentRef.current ?? undefined);
       } catch {
         // 文件读取/类型校验失败：取消创建，不入历史
         dispatchInteraction('cancel');
@@ -1955,7 +1965,12 @@ export function ScreenCanvas({
 
             <Selecto
               dragContainer={containerRef.current}
-              selectableTargets={['[data-component-id]']}
+              selectableTargets={[
+                () =>
+                  Array.from(
+                    contentRef.current?.querySelectorAll<HTMLElement>('[data-component-id]') ?? [],
+                  ),
+              ]}
               selectByClick={selectoSelectByClick}
               selectFromInside={false}
               hitRate={0}
@@ -1965,7 +1980,7 @@ export function ScreenCanvas({
               onDragStart={(e) => {
                 // Spec: introduce-canvas-interaction-modes
                 // 交互调试模式下禁止 Selecto 启动框选
-                if (!interactionCapabilities.canEditCanvas) {
+                if (readonly || !interactionCapabilities.canEditCanvas) {
                   e.stop();
                   return;
                 }

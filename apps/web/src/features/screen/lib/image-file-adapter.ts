@@ -64,16 +64,18 @@ export interface ImageFileResult {
  *
  * @returns 用户取消返回 null；否则返回解析后的图片数据
  */
-export function pickImageFile(): Promise<ImageFileResult | null> {
+export function pickImageFile(container?: HTMLElement): Promise<ImageFileResult | null> {
   return new Promise((resolve, reject) => {
-    const input = document.createElement('input');
+    const ownerDocument = container?.ownerDocument ?? document;
+    const ownerWindow = ownerDocument.defaultView ?? window;
+    const input = ownerDocument.createElement('input');
     input.type = 'file';
     input.accept = SUPPORTED_IMAGE_MIME_TYPES.join(',');
     // 隐藏 input，避免影响布局
     input.style.position = 'fixed';
     input.style.left = '-9999px';
     input.style.top = '-9999px';
-    document.body.appendChild(input);
+    (container ?? ownerDocument.body).appendChild(input);
 
     let settled = false;
 
@@ -136,11 +138,11 @@ export function pickImageFile(): Promise<ImageFileResult | null> {
         }
       }, 300);
     };
-    window.addEventListener('focus', handleCancel, { once: true });
+    ownerWindow.addEventListener('focus', handleCancel, { once: true });
 
     function cleanup(): void {
-      window.removeEventListener('focus', handleCancel);
-      document.body.removeChild(input);
+      ownerWindow.removeEventListener('focus', handleCancel);
+      input.remove();
     }
 
     input.click();

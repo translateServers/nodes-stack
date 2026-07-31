@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+@import "@xyflow/react/dist/style.css";
+
+@source "../**/*.{ts,tsx}";
+@source "../../../../apps/web/src/features/screen/**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--nebula-resolved-font-family);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  contain: layout style paint;
+  color-scheme: light;
+}
+
+:host([theme="dark"]) {
+  color-scheme: dark;
+}
+
+[data-nebula-sdk-root],
+[data-nebula-react-root],
+[data-nebula-portal-root] {
+  box-sizing: border-box;
+  font-family: var(--nebula-resolved-font-family);
+}
+
+[data-nebula-sdk-root] {
+  --background: var(--nebula-resolved-background);
+  --foreground: var(--nebula-resolved-foreground);
+  --card: var(--nebula-resolved-surface);
+  --card-foreground: var(--nebula-resolved-foreground);
+  --popover: var(--nebula-resolved-surface);
+  --popover-foreground: var(--nebula-resolved-foreground);
+  --primary: var(--nebula-resolved-primary);
+  --primary-foreground: var(--nebula-resolved-surface);
+  --secondary: var(--nebula-resolved-muted);
+  --secondary-foreground: var(--nebula-resolved-foreground);
+  --muted: var(--nebula-resolved-muted);
+  --muted-foreground: color-mix(in oklch, var(--nebula-resolved-foreground) 58%, transparent);
+  --accent: var(--nebula-resolved-muted);
+  --accent-foreground: var(--nebula-resolved-foreground);
+  --destructive: var(--nebula-resolved-danger);
+  --border: var(--nebula-resolved-border);
+  --input: var(--nebula-resolved-border);
+  --ring: var(--nebula-resolved-primary);
+  --radius: var(--nebula-resolved-radius);
+  --sidebar: var(--nebula-resolved-surface);
+  --sidebar-foreground: var(--nebula-resolved-foreground);
+  --sidebar-primary: var(--nebula-resolved-primary);
+  --sidebar-primary-foreground: var(--nebula-resolved-surface);
+  --sidebar-accent: var(--nebula-resolved-muted);
+  --sidebar-accent-foreground: var(--nebula-resolved-foreground);
+  --sidebar-border: var(--nebula-resolved-border);
+  --sidebar-ring: var(--nebula-resolved-primary);
+  --chart-1: oklch(0.75 0.18 290);
+  --chart-2: oklch(0.68 0.22 290);
+  --chart-3: oklch(0.6 0.25 290);
+  --chart-4: oklch(0.52 0.28 290);
+  --chart-5: oklch(0.44 0.3 290);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+[data-nebula-sdk-root] *,
+[data-nebula-sdk-root] *::before,
+[data-nebula-sdk-root] *::after {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+[data-nebula-react-root] {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+[data-nebula-portal-root] {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+[data-nebula-portal-root] > * {
+  pointer-events: auto;
+}
+
+[data-nebula-size-warning] {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 120;
+  max-width: min(360px, calc(100% - 24px));
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[data-nebula-size-warning][hidden] {
+  display: none;
+}
+
+[data-nebula-sdk-root] {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 50%, transparent) transparent;
+}
+
+[data-nebula-sdk-root] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+[data-nebula-sdk-root] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-nebula-sdk-root] ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  background-color: color-mix(in oklch, var(--muted-foreground) 50%, transparent);
+  background-clip: padding-box;
+}
+
+.react-flow__handle.blueprint-anchor-snap-target {
+  background-color: rgb(96 165 250) !important;
+  box-shadow:
+    0 0 0 2px rgb(59 130 246 / 90%),
+    0 0 8px 2px rgb(59 130 246 / 50%);
+}
+
+.nebula-bar-chart {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}

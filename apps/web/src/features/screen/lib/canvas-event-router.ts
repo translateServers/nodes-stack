@@ -106,8 +106,26 @@ export function getComponentIdFromElement(el: HTMLElement | null): string | null
  * @param clientY - 鼠标 client 坐标 Y
  * @returns 命中的组件 ID；若鼠标下方仅有画布空白则返回 null
  */
-export function findComponentIdAtPoint(clientX: number, clientY: number): string | null {
-  const elements = document.elementsFromPoint(clientX, clientY);
+type CanvasEventRoot = Document | ShadowRoot;
+
+function getOwnerDocument(root: CanvasEventRoot): Document {
+  return root instanceof Document ? root : root.ownerDocument;
+}
+
+function getElementsFromPoint(root: CanvasEventRoot, x: number, y: number): Element[] {
+  if ('elementsFromPoint' in root && typeof root.elementsFromPoint === 'function') {
+    return root.elementsFromPoint(x, y);
+  }
+  const elements = getOwnerDocument(root).elementsFromPoint(x, y);
+  return root instanceof Document ? elements : elements.filter((element) => root.contains(element));
+}
+
+export function findComponentIdAtPoint(
+  clientX: number,
+  clientY: number,
+  root: CanvasEventRoot = document,
+): string | null {
+  const elements = getElementsFromPoint(root, clientX, clientY);
   for (const el of elements) {
     if (!(el instanceof HTMLElement)) continue;
     if (el.closest('[data-slot="context-menu-content"]')) continue;
@@ -129,11 +147,11 @@ export function findComponentIdAtPoint(clientX: number, clientY: number): string
  * 即使 `modal={false}`，Radix 在某些过渡态仍可能短暂设置 `pointer-events`，
  * 因此在重新派发右键事件前始终调用以兜底。
  */
-function restorePointerEvents(): void {
-  document.body.style.pointerEvents = '';
-  document.documentElement.style.pointerEvents = '';
-  const root = document.getElementById('root');
-  if (root) root.style.pointerEvents = '';
+function restorePointerEvents(root: CanvasEventRoot): void {
+  if (!(root instanceof Document)) return;
+  root.body.style.pointerEvents = '';
+  root.documentElement.style.pointerEvents = '';
+  root.getElementById('root')?.style.removeProperty('pointer-events');
 }
 
 /**
@@ -152,11 +170,17 @@ function restorePointerEvents(): void {
  * @param x - 目标 client 坐标 X
  * @param y - 目标 client 坐标 Y
  */
-export function redistributeContextMenu(x: number, y: number): void {
-  restorePointerEvents();
+export function redistributeContextMenu(
+  x: number,
+  y: number,
+  root: CanvasEventRoot = document,
+): void {
+  restorePointerEvents(root);
+  const ownerDocument = getOwnerDocument(root);
+  const ownerWindow = ownerDocument.defaultView;
 
   // 与 findComponentIdAtPoint 同款跳过规则，找到真实派发目标元素
-  const elements = document.elementsFromPoint(x, y);
+  const elements = getElementsFromPoint(root, x, y);
   let target: Element | null = null;
   for (const el of elements) {
     if (!(el instanceof HTMLElement)) continue;
@@ -166,14 +190,14 @@ export function redistributeContextMenu(x: number, y: number): void {
     target = el;
     break;
   }
-  if (!target) target = document.body;
+  if (!target) target = root instanceof Document ? root.body : root.host;
 
   const common = {
     bubbles: true,
     cancelable: true,
     clientX: x,
     clientY: y,
-    view: window,
+    view: ownerWindow,
     button: 2,
     pointerId: 1,
     isPrimary: true,
@@ -187,7 +211,7 @@ export function redistributeContextMenu(x: number, y: number): void {
       cancelable: true,
       clientX: x,
       clientY: y,
-      view: window,
+      view: ownerWindow,
       button: 2,
       buttons: 2,
     }),
@@ -199,7 +223,7 @@ export function redistributeContextMenu(x: number, y: number): void {
       cancelable: true,
       clientX: x,
       clientY: y,
-      view: window,
+      view: ownerWindow,
       button: 2,
       buttons: 0,
     }),
@@ -210,7 +234,7 @@ export function redistributeContextMenu(x: number, y: number): void {
       cancelable: true,
       clientX: x,
       clientY: y,
-      view: window,
+      view: ownerWindow,
       button: 2,
       buttons: 0,
     }),
@@ -232,6 +256,7 @@ export interface ContextMenuRedistributorCallbacks {
   readonly onMenuKeyBump: () => void;
   /** 在重派发完成后若菜单仍未打开，则重新打开（恢复 open=true） */
   readonly onReopenIfClosed: () => void;
+  readonly root?: CanvasEventRoot;
 }
 
 /**
@@ -258,10 +283,16 @@ export function attachContextMenuRedistributor(
 ): () => void {
   /** 防止重派发的事件再次触发本处理逻辑（无限循环） */
   let isRedistributing = false;
+  const root = callbacks.root ?? document;
+  const ownerWindow = getOwnerDocument(root).defaultView;
+  let firstAnimationFrame: number | undefined;
+  let secondAnimationFrame: number | undefined;
+  let idleCallback: number | undefined;
+  let timeout: number | undefined;
 
   /** 视觉隐藏已存在的菜单 Content（避免重派发期间闪烁） */
   const hideExistingContent = (): void => {
-    const existingContent = document.querySelector('[data-slot="context-menu-content"]');
+    const existingContent = root.querySelector('[data-slot="context-menu-content"]');
     if (existingContent instanceof HTMLElement) {
       existingContent.style.setProperty('animation', 'none', 'important');
       existingContent.style.setProperty('transition', 'none', 'important');
@@ -291,9 +322,9 @@ export function attachContextMenuRedistributor(
     callbacks.onMenuKeyBump();
 
     isRedistributing = true;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        redistributeContextMenu(x, y);
+    firstAnimationFrame = ownerWindow?.requestAnimationFrame(() => {
+      secondAnimationFrame = ownerWindow.requestAnimationFrame(() => {
+        redistributeContextMenu(x, y, root);
 
         // 使用 requestIdleCallback 替代 setTimeout，减少主线程阻塞；
         // 兜底 100ms 超时确保在极端繁忙场景下仍能复位
@@ -303,21 +334,25 @@ export function attachContextMenuRedistributor(
             callbacks.onReopenIfClosed();
           }
         };
-        if (typeof requestIdleCallback !== 'undefined') {
-          requestIdleCallback(resetRedistributing, { timeout: 100 });
+        if (typeof ownerWindow.requestIdleCallback === 'function') {
+          idleCallback = ownerWindow.requestIdleCallback(resetRedistributing, { timeout: 100 });
         } else {
-          setTimeout(resetRedistributing, 50);
+          timeout = ownerWindow.setTimeout(resetRedistributing, 50);
         }
       });
     });
   };
 
-  document.addEventListener('contextmenu', handleContextMenuCapture, true);
-  document.addEventListener('pointerdown', handlePointerDownCapture, true);
+  root.addEventListener('contextmenu', handleContextMenuCapture as EventListener, true);
+  root.addEventListener('pointerdown', handlePointerDownCapture as EventListener, true);
 
   return () => {
-    document.removeEventListener('contextmenu', handleContextMenuCapture, true);
-    document.removeEventListener('pointerdown', handlePointerDownCapture, true);
+    root.removeEventListener('contextmenu', handleContextMenuCapture as EventListener, true);
+    root.removeEventListener('pointerdown', handlePointerDownCapture as EventListener, true);
+    if (firstAnimationFrame !== undefined) ownerWindow?.cancelAnimationFrame(firstAnimationFrame);
+    if (secondAnimationFrame !== undefined) ownerWindow?.cancelAnimationFrame(secondAnimationFrame);
+    if (idleCallback !== undefined) ownerWindow?.cancelIdleCallback(idleCallback);
+    if (timeout !== undefined) ownerWindow?.clearTimeout(timeout);
   };
 }
 
