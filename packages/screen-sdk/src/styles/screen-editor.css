@@ -5,7 +5,7 @@
 @import "@xyflow/react/dist/style.css";
 
 @source "../**/*.{ts,tsx}";
-@source "../../../../apps/web/src/features/screen/**/*.{ts,tsx}";
+@source "../../../screen-editor-core/src/**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -158,6 +158,43 @@
 
 [data-nebula-size-warning][hidden] {
   display: none;
+}
+
+[data-nebula-runtime-error] {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 130;
+  display: flex;
+  max-width: min(360px, calc(100% - 24px));
+  align-items: center;
+  gap: 10px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--card-foreground);
+  padding: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+  font-size: 13px;
+}
+
+[data-nebula-runtime-error][hidden] {
+  display: none;
+}
+
+[data-nebula-runtime-error-message] {
+  min-width: 0;
+  flex: 1;
+}
+
+[data-nebula-runtime-error] button {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.75);
+  background: var(--muted);
+  color: var(--foreground);
+  padding: 4px 10px;
+  cursor: pointer;
 }
 
 [data-nebula-sdk-root] {

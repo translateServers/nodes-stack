@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { createLocalSnapshotAdapter } from '@/features/screen/adapters/local-snapshot-adapter';
-import type { ScreenEditorHostAdapter } from '@/features/screen/adapters/screen-editor-host-adapter';
+import {
+  createLocalSnapshotAdapter,
+  type ScreenEditorHostAdapter,
+} from '@nebula/screen-editor-core';
 import { ScreenEditor } from '@/features/screen/components/screen-editor';
 import { useUiStore } from '@/store';
 

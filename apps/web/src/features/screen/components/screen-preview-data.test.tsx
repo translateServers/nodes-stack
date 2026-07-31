@@ -23,7 +23,7 @@ vi.mock('../hooks', () => ({
 
 import { useParams } from '@tanstack/react-router';
 import { useScreenPreview } from '../hooks';
-import { ComponentRenderer } from '../registry/renderer';
+import { ComponentRenderer } from '@nebula/screen-editor-core';
 import { ScreenPreview } from './screen-preview';
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 

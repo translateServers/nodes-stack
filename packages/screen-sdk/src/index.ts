@@ -1,10 +1,10 @@
-export * from './contracts/index.js';
-export * from './core/static-chart-data.js';
-export * from './core/static-capability-profile.js';
-export * from './core/static-component-registry.js';
-export * from './events.js';
+export * from '@nebula/screen-editor-core/sdk-public';
 export * from './element/index.js';
-export * from './host/browser-export.js';
-export * from './host/operation-coordinator.js';
-export * from './host/screen-host-controller.js';
-export * from './react/ui/index.js';
+
+import type { NebulaScreenEditorElement } from './element/nebula-screen-editor-element.js';
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'nebula-screen-editor': NebulaScreenEditorElement;
+  }
+}

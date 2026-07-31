@@ -1,12 +1,11 @@
-import type { ScreenHostAdapter } from '../contracts/adapter.js';
 import type {
   ScreenDocumentV1,
+  ScreenHostAdapter,
   ScreenProjectDraft,
   ScreenProjectEnvelope,
-} from '../contracts/document.js';
-import type { ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
-
-export type ScreenEditorTheme = 'light' | 'dark';
+  ScreenSdkDiagnostic,
+  ScreenEditorTheme,
+} from '@nebula/screen-editor-core';
 
 export interface ScreenEditorOptions {
   debug?: boolean;

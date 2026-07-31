@@ -1,4 +1,4 @@
-import type { ScreenEditorTheme } from '../element/runtime.js';
+import type { ScreenEditorTheme } from '@nebula/screen-editor-core';
 
 type ThemeVariableKind = 'color' | 'font-family' | 'length';
 

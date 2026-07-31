@@ -14,7 +14,7 @@ ADR（Architecture Decision Record）是记录架构决策的简短文档。每�
 
 | 编号 | 标题 | 状态 | 日期 |
 | --- | --- | --- | --- |
-| _待创建_ | — | — | — |
+| [ADR-0001](./ADR-0001-screen-sdk-static-runtime-boundary.md) | 大屏 SDK 静态 Runtime 边界与组合方式 | 已接受 | 2026-07-31 |
 
 ## 命名规范
 

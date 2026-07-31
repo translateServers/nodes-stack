@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 5 已完成，待进入阶段 6 Web Component 与 Shadow DOM）
+> 状态：实施中（阶段 6 已完成：静态 runtime 组合架构落地并通过定向验证；待阶段 7 参考宿主与兼容验证）
 > 最近更新：2026-07-31
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
@@ -123,7 +123,8 @@
   - [x] SDK 不导入 dataset feature
   - [x] 将 Workbench 可达路径的 Sonner 调用替换为实例通知/错误状态
   - [x] 将 app UI primitives 替换为 SDK 内部 UI primitives
-  - [x] 通过依赖图测试或静态检查防止应用依赖回流
+   - [x] 通过依赖图测试或静态检查防止应用依赖回流
+   - [ ] SDK production runtime 依赖图不包含 `apps/web`、API/dataset hooks、Axios、Sonner、TanStack Router/Query 或直接业务 `fetch`
 
 ### 阶段 4 执行记录（已完成）
 
@@ -135,7 +136,7 @@
 - static profile 的 preview/navigate 只从 Workbench 根节点派发 bubbling + composed CustomEvent；Nebula 宿主外壳监听事件后执行现有预览与导航，dynamic profile 保留原 controller 路径。
 - SDK 新增 TypeScript AST 边界检查，拒绝应用 alias、Router/Query、Axios、Sonner、相对越界和直接业务 `fetch`，并挂入 build。
 - 15 个 Workbench 可达 shadcn primitives 与 `cn` 已收归 `packages/screen-sdk`，浮层组件统一支持实例 portal root；递归依赖图测试阻止应用 UI 回流。
-- 阶段 6 创建 Custom Element React Root 时完成 Workbench 私有桥接到可发布元素入口；阶段 7 兼容验证通过前不切换现有动态项目入口。
+- 阶段 6 创建 Custom Element React Root 时完成 Workbench 私有桥接到可发布元素入口；该 bridge 仅作为临时迁移实现，阶段 6 静态 runtime 架构落地时必须删除；阶段 7 兼容验证通过前不切换现有动态项目入口。
 
 ## 阶段 5：实现 Host Adapter 工作流
 
@@ -188,37 +189,85 @@
 
 ## 阶段 6：Web Component 与 Shadow DOM
 
-- [ ] Task 16: 实现 Custom Element 生命周期
-  - [ ] 创建 `NebulaScreenEditorElement`
-  - [ ] 实现 observed attributes 与 property/attribute 反射规则
-  - [ ] 实现 React Root mount/unmount
-  - [ ] 实现显式注册和 auto-register 幂等保护
-  - [ ] 实现公共方法并确保返回值不暴露可变 Store 引用
-  - [ ] 实现并导出 `getDraft()`，项目名称/描述与 document 使用同一快照语义
-  - [ ] 导出 `HTMLElementTagNameMap`、`NebulaScreenEditorEventMap` 与 detail 类型声明
-  - [ ] 实现 readonly 命令矩阵：异步 mutation reject、undo/redo no-op、只读命令可用
-  - [ ] 测试 readonly 下 Adapter mutation 不被调用
-  - [ ] disconnected 时释放 Root、Adapter 操作和事件监听
+- [x] Task 16: 实现 Custom Element 生命周期
+  - [x] 创建 `NebulaScreenEditorElement`
+  - [x] 实现 observed attributes 与 property/attribute 反射规则
+  - [x] 实现 React Root mount/unmount
+  - [x] 实现显式注册和 auto-register 幂等保护
+  - [x] 实现公共方法并确保返回值不暴露可变 Store 引用
+  - [x] 实现并导出 `getDraft()`，项目名称/描述与 document 使用同一快照语义
+  - [x] 导出 `HTMLElementTagNameMap`、`NebulaScreenEditorEventMap` 与 detail 类型声明
+  - [x] 实现 readonly 命令矩阵：异步 mutation reject、undo/redo no-op、只读命令可用
+  - [x] 测试 readonly 下 Adapter mutation 不被调用
+  - [x] disconnected 时释放 Root、Adapter 操作和事件监听
 
-- [ ] Task 17: 建立 Shadow DOM 样式边界
-  - [ ] 编译 SDK 专用 Tailwind/shadcn/React Flow 样式
-  - [ ] 将 root/body/html 样式迁移到 `:host` 与 Shadow reset
-  - [ ] 创建实例 portal root 和 Portal Context
-  - [ ] 改造 Dialog/AlertDialog/ContextMenu/DropdownMenu/Select/Sheet/Tooltip 等 Portal
-  - [ ] 使用 adoptedStyleSheets 并提供 style fallback
-  - [ ] 打包 Geist 字体或确定稳定系统字体回退
-  - [ ] 实现 spec 定义的 9 个稳定 `--nebula-screen-*` variables 及 light/dark 默认值
-  - [ ] 测试宿主冲突 CSS 与暗/亮主题
-  - [ ] 测试宿主变量覆盖、无效值回退和画布用户颜色不受 UI 主题影响
+- [x] Task 17: 建立 Shadow DOM 样式边界
+  - [x] 编译 SDK 专用 Tailwind/shadcn/React Flow 样式
+  - [x] 将 root/body/html 样式迁移到 `:host` 与 Shadow reset
+  - [x] 创建实例 portal root 和 Portal Context
+  - [x] 改造 Dialog/AlertDialog/ContextMenu/DropdownMenu/Select/Sheet/Tooltip 等 Portal
+  - [x] 使用 adoptedStyleSheets 并提供 style fallback
+  - [x] 打包 Geist 字体或确定稳定系统字体回退
+  - [x] 实现 spec 定义的 9 个稳定 `--nebula-screen-*` variables 及 light/dark 默认值
+  - [x] 测试宿主冲突 CSS 与暗/亮主题
+  - [x] 测试宿主变量覆盖、无效值回退和画布用户颜色不受 UI 主题影响
 
-- [ ] Task 18: 收口 DOM、快捷键和布局范围
-  - [ ] 全局 querySelector 改为 ShadowRoot/容器 ref 查询
-  - [ ] 固定 DOM id 改为 useId/ref
-  - [ ] active editor 焦点仲裁快捷键
-  - [ ] 跨窗口 pointer/blur 监听使用 ownerDocument.defaultView 并正确清理
-  - [ ] 使用 ResizeObserver 驱动容器布局和 fitToScreen
-  - [ ] 容器低于 1024x640 时显示尺寸提示
-  - [ ] 编写双实例 Portal、快捷键、DOM query 与 resize 测试
+- [x] Task 18: 收口 DOM、快捷键和布局范围
+  - [x] 全局 querySelector 改为 ShadowRoot/容器 ref 查询
+  - [x] 固定 DOM id 改为 useId/ref
+  - [x] active editor 焦点仲裁快捷键
+  - [x] 跨窗口 pointer/blur 监听使用 ownerDocument.defaultView 并正确清理
+  - [x] 使用 ResizeObserver 驱动容器布局和 fitToScreen
+  - [x] 容器低于 1024x640 时显示尺寸提示
+  - [x] 编写双实例 Portal、快捷键、DOM query 与 resize 测试
+
+- [x] Task 18A: 落地静态与动态 Runtime 组合架构
+  - [x] 创建私有 `@nebula/screen-editor-core`，迁移 Store、画布、Workbench 公共布局、Portal 和实例隔离能力
+  - [x] 在 core 中定义内部 `ScreenEditorRuntimeProfile`，不公开 V1 plugin API
+  - [x] 在 `packages/screen-sdk` 创建只引用 static profile 的 production runtime entry
+  - [x] 让 `apps/web` 基于同一 core 组装 dynamic profile，保留 API/dataset 和 Nebula 宿主能力
+  - [x] 删除 SDK 到 `apps/web` 的 Vite virtual runtime bridge
+  - [x] 增加 production runtime module graph 门禁，拒绝应用源码与动态业务依赖回流
+
+### 阶段 6 执行记录（已完成）
+
+- 新增 `NebulaScreenEditorElement` Custom Element，使用 open ShadowRoot，支持 `project-id`/`theme`/`readonly` attribute/property 反射、显式注册与 auto-register 幂等保护。
+- React Root 通过 Vite 虚拟 Runtime Bridge 懒加载挂载，运行时模块作为独立 chunk 分离，避免 SDK 主入口在 apps/web 源码别名环境（dev/test）下产生循环依赖。
+- 公共方法 `whenReady/reload/save/publish/getDraft/getDocument/validate/undo/redo/fitToScreen/focusComponent` 全部实现；返回值使用 `structuredClone` 深拷贝，不暴露可变 Store 引用。
+- readonly 命令矩阵：save/publish 以 `FORBIDDEN` reject，undo/redo no-op，Adapter mutation 调用数为 0（31 项 Element 测试覆盖）。
+- Shadow DOM 样式边界：SDK 专用 `screen-editor.css` 通过 `adoptedStyleSheets` + style fallback 安装到 ShadowRoot；9 个 `--nebula-screen-*` 主题变量按 light/dark 默认值应用；宿主变量覆盖优先，非法值回退到默认（23 项 Shadow DOM 隔离测试覆盖）。
+- Dialog/AlertDialog/ContextMenu/DropdownMenu/Select/Sheet/Tooltip Portal 统一使用实例 `portalRoot`（位于 ShadowRoot 内）。
+- DOM 查询隔离：`use-anchor-snap.ts`、`canvas-event-router.ts` 使用实例 root/container ref 限定查询范围；`bar-chart-config-sections`、`canvas-settings-dialog`、`global-variables-panel`、`layer-panel`、`v2-search-panel` 固定 DOM id 已改为 `useId`/ref。
+- 快捷键 active editor 仲裁：`use-keyboard-shortcuts.ts` 使用 `isActive` + `focusRoot` + `ownerWindow` 限定接收者；pointer/blur 监听使用 `ownerDocument.defaultView` 并在手势结束和卸载时清理。
+- ResizeObserver 驱动容器布局和 `fitToScreen`；容器低于 1024x640 时显示尺寸提示。
+- 声明文件不泄漏 virtual runtime 模块或 apps/web 私有路径（`strip-virtual-module.mjs` 在构建后清理）。
+- SDK 构建产物将 React/ReactDOM/Zustand/Radix/Moveable/Selecto 等运行时依赖打入 dist，无 peerDependencies，宿主无需显式安装 React。
+- SDK 199 项测试通过；SDK typecheck/lint/build 通过；Web typecheck/lint 通过。
+- Web screen 测试 2367 项通过、14 项跳过、4 项既有 ECharts/jsdom 零尺寸基线失败（与阶段 5 记录一致，非阶段 6 引入）。
+- 阶段 6 修复了 Stage 6 引入的循环依赖回归（registry/property-schema/blueprint 9 个测试文件从失败恢复为通过）：runtime-loader 改为 dynamic import 懒加载，元素 mount 改为异步，异步命令（whenReady/reload/save/publish）await mount 完成后再执行。
+
+阶段 6 复核整改项：
+
+- [x] 修复 `./auto-register` 与 `./contracts` 声明入口中的悬空 `NebulaScreenEditorElement` 类型，两个入口可独立通过消费者 TypeScript 校验。
+- [x] runtime chunk 加载失败后清除失败缓存、派发安全 `nebula-error`、显示重试入口，并允许后续重试加载。
+- [x] 决策并落地静态 production runtime 架构，解决 virtual bridge 从 `apps/web` 编译动态数据、Axios/Sonner 等非 V1 代码进入 SDK 产物的问题。
+- [x] 静态 runtime 架构落地后重新执行产物依赖扫描与 tarball 消费验证，阶段 6 定义为“实现完成”；Vanilla 宿主 E2E 依赖阶段 7 的 Vanilla TS 消费宿主（Task 19），与双实例焦点/快捷键 E2E 一并留待阶段 7 执行。
+
+阶段 6 静态 runtime 架构落地记录（ADR-0001 方案 A）：
+
+- 新增私有 `@nebula/screen-editor-core`（private workspace 包），承载 Store、画布、历史栈、快捷键、Workbench 布局、Portal/实例隔离与公共 UI primitives；`apps/web` 编辑器公共源码全部迁移至该包。
+- `ScreenEditorRuntimeProfile` 以具体能力对象组合（componentRegistry/propertySchemas/dataRuntime/blueprintCapabilities/notifications），静态 profile 在 `packages/screen-sdk/src/runtime/static-runtime.tsx` 组装，动态 profile 由 `apps/web/src/features/screen/runtime/dynamic-runtime-profile.tsx` 注入 API/dataset 执行能力，不对外形成 V1 插件 API。
+- 删除 Vite virtual runtime bridge（`runtime-plugin.ts`、`strip-virtual-module.mjs`），元素改为懒加载 SDK 自身 static-runtime chunk；`apps/web` 基于同一 core 组装 dynamic runtime，保留 API/dataset 与 Nebula 宿主能力。
+- 构建门禁：源码级 TypeScript AST 边界检查（拒绝 `@/`、`@nebula/web`、`apps/web`、Router/Query、Axios、Sonner 与直接业务 `fetch`）扫描 SDK 与 core 两棵源码树并挂入 build；构建后对 dist sourcemap 执行 production module graph 扫描，拒绝 `apps/web`、dataset feature、api/core、Axios、Sonner、TanStack Router/Query 回流（`check-boundaries.mjs` + `check-dist-boundaries.mjs`）。
+- 依赖边界测试补齐：`test/boundaries.test.ts` 覆盖源码门禁接受路径与 10 类拒绝路径（含 core 全量扫描）；`test/dist-boundaries.test.ts` 覆盖产物门禁的干净/违禁/多违禁/Windows 反斜杠路径用例，共 24 项。
+
+阶段 6 定向验证结果（2026-07-31）：
+
+- `@nebula/screen-editor-core`：typecheck/lint/build 通过，测试 2413 项通过、14 项跳过。
+- `@nebula/screen-sdk`：typecheck/lint 通过；测试 81 项通过（含新增 24 项边界测试）；build 通过（源码边界检查 + production module graph 门禁均 ok，声明文件归一化无泄漏）。
+- tarball 消费验证：`pnpm --filter @nebula/screen-sdk verify:tarball` 通过——`pnpm pack` 后在空白 consumer 项目（vite + tsc，仅安装 tarball）中 install/typecheck/build 成功，且打包产物不暴露私有 core 依赖。
+- `apps/web`：typecheck/lint 通过；全量测试 238 项通过，仅 `screen-preview-data.test.tsx` 4 项既有 ECharts/jsdom 零尺寸基线失败（与阶段 5/6 记录一致，非本次迁移引入）；修复 `dataset-config-section.tsx` 从 `@nebula/screen-sdk` 导入 UI 的迁移遗留（改从 core 导入）。
+- 仓库级 `pnpm biome:check` 仍受既有 CRLF 行尾基线阻断（391 项既有错误）；本次改动文件单独通过 Biome 检查。
 
 ## 阶段 7：参考宿主与兼容验证
 
@@ -275,7 +324,7 @@
 - Task 9-11 依赖 Store Provider 可用；static profile 与应用依赖清理可并行。
 - Task 12-15 依赖 Task 5-6、Task 9。
 - Task 16 依赖 Task 9、Task 12；Task 17-18 可在元素 mount 骨架完成后并行。
-- Task 19 依赖 Task 16-18 和完整 Fake Adapter。
+- Task 18A 依赖 Task 9-18；Task 19 依赖 Task 16-18A 和完整 Fake Adapter。
 - Task 20 依赖 Adapter 契约稳定，可与 Shadow DOM 工作并行。
 - Task 21 贯穿 Task 9-20，在生产入口切换前必须完成。
 - Task 22-24 依赖所有实现任务完成。

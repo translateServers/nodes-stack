@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 5 已完成，待进入阶段 6 Web Component 与 Shadow DOM）
+> 状态：实施中（阶段 6 已完成：静态 runtime 组合架构落地并通过定向验证；待阶段 7 参考宿主与兼容验证）
 > 最近更新：2026-07-31
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
@@ -89,12 +89,16 @@
 - [x] SDK 源码不使用 apps/web 的 `@/` alias
 - [x] SDK 工作台不显示应用级返回按钮，宿主自行提供返回/关闭导航
 - [x] static preview/navigate 通过 bubbling + composed event 请求宿主执行
-- [ ] 操作反馈在 ShadowRoot 内展示并可由事件观测（事件与实例通知面已完成，待阶段 6 ShadowRoot 挂载）
+- [x] 操作反馈在 ShadowRoot 内展示并可由事件观测（事件与实例通知面已完成，阶段 6 已在 ShadowRoot 内挂载）
 - [x] Workbench 可达 UI primitives 与 `cn` 来自 SDK，不依赖应用 UI
 - [x] 编辑器根节点不使用 `h-screen/w-screen`
 - [x] fitToScreen 基于宿主容器 rect
 - [x] 蓝图编辑器可动态加载
 - [x] apps/web API/hooks/route/list/preview 继续留在宿主层
+- [x] 私有 `@nebula/screen-editor-core` 承载 Store、画布、Workbench 公共布局、Portal 和实例隔离能力
+- [x] SDK static runtime 与 Nebula dynamic runtime 基于同一 core 分别组装
+- [x] SDK static runtime 不再通过 Vite virtual bridge 编译 `apps/web`
+- [x] production runtime module graph 拒绝 `apps/web`、API/dataset hooks、Axios、Sonner、TanStack Router/Query 和直接业务 `fetch`
 
 ## 6. Static Capability Profile
 
@@ -115,7 +119,7 @@
 ## 7. Project Operations
 
 - [x] `project-id + adapter` 就绪后只加载一次
-- [ ] property 与 attribute 赋值顺序不影响加载
+- [x] property 与 attribute 赋值顺序不影响加载
 - [x] project-id 快速切换时旧响应不能覆盖新项目
 - [x] project-id/Adapter 变化会清除旧画面；宿主负责在 dirty 时确认受控切换
 - [x] load 失败可重试且不伪造 ready
@@ -155,58 +159,60 @@
 
 ## 9. Web Component API
 
-- [ ] `defineNebulaScreenEditor()` 重复调用安全
-- [ ] auto-register 不发请求、不扫描 DOM
-- [ ] `project-id`、`theme`、`readonly` attribute/property 行为一致
-- [ ] Adapter 只能通过 JavaScript property 注入
-- [ ] Token、完整项目和敏感 header 不通过 attribute 传入
-- [ ] `whenReady/reload/save/publish/getDraft/getDocument/validate` 正常
-- [ ] dirty 状态下 `reload()` 默认拒绝，显式 discard 才可重新加载
-- [ ] `undo/redo/fitToScreen/focusComponent` 正常
-- [ ] `getDraft()` 与 `getDocument()` 不暴露内部可变引用
-- [ ] 所有 CustomEvent 均 bubbles + composed
-- [ ] change 事件包含项目名称、描述和 document 的完整 draft
-- [ ] ready/change/dirty/selection/save/publish/preview/navigate/error 事件 detail 符合 spec
-- [ ] disconnectedCallback 卸载 React Root
-- [ ] disconnectedCallback 中止全部 Adapter 操作
-- [ ] 断连后迟到响应不派发事件、不写 Store
-- [ ] `HTMLElementTagNameMap`、EventMap 与 CustomEvent detail 类型可供 TypeScript 宿主使用
+- [x] `defineNebulaScreenEditor()` 重复调用安全
+- [x] auto-register 不发请求、不扫描 DOM
+- [x] `project-id`、`theme`、`readonly` attribute/property 行为一致
+- [x] Adapter 只能通过 JavaScript property 注入
+- [x] Token、完整项目和敏感 header 不通过 attribute 传入
+- [x] `whenReady/reload/save/publish/getDraft/getDocument/validate` 正常
+- [x] dirty 状态下 `reload()` 默认拒绝，显式 discard 才可重新加载
+- [x] `undo/redo/fitToScreen/focusComponent` 正常
+- [x] `getDraft()` 与 `getDocument()` 不暴露内部可变引用
+- [x] 所有 CustomEvent 均 bubbles + composed
+- [x] change 事件包含项目名称、描述和 document 的完整 draft
+- [x] ready/change/dirty/selection/save/publish/preview/navigate/error 事件 detail 符合 spec
+- [x] disconnectedCallback 卸载 React Root
+- [x] disconnectedCallback 中止全部 Adapter 操作
+- [x] 断连后迟到响应不派发事件、不写 Store
+- [x] `HTMLElementTagNameMap`、EventMap 与 CustomEvent detail 类型可供 TypeScript 宿主使用
+- [x] `./auto-register` 与 `./contracts` 声明入口可独立通过消费者 TypeScript 校验
+- [x] runtime chunk 加载失败会派发安全 load error、显示重试入口并允许重新加载
 
 ## 10. Shadow DOM and UI
 
-- [ ] 使用 open ShadowRoot
-- [ ] 每个实例有独立 React root 与 portal root
-- [ ] Tailwind/shadcn/React Flow 样式打入 SDK
-- [ ] Dialog Portal 位于当前 ShadowRoot
-- [ ] AlertDialog Portal 位于当前 ShadowRoot
-- [ ] ContextMenu Portal 位于当前 ShadowRoot
-- [ ] DropdownMenu Portal 位于当前 ShadowRoot
-- [ ] Select Portal 位于当前 ShadowRoot
-- [ ] Sheet Portal 位于当前 ShadowRoot
-- [ ] Tooltip Portal 位于当前 ShadowRoot
-- [ ] adoptedStyleSheets 与 style fallback 正常
-- [ ] 宿主全局 button/input/svg/* 样式不污染 SDK
-- [ ] light/dark 主题只作用于当前实例
-- [ ] spec 中 9 个稳定 CSS variables 的名称、默认值与取值类型一致
-- [ ] 宿主变量覆盖优先，画布用户颜色不被 UI theme 覆盖
-- [ ] readonly 禁止所有设计和服务端 mutation，但允许导出、列表、预览和视口操作
-- [ ] readonly 下 save/publish reject FORBIDDEN，undo/redo no-op，Adapter mutation 调用数为 0
+- [x] 使用 open ShadowRoot
+- [x] 每个实例有独立 React root 与 portal root
+- [x] Tailwind/shadcn/React Flow 样式打入 SDK
+- [x] Dialog Portal 位于当前 ShadowRoot
+- [x] AlertDialog Portal 位于当前 ShadowRoot
+- [x] ContextMenu Portal 位于当前 ShadowRoot
+- [x] DropdownMenu Portal 位于当前 ShadowRoot
+- [x] Select Portal 位于当前 ShadowRoot
+- [x] Sheet Portal 位于当前 ShadowRoot
+- [x] Tooltip Portal 位于当前 ShadowRoot
+- [x] adoptedStyleSheets 与 style fallback 正常
+- [x] 宿主全局 button/input/svg/* 样式不污染 SDK
+- [x] light/dark 主题只作用于当前实例
+- [x] spec 中 9 个稳定 CSS variables 的名称、默认值与取值类型一致
+- [x] 宿主变量覆盖优先，画布用户颜色不被 UI theme 覆盖
+- [x] readonly 禁止所有设计和服务端 mutation，但允许导出、列表、预览和视口操作
+- [x] readonly 下 save/publish reject FORBIDDEN，undo/redo no-op，Adapter mutation 调用数为 0
 - [ ] 字体资源在 tarball 消费项目中可加载
-- [ ] 首版没有承诺未记录的 slot、class 或 `::part` API
+- [x] 首版没有承诺未记录的 slot、class 或 `::part` API
 
 ## 11. DOM, Focus, and Layout
 
-- [ ] 组件与蓝图 DOM 查询限定在实例 root/container
-- [ ] 不使用全局 document 查询 Moveable target 或 React Flow Handle
-- [ ] 固定表单 id 已改为 useId/ref
-- [ ] active editor 决定快捷键接收者
-- [ ] 输入控件与浮层打开时快捷键正确挂起
-- [ ] window blur 清理临时工具与修饰键
-- [ ] pointer/window 监听在手势结束和卸载时清理
-- [ ] ResizeObserver 响应宿主容器变化
-- [ ] 1440x900 与 1024x640 容器布局可用
-- [ ] 小于最小尺寸时显示明确提示
-- [ ] 不依赖 `window.innerWidth` 计算编辑器尺寸
+- [x] 组件与蓝图 DOM 查询限定在实例 root/container
+- [x] 不使用全局 document 查询 Moveable target 或 React Flow Handle
+- [x] 固定表单 id 已改为 useId/ref
+- [x] active editor 决定快捷键接收者
+- [x] 输入控件与浮层打开时快捷键正确挂起
+- [x] window blur 清理临时工具与修饰键
+- [x] pointer/window 监听在手势结束和卸载时清理
+- [x] ResizeObserver 响应宿主容器变化
+- [x] 1440x900 与 1024x640 容器布局可用
+- [x] 小于最小尺寸时显示明确提示
+- [x] 不依赖 `window.innerWidth` 计算编辑器尺寸
 
 ## 12. Host Integration and Regression
 
@@ -214,32 +220,33 @@
 - [ ] Fake Adapter 覆盖全部 V1 服务能力
 - [ ] Nebula Host Adapter 复用现有 screen API
 - [ ] `updatedAt` 仅在宿主 Adapter 内映射为 revision
-- [ ] Nebula JWT、401 refresh 和 Query cache 保留在 apps/web
+- [x] Nebula JWT、401 refresh 和 Query cache 保留在 apps/web
 - [ ] preview request 由宿主打开现有预览路由
-- [ ] 本功能未修改 NestJS、Prisma 或数据库迁移
-- [ ] apps/web 的 API/dataset 能力未被删除或静默降级
-- [ ] 动态项目在迁移条件满足前继续使用现有应用入口
+- [x] 本功能未修改 NestJS、Prisma 或数据库迁移
+- [x] apps/web 的 API/dataset 能力未被删除或静默降级
+- [x] 动态项目在迁移条件满足前继续使用现有应用入口
+- [x] 静态 production runtime 不再从 `apps/web` 编译动态数据、Axios/Sonner 等非 V1 代码（ADR-0001 方案 A 已落地，dist module graph 门禁通过）
 
 ## 13. Tests and Release
 
 - [x] 文档 Schema 与 capability validator 单测通过
 - [x] Adapter/error/cancellation 单测通过
 - [x] Store factory 与双实例单测通过
-- [ ] Custom Element 生命周期测试通过
-- [ ] Shadow Portal 与宿主 CSS 隔离测试通过
+- [x] Custom Element 生命周期测试通过
+- [x] Shadow Portal 与宿主 CSS 隔离测试通过
 - [ ] Vanilla 宿主 Playwright E2E 通过
 - [ ] 当前稳定版 Chrome 与 Edge 发布冒烟通过
 - [ ] 双实例焦点/快捷键 E2E 通过
 - [ ] 保存冲突、导入导出和快照 E2E 通过
-- [ ] 现有画布、工具、属性、历史与蓝图核心测试通过
+- [x] 现有画布、工具、属性、历史与蓝图核心测试通过
 - [x] `pnpm --filter @nebula/screen-sdk typecheck` 通过
 - [x] `pnpm --filter @nebula/screen-sdk lint` 通过
 - [x] `pnpm --filter @nebula/screen-sdk test` 通过
-- [x] `pnpm --filter @nebula/screen-sdk build` 通过
+- [x] `pnpm --filter @nebula/screen-sdk build` 通过（含源码边界检查与 production module graph 门禁）
+- [x] 空白 Vanilla Vite 项目安装 tarball 后 typecheck/build 通过（`verify:tarball` 通过，且不暴露私有 core 依赖）
 - [ ] `pnpm biome:check` 通过
 - [x] 根 `pnpm typecheck` 与 `pnpm lint` 通过
 - [ ] 首次 gzip 体积基线已记录
 - [ ] `pnpm pack` tarball 内容正确
-- [ ] 空白 Vanilla Vite 项目安装 tarball 后 typecheck/build 通过
 - [ ] 字体、source map 与动态 chunk URL 在 tarball 消费场景正常
 - [ ] 私有 registry `0.1.0` 发布成功

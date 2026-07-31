@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import dts from 'unplugin-dts/vite';
 import { defineConfig } from 'vite';
-import { screenEditorRuntimePlugin } from './runtime-plugin';
 
 function fromHere(relativePath: string): string {
   return fileURLToPath(new URL(relativePath, import.meta.url));
@@ -12,7 +11,6 @@ function fromHere(relativePath: string): string {
 
 export default defineConfig({
   plugins: [
-    screenEditorRuntimePlugin('build'),
     react(),
     tailwindcss(),
     dts({
@@ -20,7 +18,7 @@ export default defineConfig({
       tsconfigPath: './tsconfig.json',
       exclude: ['src/**/*.test.*', 'test/**'],
       bundleTypes: {
-        bundledPackages: ['@nebula/shared'],
+        bundledPackages: ['@nebula/screen-editor-core', '@nebula/shared'],
       },
     }),
   ],
@@ -34,10 +32,6 @@ export default defineConfig({
       {
         find: '@nebula/screen-sdk',
         replacement: resolve(import.meta.dirname, './src/index.ts'),
-      },
-      {
-        find: '@/',
-        replacement: resolve(import.meta.dirname, '../../apps/web/src'),
       },
     ],
   },

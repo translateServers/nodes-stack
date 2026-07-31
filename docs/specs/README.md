@@ -11,7 +11,7 @@ specs 是本文档体系中**最重要的开发依据**。每个 spec 必须包�
 | 功能 | 索引 | 状态 | 说明 |
 | --- | --- | --- | --- |
 | 大屏编辑器 | [screen-editor/](./screen-editor/README.md) | 生效中（2026-07-30） | 已实现功能的现状描述：画布/组件/工具/属性面板/图层/数据层/历史栈/快捷键/蓝图/预览/保存发布 |
-| 大屏设计器 Web Component SDK | [screen-web-component-sdk/](./screen-web-component-sdk/spec.md) | 实施中（2026-07-31） | 阶段 5 已完成：Host Adapter 控制器、跨 mutation 协调、Envelope 基线、导入导出与快照闭环已建立；待阶段 6 Web Component 与 Shadow DOM |
+| 大屏设计器 Web Component SDK | [screen-web-component-sdk/](./screen-web-component-sdk/spec.md) | 实施中（2026-07-31） | 阶段 6 已完成：Custom Element、Shadow DOM 隔离与静态 runtime 组合架构落地（ADR-0001），产物依赖扫描与 tarball 消费验证通过；待阶段 7 参考宿主与兼容验证 |
 | 数据集管理 | [dataset-management/](./dataset-management/README.md) | 实施中（2026-07-28） | 独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter。第一阶段 MVP 已完成，验收进度见 checklist.md |
 | 事件蓝图重新设计 | [blueprint-redesign/](./blueprint-redesign/spec.md) | 生效中（2026-07-26） | V2 蓝图：组件即节点、锚点即事件、三阶层节点模型、V1→V2 自动迁移（已落地） |
 | 事件蓝图事件触发链路修复 | [blueprint-event-trigger-fix/](./blueprint-event-trigger-fix/spec.md) | 生效中（2026-07-29） | 修复 dataLoaded/dataError/interval 事件触发并明确编辑器画布总闸门（代码已合并，手动验证待确认） |

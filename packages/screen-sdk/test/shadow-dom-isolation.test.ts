@@ -13,8 +13,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ScreenHostAdapter } from '../src/contracts/adapter.js';
-import type { ScreenProjectEnvelopeInput } from '../src/contracts/document.js';
+import type { ScreenHostAdapter, ScreenProjectEnvelopeInput } from '@nebula/screen-editor-core';
 import { defineNebulaScreenEditor, NEBULA_SCREEN_EDITOR_TAG_NAME } from '../src/element/define.js';
 import type { NebulaScreenEditorElement } from '../src/element/nebula-screen-editor-element.js';
 import { SCREEN_EDITOR_THEME_VARIABLES } from '../src/styles/theme.js';

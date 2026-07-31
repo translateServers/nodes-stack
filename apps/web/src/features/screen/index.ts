@@ -5,12 +5,12 @@ export { ScreenEditor } from './components/screen-editor';
 export {
   ScreenHostAdapterWorkbench,
   type ScreenHostAdapterWorkbenchProps,
-} from './components/screen-host-adapter-workbench';
+} from '@nebula/screen-editor-core';
 export {
   ScreenEditorWorkbench,
   type ScreenEditorWorkbenchEnvelope,
   type ScreenEditorWorkbenchOperationController,
   type ScreenEditorWorkbenchProps,
-} from './components/screen-editor-workbench';
+} from '@nebula/screen-editor-core';
 export { ScreenPreview } from './components/screen-preview';
 export { EditorPreviewScreen } from './components/editor-preview-screen';

@@ -1,24 +1,24 @@
-import type { ScreenNavigateRequestDetail } from '@nebula/screen-sdk';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useParams } from '@tanstack/react-router';
-import type { ScreenEditorHostAdapter } from '../adapters/screen-editor-host-adapter';
-import { usePublishScreenProject, useScreenProject, useUpdateScreenProject } from '../hooks';
-import { isSaveConflictError } from '../lib/is-save-conflict-error';
 import {
+  STATIC_SCREEN_EDITOR_RUNTIME_PROFILE,
   createScreenEditorStore,
+  isSaveConflictError,
   ScreenEditorStoreProvider,
-  useScreenEditorStoreApi,
-  type ScreenEditorStore,
-} from '../stores/editor-store';
-import {
   ScreenEditorWorkbench,
+  useScreenEditorStoreApi,
+  type ScreenEditorCapabilityProfile,
+  type ScreenEditorHostAdapter,
+  type ScreenEditorStore,
+  type ScreenEditorTheme,
   type ScreenEditorWorkbenchEnvelope,
   type ScreenEditorWorkbenchMutationCallbacks,
   type ScreenEditorWorkbenchOperationController,
   type ScreenEditorWorkbenchOperationResult,
-} from './screen-editor-workbench';
-import type { ScreenEditorTheme } from './screen-editor-environment';
-import type { ScreenEditorCapabilityProfile } from './screen-editor-environment';
+  type ScreenNavigateRequestDetail,
+} from '@nebula/screen-editor-core';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useParams } from '@tanstack/react-router';
+import { usePublishScreenProject, useScreenProject, useUpdateScreenProject } from '../hooks';
+import { DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE } from '../runtime/dynamic-runtime-profile';
 
 export interface ScreenEditorProps {
   debug?: boolean;
@@ -274,6 +274,11 @@ function NebulaScreenEditorHost({
         capabilityProfile={capabilityProfile}
         portalRoot={portalRoot}
         project={envelope}
+        runtimeProfile={
+          capabilityProfile === 'static'
+            ? STATIC_SCREEN_EDITOR_RUNTIME_PROFILE
+            : DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE
+        }
         setTheme={onThemeChange}
         theme={theme}
       />

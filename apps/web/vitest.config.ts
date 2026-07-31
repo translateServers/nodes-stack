@@ -1,9 +1,7 @@
 import path from 'node:path';
 import { defineConfig } from 'vitest/config';
-import { screenEditorRuntimePlugin } from '../../packages/screen-sdk/runtime-plugin';
 
 export default defineConfig({
-  plugins: [screenEditorRuntimePlugin('build')],
   test: {
     globals: true,
     environment: 'jsdom',

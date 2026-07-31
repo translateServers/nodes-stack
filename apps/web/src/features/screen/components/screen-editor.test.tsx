@@ -2,7 +2,13 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { BizCode, BusinessError, type ScreenComponent, type ScreenProject } from '@nebula/shared';
-import type { ScreenPreviewRequestDetail } from '@nebula/screen-sdk';
+import {
+  compileBlueprintV2,
+  createScreenEditorStore,
+  useScreenEditorEnvironment,
+  type Diagnostic,
+  type ScreenPreviewRequestDetail,
+} from '@nebula/screen-editor-core';
 
 /**
  * ScreenEditor 集成测试：保存冲突对话框接入（任务 9.3）
@@ -27,7 +33,7 @@ vi.mock('../hooks', () => ({
   usePublishScreenProject: vi.fn(),
 }));
 
-vi.mock('./screen-canvas', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/screen-canvas', () => ({
   ScreenCanvas: () => {
     const { requestNavigate } = useScreenEditorEnvironment();
     return (
@@ -43,44 +49,44 @@ vi.mock('./screen-canvas', () => ({
   },
 }));
 
-vi.mock('../components/component-library', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/component-library', () => ({
   ComponentLibrary: () => <div data-testid="component-library" />,
   useCanvasDrop: () => ({ handleDrop: vi.fn(), handleDragOver: vi.fn() }),
 }));
 
-vi.mock('../components/property-panel', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/property-panel', () => ({
   PropertyPanel: () => <div data-testid="property-panel" />,
 }));
 
-vi.mock('../components/layer-panel', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/layer-panel', () => ({
   LayerPanel: () => <div data-testid="layer-panel" />,
 }));
 
-vi.mock('../components/canvas-context-menu', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-context-menu', () => ({
   CanvasContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('../components/canvas-rulers', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-rulers', () => ({
   CanvasRulers: () => null,
 }));
 
-vi.mock('./canvas-guides', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-guides', () => ({
   CanvasGuides: () => null,
 }));
 
-vi.mock('./canvas-status-bar', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-status-bar', () => ({
   CanvasStatusBar: () => null,
 }));
 
-vi.mock('./tool-selector', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/tool-selector', () => ({
   ToolSelector: () => null,
 }));
 
-vi.mock('../hooks/use-keyboard-shortcuts', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/hooks/use-keyboard-shortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
 
-vi.mock('../hooks/use-tool-state-machine', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/hooks/use-tool-state-machine', () => ({
   useToolStateMachine: vi.fn(() => ({
     activeTool: 'select' as const,
     currentTool: 'select' as const,
@@ -91,50 +97,55 @@ vi.mock('../hooks/use-tool-state-machine', () => ({
   })),
 }));
 
-vi.mock('./shortcuts-help-dialog', () => ({
-  ShortcutsHelpDialog: () => null,
-}));
+vi.mock(
+  '../../../../../../packages/screen-editor-core/src/components/shortcuts-help-dialog',
+  () => ({
+    ShortcutsHelpDialog: () => null,
+  }),
+);
 
-vi.mock('./project-menubar', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/project-menubar', () => ({
   ProjectMenubar: () => null,
 }));
 
-vi.mock('./canvas-settings-dialog', () => ({
-  CanvasSettingsDialog: () => null,
-}));
+vi.mock(
+  '../../../../../../packages/screen-editor-core/src/components/canvas-settings-dialog',
+  () => ({
+    CanvasSettingsDialog: () => null,
+  }),
+);
 
-vi.mock('./import-dialog', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/import-dialog', () => ({
   ImportDialog: () => null,
 }));
 
-vi.mock('./snapshot-manager-dialog', () => ({
-  SnapshotManagerDialog: () => null,
-}));
+vi.mock(
+  '../../../../../../packages/screen-editor-core/src/components/snapshot-manager-dialog',
+  () => ({
+    SnapshotManagerDialog: () => null,
+  }),
+);
 
-vi.mock('../blueprint/sheet', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/blueprint/sheet', () => ({
   BlueprintSheet: () => null,
   BlueprintSheetV2: () => null,
 }));
 
-vi.mock('../blueprint/compiler', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/blueprint/compiler', () => ({
   compileBlueprint: vi.fn(() => ({ rules: [], diagnostics: [] })),
 }));
 
-vi.mock('../blueprint/compiler/v2-compile', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/blueprint/compiler/v2-compile', () => ({
   compileBlueprintV2: vi.fn(() => ({ rules: [], diagnostics: [] })),
 }));
 
-vi.mock('./code-editor-sheet', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/code-editor-sheet', () => ({
   CodeEditorSheet: () => null,
 }));
 
 import { useParams } from '@tanstack/react-router';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { ScreenEditor as ScreenEditorContent } from './screen-editor';
-import { createScreenEditorStore } from '../stores/editor-store';
-import { type Diagnostic } from '../blueprint/compiler';
-import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
-import { useScreenEditorEnvironment } from './screen-editor-environment';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
 const mockUseScreenProject = useScreenProject as unknown as ReturnType<typeof vi.fn>;

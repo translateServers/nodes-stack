@@ -1,7 +1,10 @@
 import { createRoot } from 'react-dom/client';
-import { parseScreenDocument, validateScreenSdkCapabilities } from '../src/contracts/document.js';
-import type { ScreenProjectEnvelope } from '../src/contracts/document.js';
-import { ScreenHostController } from '../src/host/screen-host-controller.js';
+import {
+  parseScreenDocument,
+  ScreenHostController,
+  validateScreenSdkCapabilities,
+  type ScreenProjectEnvelope,
+} from '@nebula/screen-editor-core';
 import type {
   MountScreenEditorRuntime,
   ScreenEditorRuntimeConfiguration,
@@ -37,8 +40,9 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
     },
   });
   const unsubscribe = controller.subscribe(() => {
-    if (controller.getState().phase === 'awaiting-render')
+    if (controller.getState().phase === 'awaiting-render') {
       queueMicrotask(() => controller.markRendered());
+    }
   });
 
   const update = (nextConfiguration: ScreenEditorRuntimeConfiguration): void => {

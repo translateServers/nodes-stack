@@ -1,8 +1,10 @@
 # 大屏设计器 Web Component SDK Spec
 
-> 状态：实施中（阶段 5 已完成，待进入阶段 6 Web Component 与 Shadow DOM）
+> 状态：实施中（阶段 6 已完成：静态 runtime 组合架构落地并通过定向验证；待阶段 7 参考宿主与兼容验证）
 > 最近更新：2026-07-31
 > 定位：定义大屏设计器以前端 Web Component SDK 交付时的产品边界、宿主适配器、文档协议、元素 API、隔离机制与验收标准
+
+> 阶段 6 复核结论（2026-07-31）：静态 production runtime 已按 ADR-0001 方案 A 落地——新增私有 `@nebula/screen-editor-core`，`packages/screen-sdk` 只组装 static runtime，`apps/web` 基于同一 core 组装 dynamic profile，Vite virtual runtime bridge 已删除；生产构建以源码 AST 检查 + dist module graph 门禁双重拒绝动态能力回流，并完成 tarball 消费验证。阶段 6 定义为“实现完成”，Vanilla 宿主 E2E 与发布冒烟留待阶段 7-8。
 
 ## 1. Why
 
@@ -96,12 +98,44 @@ Host Application
 
 ### 5.3 Source Ownership
 
-- `packages/screen-sdk/` 是可发布 SDK 的唯一源码与构建边界。
+- `packages/screen-editor-core/` 是私有 workspace 包，承载 Store、画布、历史栈、快捷键、Workbench 基础布局、Portal/实例隔离和不含业务请求的编辑器公共能力。
+- `packages/screen-sdk/` 是可发布 SDK 的 static runtime、Custom Element、Host Adapter、契约和静态能力组装边界；构建不得 import `apps/web` 源码。
 - `packages/shared/` 继续作为 Nebula 内部领域 Schema 的单一数据源；SDK 通过公共 facade 导出所需契约，产物不得泄漏 workspace 私有路径。
-- `apps/web/` 保留项目列表、路由、认证、预览页和 Nebula Host Adapter。
+- `apps/web/` 基于 `screen-editor-core` 组装 dynamic runtime，保留项目列表、路由、认证、预览页、Nebula Host Adapter、API/dataset 和动态蓝图能力。
 - `apps/web/src/features/screen/api.ts` 与 `hooks.ts` 不迁入 SDK。
 - `apps/nestjs-server/` 不因本功能发生代码或数据模型变更。
 - 抽离过程中不得长期维护两份编辑器 Store、画布交互逻辑或属性 Schema；临时迁移桥接必须在对应任务结束前删除。
+
+### 5.4 Runtime Assembly and Dependency Direction
+
+编辑器公共能力通过私有 `@nebula/screen-editor-core` 复用，static 与 dynamic 能力分别由两个 runtime profile 组装：
+
+```text
+packages/shared
+       ↓
+packages/screen-editor-core   private workspace package
+       ↓                  ↓
+packages/screen-sdk       apps/web
+static runtime            dynamic runtime + Nebula host
+```
+
+内部 runtime profile 使用具体能力对象，不以单一 `static/dynamic` 标志控制所有模块：
+
+```ts
+interface ScreenEditorRuntimeProfile {
+  componentRegistry: ComponentRegistry;
+  propertySchemas: PropertySchemaRegistry;
+  dataRuntime: DataRuntime;
+  blueprintCapabilities: BlueprintCapabilities;
+  notifications: NotificationPort;
+}
+```
+
+- SDK static profile 只能引用 static registry、static data parser、白名单蓝图执行器和实例通知面。
+- Nebula dynamic profile 由 `apps/web` 注入 API/dataset 执行能力和动态 UI；该 profile 不进入 SDK V1 产物。
+- profile 组合接口属于 workspace 内部实现，不作为 V1 renderer、属性面板或蓝图插件 API 导出。
+- 禁止 `packages/screen-sdk` 或 `packages/screen-editor-core` 反向 import `apps/web`。
+- 阶段 6 临时 Vite virtual runtime bridge 已在 static runtime 落地时删除（2026-07-31，见 ADR-0001 落地记录）。
 
 ## 6. Public Document Contract
 
@@ -790,6 +824,17 @@ V1 稳定 CSS variables：
 建议目录：
 
 ```text
+packages/screen-editor-core/
+├── src/
+│   ├── stores/
+│   ├── canvas/
+│   ├── workbench/
+│   ├── blueprint/
+│   ├── runtime-profile.ts
+│   └── index.ts
+├── package.json              private workspace package
+└── tsconfig.json
+
 packages/screen-sdk/
 ├── src/
 │   ├── contracts/
@@ -797,6 +842,7 @@ packages/screen-sdk/
 │   ├── react/
 │   ├── element/
 │   ├── styles/
+│   ├── runtime/static-runtime.tsx
 │   ├── index.ts
 │   └── auto-register.ts
 ├── test/
@@ -808,11 +854,12 @@ packages/screen-sdk/
 
 包规则：
 
+- `@nebula/screen-editor-core` 仅供 workspace 内部使用，不发布、不作为 SDK consumer 依赖、不进入公共 exports。
 - 包名 `@nebula/screen-sdk`，`type: module`。
 - workspace 阶段保持 `private: true`。
 - 只输出 ESM、source map、声明文件和必要字体/分包资源。
 - 公共 exports 至少包含 `.`、`./auto-register`、`./contracts`。
-- React、ReactDOM、Zustand、Radix、Moveable、Selecto 等实现依赖打入 SDK，避免宿主 React 版本冲突。
+- React、ReactDOM、Zustand、Radix、Moveable、Selecto 等实现依赖以及 private core 打入 SDK，避免宿主 React 版本冲突和 workspace 源路径泄漏。
 - 蓝图编辑器允许 ESM 动态分包，V1 不要求单文件。
 - 声明文件必须 roll up，不得要求消费者解析 `@nebula/shared` workspace 源路径。
 - 发布前执行 `pnpm pack` 并在空白消费项目安装 tarball 验证。
@@ -1098,5 +1145,6 @@ V1 达到以下边界即可发布 `0.1.0`：
 - [蓝图运行时架构](../../architecture/blueprint-runtime-architecture.md)
 - [编码规范](../../conventions/coding-standards.md)
 - [前后端契约规范](../../conventions/frontend-backend-contract.md)
+- [ADR-0001：大屏 SDK 静态 Runtime 边界与组合方式](../../decisions/ADR-0001-screen-sdk-static-runtime-boundary.md)
 - [实施任务](./tasks.md)
 - [验收清单](./checklist.md)

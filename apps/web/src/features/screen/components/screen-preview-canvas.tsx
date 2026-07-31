@@ -1,16 +1,14 @@
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
-import { resolveComponentContainerStyle } from '../registry/component-container-style';
 import {
   BlueprintEventProvider,
   BlueprintPreviewProvider,
-  useBlueprintPreviewRuntime,
-} from '../blueprint/runtime';
-import {
+  PreviewComponentRenderer,
+  buildFilterString,
   CanvasInteractionProvider,
   INTERACTIVE_CAPABILITIES,
-} from '../lib/canvas-interaction-context';
-import { PreviewComponentRenderer } from './preview-component-renderer';
-import { buildFilterString } from './screen-canvas';
+  resolveComponentContainerStyle,
+  useBlueprintPreviewRuntime,
+} from '@nebula/screen-editor-core';
 
 /**
  * 按 scaleMode 计算画布缩放比以适配视口。

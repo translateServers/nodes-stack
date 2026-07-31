@@ -16,15 +16,18 @@ vi.mock('../hooks', () => ({
   useScreenPreview: vi.fn(),
 }));
 
-vi.mock('../registry/renderer', () => ({
-  ComponentRenderer: ({ component }: { component: { id: string; name: string } }): JSX.Element => (
-    <div data-testid={`renderer-${component.id}`}>{component.name}</div>
-  ),
+vi.mock('@nebula/screen-editor-core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nebula/screen-editor-core')>()),
+  PreviewComponentRenderer: ({
+    component,
+  }: {
+    component: { id: string; name: string };
+  }): JSX.Element => <div data-testid={`renderer-${component.id}`}>{component.name}</div>,
 }));
 
 import { useParams } from '@tanstack/react-router';
 import { useScreenPreview } from '../hooks';
-import { resolveComponentContainerStyle } from '../registry/component-container-style';
+import { resolveComponentContainerStyle } from '@nebula/screen-editor-core';
 import { ScreenPreview } from './screen-preview';
 import type { CanvasConfig, EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
 

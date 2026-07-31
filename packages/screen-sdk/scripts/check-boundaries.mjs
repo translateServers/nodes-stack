@@ -8,7 +8,8 @@ import ts from 'typescript';
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(SCRIPT_DIRECTORY, '..');
-const SOURCE_ROOT = resolve(PACKAGE_ROOT, 'src');
+export const SOURCE_ROOT = resolve(PACKAGE_ROOT, 'src');
+export const CORE_SOURCE_ROOT = resolve(PACKAGE_ROOT, '../screen-editor-core/src');
 
 const FORBIDDEN_PACKAGES = new Set([
   '@tanstack/react-query',
@@ -122,9 +123,12 @@ function sourceFiles(directory) {
  * @param {string} [sourceRoot]
  * @returns {string[]}
  */
-export function checkBoundaries(sourceRoot = SOURCE_ROOT) {
-  return sourceFiles(sourceRoot).flatMap((filePath) =>
-    inspectSource(filePath, readFileSync(filePath, 'utf8'), sourceRoot),
+export function checkBoundaries(sourceRoot) {
+  const sourceRoots = sourceRoot === undefined ? [SOURCE_ROOT, CORE_SOURCE_ROOT] : [sourceRoot];
+  return sourceRoots.flatMap((root) =>
+    sourceFiles(root).flatMap((filePath) =>
+      inspectSource(filePath, readFileSync(filePath, 'utf8'), root),
+    ),
   );
 }
 

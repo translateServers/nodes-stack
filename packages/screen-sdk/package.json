@@ -30,12 +30,15 @@
     "./dist/**/*.css"
   ],
   "scripts": {
-    "build": "pnpm check:boundaries && vite build && node ./scripts/generate-json-schemas.mjs && node ./scripts/strip-virtual-module.mjs",
+    "prebuild": "pnpm --filter @nebula/screen-editor-core build",
+    "build": "pnpm check:boundaries && vite build && pnpm check:dist-boundaries && node ./scripts/generate-json-schemas.mjs && node ./scripts/normalize-declarations.mjs",
     "check:boundaries": "node ./scripts/check-boundaries.mjs",
+    "check:dist-boundaries": "node ./scripts/check-dist-boundaries.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:tarball": "node ./scripts/verify-tarball-consumer.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -62,6 +65,7 @@
     "@fontsource-variable/geist": "^5.2.9",
     "@microsoft/api-extractor": "^7.57.0",
     "@nebula/eslint-config": "workspace:*",
+    "@nebula/screen-editor-core": "workspace:*",
     "@nebula/shared": "workspace:*",
     "@nebula/typescript-config": "workspace:*",
     "@types/node": "^24.0.0",

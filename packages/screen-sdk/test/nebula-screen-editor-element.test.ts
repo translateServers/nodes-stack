@@ -13,12 +13,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ScreenHostAdapter } from '../src/contracts/adapter.js';
-import type { ScreenProjectEnvelopeInput } from '../src/contracts/document.js';
+import type {
+  NebulaScreenEditorEventMap,
+  ScreenHostAdapter,
+  ScreenProjectEnvelopeInput,
+} from '@nebula/screen-editor-core';
 import { defineNebulaScreenEditor } from '../src/element/define.js';
 import { NEBULA_SCREEN_EDITOR_TAG_NAME } from '../src/element/define.js';
 import { NebulaScreenEditorElement } from '../src/element/nebula-screen-editor-element.js';
-import type { NebulaScreenEditorEventMap } from '../src/events.js';
 
 // ===== 测试工具 =====
 

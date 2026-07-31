@@ -22,6 +22,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/geist": "^5.2.9",
+    "@nebula/screen-editor-core": "workspace:*",
     "@nebula/screen-sdk": "workspace:*",
     "@nebula/shared": "workspace:*",
     "@scena/react-ruler": "^0.19.0",

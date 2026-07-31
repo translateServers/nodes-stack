@@ -23,10 +23,16 @@ import {
   type ScreenComponent,
 } from '@nebula/shared';
 import { useDatasets, useExecuteDataset } from '@/features/dataset';
-import { Button, Input } from '@nebula/screen-sdk';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
-import { buildDataSourceMigration } from '../lib/data-source-migration';
-import { PanelSection } from './ui-primitives';
+import { Button, Input } from '@nebula/screen-editor-core';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@nebula/screen-editor-core';
+import { buildDataSourceMigration } from '@nebula/screen-editor-core';
+import { PanelSection } from '@nebula/screen-editor-core';
 
 /** Radix Select 不接受空字符串值，用哨兵值表示"未选择" */
 const NO_DATASET_OPTION = '__none__';

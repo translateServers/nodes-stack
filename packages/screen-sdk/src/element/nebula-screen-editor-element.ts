@@ -1,21 +1,25 @@
-import type { ScreenHostAdapter } from '../contracts/adapter.js';
-import { ScreenAdapterErrorCode, type ScreenAdapterError } from '../contracts/adapter.js';
-import type {
-  ScreenDocumentV1,
-  ScreenProjectDraft,
-  ScreenProjectEnvelope,
-} from '../contracts/document.js';
-import type { ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
-import type { NebulaScreenEditorEventMap } from '../events.js';
+import {
+  dispatchScreenEditorEvent,
+  normalizeScreenAdapterError,
+  ScreenAdapterErrorCode,
+  toScreenPublicError,
+  type ScreenAdapterError,
+  type NebulaScreenEditorEventMap,
+  type ScreenHostAdapter,
+  type ScreenDocumentV1,
+  type ScreenEditorTheme,
+  type ScreenProjectDraft,
+  type ScreenProjectEnvelope,
+  type ScreenSdkDiagnostic,
+} from '@nebula/screen-editor-core';
 import screenEditorStyles from '../styles/screen-editor.css?inline';
 import { installScreenEditorStyles } from '../styles/install-styles.js';
 import { applyScreenEditorThemeVariables } from '../styles/theme.js';
-import { mountNebulaScreenEditorRuntime } from './runtime-loader.js';
+import { loadRuntimeMount } from './runtime-loader.js';
 import type {
   ScreenEditorOptions,
   ScreenEditorRuntime,
   ScreenEditorRuntimeConfiguration,
-  ScreenEditorTheme,
 } from './runtime.js';
 
 const MINIMUM_EDITOR_WIDTH = 1024;
@@ -40,10 +44,6 @@ function cloneOptions(options: ScreenEditorOptions | undefined): ScreenEditorOpt
   return structuredClone(options);
 }
 
-function rejectWithError(error: unknown): Promise<never> {
-  return Promise.reject(error instanceof Error ? error : new Error(String(error)));
-}
-
 export class NebulaScreenEditorElement extends HTMLElement {
   static readonly observedAttributes = ['project-id', 'readonly', 'theme'];
 
@@ -52,10 +52,23 @@ export class NebulaScreenEditorElement extends HTMLElement {
   readonly #portalRoot: HTMLDivElement;
   readonly #sdkRoot: HTMLDivElement;
   readonly #sizeWarning: HTMLDivElement;
+  readonly #runtimeError: HTMLDivElement;
+  readonly #runtimeErrorMessage: HTMLSpanElement;
+  readonly #runtimeRetryButton: HTMLButtonElement;
   #adapter?: ScreenHostAdapter;
   #options?: ScreenEditorOptions;
   #resizeObserver?: ResizeObserver;
   #runtime?: ScreenEditorRuntime;
+  #mountPromise?: Promise<void>;
+  #mountError?: ScreenAdapterError;
+  #pendingUpdate?: ScreenEditorRuntimeConfiguration;
+  #pendingSize?: { width: number; height: number };
+
+  readonly #retryRuntime = (): void => {
+    this.#mountError = undefined;
+    this.#clearRuntimeError();
+    void this.#mountRuntime().catch(() => undefined);
+  };
 
   constructor() {
     super();
@@ -72,7 +85,18 @@ export class NebulaScreenEditorElement extends HTMLElement {
     this.#sizeWarning.dataset['nebulaSizeWarning'] = '';
     this.#sizeWarning.textContent = '建议使用至少 1024 × 640 的容器以获得完整编辑体验。';
     this.#sizeWarning.hidden = true;
-    this.#sdkRoot.append(this.#mountRoot, this.#portalRoot, this.#sizeWarning);
+    this.#runtimeError = this.ownerDocument.createElement('div');
+    this.#runtimeError.dataset['nebulaRuntimeError'] = '';
+    this.#runtimeError.setAttribute('role', 'alert');
+    this.#runtimeError.hidden = true;
+    this.#runtimeErrorMessage = this.ownerDocument.createElement('span');
+    this.#runtimeErrorMessage.dataset['nebulaRuntimeErrorMessage'] = '';
+    this.#runtimeRetryButton = this.ownerDocument.createElement('button');
+    this.#runtimeRetryButton.type = 'button';
+    this.#runtimeRetryButton.textContent = '重试';
+    this.#runtimeRetryButton.addEventListener('click', this.#retryRuntime);
+    this.#runtimeError.append(this.#runtimeErrorMessage, this.#runtimeRetryButton);
+    this.#sdkRoot.append(this.#mountRoot, this.#portalRoot, this.#sizeWarning, this.#runtimeError);
     shadowRoot.append(this.#sdkRoot);
   }
 
@@ -130,7 +154,8 @@ export class NebulaScreenEditorElement extends HTMLElement {
     this.addEventListener('pointerdown', this.#activate, true);
     this.#activate();
     this.#applyTheme();
-    this.#mountRuntime();
+    this.#mountError = undefined;
+    void this.#mountRuntime().catch(() => undefined);
     this.#observeSize();
   }
 
@@ -140,6 +165,10 @@ export class NebulaScreenEditorElement extends HTMLElement {
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = undefined;
     if (activeEditors.get(this.ownerDocument) === this) activeEditors.delete(this.ownerDocument);
+    this.#mountPromise = undefined;
+    this.#mountError = undefined;
+    this.#pendingUpdate = undefined;
+    this.#pendingSize = undefined;
     this.#runtime?.dispose();
     this.#runtime = undefined;
   }
@@ -155,39 +184,27 @@ export class NebulaScreenEditorElement extends HTMLElement {
   }
 
   whenReady(): Promise<void> {
-    try {
-      return this.#requireRuntime().whenReady();
-    } catch (error) {
-      return rejectWithError(error);
-    }
+    return this.#awaitRuntime().then((runtime) => runtime.whenReady());
   }
 
   reload(options?: { discardChanges?: boolean }): Promise<void> {
-    try {
-      return this.#requireRuntime().reload(options);
-    } catch (error) {
-      return rejectWithError(error);
+    if (this.#runtime === undefined && this.#mountError !== undefined) {
+      this.#mountError = undefined;
+      this.#clearRuntimeError();
     }
+    return this.#awaitRuntime().then((runtime) => runtime.reload(options));
   }
 
   save(): Promise<ScreenProjectEnvelope> {
-    try {
-      return this.#requireRuntime()
-        .save()
-        .then((envelope) => structuredClone(envelope));
-    } catch (error) {
-      return rejectWithError(error);
-    }
+    return this.#awaitRuntime()
+      .then((runtime) => runtime.save())
+      .then((envelope) => structuredClone(envelope));
   }
 
   publish(): Promise<ScreenProjectEnvelope> {
-    try {
-      return this.#requireRuntime()
-        .publish()
-        .then((envelope) => structuredClone(envelope));
-    } catch (error) {
-      return rejectWithError(error);
-    }
+    return this.#awaitRuntime()
+      .then((runtime) => runtime.publish())
+      .then((envelope) => structuredClone(envelope));
   }
 
   getDraft(): ScreenProjectDraft | null {
@@ -238,38 +255,93 @@ export class NebulaScreenEditorElement extends HTMLElement {
     };
   }
 
-  #mountRuntime(): void {
-    if (this.#runtime !== undefined || !this.isConnected) return;
-    this.#runtime = mountNebulaScreenEditorRuntime({
-      ...this.#configuration(),
-      eventTarget: this,
-      identifierPrefix: `${this.#instanceId}-`,
-      isActive: () => activeEditors.get(this.ownerDocument) === this,
-      mountRoot: this.#mountRoot,
-      onThemeChange: (theme) => {
-        this.theme = theme;
-      },
-      portalRoot: this.#portalRoot,
+  #mountRuntime(): Promise<void> {
+    if (this.#runtime !== undefined || !this.isConnected) return Promise.resolve();
+    if (this.#mountPromise !== undefined) return this.#mountPromise;
+    this.#clearRuntimeError();
+    const promise = loadRuntimeMount()
+      .then((mount) => {
+        if (this.#mountPromise !== promise || !this.isConnected) return;
+        this.#runtime = mount({
+          ...this.#configuration(),
+          eventTarget: this,
+          identifierPrefix: `${this.#instanceId}-`,
+          isActive: () => activeEditors.get(this.ownerDocument) === this,
+          mountRoot: this.#mountRoot,
+          onThemeChange: (theme) => {
+            this.theme = theme;
+          },
+          portalRoot: this.#portalRoot,
+        });
+        this.#mountPromise = undefined;
+        this.#mountError = undefined;
+        if (this.#pendingUpdate !== undefined) {
+          this.#runtime.update(this.#pendingUpdate);
+          this.#pendingUpdate = undefined;
+        }
+        if (this.#pendingSize !== undefined) {
+          this.#runtime.resize(this.#pendingSize.width, this.#pendingSize.height);
+          this.#pendingSize = undefined;
+        }
+      })
+      .catch((error: unknown) => {
+        if (this.#mountPromise !== promise || !this.isConnected) return;
+        const normalized = normalizeScreenAdapterError(error);
+        const publicError = { ...toScreenPublicError(normalized), recoverable: true };
+        this.#mountPromise = undefined;
+        this.#mountError = normalized;
+        this.#runtimeErrorMessage.textContent = publicError.message;
+        this.#runtimeError.hidden = false;
+        dispatchScreenEditorEvent(this, 'nebula-error', {
+          ...(this.projectId === '' ? {} : { projectId: this.projectId }),
+          operation: 'load',
+          error: publicError,
+        });
+        throw normalized;
+      });
+    this.#mountPromise = promise;
+    return promise;
+  }
+
+  #awaitRuntime(): Promise<ScreenEditorRuntime> {
+    if (this.#runtime !== undefined) return Promise.resolve(this.#runtime);
+    if (!this.isConnected)
+      return Promise.reject(new ElementCommandError(ScreenAdapterErrorCode.UNAVAILABLE));
+    if (this.#mountError !== undefined) return Promise.reject(this.#mountError);
+    return this.#mountRuntime().then(() => {
+      if (this.#runtime === undefined) {
+        throw new ElementCommandError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
+      return this.#runtime;
     });
   }
 
   #restartRuntime(): void {
     this.#runtime?.dispose();
     this.#runtime = undefined;
-    this.#mountRuntime();
+    this.#mountPromise = undefined;
+    this.#mountError = undefined;
+    this.#pendingUpdate = undefined;
+    this.#pendingSize = undefined;
+    this.#clearRuntimeError();
+    void this.#mountRuntime().catch(() => undefined);
   }
 
   #updateRuntime(): void {
     if (!this.isConnected) return;
-    this.#mountRuntime();
-    this.#runtime?.update(this.#configuration());
+    if (this.#runtime !== undefined) {
+      this.#runtime.update(this.#configuration());
+      return;
+    }
+    this.#mountError = undefined;
+    this.#clearRuntimeError();
+    this.#pendingUpdate = this.#configuration();
+    void this.#mountRuntime().catch(() => undefined);
   }
 
-  #requireRuntime(): ScreenEditorRuntime {
-    if (this.#runtime === undefined) {
-      throw new ElementCommandError(ScreenAdapterErrorCode.UNAVAILABLE);
-    }
-    return this.#runtime;
+  #clearRuntimeError(): void {
+    this.#runtimeError.hidden = true;
+    this.#runtimeErrorMessage.textContent = '';
   }
 
   #applyTheme(): void {
@@ -285,7 +357,11 @@ export class NebulaScreenEditorElement extends HTMLElement {
   #observeSize(): void {
     const updateSize = (width: number, height: number): void => {
       this.#sizeWarning.hidden = width >= MINIMUM_EDITOR_WIDTH && height >= MINIMUM_EDITOR_HEIGHT;
-      this.#runtime?.resize(width, height);
+      if (this.#runtime !== undefined) {
+        this.#runtime.resize(width, height);
+      } else {
+        this.#pendingSize = { width, height };
+      }
       this.#applyTheme();
     };
     const ResizeObserverConstructor = this.ownerDocument.defaultView?.ResizeObserver;
@@ -343,11 +419,5 @@ export class NebulaScreenEditorElement extends HTMLElement {
     options?: boolean | EventListenerOptions,
   ): void {
     if (listener !== null) super.removeEventListener(type, listener, options);
-  }
-}
-
-declare global {
-  interface HTMLElementTagNameMap {
-    'nebula-screen-editor': NebulaScreenEditorElement;
   }
 }
