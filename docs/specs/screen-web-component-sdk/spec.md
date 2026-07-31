@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Spec
 
-> 状态：实施中（阶段 4 已完成，待进入阶段 5 Host Adapter 工作流）
+> 状态：实施中（阶段 5 已完成，待进入阶段 6 Web Component 与 Shadow DOM）
 > 最近更新：2026-07-31
 > 定位：定义大屏设计器以前端 Web Component SDK 交付时的产品边界、宿主适配器、文档协议、元素 API、隔离机制与验收标准
 

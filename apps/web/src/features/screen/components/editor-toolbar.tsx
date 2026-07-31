@@ -196,7 +196,7 @@ function ZoomControls({
 
 interface EditorToolbarProps {
   onSave: () => void;
-  onPublish: () => void;
+  onPublish?: () => void;
   onPreview: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -303,15 +303,17 @@ export const EditorToolbar = memo(function EditorToolbar({
           {isSaving ? <LoaderCircle className="animate-spin" /> : <Save />}
           保存
         </Button>
-        <Button
-          size="sm"
-          onClick={onPublish}
-          disabled={isPublishing}
-          className="cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700"
-        >
-          {isPublishing ? <LoaderCircle className="animate-spin" /> : <Upload />}
-          发布
-        </Button>
+        {onPublish !== undefined && (
+          <Button
+            size="sm"
+            onClick={onPublish}
+            disabled={isPublishing}
+            className="cursor-pointer bg-emerald-500 text-white hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+          >
+            {isPublishing ? <LoaderCircle className="animate-spin" /> : <Upload />}
+            发布
+          </Button>
+        )}
       </div>
     </header>
   );

@@ -1,4 +1,8 @@
-import { dispatchScreenEditorRequestEvent, type ScreenPreviewRequestDetail } from './events.js';
+import {
+  dispatchScreenEditorEvent,
+  dispatchScreenEditorRequestEvent,
+  type ScreenPreviewRequestDetail,
+} from './events.js';
 
 describe('dispatchScreenEditorRequestEvent', () => {
   it('dispatches a bubbling composed navigate request with its detail', () => {
@@ -51,5 +55,22 @@ describe('dispatchScreenEditorRequestEvent', () => {
     expect(listener).toHaveBeenCalledOnce();
     const event = listener.mock.calls[0]?.[0] as CustomEvent<ScreenPreviewRequestDetail>;
     expect(event.detail.revision).toBe('revision-1');
+  });
+});
+
+describe('dispatchScreenEditorEvent', () => {
+  it('dispatches detached public details', () => {
+    const target = document.createElement('div');
+    const listener = vi.fn<(event: Event) => void>();
+    target.addEventListener('nebula-dirty-change', listener);
+    const detail = { projectId: 'screen-1', dirty: true };
+
+    dispatchScreenEditorEvent(target, 'nebula-dirty-change', detail);
+    detail.projectId = 'changed-after-dispatch';
+
+    const event = listener.mock.calls[0]?.[0] as CustomEvent;
+    expect(event.detail).toEqual({ projectId: 'screen-1', dirty: true });
+    expect(event.bubbles).toBe(true);
+    expect(event.composed).toBe(true);
   });
 });

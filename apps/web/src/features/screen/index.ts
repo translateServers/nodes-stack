@@ -3,6 +3,10 @@ export * from './hooks';
 export { ScreenListPage } from './components/screen-list-page';
 export { ScreenEditor } from './components/screen-editor';
 export {
+  ScreenHostAdapterWorkbench,
+  type ScreenHostAdapterWorkbenchProps,
+} from './components/screen-host-adapter-workbench';
+export {
   ScreenEditorWorkbench,
   type ScreenEditorWorkbenchEnvelope,
   type ScreenEditorWorkbenchOperationController,

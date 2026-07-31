@@ -1,11 +1,15 @@
 import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import {
+  downloadScreenExportFile,
   dispatchScreenEditorRequestEvent,
   parseScreenDocument,
   SCREEN_DOCUMENT_VERSION,
   ScreenSdkPortalRootProvider,
   Spinner,
+  toScreenPublicError,
   TooltipProvider,
+  type ScreenHostController,
+  type ScreenHostControllerState,
   type ScreenProjectDraft,
 } from '@nebula/screen-sdk';
 import {
@@ -84,16 +88,20 @@ export interface ScreenEditorWorkbenchOperationResult {
 }
 
 export interface ScreenEditorWorkbenchOperationController {
-  exportProject: () => ScreenEditorWorkbenchOperationResult;
-  isLoading: boolean;
-  isPublishing: boolean;
-  isSaving: boolean;
+  exportProject?: () => ScreenEditorWorkbenchOperationResult;
+  host?: {
+    controller: ScreenHostController;
+    state: ScreenHostControllerState;
+  };
+  isLoading?: boolean;
+  isPublishing?: boolean;
+  isSaving?: boolean;
   navigate: (url: string, target: '_blank' | '_self') => void;
   preview: () => void;
   projectId: string;
-  publish: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
-  reload: () => Promise<boolean>;
-  save: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
+  publish?: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
+  reload?: () => Promise<boolean>;
+  save?: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
   snapshots?: ScreenSnapshotHostAdapter;
 }
 
@@ -117,6 +125,10 @@ export function ScreenEditorWorkbench({
   capabilityProfile = 'static',
 }: ScreenEditorWorkbenchProps) {
   const eventTargetRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    operations.host?.controller.setEventTarget(eventTargetRef.current ?? undefined);
+    return () => operations.host?.controller.setEventTarget(undefined);
+  }, [operations.host?.controller]);
   const requestNavigate = useCallback(
     (url: string, target: '_blank' | '_self'): void => {
       if (capabilityProfile === 'static' && eventTargetRef.current !== null) {
@@ -171,6 +183,7 @@ function ScreenEditorWorkbenchContent({
   const { notify } = useScreenEditorNotifications();
   const { capabilityProfile } = useScreenEditorEnvironment();
   const loadProject = useScreenEditorStore((state) => state.loadProject);
+  const loadedProject = useScreenEditorStore((state) => state.project);
   const canvasConfig = useScreenEditorStore((state) => state.project?.canvas);
   const canvasScale = useScreenEditorStore((state) => state.canvasScale);
   const canvasOffset = useScreenEditorStore((state) => state.canvasOffset);
@@ -207,6 +220,7 @@ function ScreenEditorWorkbenchContent({
   const editorSession = useEditorSession({ toolStateMachine, interactionStateMachine });
 
   useEffect(() => {
+    if (operations.host !== undefined) return;
     if (project === null || project === undefined) return;
     const result = createScreenEditorWorkbenchProject(project, capabilityProfile);
     if (!result.success) {
@@ -214,7 +228,12 @@ function ScreenEditorWorkbenchContent({
       return;
     }
     loadProject(result.project);
-  }, [capabilityProfile, loadProject, notify, project]);
+  }, [capabilityProfile, loadProject, notify, operations.host, project]);
+
+  useEffect(() => {
+    if (operations.host?.state.phase !== 'awaiting-render' || loadedProject === null) return;
+    operations.host.controller.markRendered();
+  }, [loadedProject, operations.host]);
 
   const handleTextEditorExit = useCallback(
     (result: {
@@ -291,15 +310,42 @@ function ScreenEditorWorkbenchContent({
   }, [debugHandle, editorSession, store]);
 
   const handleSave = useCallback((): void => {
-    operations.save({
+    if (operations.host !== undefined && editorSession.isInteracting) {
+      notify('warning', '请先结束当前编辑操作');
+      return;
+    }
+    if (operations.host !== undefined) {
+      void operations.host.controller.save().then(
+        () => setLastSavedAt(new Date()),
+        (error: unknown) => {
+          const publicError = toScreenPublicError(error);
+          if (publicError.code === 'CONFLICT') {
+            setShowConflictDialog(true);
+            return;
+          }
+          notify('error', publicError.message);
+        },
+      );
+      return;
+    }
+    operations.save?.({
       onConflict: () => setShowConflictDialog(true),
       onError: (message) => notify('error', message),
       onSuccess: () => setLastSavedAt(new Date()),
     });
-  }, [notify, operations]);
+  }, [editorSession.isInteracting, notify, operations]);
 
   const handleReloadFromConflict = useCallback(async (): Promise<void> => {
-    const reloaded = await operations.reload();
+    if (operations.host !== undefined) {
+      try {
+        await operations.host.controller.reload({ discardChanges: true });
+        setShowConflictDialog(false);
+      } catch (error) {
+        notify('error', toScreenPublicError(error).message);
+      }
+      return;
+    }
+    const reloaded = (await operations.reload?.()) ?? false;
     if (!reloaded) {
       notify('error', '重新加载失败，请重试');
       return;
@@ -308,7 +354,21 @@ function ScreenEditorWorkbenchContent({
   }, [notify, operations]);
 
   const doPublish = useCallback((): void => {
-    operations.publish({
+    if (operations.host !== undefined) {
+      void operations.host.controller.publish().then(
+        () => notify('success', '发布成功'),
+        (error: unknown) => {
+          const publicError = toScreenPublicError(error);
+          if (publicError.code === 'CONFLICT') {
+            setShowConflictDialog(true);
+            return;
+          }
+          notify('error', publicError.message);
+        },
+      );
+      return;
+    }
+    operations.publish?.({
       onConflict: () => setShowConflictDialog(true),
       onError: (message) => notify('error', message),
       onSuccess: () => notify('success', '发布成功'),
@@ -316,6 +376,10 @@ function ScreenEditorWorkbenchContent({
   }, [notify, operations]);
 
   const handlePublish = useCallback((): void => {
+    if (operations.host !== undefined && editorSession.isInteracting) {
+      notify('warning', '请先结束当前编辑操作');
+      return;
+    }
     const currentProject = store.getState().project;
     if (currentProject === null) return;
     if (store.getState().isDirty) {
@@ -337,7 +401,7 @@ function ScreenEditorWorkbenchContent({
       }
     }
     doPublish();
-  }, [doPublish, notify, store]);
+  }, [doPublish, editorSession.isInteracting, notify, operations.host, store]);
 
   const handlePublishConfirm = useCallback((): void => {
     setShowPublishConfirm(false);
@@ -346,7 +410,17 @@ function ScreenEditorWorkbenchContent({
   }, [doPublish]);
 
   const handleExport = useCallback((): void => {
-    const result = operations.exportProject();
+    if (operations.host !== undefined) {
+      void operations.host.controller.exportProject().then(
+        (file) => {
+          downloadScreenExportFile(file);
+          notify('success', `已导出 ${file.fileName}`);
+        },
+        (error: unknown) => notify('error', toScreenPublicError(error).message),
+      );
+      return;
+    }
+    const result = operations.exportProject?.() ?? { success: false, message: '导出能力不可用' };
     notify(result.success ? 'success' : 'error', result.message);
   }, [notify, operations]);
 
@@ -414,6 +488,8 @@ function ScreenEditorWorkbenchContent({
     });
   }, [setCanvasScaleAndOffset, store]);
 
+  const hostState = operations.host?.state;
+  const hostMutationPending = (hostState?.pendingMutations.length ?? 0) > 0;
   useKeyboardShortcuts({
     onSave: handleSave,
     onZoomIn: handleZoomIn,
@@ -421,10 +497,15 @@ function ScreenEditorWorkbenchContent({
     onFitToScreen: handleFitToScreen,
     onShowHelp: () => setShowHelp(true),
     editorSession,
-    suspended: showEventBlueprint || blueprintSheetOpen || showCodeEditor,
+    suspended: showEventBlueprint || blueprintSheetOpen || showCodeEditor || hostMutationPending,
   });
 
-  if (operations.isLoading) {
+  const isInitialLoading =
+    hostState?.phase === 'loading' ? !hostState.retainedProject : operations.isLoading === true;
+  if (hostState?.phase === 'waiting') {
+    return <div className="h-full w-full bg-background" aria-label="等待项目配置" />;
+  }
+  if (isInitialLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-background">
         <Spinner className="size-6 text-muted-foreground/70" />
@@ -432,9 +513,40 @@ function ScreenEditorWorkbenchContent({
     );
   }
 
+  if (hostState?.phase === 'error' || hostState?.phase === 'unsupported') {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <p className="text-sm text-foreground">{hostState.error?.message ?? '项目加载失败'}</p>
+        <button
+          type="button"
+          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+          onClick={() => void operations.host?.controller.retry().catch(() => undefined)}
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+
   const canvasWidth = canvasConfig?.width ?? 1920;
   const canvasHeight = canvasConfig?.height ?? 1080;
   const blueprintOpen = showEventBlueprint || blueprintSheetOpen;
+  const capabilities = hostState?.capabilities;
+  const canPublish =
+    operations.host === undefined ? operations.publish !== undefined : capabilities?.publish;
+  const canImport = operations.host === undefined ? true : capabilities?.import;
+  const canExport =
+    operations.host === undefined ? operations.exportProject !== undefined : capabilities?.export;
+  const canUseSnapshots =
+    operations.host === undefined ? operations.snapshots !== undefined : capabilities?.snapshots;
+  const isSaving =
+    operations.host === undefined
+      ? operations.isSaving === true
+      : hostState?.pendingMutations.includes('save') === true;
+  const isPublishing =
+    operations.host === undefined
+      ? operations.isPublishing === true
+      : hostState?.pendingMutations.includes('publish') === true;
 
   return (
     <TooltipProvider>
@@ -442,20 +554,20 @@ function ScreenEditorWorkbenchContent({
         {showToolbar && (
           <EditorToolbar
             onSave={handleSave}
-            onPublish={handlePublish}
+            onPublish={canPublish === true ? handlePublish : undefined}
             onPreview={handlePreview}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onFitToScreen={handleFitToScreen}
-            isSaving={operations.isSaving}
-            isPublishing={operations.isPublishing}
+            isSaving={isSaving}
+            isPublishing={isPublishing}
             lastSavedAt={lastSavedAt}
             editorSession={editorSession}
             menubarProps={{
-              onShowImport: () => setShowImport(true),
-              onExport: handleExport,
+              onShowImport: canImport === true ? () => setShowImport(true) : undefined,
+              onExport: canExport === true ? handleExport : undefined,
               onShowSnapshotManager:
-                operations.snapshots === undefined ? undefined : () => setShowSnapshotManager(true),
+                canUseSnapshots === true ? () => setShowSnapshotManager(true) : undefined,
               onShowCanvasSettings: () => setShowCanvasSettings(true),
               onShowEventBlueprint: () => setShowEventBlueprint(true),
               onShowCodeEditor: () => setShowCodeEditor(true),
@@ -521,6 +633,17 @@ function ScreenEditorWorkbenchContent({
           {showPanels && <EditorRightPanel />}
         </div>
         {showPanels && <CanvasStatusBar editorSession={editorSession} />}
+        {hostState?.phase === 'loading' && hostState.retainedProject && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60">
+            <Spinner className="size-6 text-muted-foreground/70" />
+          </div>
+        )}
+        {hostState !== undefined && hostState.pendingMutations.length > 0 && (
+          <div
+            className="absolute inset-0 z-30 cursor-wait bg-background/10"
+            aria-label="项目操作进行中"
+          />
+        )}
       </div>
 
       <ShortcutsHelpDialog open={showHelp} onOpenChange={setShowHelp} />
@@ -529,13 +652,17 @@ function ScreenEditorWorkbenchContent({
         open={showImport}
         onOpenChange={setShowImport}
         currentProjectId={operations.projectId}
+        onConflict={() => setShowConflictDialog(true)}
+        {...(operations.host === undefined ? {} : { hostController: operations.host.controller })}
       />
-      {operations.snapshots !== undefined && (
+      {canUseSnapshots === true && (
         <SnapshotManagerDialog
           open={showSnapshotManager}
           onOpenChange={setShowSnapshotManager}
           projectId={operations.projectId}
-          adapter={operations.snapshots}
+          onConflict={() => setShowConflictDialog(true)}
+          {...(operations.snapshots === undefined ? {} : { adapter: operations.snapshots })}
+          {...(operations.host === undefined ? {} : { hostController: operations.host.controller })}
         />
       )}
       {blueprintOpen && (

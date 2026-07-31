@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 4 已完成，待进入阶段 5 Host Adapter 工作流）
+> 状态：实施中（阶段 5 已完成，待进入阶段 6 Web Component 与 Shadow DOM）
 > 最近更新：2026-07-31
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
@@ -139,44 +139,52 @@
 
 ## 阶段 5：实现 Host Adapter 工作流
 
-- [ ] Task 12: 实现加载与项目切换控制器
-  - [ ] 等待 `projectId + adapter` 后加载
-  - [ ] 校验 Envelope、迁移蓝图并执行 static capability validation
-  - [ ] project-id 变化时取消旧操作并原子加载新项目
-  - [ ] 实现 loading、retry、unsupported 与普通错误 UI
-  - [ ] 实现 `whenReady()` 和 `nebula-ready`
-  - [ ] 测试乱序响应、切换失败和断连取消
-  - [ ] 建立统一 operation coordinator，使全部项目 mutation 跨类型互斥
-  - [ ] 用表驱动测试覆盖 save/publish/import/snapshot mutation 竞争与迟到响应
+- [x] Task 12: 实现加载与项目切换控制器
+  - [x] 等待 `projectId + adapter` 后加载
+  - [x] 校验 Envelope、迁移蓝图并执行 static capability validation
+  - [x] project-id 变化时取消旧操作并原子加载新项目
+  - [x] 实现 loading、retry、unsupported 与普通错误 UI
+  - [x] 实现 `whenReady()` 和 `nebula-ready`
+  - [x] 测试乱序响应、切换失败和断连取消
+  - [x] 建立统一 operation coordinator，使全部项目 mutation 跨类型互斥
+  - [x] 用表驱动测试覆盖 save/publish/import/snapshot mutation 竞争与迟到响应
 
-- [ ] Task 13: 实现保存、发布与冲突处理
-  - [ ] 保存传入 revision、draft 与 AbortSignal
-  - [ ] 成功后使用完整返回 Envelope 建立新基线
-  - [ ] 普通保存/发布保留历史，导入/恢复/项目切换才清空旧历史
-  - [ ] 服务端返回内容与提交草稿不一致时以响应为准并重置不适用历史
-  - [ ] dirty 时阻止发布
-  - [ ] `CONFLICT` 保留草稿与历史，支持重新加载/取消
-  - [ ] 可选发布能力不存在时隐藏 UI
-  - [ ] 实现成功/error/dirty CustomEvent
+- [x] Task 13: 实现保存、发布与冲突处理
+  - [x] 保存传入 revision、draft 与 AbortSignal
+  - [x] 成功后使用完整返回 Envelope 建立新基线
+  - [x] 普通保存/发布保留历史，导入/恢复/项目切换才清空旧历史
+  - [x] 服务端返回内容与提交草稿不一致时以响应为准并重置不适用历史
+  - [x] dirty 时阻止发布
+  - [x] `CONFLICT` 保留草稿与历史，支持重新加载/取消
+  - [x] 可选发布能力不存在时隐藏 UI
+  - [x] 实现成功/error/dirty CustomEvent
 
-- [ ] Task 14: 实现 Adapter 导入导出
-  - [ ] 在读取前校验文件类型与 10 MiB 大小上限，再校验 transfer JSON
-  - [ ] 展示项目名称、组件数、画布尺寸和 dirty 覆盖警告
-  - [ ] 确认后调用 `importProject` 并应用返回 Envelope
-  - [ ] 调用 `exportProject`，下载返回 Blob 并释放 Object URL
-  - [ ] 可选能力不存在时隐藏菜单项
-  - [ ] 成功后派发类型化 `nebula-operation-success`
-  - [ ] 测试非法文件、服务端校验失败、冲突和下载文件名
+- [x] Task 14: 实现 Adapter 导入导出
+  - [x] 在读取前校验文件类型与 10 MiB 大小上限，再校验 transfer JSON
+  - [x] 展示项目名称、组件数、画布尺寸和 dirty 覆盖警告
+  - [x] 确认后调用 `importProject` 并应用返回 Envelope
+  - [x] 调用 `exportProject`，下载返回 Blob 并释放 Object URL
+  - [x] 可选能力不存在时隐藏菜单项
+  - [x] 成功后派发类型化 `nebula-operation-success`
+  - [x] 测试非法文件、服务端校验失败、冲突和下载文件名
 
-- [ ] Task 15: 实现 Adapter 快照管理
-  - [ ] 实现列表、创建、恢复、删除和清空操作
-  - [ ] 创建时传递当前未保存 draft
-  - [ ] 恢复和清空前二次确认
-  - [ ] 恢复成功使用返回 Envelope 重建基线
-  - [ ] 失败时保留当前文档与历史
-  - [ ] restore 的 CONFLICT 与迟到响应遵循统一 mutation/代际规则
-  - [ ] snapshots 不存在时隐藏入口
-  - [ ] create/restore/remove/clear 成功后派发类型化 operation success detail
+- [x] Task 15: 实现 Adapter 快照管理
+  - [x] 实现列表、创建、恢复、删除和清空操作
+  - [x] 创建时传递当前未保存 draft
+  - [x] 恢复和清空前二次确认
+  - [x] 恢复成功使用返回 Envelope 重建基线
+  - [x] 失败时保留当前文档与历史
+  - [x] restore 的 CONFLICT 与迟到响应遵循统一 mutation/代际规则
+  - [x] snapshots 不存在时隐藏入口
+  - [x] create/restore/remove/clear 成功后派发类型化 operation success detail
+
+### 阶段 5 执行记录（已完成）
+
+- SDK 新增无 React 的 `ScreenOperationCoordinator` 与 `ScreenHostController`，通过 generation、AbortSignal 和迟到响应守卫统一管理 load、只读操作与 7 类互斥 mutation。
+- Host controller 已覆盖 Envelope 运行时校验、ready/retry、保存发布、冲突、导入导出、快照、能力派生、安全错误和类型化 CustomEvent；49 组 mutation 竞争使用表驱动测试验证。
+- Store 新增 Envelope 应用语义：普通保存/发布响应未重写草稿时保留历史；服务端重写时以响应为新基线并清空旧历史，提交后的本地差异通过三方合并重放；导入/恢复/切换执行权威替换。
+- Workbench 增加 Host controller bridge，Adapter 可选能力驱动发布、导入导出和快照入口；现有 Nebula dynamic 宿主路径保持兼容，阶段 7 前不切换生产入口。
+- SDK 143 项测试通过，SDK typecheck/lint/build 与 Web typecheck/lint 通过；Web 完整回归 2515 项通过、14 项跳过，仅 4 个既有 ECharts/jsdom 零尺寸用例失败，与阶段 2 记录基线一致。
 
 ## 阶段 6：Web Component 与 Shadow DOM
 

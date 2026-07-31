@@ -11,6 +11,13 @@ import type {
 } from '@nebula/shared';
 import { migrateBlueprintV1ToV2, EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import {
+  parseScreenDocument,
+  SCREEN_DOCUMENT_VERSION,
+  ScreenProjectDraftSchema,
+  type ScreenProjectDraft,
+  type ScreenProjectEnvelope,
+} from '@nebula/screen-sdk/contracts';
+import {
   createPreferenceRepository,
   DEFAULT_SCREEN_EDITOR_PREFERENCE_NAMESPACE,
   type PreferenceRepository,
@@ -189,6 +196,8 @@ interface ScreenEditorData {
 
 interface ScreenEditorActions {
   loadProject: (project: ScreenProject) => void;
+  clearProject: () => void;
+  applyProjectEnvelope: (input: ApplyProjectEnvelopeInput) => void;
   /** 重命名项目（不入历史栈，仅置脏；名称随下次保存持久化） */
   renameProject: (name: string) => void;
   selectComponent: (id: string | null) => void;
@@ -337,6 +346,17 @@ interface ScreenEditorActions {
 export type ScreenEditorState = ScreenEditorData & ScreenEditorActions;
 export type ScreenEditorStore = StoreApi<ScreenEditorState>;
 
+export type ApplyProjectEnvelopeInput =
+  | {
+      envelope: ScreenProjectEnvelope;
+      source: 'load' | 'reload' | 'switch' | 'import' | 'restore';
+    }
+  | {
+      envelope: ScreenProjectEnvelope;
+      source: 'save' | 'publish';
+      submittedDraft: ScreenProjectDraft;
+    };
+
 export interface CreateScreenEditorStoreOptions {
   instanceId?: string;
   persistPreferences?: boolean;
@@ -475,6 +495,107 @@ export function normalizeBlueprintToV2(blueprint: EventBlueprint | EventBlueprin
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStructurallyEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((value, index) => isStructurallyEqual(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).filter((key) => left[key] !== undefined);
+  const rightKeys = Object.keys(right).filter((key) => right[key] !== undefined);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key) => Object.hasOwn(right, key) && isStructurallyEqual(left[key], right[key]),
+  );
+}
+
+function toComparableDraft(project: ScreenProject): unknown {
+  return {
+    name: project.name,
+    description: project.description ?? null,
+    document: {
+      schemaVersion: 1,
+      canvas: project.canvas,
+      components: project.components,
+      blueprint: project.blueprint,
+      globalVariables: project.globalVariables ?? [],
+    },
+  };
+}
+
+function toStaticProjectDraft(project: ScreenProject): ScreenProjectDraft | null {
+  const document = parseScreenDocument({
+    schemaVersion: SCREEN_DOCUMENT_VERSION,
+    canvas: project.canvas,
+    components: project.components,
+    blueprint: project.blueprint,
+    globalVariables: project.globalVariables,
+  });
+  if (!document.success) return null;
+  return {
+    name: project.name,
+    description: project.description ?? null,
+    document: document.data,
+  };
+}
+
+function rebaseLocalChanges(base: unknown, local: unknown, remote: unknown): unknown {
+  if (isStructurallyEqual(base, local)) return remote;
+  if (!isRecord(base) || !isRecord(local) || !isRecord(remote)) return local;
+  const keys = new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)]);
+  return Object.fromEntries(
+    [...keys].map((key) => [key, rebaseLocalChanges(base[key], local[key], remote[key])]),
+  );
+}
+
+function normalizeDraftDescription(draft: ScreenProjectDraft): ScreenProjectDraft {
+  return { ...draft, description: draft.description ?? null };
+}
+
+function toInternalScreenProject(
+  envelope: ScreenProjectEnvelope,
+  currentProject: ScreenProject | null,
+): ScreenProject {
+  const currentMetadata = currentProject?.id === envelope.id ? currentProject : null;
+  return {
+    id: envelope.id,
+    name: envelope.name,
+    description: envelope.description ?? null,
+    status: envelope.status,
+    canvas: envelope.document.canvas,
+    components: envelope.document.components,
+    blueprint: envelope.document.blueprint,
+    globalVariables: envelope.document.globalVariables,
+    createdAt: currentMetadata?.createdAt ?? '',
+    updatedAt: envelope.revision,
+    thumbnail: currentMetadata?.thumbnail ?? null,
+  };
+}
+
+function createProjectReplacement(project: ScreenProject): Partial<ScreenEditorState> {
+  const { blueprint: v2Blueprint, warnings } = normalizeBlueprintToV2(project.blueprint);
+  if (warnings.length > 0) {
+    console.debug('[blueprint] V1→V2 migration warnings:', warnings);
+  }
+  return {
+    project: v2Blueprint === project.blueprint ? project : { ...project, blueprint: v2Blueprint },
+    selectedComponentIds: [],
+    targets: [],
+    activeGroupId: null,
+    history: { past: [], future: [] },
+    isDirty: false,
+    blueprintGesture: { active: false, baseline: undefined },
+    blueprintSheetOpen: false,
+    blueprintFocusComponentId: null,
+    interactionMode: 'design',
+  };
+}
+
 export function createScreenEditorStore(
   options: CreateScreenEditorStoreOptions = {},
 ): ScreenEditorStore {
@@ -489,30 +610,97 @@ export function createScreenEditorStore(
         ...initialData,
 
         loadProject: (project) => {
-          // 任务 8.1：项目加载时自动迁移 V1 蓝图 → V2，编辑器内存始终为 V2
-          // 迁移 warnings 当前静默处理（仅在控制台 debug），后续可在 UI 提示
-          const { blueprint: v2Blueprint, warnings } = normalizeBlueprintToV2(project.blueprint);
-          if (warnings.length > 0) {
-            console.debug('[blueprint] V1→V2 migration warnings:', warnings);
-          }
-          const normalizedProject: ScreenProject =
-            v2Blueprint === project.blueprint ? project : { ...project, blueprint: v2Blueprint };
+          set(createProjectReplacement(project), false, 'loadProject');
+        },
+
+        clearProject: () => {
           set(
             {
-              project: normalizedProject,
+              project: null,
               selectedComponentIds: [],
+              targets: [],
+              activeGroupId: null,
               history: { past: [], future: [] },
               isDirty: false,
-              // 加载新项目时重置蓝图手势，避免跨项目残留手势态
               blueprintGesture: { active: false, baseline: undefined },
-              // 加载新项目时关闭事件蓝图 Sheet，避免跨项目残留打开状态
               blueprintSheetOpen: false,
               blueprintFocusComponentId: null,
-              // 加载新项目时回到设计模式，避免自动执行蓝图副作用
               interactionMode: 'design',
             },
             false,
-            'loadProject',
+            'clearProject',
+          );
+        },
+
+        applyProjectEnvelope: (input) => {
+          const currentProject = get().project;
+          const responseProject = toInternalScreenProject(input.envelope, currentProject);
+          if (input.source !== 'save' && input.source !== 'publish') {
+            set(createProjectReplacement(responseProject), false, 'applyProjectEnvelope');
+            return;
+          }
+
+          const submittedDraft = normalizeDraftDescription(input.submittedDraft);
+          const currentDraft =
+            currentProject === null ? null : toStaticProjectDraft(currentProject);
+          const currentMatchesSubmission =
+            currentDraft !== null && isStructurallyEqual(currentDraft, submittedDraft);
+          const responseMatchesSubmission = isStructurallyEqual(
+            toComparableDraft(responseProject),
+            submittedDraft,
+          );
+          if (currentProject === null || currentDraft === null) {
+            set(createProjectReplacement(responseProject), false, 'applyProjectEnvelope');
+            return;
+          }
+
+          if (currentMatchesSubmission) {
+            if (responseMatchesSubmission) {
+              set({ project: responseProject, isDirty: false }, false, 'applyProjectEnvelope');
+            } else {
+              set(createProjectReplacement(responseProject), false, 'applyProjectEnvelope');
+            }
+            return;
+          }
+
+          if (responseMatchesSubmission) {
+            set(
+              {
+                project: {
+                  ...currentProject,
+                  status: input.envelope.status,
+                  updatedAt: input.envelope.revision,
+                },
+                isDirty: true,
+              },
+              false,
+              'applyProjectEnvelope',
+            );
+            return;
+          }
+
+          const rebasedDraft = ScreenProjectDraftSchema.safeParse(
+            rebaseLocalChanges(submittedDraft, currentDraft, {
+              name: input.envelope.name,
+              description: input.envelope.description ?? null,
+              document: input.envelope.document,
+            }),
+          );
+          if (!rebasedDraft.success) {
+            set(createProjectReplacement(responseProject), false, 'applyProjectEnvelope');
+            return;
+          }
+          const rebasedProject = toInternalScreenProject(
+            { ...input.envelope, ...rebasedDraft.data },
+            currentProject,
+          );
+          set(
+            {
+              ...createProjectReplacement(rebasedProject),
+              isDirty: true,
+            },
+            false,
+            'applyProjectEnvelope',
           );
         },
 

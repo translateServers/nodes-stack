@@ -61,11 +61,11 @@ import { useScreenEditorEnvironment } from './screen-editor-environment';
 interface ProjectMenubarProps {
   /** 文件级操作回调（在父组件接入 mutation） */
   onSave: () => void;
-  onPublish: () => void;
+  onPublish?: () => void;
   onPreview: () => void;
-  onShowImport: () => void;
+  onShowImport?: () => void;
   /** 直接触发 JSON 导出下载（不再通过 Dialog） */
-  onExport: () => void;
+  onExport?: () => void;
   onShowSnapshotManager?: () => void;
   onShowCanvasSettings: () => void;
   onShowEventBlueprint: () => void;
@@ -174,26 +174,36 @@ export const ProjectMenubar = memo(function ProjectMenubar({
             <DropdownMenuItem onSelect={onSave} disabled={isSaving}>
               <MenuItemContent icon={Save} label="保存项目" shortcutId="save" />
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onPublish} disabled={isPublishing}>
-              <Upload className="size-4 text-muted-foreground" />
-              <span className="flex-1">发布项目</span>
-            </DropdownMenuItem>
+            {onPublish !== undefined && (
+              <DropdownMenuItem onSelect={onPublish} disabled={isPublishing}>
+                <Upload className="size-4 text-muted-foreground" />
+                <span className="flex-1">发布项目</span>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onSelect={onPreview}>
               <Eye className="size-4 text-muted-foreground" />
               <span className="flex-1">预览项目</span>
             </DropdownMenuItem>
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem onSelect={onShowImport}>
-              <FileUp className="size-4 text-muted-foreground" />
-              <span className="flex-1">导入 JSON...</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onExport} disabled={!project}>
-              <FileDown className="size-4 text-muted-foreground" />
-              <span className="flex-1">导出 JSON</span>
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
+          {(onShowImport !== undefined || onExport !== undefined) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                {onShowImport !== undefined && (
+                  <DropdownMenuItem onSelect={onShowImport}>
+                    <FileUp className="size-4 text-muted-foreground" />
+                    <span className="flex-1">导入 JSON...</span>
+                  </DropdownMenuItem>
+                )}
+                {onExport !== undefined && (
+                  <DropdownMenuItem onSelect={onExport} disabled={!project}>
+                    <FileDown className="size-4 text-muted-foreground" />
+                    <span className="flex-1">导出 JSON</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuGroup>
+            </>
+          )}
           {onShowSnapshotManager !== undefined && (
             <>
               <DropdownMenuSeparator />

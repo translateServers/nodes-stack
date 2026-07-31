@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { History, Inbox, LoaderCircle, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import type {
-  ScreenSnapshotHostAdapter,
-  ScreenSnapshotSummary,
-} from '../adapters/screen-editor-host-adapter';
+import type { ScreenSnapshotHostAdapter } from '../adapters/screen-editor-host-adapter';
+import {
+  toScreenPublicError,
+  type ScreenHostController,
+  type ScreenSnapshotSummary,
+} from '@nebula/screen-sdk';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useScreenEditorNotifications } from './screen-editor-notifications';
 import {
@@ -29,7 +31,9 @@ interface SnapshotManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
-  adapter: ScreenSnapshotHostAdapter;
+  adapter?: ScreenSnapshotHostAdapter;
+  hostController?: ScreenHostController;
+  onConflict?: () => void;
 }
 
 type SnapshotOperation = 'list' | 'create' | 'restore' | 'remove' | 'clear';
@@ -50,6 +54,8 @@ export function SnapshotManagerDialog({
   onOpenChange,
   projectId,
   adapter,
+  hostController,
+  onConflict,
 }: SnapshotManagerDialogProps) {
   const storeProject = useScreenEditorStore((s) => s.project);
   const loadProject = useScreenEditorStore((s) => s.loadProject);
@@ -63,9 +69,24 @@ export function SnapshotManagerDialog({
   const showOperationError = useCallback(
     (error: unknown, fallback: string): void => {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      notify('error', error instanceof Error ? error.message : fallback);
+      const publicError = hostController === undefined ? undefined : toScreenPublicError(error);
+      if (publicError?.code === 'ABORTED') return;
+      if (publicError?.code === 'CONFLICT') {
+        setPendingRestore(null);
+        onOpenChange(false);
+        onConflict?.();
+        return;
+      }
+      notify(
+        'error',
+        hostController === undefined
+          ? error instanceof Error
+            ? error.message
+            : fallback
+          : (publicError?.message ?? fallback),
+      );
     },
-    [notify],
+    [hostController, notify, onConflict, onOpenChange],
   );
 
   const beginOperation = useCallback((nextOperation: SnapshotOperation): AbortController => {
@@ -82,12 +103,28 @@ export function SnapshotManagerDialog({
     setOperation(null);
   }, []);
 
+  const cancelPendingOperations = useCallback((): void => {
+    operationControllerRef.current?.abort();
+    hostController?.cancelSnapshotList();
+    hostController?.cancelSnapshotMutations();
+  }, [hostController]);
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean): void => {
+      if (!nextOpen) cancelPendingOperations();
+      onOpenChange(nextOpen);
+    },
+    [cancelPendingOperations, onOpenChange],
+  );
+
   useEffect(() => {
     if (!open) return;
     setSnapshots([]);
     const controller = beginOperation('list');
-    void adapter
-      .list({ projectId, signal: controller.signal })
+    const listPromise =
+      hostController?.listSnapshots() ?? adapter?.list({ projectId, signal: controller.signal });
+    if (listPromise === undefined) return;
+    void listPromise
       .then((nextSnapshots) => {
         if (!controller.signal.aborted) setSnapshots(nextSnapshots);
       })
@@ -96,23 +133,43 @@ export function SnapshotManagerDialog({
       })
       .finally(() => finishOperation(controller));
 
-    return () => controller.abort();
-  }, [adapter, beginOperation, finishOperation, open, projectId, showOperationError]);
+    return () => {
+      controller.abort();
+      hostController?.cancelSnapshotList();
+    };
+  }, [
+    adapter,
+    beginOperation,
+    finishOperation,
+    hostController,
+    open,
+    projectId,
+    showOperationError,
+  ]);
 
   useEffect(() => {
-    return () => operationControllerRef.current?.abort();
-  }, []);
+    return cancelPendingOperations;
+  }, [cancelPendingOperations]);
+
+  useEffect(() => {
+    if (open) return;
+    cancelPendingOperations();
+  }, [cancelPendingOperations, open]);
 
   const handleCreate = useCallback(async (): Promise<void> => {
     if (!storeProject) return;
     const controller = beginOperation('create');
     try {
-      const snapshot = await adapter.create({
-        projectId,
-        revision: storeProject.updatedAt,
-        project: structuredClone(storeProject),
-        signal: controller.signal,
-      });
+      const snapshot =
+        hostController === undefined
+          ? await adapter?.create({
+              projectId,
+              revision: storeProject.updatedAt,
+              project: structuredClone(storeProject),
+              signal: controller.signal,
+            })
+          : await hostController.createSnapshot();
+      if (snapshot === undefined) return;
       if (controller.signal.aborted) return;
       setSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)]);
       notify('success', '已创建快照');
@@ -125,6 +182,7 @@ export function SnapshotManagerDialog({
     adapter,
     beginOperation,
     finishOperation,
+    hostController,
     notify,
     projectId,
     showOperationError,
@@ -135,14 +193,20 @@ export function SnapshotManagerDialog({
     if (!pendingRestore || !storeProject) return;
     const controller = beginOperation('restore');
     try {
-      const project = await adapter.restore({
-        projectId,
-        snapshotId: pendingRestore.id,
-        revision: storeProject.updatedAt,
-        signal: controller.signal,
-      });
+      if (hostController === undefined) {
+        const project = await adapter?.restore({
+          projectId,
+          snapshotId: pendingRestore.id,
+          revision: storeProject.updatedAt,
+          signal: controller.signal,
+        });
+        if (project === undefined) return;
+        if (controller.signal.aborted) return;
+        loadProject(project);
+      } else {
+        await hostController.restoreSnapshot(pendingRestore.id);
+      }
       if (controller.signal.aborted) return;
-      loadProject(project);
       notify('success', `已恢复至 ${formatCreatedAt(pendingRestore.createdAt)} 的快照`);
       setPendingRestore(null);
       onOpenChange(false);
@@ -155,6 +219,7 @@ export function SnapshotManagerDialog({
     adapter,
     beginOperation,
     finishOperation,
+    hostController,
     loadProject,
     notify,
     onOpenChange,
@@ -168,7 +233,11 @@ export function SnapshotManagerDialog({
     async (snapshotId: string): Promise<void> => {
       const controller = beginOperation('remove');
       try {
-        await adapter.remove({ projectId, snapshotId, signal: controller.signal });
+        if (hostController === undefined) {
+          await adapter?.remove({ projectId, snapshotId, signal: controller.signal });
+        } else {
+          await hostController.removeSnapshot(snapshotId);
+        }
         if (controller.signal.aborted) return;
         setSnapshots((current) => current.filter((snapshot) => snapshot.id !== snapshotId));
         notify('success', '快照已删除');
@@ -178,13 +247,25 @@ export function SnapshotManagerDialog({
         finishOperation(controller);
       }
     },
-    [adapter, beginOperation, finishOperation, notify, projectId, showOperationError],
+    [
+      adapter,
+      beginOperation,
+      finishOperation,
+      hostController,
+      notify,
+      projectId,
+      showOperationError,
+    ],
   );
 
   const handleClearAll = useCallback(async (): Promise<void> => {
     const controller = beginOperation('clear');
     try {
-      await adapter.clear({ projectId, signal: controller.signal });
+      if (hostController === undefined) {
+        await adapter?.clear({ projectId, signal: controller.signal });
+      } else {
+        await hostController.clearSnapshots();
+      }
       if (controller.signal.aborted) return;
       setSnapshots([]);
       setShowClearConfirm(false);
@@ -194,13 +275,21 @@ export function SnapshotManagerDialog({
     } finally {
       finishOperation(controller);
     }
-  }, [adapter, beginOperation, finishOperation, notify, projectId, showOperationError]);
+  }, [
+    adapter,
+    beginOperation,
+    finishOperation,
+    hostController,
+    notify,
+    projectId,
+    showOperationError,
+  ]);
 
   const isBusy = operation !== null;
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>快照管理</DialogTitle>

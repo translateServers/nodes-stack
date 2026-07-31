@@ -15,6 +15,11 @@
 import { useCallback, useId, useState } from 'react';
 import { Upload, FileJson, AlertCircle } from 'lucide-react';
 import { ScreenProjectSchema, type ScreenProject } from '@nebula/shared';
+import {
+  toScreenPublicError,
+  type PreparedScreenImport,
+  type ScreenHostController,
+} from '@nebula/screen-sdk';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useScreenEditorNotifications } from './screen-editor-notifications';
 import {
@@ -32,55 +37,101 @@ interface ImportDialogProps {
   onOpenChange: (open: boolean) => void;
   /** 当前项目 ID（导入时保留，避免路由失配） */
   currentProjectId: string;
+  hostController?: ScreenHostController;
+  onConflict?: () => void;
 }
 
 interface ParsedPreview {
-  project: ScreenProject;
+  canvasHeight: number;
+  canvasWidth: number;
+  componentCount: number;
   fileName: string;
+  name: string;
+  prepared?: PreparedScreenImport;
+  project?: ScreenProject;
 }
 
-export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDialogProps) {
+export function ImportDialog({
+  open,
+  onOpenChange,
+  currentProjectId,
+  hostController,
+  onConflict,
+}: ImportDialogProps) {
   const loadProject = useScreenEditorStore((s) => s.loadProject);
+  const isDirty = useScreenEditorStore((s) => s.isDirty);
   const { notify } = useScreenEditorNotifications();
   const fileInputId = useId();
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ParsedPreview | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const reset = useCallback(() => {
     setPreview(null);
     setError(null);
     setIsParsing(false);
     setIsDragging(false);
+    setIsImporting(false);
   }, []);
 
-  const handleFile = useCallback(async (file: File) => {
-    if (!file.name.endsWith('.json') && file.type !== 'application/json') {
-      setError('请选择 .json 文件');
-      setPreview(null);
-      return;
-    }
-
-    setIsParsing(true);
-    setError(null);
-    try {
-      const text = await file.text();
-      const raw: unknown = JSON.parse(text);
-      const parsed = ScreenProjectSchema.safeParse(raw);
-      if (!parsed.success) {
-        setError(`JSON 格式校验失败：${parsed.error.issues[0]?.message ?? '未知错误'}`);
+  const handleFile = useCallback(
+    async (file: File) => {
+      if (
+        hostController === undefined &&
+        !file.name.toLowerCase().endsWith('.json') &&
+        file.type !== 'application/json'
+      ) {
+        setError('请选择 .json 文件');
         setPreview(null);
         return;
       }
-      setPreview({ project: parsed.data, fileName: file.name });
-    } catch (e) {
-      setError(`解析失败：${e instanceof Error ? e.message : '未知错误'}`);
-      setPreview(null);
-    } finally {
-      setIsParsing(false);
-    }
-  }, []);
+
+      setIsParsing(true);
+      setError(null);
+      try {
+        if (hostController !== undefined) {
+          const prepared = await hostController.prepareImport(file);
+          setPreview({
+            fileName: file.name,
+            name: prepared.preview.name,
+            componentCount: prepared.preview.componentCount,
+            canvasWidth: prepared.preview.canvasWidth,
+            canvasHeight: prepared.preview.canvasHeight,
+            prepared,
+          });
+          return;
+        }
+        const text = await file.text();
+        const raw: unknown = JSON.parse(text);
+        const parsed = ScreenProjectSchema.safeParse(raw);
+        if (!parsed.success) {
+          setError(`JSON 格式校验失败：${parsed.error.issues[0]?.message ?? '未知错误'}`);
+          setPreview(null);
+          return;
+        }
+        setPreview({
+          project: parsed.data,
+          fileName: file.name,
+          name: parsed.data.name,
+          componentCount: parsed.data.components.length,
+          canvasWidth: parsed.data.canvas.width,
+          canvasHeight: parsed.data.canvas.height,
+        });
+      } catch (e) {
+        setError(
+          hostController === undefined
+            ? `解析失败：${e instanceof Error ? e.message : '未知错误'}`
+            : toScreenPublicError(e).message,
+        );
+        setPreview(null);
+      } finally {
+        setIsParsing(false);
+      }
+    },
+    [hostController],
+  );
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,14 +153,45 @@ export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDia
     [handleFile],
   );
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async (): Promise<void> => {
     if (!preview) return;
+    if (hostController !== undefined && preview.prepared !== undefined) {
+      setIsImporting(true);
+      try {
+        const envelope = await hostController.importProject(preview.prepared);
+        notify('success', `已导入 ${envelope.name}`);
+        onOpenChange(false);
+        reset();
+      } catch (importError) {
+        const publicError = toScreenPublicError(importError);
+        if (publicError.code === 'CONFLICT') {
+          onOpenChange(false);
+          reset();
+          onConflict?.();
+        } else {
+          setError(publicError.message);
+        }
+      } finally {
+        setIsImporting(false);
+      }
+      return;
+    }
+    if (preview.project === undefined) return;
     // 保留当前路由的 id，避免 URL 失配
     loadProject({ ...preview.project, id: currentProjectId });
     notify('success', `已导入 ${preview.project.name}`);
     onOpenChange(false);
     reset();
-  }, [preview, loadProject, currentProjectId, notify, onOpenChange, reset]);
+  }, [
+    preview,
+    hostController,
+    loadProject,
+    currentProjectId,
+    notify,
+    onOpenChange,
+    onConflict,
+    reset,
+  ]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -124,7 +206,9 @@ export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDia
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>导入 JSON</DialogTitle>
-          <DialogDescription>导入会覆盖当前项目内容，请先保存未提交的修改</DialogDescription>
+          <DialogDescription>
+            {isDirty ? '导入将覆盖当前未保存内容，请确认后继续' : '选择 Nebula Screen JSON 文件'}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -186,12 +270,12 @@ export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDia
               </div>
               <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <dt className="text-muted-foreground">项目名</dt>
-                <dd className="text-foreground">{preview.project.name}</dd>
+                <dd className="text-foreground">{preview.name}</dd>
                 <dt className="text-muted-foreground">组件数</dt>
-                <dd className="text-foreground">{preview.project.components.length}</dd>
+                <dd className="text-foreground">{preview.componentCount}</dd>
                 <dt className="text-muted-foreground">画布尺寸</dt>
                 <dd className="text-foreground">
-                  {preview.project.canvas.width} × {preview.project.canvas.height}
+                  {preview.canvasWidth} × {preview.canvasHeight}
                 </dd>
               </dl>
             </div>
@@ -202,8 +286,11 @@ export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDia
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             取消
           </Button>
-          <Button onClick={handleConfirm} disabled={!preview || isParsing}>
-            确认导入
+          <Button
+            onClick={() => void handleConfirm()}
+            disabled={!preview || isParsing || isImporting}
+          >
+            {isImporting ? '导入中...' : '确认导入'}
           </Button>
         </DialogFooter>
       </DialogContent>

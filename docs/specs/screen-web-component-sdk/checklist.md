@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 4 已完成，待进入阶段 5 Host Adapter 工作流）
+> 状态：实施中（阶段 5 已完成，待进入阶段 6 Web Component 与 Shadow DOM）
 > 最近更新：2026-07-31
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
@@ -41,17 +41,17 @@
 
 ## 3. Adapter Boundary
 
-- [ ] SDK 只通过 `ScreenHostAdapter` 加载和保存项目
+- [x] SDK 只通过 `ScreenHostAdapter` 加载和保存项目
 - [x] SDK 源码没有固定 API base URL、endpoint 或 Nebula response envelope
 - [x] SDK 不读取 Token、Cookie 或 auth store
 - [x] 所有 Adapter 方法接收 AbortSignal
 - [x] save/publish/import/restore 使用当前 revision
-- [ ] 成功操作均用完整返回 Envelope 更新基线
+- [x] 成功操作均用完整返回 Envelope 更新基线
 - [x] SDK 不把 Store 内部 draft/document/transfer 引用直接交给 Adapter
 - [x] SDK 向 Adapter 传递 detached clone，恶意 Adapter 修改输入不影响 Store
-- [ ] Adapter 缺少 publish 时发布入口隐藏
-- [ ] Adapter 缺少 import/export 时对应文件入口隐藏
-- [ ] Adapter 缺少 snapshots 时快照入口隐藏
+- [x] Adapter 缺少 publish 时发布入口隐藏
+- [x] Adapter 缺少 import/export 时对应文件入口隐藏
+- [x] Adapter 缺少 snapshots 时快照入口隐藏
 - [x] HTTP/GraphQL/BizCode 错误可映射到统一 `ScreenAdapterError`
 - [x] 文档错误通过 error.diagnostics 暴露稳定 code/path 且不含敏感原值
 - [x] error event 使用 `ScreenPublicError`，不暴露 Adapter 原始 message/stack/cause/response/附加字段
@@ -89,7 +89,7 @@
 - [x] SDK 源码不使用 apps/web 的 `@/` alias
 - [x] SDK 工作台不显示应用级返回按钮，宿主自行提供返回/关闭导航
 - [x] static preview/navigate 通过 bubbling + composed event 请求宿主执行
-- [ ] 操作反馈在 ShadowRoot 内展示并可由事件观测
+- [ ] 操作反馈在 ShadowRoot 内展示并可由事件观测（事件与实例通知面已完成，待阶段 6 ShadowRoot 挂载）
 - [x] Workbench 可达 UI primitives 与 `cn` 来自 SDK，不依赖应用 UI
 - [x] 编辑器根节点不使用 `h-screen/w-screen`
 - [x] fitToScreen 基于宿主容器 rect
@@ -114,44 +114,44 @@
 
 ## 7. Project Operations
 
-- [ ] `project-id + adapter` 就绪后只加载一次
+- [x] `project-id + adapter` 就绪后只加载一次
 - [ ] property 与 attribute 赋值顺序不影响加载
-- [ ] project-id 快速切换时旧响应不能覆盖新项目
-- [ ] project-id/Adapter 变化会清除旧画面；宿主负责在 dirty 时确认受控切换
-- [ ] load 失败可重试且不伪造 ready
-- [ ] 编辑提交会设置 dirty 并派发 dirty/change 事件
-- [ ] 拖拽每帧不派发完整文档事件
-- [ ] Ctrl/Cmd+S 与保存按钮共用同一操作控制器
-- [ ] 保存请求不并发
-- [ ] save/publish/import/snapshot create/restore/remove/clear 跨类型互斥
-- [ ] mutation 竞争使用表驱动测试覆盖，迟到响应不写回
-- [ ] 保存成功更新 revision 并清除 dirty
-- [ ] 普通保存/发布保留 undo/redo 历史，导入/恢复/项目切换清空旧历史
-- [ ] 保存响应若重写草稿，SDK 以响应为准并清空不适用历史
-- [ ] dirty 时发布被阻止
-- [ ] publish 只提交 projectId + revision
-- [ ] conflict 保留草稿、dirty 和历史栈
-- [ ] conflict 支持重新加载与取消，不提供强制覆盖
+- [x] project-id 快速切换时旧响应不能覆盖新项目
+- [x] project-id/Adapter 变化会清除旧画面；宿主负责在 dirty 时确认受控切换
+- [x] load 失败可重试且不伪造 ready
+- [x] 编辑提交会设置 dirty 并派发 dirty/change 事件
+- [x] 拖拽每帧不派发完整文档事件
+- [x] Ctrl/Cmd+S 与保存按钮共用同一操作控制器
+- [x] 保存请求不并发
+- [x] save/publish/import/snapshot create/restore/remove/clear 跨类型互斥
+- [x] mutation 竞争使用表驱动测试覆盖，迟到响应不写回
+- [x] 保存成功更新 revision 并清除 dirty
+- [x] 普通保存/发布保留 undo/redo 历史，导入/恢复/项目切换清空旧历史
+- [x] 保存响应若重写草稿，SDK 以响应为准并清空不适用历史
+- [x] dirty 时发布被阻止
+- [x] publish 只提交 projectId + revision
+- [x] conflict 保留草稿、dirty 和历史栈
+- [x] conflict 支持重新加载与取消，不提供强制覆盖
 
 ## 8. Import, Export, and Snapshots
 
-- [ ] 导入只接受 JSON 文件
-- [ ] 超过 10 MiB 的导入文件在读取前被拒绝
-- [ ] transfer 本地校验通过后才允许确认
-- [ ] 导入预览展示名称、组件数与画布尺寸
-- [ ] dirty 导入前显示覆盖警告
-- [ ] 导入成功应用返回 Envelope 并清空旧历史
-- [ ] 导出通过 Adapter 获取 Blob
-- [ ] 下载使用安全文件名并释放 Object URL
-- [ ] 导入/导出成功派发类型化 operation success 事件
-- [ ] 快照列表完全来自 Adapter
-- [ ] 创建快照包含当前未保存 draft
-- [ ] 恢复和清空快照需要二次确认
-- [ ] 恢复成功应用返回 Envelope
-- [ ] 恢复失败保留当前项目和历史
-- [ ] 快照恢复 conflict 保留当前项目，项目切换后的迟到恢复响应被忽略
-- [ ] 删除/清空快照不修改当前文档
-- [ ] 快照 create/restore/remove/clear 成功派发对应 operation success detail
+- [x] 导入只接受 JSON 文件
+- [x] 超过 10 MiB 的导入文件在读取前被拒绝
+- [x] transfer 本地校验通过后才允许确认
+- [x] 导入预览展示名称、组件数与画布尺寸
+- [x] dirty 导入前显示覆盖警告
+- [x] 导入成功应用返回 Envelope 并清空旧历史
+- [x] 导出通过 Adapter 获取 Blob
+- [x] 下载使用安全文件名并释放 Object URL
+- [x] 导入/导出成功派发类型化 operation success 事件
+- [x] 快照列表完全来自 Adapter
+- [x] 创建快照包含当前未保存 draft
+- [x] 恢复和清空快照需要二次确认
+- [x] 恢复成功应用返回 Envelope
+- [x] 恢复失败保留当前项目和历史
+- [x] 快照恢复 conflict 保留当前项目，项目切换后的迟到恢复响应被忽略
+- [x] 删除/清空快照不修改当前文档
+- [x] 快照 create/restore/remove/clear 成功派发对应 operation success detail
 
 ## 9. Web Component API
 

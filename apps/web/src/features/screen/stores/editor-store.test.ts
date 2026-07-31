@@ -7,6 +7,7 @@ import type {
   ScreenComponent,
   ScreenProject,
 } from '@nebula/shared';
+import type { ScreenProjectDraft, ScreenProjectEnvelope } from '@nebula/screen-sdk/contracts';
 
 import { createScreenEditorStore, withHistory } from './editor-store';
 import type { ScreenEditorState } from './editor-store';
@@ -448,6 +449,172 @@ describe('isDirty 脏状态跟踪（任务 8.1）', () => {
     expect(useScreenEditorStore.getState().isDirty).toBe(true);
     // 验证基线 updatedAt 未被覆盖（保持旧值，下次保存仍用旧基线）
     expect(useScreenEditorStore.getState().project?.updatedAt).toBe(baselineUpdatedAt);
+  });
+});
+
+describe('Host Adapter Envelope 基线语义', () => {
+  function createProject(): ScreenProject {
+    return {
+      id: 'screen-1',
+      name: 'SDK Screen',
+      description: null,
+      canvas: makeMockCanvas(),
+      components: [],
+      globalVariables: [],
+      status: 'draft',
+      thumbnail: null,
+      createdAt: '2026-07-31T00:00:00.000Z',
+      updatedAt: 'revision-1',
+    };
+  }
+
+  function createDraft(project: ScreenProject): ScreenProjectDraft {
+    return {
+      name: project.name,
+      description: project.description,
+      document: {
+        schemaVersion: 1,
+        canvas: project.canvas,
+        components: [],
+        blueprint: project.blueprint?.version === 2 ? project.blueprint : undefined,
+        globalVariables: [],
+      },
+    };
+  }
+
+  function createEnvelope(
+    draft: ScreenProjectDraft,
+    overrides: Partial<ScreenProjectEnvelope> = {},
+  ): ScreenProjectEnvelope {
+    return {
+      id: 'screen-1',
+      status: 'draft',
+      revision: 'revision-2',
+      ...draft,
+      ...overrides,
+    };
+  }
+
+  it.each(['save', 'publish'] as const)('%s 响应未重写草稿时保留历史与选择并更新基线', (source) => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    store.getState().loadProject(createProject());
+    store.getState().updateCanvas({ width: 1280 });
+    store.setState({ selectedComponentIds: ['selection-1'] });
+    const submittedDraft = createDraft(store.getState().project!);
+    const history = store.getState().history;
+
+    store.getState().applyProjectEnvelope({
+      source,
+      envelope: createEnvelope(submittedDraft, {
+        status: source === 'publish' ? 'published' : 'draft',
+      }),
+      submittedDraft,
+    });
+
+    expect(store.getState().project?.updatedAt).toBe('revision-2');
+    expect(store.getState().project?.status).toBe(source === 'publish' ? 'published' : 'draft');
+    expect(store.getState().history).toEqual(history);
+    expect(store.getState().selectedComponentIds).toEqual(['selection-1']);
+    expect(store.getState().isDirty).toBe(false);
+  });
+
+  it('保存响应重写草稿时以响应为准并清空不适用历史', () => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    store.getState().loadProject(createProject());
+    store.getState().updateCanvas({ width: 1280 });
+    const submittedDraft = createDraft(store.getState().project!);
+    const rewrittenDraft: ScreenProjectDraft = {
+      ...submittedDraft,
+      document: {
+        ...submittedDraft.document,
+        canvas: { ...submittedDraft.document.canvas, width: 1440 },
+      },
+    };
+
+    store.getState().applyProjectEnvelope({
+      source: 'save',
+      envelope: createEnvelope(rewrittenDraft),
+      submittedDraft,
+    });
+
+    expect(store.getState().project?.canvas.width).toBe(1440);
+    expect(store.getState().history).toEqual({ past: [], future: [] });
+    expect(store.getState().isDirty).toBe(false);
+  });
+
+  it('保存期间产生的新编辑不会被迟到的等值响应覆盖', () => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    store.getState().loadProject(createProject());
+    store.getState().updateCanvas({ width: 1280 });
+    const submittedDraft = createDraft(store.getState().project!);
+    store.getState().updateCanvas({ height: 720 });
+
+    store.getState().applyProjectEnvelope({
+      source: 'save',
+      envelope: createEnvelope(submittedDraft),
+      submittedDraft,
+    });
+
+    expect(store.getState().project?.canvas).toMatchObject({ width: 1280, height: 720 });
+    expect(store.getState().project?.updatedAt).toBe('revision-2');
+    expect(store.getState().history.past).toHaveLength(2);
+    expect(store.getState().isDirty).toBe(true);
+  });
+
+  it('保存响应规范化草稿时会保留提交后产生的本地差异', () => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    store.getState().loadProject(createProject());
+    store.getState().updateCanvas({ width: 1280 });
+    const submittedDraft = createDraft(store.getState().project!);
+    store.getState().updateCanvas({ height: 720 });
+    const normalizedDraft: ScreenProjectDraft = {
+      ...submittedDraft,
+      name: 'Normalized Screen',
+      document: {
+        ...submittedDraft.document,
+        canvas: { ...submittedDraft.document.canvas, backgroundColor: '#111111' },
+      },
+    };
+
+    store.getState().applyProjectEnvelope({
+      source: 'save',
+      envelope: createEnvelope(normalizedDraft),
+      submittedDraft,
+    });
+
+    expect(store.getState().project).toMatchObject({
+      name: 'Normalized Screen',
+      canvas: { width: 1280, height: 720, backgroundColor: '#111111' },
+      updatedAt: 'revision-2',
+    });
+    expect(store.getState().history).toEqual({ past: [], future: [] });
+    expect(store.getState().isDirty).toBe(true);
+  });
+
+  it.each([
+    'load',
+    'reload',
+    'switch',
+    'import',
+    'restore',
+  ] as const)('%s 权威替换会清空旧会话状态', (source) => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    store.getState().loadProject(createProject());
+    store.getState().updateCanvas({ width: 1280 });
+    store.setState({
+      selectedComponentIds: ['selection-1'],
+      targets: [document.createElement('div')],
+      activeGroupId: 'group-1',
+    });
+    const draft = createDraft(createProject());
+
+    store.getState().applyProjectEnvelope({ source, envelope: createEnvelope(draft) });
+
+    expect(store.getState().selectedComponentIds).toEqual([]);
+    expect(store.getState().targets).toEqual([]);
+    expect(store.getState().activeGroupId).toBeNull();
+    expect(store.getState().history).toEqual({ past: [], future: [] });
+    expect(store.getState().isDirty).toBe(false);
   });
 });
 

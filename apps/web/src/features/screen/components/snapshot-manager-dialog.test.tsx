@@ -1,6 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScreenProject } from '@nebula/shared';
+import {
+  ScreenAdapterErrorCode,
+  ScreenHostController,
+  type ScreenHostAdapter,
+  type ScreenProjectEnvelopeInput,
+} from '@nebula/screen-sdk';
 import type {
   ScreenSnapshotHostAdapter,
   ScreenSnapshotSummary,
@@ -10,6 +16,7 @@ import type {
   SnapshotRestoreInput,
 } from '../adapters/screen-editor-host-adapter';
 import { createScreenEditorStore, ScreenEditorStoreProvider } from '../stores/editor-store';
+import { createScreenHostSessionPort } from '../lib/screen-host-session';
 import { ScreenEditorNotificationProvider } from './screen-editor-notifications';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
 
@@ -39,6 +46,23 @@ function createProject(name = '初始项目'): ScreenProject {
     thumbnail: null,
     createdAt: '2026-07-30 10:00:00',
     updatedAt: '2026-07-30 10:00:00',
+  };
+}
+
+function createEnvelope(): ScreenProjectEnvelopeInput {
+  const project = createProject();
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    status: project.status,
+    revision: project.updatedAt,
+    document: {
+      schemaVersion: 1,
+      canvas: project.canvas,
+      components: [],
+      globalVariables: [],
+    },
   };
 }
 
@@ -160,5 +184,51 @@ describe('SnapshotManagerDialog host adapter flow', () => {
     unmount();
     expect(listSignal?.aborted).toBe(true);
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
+  it('routes Host restore conflicts to the reload-or-cancel flow', async () => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    const conflict = Object.assign(new Error('conflict detail'), {
+      code: ScreenAdapterErrorCode.CONFLICT,
+    });
+    const adapter: ScreenHostAdapter = {
+      loadProject: () => Promise.resolve(createEnvelope()),
+      saveProject: () => Promise.resolve(createEnvelope()),
+      snapshots: {
+        list: () => Promise.resolve([SNAPSHOT]),
+        create: () => Promise.resolve(SNAPSHOT),
+        restore: () => Promise.reject(conflict),
+        remove: () => Promise.resolve(),
+        clear: () => Promise.resolve(),
+      },
+    };
+    const controller = new ScreenHostController({
+      session: createScreenHostSessionPort(store),
+    });
+    controller.setBinding('screen-1', adapter);
+    await vi.waitFor(() => expect(controller.getState().phase).toBe('awaiting-render'));
+    controller.markRendered();
+    const onConflict = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <ScreenEditorStoreProvider store={store}>
+        <ScreenEditorNotificationProvider>
+          <SnapshotManagerDialog
+            open
+            onOpenChange={onOpenChange}
+            onConflict={onConflict}
+            projectId="screen-1"
+            hostController={controller}
+          />
+        </ScreenEditorNotificationProvider>
+      </ScreenEditorStoreProvider>,
+    );
+    await screen.findByText('0 个组件 · 1920×1080');
+    fireEvent.click(screen.getByRole('button', { name: '恢复快照' }));
+    fireEvent.click(await screen.findByRole('button', { name: '确认恢复' }));
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalledOnce());
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(store.getState().project?.updatedAt).toBe('2026-07-30 10:00:00');
   });
 });
