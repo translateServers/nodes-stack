@@ -34,12 +34,12 @@ import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
 import type { BaseDiagnostic } from '../blueprint/hooks';
 import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import { useCanvasFlash } from '../hooks/use-canvas-flash';
-import { useLocalSnapshots } from '../hooks/use-local-snapshots';
 import { CanvasFlashOverlay } from './canvas-flash-overlay';
 import { CodeEditorSheet } from './code-editor-sheet';
 import { SaveConflictDialog } from './save-conflict-dialog';
 import { PublishConfirmDialog } from './publish-confirm-dialog';
 import { isSaveConflictError } from '../lib/is-save-conflict-error';
+import type { ScreenEditorHostAdapter } from '../adapters/screen-editor-host-adapter';
 import { Spinner } from '@/components/ui/spinner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
@@ -50,6 +50,7 @@ export interface ScreenEditorProps {
   persistPreferences?: boolean;
   preferenceNamespace?: string;
   store?: ScreenEditorStore;
+  hostAdapter?: ScreenEditorHostAdapter;
 }
 
 export function ScreenEditor({
@@ -58,6 +59,7 @@ export function ScreenEditor({
   persistPreferences = true,
   preferenceNamespace,
   store: providedStore,
+  hostAdapter,
 }: ScreenEditorProps = {}) {
   const storeRef = useRef<ScreenEditorStore | null>(null);
   if (storeRef.current === null) {
@@ -72,12 +74,16 @@ export function ScreenEditor({
       instanceId={instanceId}
       preferenceNamespace={preferenceNamespace}
     >
-      <ScreenEditorContent />
+      <ScreenEditorContent hostAdapter={hostAdapter} />
     </ScreenEditorStoreProvider>
   );
 }
 
-function ScreenEditorContent() {
+interface ScreenEditorContentProps {
+  hostAdapter?: ScreenEditorHostAdapter;
+}
+
+function ScreenEditorContent({ hostAdapter }: ScreenEditorContentProps) {
   const { id } = useParams({ from: '/_app/screen/$id' });
   const navigate = useNavigate();
   const store = useScreenEditorStoreApi();
@@ -86,7 +92,7 @@ function ScreenEditorContent() {
   const { data: project, isLoading, refetch } = useScreenProject(id);
   const updateMutation = useUpdateScreenProject();
   const publishMutation = usePublishScreenProject();
-  const snapshotService = useLocalSnapshots(id);
+  const snapshotAdapter = hostAdapter?.snapshots;
 
   const loadProject = useScreenEditorStore((s) => s.loadProject);
   // 性能优化：细粒度订阅，仅订阅渲染真正需要的字段，避免整个 project 对象变化（如拖拽结束
@@ -487,7 +493,8 @@ function ScreenEditorContent() {
             menubarProps={{
               onShowImport: () => setShowImport(true),
               onExport: handleExport,
-              onShowSnapshotManager: () => setShowSnapshotManager(true),
+              onShowSnapshotManager:
+                snapshotAdapter === undefined ? undefined : () => setShowSnapshotManager(true),
               onShowCanvasSettings: () => setShowCanvasSettings(true),
               onShowEventBlueprint: () => setShowEventBlueprint(true),
               onShowCodeEditor: () => setShowCodeEditor(true),
@@ -568,11 +575,14 @@ function ScreenEditorContent() {
       <ShortcutsHelpDialog open={showHelp} onOpenChange={setShowHelp} />
       <CanvasSettingsDialog open={showCanvasSettings} onOpenChange={setShowCanvasSettings} />
       <ImportDialog open={showImport} onOpenChange={setShowImport} currentProjectId={id} />
-      <SnapshotManagerDialog
-        open={showSnapshotManager}
-        onOpenChange={setShowSnapshotManager}
-        service={snapshotService}
-      />
+      {snapshotAdapter !== undefined && (
+        <SnapshotManagerDialog
+          open={showSnapshotManager}
+          onOpenChange={setShowSnapshotManager}
+          projectId={id}
+          adapter={snapshotAdapter}
+        />
+      )}
       <BlueprintSheetV2
         open={showEventBlueprint || blueprintSheetOpen}
         onOpenChange={(next) => {

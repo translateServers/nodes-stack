@@ -72,6 +72,18 @@ describe('任务 2.4：工具状态机恢复测试', () => {
   });
 
   describe('临时工具压栈/出栈', () => {
+    it('两个编辑器实例的临时工具栈互不影响', () => {
+      const first = renderHook(() => useToolStateMachine());
+      const second = renderHook(() => useToolStateMachine());
+
+      act(() => first.result.current.pushTemporaryTool('hand'));
+
+      expect(first.result.current.activeTool).toBe('hand');
+      expect(first.result.current.hasTemporaryTool).toBe(true);
+      expect(second.result.current.activeTool).toBe('select');
+      expect(second.result.current.hasTemporaryTool).toBe(false);
+    });
+
     it('pushTemporaryTool 压入栈顶，activeTool 切换为临时工具', () => {
       const { result } = renderHook(() => useToolStateMachine());
       act(() => result.current.pushTemporaryTool('hand'));

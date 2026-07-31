@@ -66,7 +66,7 @@ interface ProjectMenubarProps {
   onShowImport: () => void;
   /** 直接触发 JSON 导出下载（不再通过 Dialog） */
   onExport: () => void;
-  onShowSnapshotManager: () => void;
+  onShowSnapshotManager?: () => void;
   onShowCanvasSettings: () => void;
   onShowEventBlueprint: () => void;
   onShowCodeEditor: () => void;
@@ -195,11 +195,15 @@ export const ProjectMenubar = memo(function ProjectMenubar({
               <span className="flex-1">导出 JSON</span>
             </DropdownMenuItem>
           </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onShowSnapshotManager} disabled={!project}>
-            <History className="size-4 text-muted-foreground" />
-            <span className="flex-1">本地快照管理...</span>
-          </DropdownMenuItem>
+          {onShowSnapshotManager !== undefined && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onShowSnapshotManager} disabled={!project}>
+                <History className="size-4 text-muted-foreground" />
+                <span className="flex-1">快照管理...</span>
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

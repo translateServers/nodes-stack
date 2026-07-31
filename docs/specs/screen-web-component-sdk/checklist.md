@@ -1,7 +1,7 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 3 暂停，Store 实例化主体已完成）
-> 最近更新：2026-07-30
+> 状态：实施中（阶段 3 已完成，下一步阶段 4）
+> 最近更新：2026-07-31
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
 ## 1. 阶段 1 契约
@@ -73,7 +73,7 @@
 - [x] 两个实例项目内容互不影响
 - [x] 两个实例选中状态互不影响
 - [x] 两个实例 undo/redo 历史互不影响
-- [ ] 两个实例临时工具和画布视口互不影响
+- [x] 两个实例临时工具和画布视口互不影响
 
 ## 5. Workbench Extraction
 
@@ -217,7 +217,7 @@
 
 - [x] 文档 Schema 与 capability validator 单测通过
 - [x] Adapter/error/cancellation 单测通过
-- [ ] Store factory 与双实例单测通过
+- [x] Store factory 与双实例单测通过
 - [ ] Custom Element 生命周期测试通过
 - [ ] Shadow Portal 与宿主 CSS 隔离测试通过
 - [ ] Vanilla 宿主 Playwright E2E 通过

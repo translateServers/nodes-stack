@@ -1,7 +1,7 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 3 暂停，Task 7 已完成，Task 8 待收尾）
-> 最近更新：2026-07-30
+> 状态：实施中（阶段 3 已完成，下一步阶段 4）
+> 最近更新：2026-07-31
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
 ## 阶段 1：冻结规格与公共契约
@@ -81,19 +81,20 @@
   - [x] 保持历史栈、dirty、蓝图迁移和现有操作语义
   - [x] 改造并迁移 editor-store 测试
 
-- [ ] Task 8: 实例化辅助状态与缓存
+- [x] Task 8: 实例化辅助状态与缓存
   - [x] 将 `useDimensionStore` 改为实例 Store
   - [x] 将 `useAlignmentLinesStore` 改为实例 Store
   - [x] 将 blueprint viewport module cache 改为实例状态
   - [x] 收藏、最近使用和面板宽度 key 加 SDK namespace
-  - [ ] 快照从 localStorage hook 脱离，改走 Host Adapter
+  - [x] 快照从 localStorage hook 脱离，改走 Host Adapter
   - [x] 编写同页双实例状态隔离测试
 
-### 阶段 3 暂停记录
+### 阶段 3 执行记录
 
-- 已完成主 Store、辅助 Store、蓝图视口缓存和本地偏好 key 的实例隔离。
-- 已增加项目、选中态、历史栈、dirty、画布视口及辅助 Store 的双实例隔离测试。
-- 暂停点：快照仍由 Nebula 宿主的 `useLocalSnapshots` 提供；恢复实施后应结合阶段 5 Host Adapter 工作流完成迁移。
+- 主 Store、辅助 Store、蓝图视口缓存和本地偏好 key 已完成实例隔离。
+- 项目、选中态、历史栈、dirty、画布视口、临时工具栈及辅助 Store 的双实例隔离测试已覆盖。
+- `ScreenEditor` 与快照对话框不再读取 localStorage；快照列表与 mutation 通过宿主注入的异步、可取消 Adapter 执行。
+- Nebula 路由宿主注入兼容现有完整 `ScreenProject` 的 localStorage Adapter，保留旧 key、动态项目和 20 条上限；阶段 5 再由 Workbench 操作控制器接入 SDK 公共 `ScreenHostAdapter` Envelope/Draft 契约。
 
 ## 阶段 4：抽离无宿主依赖的编辑器工作台
 

@@ -1,21 +1,11 @@
-/**
- * 本地快照管理 Dialog
- *
- * 入口：项目菜单·文件 → "本地快照管理..."
- *
- * 功能：
- * - 顶部：创建快照 / 清空全部
- * - 列表：每条显示时间戳 + 组件数 + 画布尺寸 + 恢复/删除操作
- * - 恢复时二次确认（会覆盖当前未保存内容）
- *
- * 数据操作由宿主注入的 SnapshotService 提供。
- */
-
-import { useCallback, useState } from 'react';
-import { History, RotateCcw, Trash2, Plus, Inbox } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { History, Inbox, LoaderCircle, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import type {
+  ScreenSnapshotHostAdapter,
+  ScreenSnapshotSummary,
+} from '../adapters/screen-editor-host-adapter';
 import { useScreenEditorStore } from '../stores/editor-store';
-import type { SnapshotMeta, SnapshotService } from '../hooks/use-local-snapshots';
 import {
   Dialog,
   DialogContent,
@@ -39,12 +29,14 @@ import { Separator } from '@/components/ui/separator';
 interface SnapshotManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  service: SnapshotService;
+  projectId: string;
+  adapter: ScreenSnapshotHostAdapter;
 }
 
-/** 格式化时间戳为本地可读字符串 */
-function formatTimestamp(ts: number): string {
-  return new Date(ts).toLocaleString('zh-CN', {
+type SnapshotOperation = 'list' | 'create' | 'restore' | 'remove' | 'clear';
+
+function formatCreatedAt(createdAt: string): string {
+  return new Date(createdAt).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -54,68 +46,165 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotManagerDialogProps) {
+function showOperationError(error: unknown, fallback: string): void {
+  if (error instanceof DOMException && error.name === 'AbortError') return;
+  toast.error(error instanceof Error ? error.message : fallback);
+}
+
+export function SnapshotManagerDialog({
+  open,
+  onOpenChange,
+  projectId,
+  adapter,
+}: SnapshotManagerDialogProps) {
   const storeProject = useScreenEditorStore((s) => s.project);
   const loadProject = useScreenEditorStore((s) => s.loadProject);
-  const snapshots = service.snapshots;
-
-  // 待确认的恢复目标（null 表示无 AlertDialog 显示）
-  const [pendingRestore, setPendingRestore] = useState<SnapshotMeta | null>(null);
-  // 清空全部确认
+  const [snapshots, setSnapshots] = useState<ScreenSnapshotSummary[]>([]);
+  const [operation, setOperation] = useState<SnapshotOperation | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<ScreenSnapshotSummary | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const operationControllerRef = useRef<AbortController | null>(null);
 
-  const handleCreate = useCallback(() => {
+  const beginOperation = useCallback((nextOperation: SnapshotOperation): AbortController => {
+    operationControllerRef.current?.abort();
+    const controller = new AbortController();
+    operationControllerRef.current = controller;
+    setOperation(nextOperation);
+    return controller;
+  }, []);
+
+  const finishOperation = useCallback((controller: AbortController): void => {
+    if (operationControllerRef.current !== controller) return;
+    operationControllerRef.current = null;
+    setOperation(null);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    setSnapshots([]);
+    const controller = beginOperation('list');
+    void adapter
+      .list({ projectId, signal: controller.signal })
+      .then((nextSnapshots) => {
+        if (!controller.signal.aborted) setSnapshots(nextSnapshots);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) showOperationError(error, '快照列表加载失败');
+      })
+      .finally(() => finishOperation(controller));
+
+    return () => controller.abort();
+  }, [adapter, beginOperation, finishOperation, open, projectId]);
+
+  useEffect(() => {
+    return () => operationControllerRef.current?.abort();
+  }, []);
+
+  const handleCreate = useCallback(async (): Promise<void> => {
     if (!storeProject) return;
+    const controller = beginOperation('create');
     try {
-      service.createSnapshot(storeProject);
-      toast.success('已创建本地快照');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '快照创建失败');
+      const snapshot = await adapter.create({
+        projectId,
+        revision: storeProject.updatedAt,
+        project: structuredClone(storeProject),
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      setSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)]);
+      toast.success('已创建快照');
+    } catch (error) {
+      if (!controller.signal.aborted) showOperationError(error, '快照创建失败');
+    } finally {
+      finishOperation(controller);
     }
-  }, [service, storeProject]);
+  }, [adapter, beginOperation, finishOperation, projectId, storeProject]);
 
-  const handleRestoreConfirm = useCallback(() => {
-    if (!pendingRestore) return;
-    const data = service.restoreSnapshot(pendingRestore.timestamp);
-    if (!data) {
-      toast.error('快照数据已损坏或被删除');
+  const handleRestoreConfirm = useCallback(async (): Promise<void> => {
+    if (!pendingRestore || !storeProject) return;
+    const controller = beginOperation('restore');
+    try {
+      const project = await adapter.restore({
+        projectId,
+        snapshotId: pendingRestore.id,
+        revision: storeProject.updatedAt,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      loadProject(project);
+      toast.success(`已恢复至 ${formatCreatedAt(pendingRestore.createdAt)} 的快照`);
       setPendingRestore(null);
-      return;
+      onOpenChange(false);
+    } catch (error) {
+      if (!controller.signal.aborted) showOperationError(error, '快照恢复失败');
+    } finally {
+      finishOperation(controller);
     }
-    loadProject(data);
-    toast.success(`已恢复至 ${formatTimestamp(pendingRestore.timestamp)} 的快照`);
-    setPendingRestore(null);
-    onOpenChange(false);
-  }, [pendingRestore, service, loadProject, onOpenChange]);
+  }, [
+    adapter,
+    beginOperation,
+    finishOperation,
+    loadProject,
+    onOpenChange,
+    pendingRestore,
+    projectId,
+    storeProject,
+  ]);
 
   const handleDelete = useCallback(
-    (ts: number) => {
-      service.deleteSnapshot(ts);
-      toast.success('快照已删除');
+    async (snapshotId: string): Promise<void> => {
+      const controller = beginOperation('remove');
+      try {
+        await adapter.remove({ projectId, snapshotId, signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setSnapshots((current) => current.filter((snapshot) => snapshot.id !== snapshotId));
+        toast.success('快照已删除');
+      } catch (error) {
+        if (!controller.signal.aborted) showOperationError(error, '快照删除失败');
+      } finally {
+        finishOperation(controller);
+      }
     },
-    [service],
+    [adapter, beginOperation, finishOperation, projectId],
   );
 
-  const handleClearAll = useCallback(() => {
-    service.clearAllSnapshots();
-    setShowClearConfirm(false);
-    toast.success('已清空所有本地快照');
-  }, [service]);
+  const handleClearAll = useCallback(async (): Promise<void> => {
+    const controller = beginOperation('clear');
+    try {
+      await adapter.clear({ projectId, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setSnapshots([]);
+      setShowClearConfirm(false);
+      toast.success('已清空所有快照');
+    } catch (error) {
+      if (!controller.signal.aborted) showOperationError(error, '快照清空失败');
+    } finally {
+      finishOperation(controller);
+    }
+  }, [adapter, beginOperation, finishOperation, projectId]);
+
+  const isBusy = operation !== null;
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>本地快照管理</DialogTitle>
-            <DialogDescription>
-              快照保存在浏览器本地，与服务端保存隔离。最多保留 20 条，超出自动删除最旧。
-            </DialogDescription>
+            <DialogTitle>快照管理</DialogTitle>
+            <DialogDescription>快照由当前宿主提供，可用于保存和恢复编辑状态。</DialogDescription>
           </DialogHeader>
 
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={handleCreate} disabled={!storeProject}>
-              <Plus className="size-3.5" />
+            <Button
+              size="sm"
+              onClick={() => void handleCreate()}
+              disabled={!storeProject || isBusy}
+            >
+              {operation === 'create' ? (
+                <LoaderCircle className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
               创建快照
             </Button>
             <div className="flex-1" />
@@ -123,7 +212,7 @@ export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotM
               size="sm"
               variant="outline"
               onClick={() => setShowClearConfirm(true)}
-              disabled={snapshots.length === 0}
+              disabled={snapshots.length === 0 || isBusy}
             >
               <Trash2 className="size-3.5" />
               清空全部
@@ -133,21 +222,26 @@ export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotM
           <Separator />
 
           <div className="max-h-80 space-y-1.5 overflow-y-auto">
-            {snapshots.length === 0 ? (
+            {operation === 'list' ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+                <LoaderCircle className="size-4 animate-spin" />
+                正在加载快照...
+              </div>
+            ) : snapshots.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
                 <Inbox className="size-8" />
-                <span className="text-xs">暂无本地快照</span>
+                <span className="text-xs">暂无快照</span>
               </div>
             ) : (
               snapshots.map((snap) => (
                 <div
-                  key={snap.timestamp}
+                  key={snap.id}
                   className="flex items-center gap-2 rounded-md border border-border bg-card p-2 text-xs transition-colors hover:bg-accent/50"
                 >
                   <History className="size-3.5 shrink-0 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
                     <div className="truncate text-foreground">
-                      {formatTimestamp(snap.timestamp)}
+                      {formatCreatedAt(snap.createdAt)}
                     </div>
                     <div className="text-muted-foreground">
                       {snap.componentCount} 个组件 · {snap.canvasWidth}×{snap.canvasHeight}
@@ -158,6 +252,7 @@ export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotM
                     variant="ghost"
                     aria-label="恢复快照"
                     onClick={() => setPendingRestore(snap)}
+                    disabled={isBusy}
                   >
                     <RotateCcw className="size-3.5" />
                   </Button>
@@ -165,7 +260,8 @@ export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotM
                     size="icon-sm"
                     variant="ghost"
                     aria-label="删除快照"
-                    onClick={() => handleDelete(snap.timestamp)}
+                    onClick={() => void handleDelete(snap.id)}
+                    disabled={isBusy}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -186,12 +282,14 @@ export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotM
             <AlertDialogTitle>恢复快照</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingRestore &&
-                `将覆盖当前未保存内容，恢复至 ${formatTimestamp(pendingRestore.timestamp)} 的快照。此操作不可撤销，建议先保存当前修改。`}
+                `将覆盖当前未保存内容，恢复至 ${formatCreatedAt(pendingRestore.createdAt)} 的快照。此操作不可撤销，建议先保存当前修改。`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRestoreConfirm}>确认恢复</AlertDialogAction>
+            <AlertDialogAction onClick={() => void handleRestoreConfirm()} disabled={isBusy}>
+              确认恢复
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -202,12 +300,16 @@ export function SnapshotManagerDialog({ open, onOpenChange, service }: SnapshotM
           <AlertDialogHeader>
             <AlertDialogTitle>清空所有快照</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除该项目的全部 {snapshots.length} 条本地快照，此操作不可撤销。
+              将删除该项目的全部 {snapshots.length} 条快照，此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleClearAll}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void handleClearAll()}
+              disabled={isBusy}
+            >
               确认清空
             </AlertDialogAction>
           </AlertDialogFooter>
