@@ -44,7 +44,9 @@ describe('screen SDK production module graph gate', () => {
     ['dataset feature source', ['../../apps/web/src/features/dataset/hooks.ts']],
     ['api core client', ['../../apps/web/src/api/core/http-client.ts']],
     ['axios', ['../../node_modules/.pnpm/axios@1.7.9/node_modules/axios/index.js']],
+    ['flat axios', ['../../node_modules/axios/index.js']],
     ['sonner', ['../../node_modules/.pnpm/sonner@2.0.3/node_modules/sonner/dist/index.js']],
+    ['flat sonner', ['../../node_modules/sonner/dist/index.js']],
     [
       'tanstack react-query',
       [
@@ -57,6 +59,7 @@ describe('screen SDK production module graph gate', () => {
         '../../node_modules/.pnpm/@tanstack+react-router@1.115.0/node_modules/@tanstack/react-router/index.js',
       ],
     ],
+    ['flat tanstack react-query', ['../../node_modules/@tanstack/react-query/index.js']],
   ])('rejects %s in the production module graph', (_label, sources) => {
     const root = makeSourcemapFixture(sources);
 
@@ -84,10 +87,53 @@ describe('screen SDK production module graph gate', () => {
     expect(checkDistBoundaries(root)).toHaveLength(3);
   });
 
-  it('ignores non-map files in the dist directory', () => {
-    const root = makeSourcemapFixture([]);
+  it('allows source-free facade files without sourcemaps', () => {
+    const root = makeSourcemapFixture(['../../src/index.ts']);
     writeFileSync(join(root, 'chunks', 'editor.js'), 'export {};\n');
 
     expect(checkDistBoundaries(root)).toEqual([]);
+  });
+
+  it('rejects executable JavaScript without a sourcemap', () => {
+    const root = makeSourcemapFixture(['../../src/index.ts']);
+    writeFileSync(join(root, 'chunks', 'runtime.js'), 'const value = 1; export { value };\n');
+
+    expect(checkDistBoundaries(root).join('\n')).toContain('missing a sourcemap');
+  });
+
+  it('rejects sourcemaps with an empty sources array', () => {
+    const root = makeSourcemapFixture([]);
+
+    expect(checkDistBoundaries(root).join('\n')).toContain('sources must not be empty');
+  });
+
+  it('rejects sourcemaps without a valid string source', () => {
+    const root = makeSourcemapFixture([]);
+    writeFileSync(
+      join(root, 'chunks', 'editor.js.map'),
+      JSON.stringify({ version: 3, sources: [null], names: [], mappings: '' }),
+    );
+
+    expect(checkDistBoundaries(root).join('\n')).toContain('sources must not be empty');
+  });
+
+  it('rejects forbidden bare imports even without a sourcemap', () => {
+    const root = makeSourcemapFixture(['../../src/index.ts']);
+    writeFileSync(
+      join(root, 'chunks', 'external.js'),
+      "import axios from 'axios'; export { axios };\n",
+    );
+
+    expect(checkDistBoundaries(root).join('\n')).toContain('forbidden production import: axios');
+  });
+
+  it('rejects forbidden dynamic imports with import attributes', () => {
+    const root = makeSourcemapFixture(['../../src/index.ts']);
+    writeFileSync(
+      join(root, 'chunks', 'external.js'),
+      "void import('axios', { with: { type: 'json' } });\n",
+    );
+
+    expect(checkDistBoundaries(root).join('\n')).toContain('forbidden production import: axios');
   });
 });

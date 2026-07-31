@@ -8,12 +8,14 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PNPM_EXEC_PATH = process.env['npm_execpath'];
@@ -31,8 +33,56 @@ function runPnpm(args, cwd) {
   );
 }
 
+/** @param {string} directory @returns {string[]} */
+function listJavaScriptFiles(directory) {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) return listJavaScriptFiles(path);
+    return entry.endsWith('.js') ? [path] : [];
+  });
+}
+
+/** @param {string} filePath @returns {string[]} */
+function bareModuleSpecifiers(filePath) {
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    readFileSync(filePath, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  /** @type {string[]} */
+  const specifiers = [];
+
+  /** @param {import('typescript').Node} node */
+  function visit(node) {
+    let specifier;
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      specifier =
+        node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier)
+          ? node.moduleSpecifier.text
+          : undefined;
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length >= 1 &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      specifier = node.arguments[0].text;
+    }
+    if (specifier !== undefined && !specifier.startsWith('.') && !specifier.startsWith('/')) {
+      specifiers.push(specifier);
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return specifiers;
+}
+
 const consumerRoot = mkdtempSync(join(tmpdir(), 'nebula-screen-sdk-consumer-'));
 try {
+  runPnpm(['build'], PACKAGE_ROOT);
   runPnpm(['pack', '--pack-destination', consumerRoot], PACKAGE_ROOT);
   const tarballName = readdirSync(consumerRoot).find((entry) => entry.endsWith('.tgz'));
   if (tarballName === undefined) throw new Error('SDK tarball was not created');
@@ -64,6 +114,7 @@ try {
           module: 'ESNext',
           moduleResolution: 'bundler',
           noEmit: true,
+          resolveJsonModule: true,
           strict: true,
           target: 'ES2023',
         },
@@ -81,6 +132,11 @@ try {
     join(sourceRoot, 'main.ts'),
     `import '@nebula/screen-sdk/auto-register';
 import type { ScreenHostAdapter } from '@nebula/screen-sdk';
+import { ScreenDocumentV1Schema } from '@nebula/screen-sdk/contracts';
+import screenDocumentSchema from '@nebula/screen-sdk/contracts/screen-document.schema.json';
+
+void ScreenDocumentV1Schema;
+void screenDocumentSchema;
 
 const adapter: ScreenHostAdapter = {
   loadProject: async ({ projectId }) => ({
@@ -127,18 +183,28 @@ document.body.append(editor);
     'package.json',
   );
   if (!existsSync(installedManifestPath)) throw new Error('Packed SDK was not installed');
+  const installedPackageRoot = dirname(installedManifestPath);
+  const bareImports = listJavaScriptFiles(join(installedPackageRoot, 'dist')).flatMap((filePath) =>
+    bareModuleSpecifiers(filePath).map((specifier) => `${filePath}: ${specifier}`),
+  );
+  if (bareImports.length > 0) {
+    throw new Error(`Packed SDK contains bare runtime imports:\n${bareImports.join('\n')}`);
+  }
   /** @type {unknown} */
   const installedManifest = JSON.parse(readFileSync(installedManifestPath, 'utf8'));
-  const dependencies =
-    typeof installedManifest === 'object' &&
-    installedManifest !== null &&
-    'dependencies' in installedManifest &&
-    typeof installedManifest.dependencies === 'object' &&
-    installedManifest.dependencies !== null
-      ? installedManifest.dependencies
+  const manifest =
+    typeof installedManifest === 'object' && installedManifest !== null
+      ? /** @type {Record<string, unknown>} */ (installedManifest)
       : {};
-  if (Object.hasOwn(dependencies, '@nebula/screen-editor-core')) {
-    throw new Error('Packed SDK exposes the private core package as a consumer dependency');
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    const dependencies = manifest[field];
+    if (
+      typeof dependencies === 'object' &&
+      dependencies !== null &&
+      Object.hasOwn(dependencies, '@nebula/screen-editor-core')
+    ) {
+      throw new Error(`Packed SDK exposes the private core package in ${field}`);
+    }
   }
   console.log('screen-sdk tarball consumer: ok');
 } finally {

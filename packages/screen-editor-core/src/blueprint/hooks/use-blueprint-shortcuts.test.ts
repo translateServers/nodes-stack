@@ -359,6 +359,16 @@ describe('useBlueprintShortcuts - 缺口 1/2：浏览器默认行为接管', () 
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
+  it('非活跃实例不处理 Ctrl+S', () => {
+    renderShortcutsHook({ isActive: () => false });
+
+    act(() => {
+      fireKeyDown('s', { ctrlKey: true });
+    });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it('Ctrl+= 调用 onZoomIn 并 preventDefault', () => {
     const spy = vi.spyOn(KeyboardEvent.prototype, 'preventDefault');
     renderShortcutsHook();

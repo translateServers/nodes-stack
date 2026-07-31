@@ -43,23 +43,50 @@ function importSpecifier(node) {
   if (
     ts.isCallExpression(node) &&
     node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-    node.arguments.length === 1 &&
+    node.arguments.length >= 1 &&
     ts.isStringLiteral(node.arguments[0])
   ) {
     return node.arguments[0].text;
+  }
+  if (
+    ts.isImportTypeNode(node) &&
+    ts.isLiteralTypeNode(node.argument) &&
+    ts.isStringLiteral(node.argument.literal)
+  ) {
+    return node.argument.literal.text;
+  }
+  if (
+    ts.isImportEqualsDeclaration(node) &&
+    ts.isExternalModuleReference(node.moduleReference) &&
+    node.moduleReference.expression !== undefined &&
+    ts.isStringLiteral(node.moduleReference.expression)
+  ) {
+    return node.moduleReference.expression.text;
   }
   return undefined;
 }
 
 /** @param {import('typescript').Node} node */
-function isBusinessFetchCall(node) {
-  if (!ts.isCallExpression(node)) return false;
-  if (ts.isIdentifier(node.expression)) return node.expression.text === 'fetch';
-  if (!ts.isPropertyAccessExpression(node.expression) || node.expression.name.text !== 'fetch') {
-    return false;
+function isBusinessFetchReference(node) {
+  if (ts.isPropertyAccessExpression(node) && node.name.text === 'fetch') {
+    const owner = node.expression;
+    return ts.isIdentifier(owner) && ['window', 'globalThis'].includes(owner.text);
   }
-  const owner = node.expression.expression;
-  return ts.isIdentifier(owner) && ['window', 'globalThis'].includes(owner.text);
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    ['window', 'globalThis'].includes(node.expression.text) &&
+    node.argumentExpression !== undefined &&
+    ts.isStringLiteral(node.argumentExpression) &&
+    node.argumentExpression.text === 'fetch'
+  ) {
+    return true;
+  }
+  if (!ts.isIdentifier(node) || node.text !== 'fetch') return false;
+  const parent = node.parent;
+  const namedParent = /** @type {{ name?: import('typescript').Node }} */ (parent);
+  if (namedParent.name === node && !ts.isShorthandPropertyAssignment(parent)) return false;
+  return true;
 }
 
 /**
@@ -96,7 +123,7 @@ export function inspectSource(filePath, source, sourceRoot = SOURCE_ROOT) {
         }
       }
     }
-    if (isBusinessFetchCall(node)) {
+    if (isBusinessFetchReference(node)) {
       findings.push(`${filePath}: SDK production source must not call fetch directly`);
     }
     ts.forEachChild(node, visit);

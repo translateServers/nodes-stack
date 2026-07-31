@@ -258,16 +258,22 @@
 - 新增私有 `@nebula/screen-editor-core`（private workspace 包），承载 Store、画布、历史栈、快捷键、Workbench 布局、Portal/实例隔离与公共 UI primitives；`apps/web` 编辑器公共源码全部迁移至该包。
 - `ScreenEditorRuntimeProfile` 以具体能力对象组合（componentRegistry/propertySchemas/dataRuntime/blueprintCapabilities/notifications），静态 profile 在 `packages/screen-sdk/src/runtime/static-runtime.tsx` 组装，动态 profile 由 `apps/web/src/features/screen/runtime/dynamic-runtime-profile.tsx` 注入 API/dataset 执行能力，不对外形成 V1 插件 API。
 - 删除 Vite virtual runtime bridge（`runtime-plugin.ts`、`strip-virtual-module.mjs`），元素改为懒加载 SDK 自身 static-runtime chunk；`apps/web` 基于同一 core 组装 dynamic runtime，保留 API/dataset 与 Nebula 宿主能力。
-- 构建门禁：源码级 TypeScript AST 边界检查（拒绝 `@/`、`@nebula/web`、`apps/web`、Router/Query、Axios、Sonner 与直接业务 `fetch`）扫描 SDK 与 core 两棵源码树并挂入 build；构建后对 dist sourcemap 执行 production module graph 扫描，拒绝 `apps/web`、dataset feature、api/core、Axios、Sonner、TanStack Router/Query 回流（`check-boundaries.mjs` + `check-dist-boundaries.mjs`）。
-- 依赖边界测试补齐：`test/boundaries.test.ts` 覆盖源码门禁接受路径与 10 类拒绝路径（含 core 全量扫描）；`test/dist-boundaries.test.ts` 覆盖产物门禁的干净/违禁/多违禁/Windows 反斜杠路径用例，共 24 项。
+- 构建门禁：源码级 TypeScript AST 边界检查扫描 SDK 与 core 两棵源码树，拒绝应用路径、动态宿主包、`ImportTypeNode`/`import-equals` 类型泄漏以及直接/计算属性/别名 `fetch`；构建后检查 dist sourcemap 来源、无 map JS facade 与所有产物 import，拒绝 sourcemap 缺失/空 sources 及动态业务依赖回流（`check-boundaries.mjs` + `check-dist-boundaries.mjs`）。
+- 依赖边界测试补齐：`test/boundaries.test.ts` 与 `test/dist-boundaries.test.ts` 共 37 项，覆盖 SDK/core 全量扫描、15 类源码拒绝路径、pnpm/扁平 `node_modules`、多违禁、Windows 路径、无 map executable chunk、空/无效 sources、bare import 与带 attributes 的动态 import。
 
 阶段 6 定向验证结果（2026-07-31）：
 
-- `@nebula/screen-editor-core`：typecheck/lint/build 通过，测试 2413 项通过、14 项跳过。
-- `@nebula/screen-sdk`：typecheck/lint 通过；测试 81 项通过（含新增 24 项边界测试）；build 通过（源码边界检查 + production module graph 门禁均 ok，声明文件归一化无泄漏）。
-- tarball 消费验证：`pnpm --filter @nebula/screen-sdk verify:tarball` 通过——`pnpm pack` 后在空白 consumer 项目（vite + tsc，仅安装 tarball）中 install/typecheck/build 成功，且打包产物不暴露私有 core 依赖。
-- `apps/web`：typecheck/lint 通过；全量测试 238 项通过，仅 `screen-preview-data.test.tsx` 4 项既有 ECharts/jsdom 零尺寸基线失败（与阶段 5/6 记录一致，非本次迁移引入）；修复 `dataset-config-section.tsx` 从 `@nebula/screen-sdk` 导入 UI 的迁移遗留（改从 core 导入）。
+- `@nebula/screen-editor-core`：typecheck/lint/build 通过，测试 2415 项通过、14 项跳过。
+- `@nebula/screen-sdk`：typecheck/lint 通过；测试 97 项通过（含 37 项边界测试）；build 通过（源码边界检查 + production module graph 门禁均 ok，声明文件归一化无泄漏）。
+- tarball 消费验证：`pnpm --filter @nebula/screen-sdk verify:tarball` 通过——命令从当前源码自行 build/pack，在空白 consumer 中验证 root、auto-register、contracts 与 JSON Schema 入口的 install/typecheck/build，并拒绝 bare runtime import 和私有 core 依赖泄漏。
+- `apps/web`：typecheck/lint 通过；全量测试 239 项通过，仅 `screen-preview-data.test.tsx` 4 项既有 ECharts/jsdom 零尺寸基线失败（与阶段 5/6 记录一致，非本次迁移引入）；修复 `dataset-config-section.tsx` 从 `@nebula/screen-sdk` 导入 UI 的迁移遗留（改从 core 导入）。
 - 仓库级 `pnpm biome:check` 仍受既有 CRLF 行尾基线阻断（391 项既有错误）；本次改动文件单独通过 Biome 检查。
+
+阶段 6 代码质量审查整改（2026-07-31）：
+
+- runtime 配置更新同步切换 controller binding/readonly，避免属性变更后立即执行命令时操作旧项目或绕过只读；首次 React handle 尚未建立时 dispose 会以 `ABORTED` 结束等待命令，不再永久 pending。
+- Web 独立预览显式注入 dynamic runtime profile，恢复 API/dataset 与动态蓝图能力；蓝图快捷键/剪贴板接入 active editor 仲裁，清理型 keyup 对所有实例执行以避免临时工具和修饰键卡住。
+- 源码、dist 与 tarball 三层门禁改为 fail-closed；Shadow DOM 测试移除恒真断言并验证实际主题变量覆盖值。
 
 ## 阶段 7：参考宿主与兼容验证
 

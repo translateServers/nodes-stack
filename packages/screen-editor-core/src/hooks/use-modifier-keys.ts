@@ -113,7 +113,13 @@ export function useModifierKeys(options: UseModifierKeysOptions = {}): ModifierK
       spaceRef.current = false;
       setSpaceHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
+    {
+      keydown: false,
+      keyup: true,
+      enableOnContentEditable: true,
+      enableOnFormTags: true,
+      enabled: true,
+    },
   );
 
   // Shift
@@ -131,7 +137,13 @@ export function useModifierKeys(options: UseModifierKeysOptions = {}): ModifierK
       shiftRef.current = false;
       setShiftHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
+    {
+      keydown: false,
+      keyup: true,
+      enableOnContentEditable: true,
+      enableOnFormTags: true,
+      enabled: true,
+    },
   );
 
   // Alt
@@ -149,7 +161,13 @@ export function useModifierKeys(options: UseModifierKeysOptions = {}): ModifierK
       altRef.current = false;
       setAltHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
+    {
+      keydown: false,
+      keyup: true,
+      enableOnContentEditable: true,
+      enableOnFormTags: true,
+      enabled: true,
+    },
   );
 
   // Ctrl（Mac 上 cmd 由 mod 处理，这里单独管 ctrl）
@@ -167,7 +185,13 @@ export function useModifierKeys(options: UseModifierKeysOptions = {}): ModifierK
       ctrlRef.current = false;
       setCtrlHeld(false);
     },
-    { keydown: false, keyup: true, enableOnFormTags: false, enabled },
+    {
+      keydown: false,
+      keyup: true,
+      enableOnContentEditable: true,
+      enableOnFormTags: true,
+      enabled: true,
+    },
   );
 
   return {

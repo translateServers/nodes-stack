@@ -22,14 +22,20 @@ class RuntimeCommandError extends Error implements ScreenAdapterError {
   }
 }
 
+const DISPOSED_HANDLE = Symbol('disposed-handle');
+
 export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options) => {
   let configuration: ScreenEditorRuntimeConfiguration = options;
   let disposed = false;
   let handle: ScreenHostAdapterWorkbenchHandle | null = null;
-  let resolveInitialHandle: ((value: ScreenHostAdapterWorkbenchHandle) => void) | undefined;
-  const initialHandle = new Promise<ScreenHostAdapterWorkbenchHandle>((resolve) => {
-    resolveInitialHandle = resolve;
-  });
+  let resolveInitialHandle:
+    | ((value: ScreenHostAdapterWorkbenchHandle | typeof DISPOSED_HANDLE) => void)
+    | undefined;
+  const initialHandle = new Promise<ScreenHostAdapterWorkbenchHandle | typeof DISPOSED_HANDLE>(
+    (resolve) => {
+      resolveInitialHandle = resolve;
+    },
+  );
   const readonlyRef = { current: options.readonly };
   const store = createScreenEditorStore({
     instanceId: options.identifierPrefix,
@@ -41,6 +47,10 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
 
   const setHandle = (nextHandle: ScreenHostAdapterWorkbenchHandle | null): void => {
     if (nextHandle === null) return;
+    if (disposed) {
+      nextHandle.dispose();
+      return;
+    }
     handle = nextHandle;
     resolveInitialHandle?.(nextHandle);
     resolveInitialHandle = undefined;
@@ -80,7 +90,11 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
 
   const awaitHandle = async (): Promise<ScreenHostAdapterWorkbenchHandle> => {
     if (disposed) throw new RuntimeCommandError(ScreenAdapterErrorCode.ABORTED);
-    return handle ?? initialHandle;
+    const resolvedHandle = handle ?? (await initialHandle);
+    if (resolvedHandle === DISPOSED_HANDLE) {
+      throw new RuntimeCommandError(ScreenAdapterErrorCode.ABORTED);
+    }
+    return resolvedHandle;
   };
 
   render();
@@ -89,6 +103,8 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      resolveInitialHandle?.(DISPOSED_HANDLE);
+      resolveInitialHandle = undefined;
       handle?.dispose();
       handle = null;
       root.unmount();
@@ -107,6 +123,8 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
       if (disposed) return;
       configuration = nextConfiguration;
       readonlyRef.current = nextConfiguration.readonly;
+      handle?.controller.setReadonly(nextConfiguration.readonly);
+      handle?.controller.setBinding(nextConfiguration.projectId, nextConfiguration.adapter);
       render();
     },
     validate: () => handle?.validate() ?? [],

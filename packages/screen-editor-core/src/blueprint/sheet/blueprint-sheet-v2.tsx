@@ -125,6 +125,8 @@ const edgeTypes: EdgeTypes = {
   exec: ExecEdge,
 };
 
+const ALWAYS_ACTIVE = (): boolean => true;
+
 // ===== 蓝图 ↔ ReactFlow 转换 =====
 
 function buildComponentMap(components: readonly ScreenComponent[]): Map<string, ScreenComponent> {
@@ -605,7 +607,9 @@ function BlueprintSheetV2Inner({
   onSave,
   onShowHelp,
 }: BlueprintSheetV2InnerProps): JSX.Element {
-  const capabilityProfile = useOptionalScreenEditorEnvironment()?.capabilityProfile ?? 'dynamic';
+  const editorEnvironment = useOptionalScreenEditorEnvironment();
+  const capabilityProfile = editorEnvironment?.capabilityProfile ?? 'dynamic';
+  const isActive = editorEnvironment?.isActive ?? ALWAYS_ACTIVE;
   const project = useScreenEditorStore((s) => s.project);
   const updateBlueprint = useScreenEditorStore((s) => s.updateBlueprint);
   const beginBlueprintGesture = useScreenEditorStore((s) => s.beginBlueprintGesture);
@@ -969,6 +973,7 @@ function BlueprintSheetV2Inner({
   }, []);
 
   useBlueprintShortcuts({
+    isActive,
     onClose: () => onOpenChange(false),
     searchPanelVisible: searchPanelState.visible,
     onCloseSearchPanel: () => setSearchPanelState((s) => ({ ...s, visible: false })),
@@ -986,7 +991,13 @@ function BlueprintSheetV2Inner({
   });
 
   // V2 剪贴板
-  const blueprintClipboard = useBlueprintClipboardV2({ nodes, edges, setNodes, setEdges });
+  const blueprintClipboard = useBlueprintClipboardV2({
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    isActive,
+  });
 
   // V2 诊断：直接使用沙盒运行时的编译产物
   const diagnostics: readonly V2Diagnostic[] = sandbox.compileDiagnostics;

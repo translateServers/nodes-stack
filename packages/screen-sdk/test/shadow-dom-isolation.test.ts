@@ -185,16 +185,14 @@ describe('Shadow DOM and styling', () => {
 
     it('host override on element takes priority over built-in defaults', () => {
       const element = createConnectedElement();
-      element.style.setProperty('--nebula-screen-background', 'oklch(0.5 0.1 200)');
+      element.style.setProperty('--nebula-screen-background', '#123456');
       element.theme = 'light';
       const sdkRoot = element.shadowRoot?.querySelector('[data-nebula-sdk-root]');
       expect(sdkRoot).not.toBeNull();
       if (sdkRoot === null) return;
       const computed = window.getComputedStyle(sdkRoot as HTMLElement);
       const background = computed.getPropertyValue('--nebula-resolved-background').trim();
-      // jsdom may or may not support oklch; if it does, it should match the override;
-      // if not, it falls back to the built-in default. Either way, the variable should be set.
-      expect(background).not.toBe('');
+      expect(background).toBe('#123456');
     });
 
     it('falls back to built-in default when host value is invalid', () => {
@@ -226,10 +224,9 @@ describe('Shadow DOM and styling', () => {
 
       const element = createConnectedElement();
       const shadowButton = element.shadowRoot?.querySelector('button');
-      // Shadow DOM elements should not inherit host styles.
-      // In jsdom, computed styles inside ShadowRoot may not fully isolate,
-      // but the structural isolation is guaranteed by Shadow DOM.
-      expect(shadowButton ?? true).toBeTruthy();
+      expect(shadowButton).not.toBeNull();
+      expect(shadowButton?.getRootNode()).toBe(element.shadowRoot);
+      expect((shadowButton as HTMLElement | null)?.style.background).toBe('');
 
       globalStyle.remove();
     });

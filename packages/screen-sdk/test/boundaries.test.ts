@@ -27,6 +27,11 @@ describe('screen SDK dependency boundaries', () => {
     ["import '../../outside';", 'relative import escapes SDK src'],
     ["fetch('/api/data');", 'must not call fetch directly'],
     ["window.fetch('/api/data');", 'must not call fetch directly'],
+    ["globalThis['fetch']('/api/data');", 'must not call fetch directly'],
+    ["const request = fetch; request('/api/data');", 'must not call fetch directly'],
+    ["type Client = import('axios').AxiosInstance;", 'host package is forbidden'],
+    ["import Axios = require('axios');", 'host package is forbidden'],
+    ["void import('axios', { with: { type: 'json' } });", 'host package is forbidden'],
   ])('rejects boundary violation: %s', (source, expectedMessage) => {
     expect(inspectSource(FIXTURE_PATH, source, SOURCE_ROOT).join('\n')).toContain(expectedMessage);
   });

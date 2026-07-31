@@ -7,8 +7,10 @@ import {
   CanvasInteractionProvider,
   INTERACTIVE_CAPABILITIES,
   resolveComponentContainerStyle,
+  ScreenEditorRuntimeProfileProvider,
   useBlueprintPreviewRuntime,
 } from '@nebula/screen-editor-core';
+import { DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE } from '../runtime/dynamic-runtime-profile';
 
 /**
  * 按 scaleMode 计算画布缩放比以适配视口。
@@ -72,6 +74,14 @@ interface PreviewCanvasProps {
  * 调用方负责数据获取与加载/不存在态展示，本组件只接收 project 渲染。
  */
 export function PreviewCanvas({ project }: PreviewCanvasProps) {
+  return (
+    <ScreenEditorRuntimeProfileProvider profile={DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE}>
+      <PreviewCanvasContent project={project} />
+    </ScreenEditorRuntimeProfileProvider>
+  );
+}
+
+function PreviewCanvasContent({ project }: PreviewCanvasProps) {
   const { canvas, components, blueprint } = project;
   const scale = fitScale(canvas.width, canvas.height, canvas.scaleMode);
   const { contextValue, onComponentClick, onComponentEvent } = useBlueprintPreviewRuntime(

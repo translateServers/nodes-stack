@@ -191,7 +191,13 @@ describe('useKeyboardShortcuts 任务 1.4：接入全部声明的工具快捷键
     // keydown: true, keyup: false
     expect(matches[0].options).toMatchObject({ keydown: true, keyup: false });
     // keyup: true, keydown: false
-    expect(matches[1].options).toMatchObject({ keydown: false, keyup: true });
+    expect(matches[1].options).toMatchObject({
+      enableOnContentEditable: true,
+      enableOnFormTags: true,
+      enabled: true,
+      keydown: false,
+      keyup: true,
+    });
 
     // keydown 调用 preventDefault + pushTemporaryTool('hand')
     const fakeEvent = {

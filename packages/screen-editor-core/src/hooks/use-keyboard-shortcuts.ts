@@ -613,13 +613,15 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
   useHotkeys(
     getAllKeys(toolHandTempEntry),
     () => {
-      // 在表单元素内按下 Space 时 keydown 已提前返回，
-      // keyup 若仍触发则不应 pop（临时工具从未 push），防止状态机栈被破坏
-      if (isFormElementFocused(options.focusRoot)) return;
+      // 清理型 keyup 必须对所有实例执行。若 keydown 未 push，pop 本身是安全 no-op；
+      // 若用户按住 Space 后切换实例或打开弹层，仍需清掉原实例的临时工具。
       popTemporaryTool('hand');
     },
     {
       ...buildHotkeysOptions(toolHandTempEntry, globalEnabled),
+      enableOnContentEditable: true,
+      enableOnFormTags: true,
+      enabled: true,
       keydown: false,
       keyup: true,
     },
