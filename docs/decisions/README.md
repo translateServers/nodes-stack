@@ -16,6 +16,14 @@ ADR（Architecture Decision Record）是记录架构决策的简短文档。每�
 | --- | --- | --- | --- |
 | _待创建_ | — | — | — |
 
+## 既有决策记录（暂存于 spec 文档）
+
+以下 spec 文档包含关键技术决策的推理过程（背景/方案/取舍/结论），符合 ADR 收录范围，待后续抽取为独立 ADR 编号归档。在 ADR 缺位期间，请直接查阅以下文档：
+
+| 来源文档 | 决策主题 |
+| --- | --- |
+| [dataset-management/security-decisions.md](../specs/dataset-management/security-decisions.md) | filter 表达式引擎选型（JSONata vs eval vs `new Function` vs isolated-vm）、后端代理决策、SSRF 防护、SQL 安全、缓存策略、Mock 机制、权限模型分阶段方案 |
+
 ## 命名规范
 
 `ADR-NNNN-简短标题.md`（如 `ADR-0001-dataset-backend-proxy.md`）

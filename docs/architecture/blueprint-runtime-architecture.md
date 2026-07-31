@@ -1,8 +1,10 @@
 # 蓝图运行时架构
 
 > 状态：生效中
-> 最近更新：2026-07-29
+> 最近更新：2026-08-01
 > 定位：事件蓝图子系统的架构说明。读完应能理解触发器/动作/条件如何编排，编译器与执行器如何协作
+
+> 注：本文档第 8 节"关键约束"中提到的 `eventsEnabled` 总闸门已被 [introduce-canvas-interaction-modes](../specs/introduce-canvas-interaction-modes/spec.md) 规格替换为 `interactionMode: 'design' | 'interactive'`（编辑器画布"设计/交互"模式切换，交互调试对应旧"开启"语义）。在本文档完成同步更新前，请以该规格与代码实现为准。
 
 ## 1. 定位与边界
 

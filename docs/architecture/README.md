@@ -11,8 +11,8 @@
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
 | [system-overview.md](./system-overview.md) | 生效中（2026-07-24） | 系统总览。新人入职第一篇必读。monorepo 结构、技术栈、通信约定、数据库模型、路由、常用命令 |
-| [screen-editor-architecture.md](./screen-editor-architecture.md) | 生效中（2026-07-29） | 大屏设计器架构。核心 feature 的目录组织、状态管理、组件注册表、画布系统、工具系统、属性面板、数据层 |
-| [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md) | 生效中（2026-07-29） | 蓝图运行时架构。节点类型、纯函数编译器、薄执行器 + 依赖注入、宿主总闸门、预览集成、沙盒调试 |
+| [screen-editor-architecture.md](./screen-editor-architecture.md) | 生效中（2026-08-01） | 大屏设计器架构。核心 feature 的目录组织、状态管理、组件注册表、画布系统、工具系统、属性面板、数据层 |
+| [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md) | 生效中（2026-08-01） | 蓝图运行时架构。节点类型、纯函数编译器、薄执行器 + 依赖注入、宿主总闸门、预览集成、沙盒调试 |
 | _待创建_ | — | 部署架构（前端/后端/数据库/缓存拓扑） |
 
 ### 开发指南（描述如何动手，step-by-step）

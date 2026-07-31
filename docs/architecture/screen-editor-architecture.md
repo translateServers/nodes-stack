@@ -1,8 +1,10 @@
 # 大屏设计器架构
 
 > 状态：生效中
-> 最近更新：2026-07-29
+> 最近更新：2026-08-01
 > 定位：核心 feature 的架构说明。读完应能理解画布/组件/工具/属性面板/数据层如何协作，以及在哪里扩展
+
+> 注：本文档 State Shape 中的 `eventsEnabled` 字段已被 [introduce-canvas-interaction-modes](../specs/introduce-canvas-interaction-modes/spec.md) 规格替换为 `interactionMode: 'design' | 'interactive'`（状态栏"设计/交互"模式切换）。在本文档完成同步更新前，请以该规格与代码实现（`apps/web/src/features/screen/stores/editor-store.ts`）为准。
 
 ## 1. 定位与边界
 

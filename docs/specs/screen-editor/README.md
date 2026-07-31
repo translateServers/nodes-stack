@@ -1,7 +1,7 @@
 # 大屏编辑器功能规格
 
 > 状态：生效中
-> 最近更新：2026-07-30
+> 最近更新：2026-08-01
 > 定位：已实现功能的现状描述（非设计方案）。供新人快速了解"已经有什么"，作为后续需求变更的基线
 
 ## 1. 功能概述
@@ -337,6 +337,8 @@
 - 编辑器 store 提供 `addGlobalVariable` / `updateGlobalVariable` / `removeGlobalVariable` 三个 action，均走历史栈
 
 ### 10.6 编辑器画布运行时总闸门
+
+> 注：本节描述的 `Event` 开关已被 [introduce-canvas-interaction-modes](../introduce-canvas-interaction-modes/spec.md) 规格替换为"设计/交互"模式切换（`interactionMode: 'design' | 'interactive'`，交互调试对应旧"开启"语义，并新增运行时会话隔离与覆盖清理）。在本文档完成同步更新前，请以该规格与代码实现为准。
 
 - 底部状态栏 `Event` 是主编辑画布的蓝图运行时总闸门，默认关闭并作为本地偏好持久化
 - 开启后统一启用 pageLoad / interval / click / hover / dataLoaded / dataError 及其动作链
