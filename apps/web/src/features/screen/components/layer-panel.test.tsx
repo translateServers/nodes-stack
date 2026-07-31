@@ -13,7 +13,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
  * 测试策略：
  * - mock editor-store 提供最小可控 state
  * - mock @dnd-kit 以避免 jsdom 中的真实拖拽初始化
- * - mock @/components/ui/context-menu：ContextMenuContent 始终渲染（绕过 Radix 在 jsdom 中
+ * - mock SDK ContextMenu：ContextMenuContent 始终渲染（绕过 Radix 在 jsdom 中
  *   的 pointer event 限制），ContextMenuItem 点击触发 onSelect；这样能直接断言菜单项
  *   渲染与命令执行，Radix 自身的开闭行为由其单元测试覆盖
  */
@@ -51,7 +51,8 @@ vi.mock('@dnd-kit/utilities', () => ({
   CSS: { Transform: { toString: vi.fn(() => '') } },
 }));
 
-vi.mock('@/components/ui/context-menu', () => ({
+vi.mock('@nebula/screen-sdk', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nebula/screen-sdk')>()),
   ContextMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   ContextMenuContent: ({

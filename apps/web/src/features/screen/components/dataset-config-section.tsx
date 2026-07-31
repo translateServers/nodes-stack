@@ -23,15 +23,8 @@ import {
   type ScreenComponent,
 } from '@nebula/shared';
 import { useDatasets, useExecuteDataset } from '@/features/dataset';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Button, Input } from '@nebula/screen-sdk';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
 import { buildDataSourceMigration } from '../lib/data-source-migration';
 import { PanelSection } from './ui-primitives';
 

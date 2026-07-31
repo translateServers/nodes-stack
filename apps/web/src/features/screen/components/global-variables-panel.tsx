@@ -20,7 +20,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import type { GlobalVariable, GlobalVariableType } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { PanelSection } from './ui-primitives';
-import { Button } from '@/components/ui/button';
+import { Button } from '@nebula/screen-sdk';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from '@nebula/screen-sdk';
 import {
   Dialog,
   DialogContent,
@@ -38,17 +38,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
+} from '@nebula/screen-sdk';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
+import { Input, Label } from '@nebula/screen-sdk';
+import { cn } from '@nebula/screen-sdk';
 
 // ===== 显示工具 =====
 
@@ -187,7 +180,13 @@ function parseStaticValue(text: string): unknown {
  *
  * 默认导出，无 props。订阅 editor-store 的 globalVariables 列表与三个 action。
  */
-export default function GlobalVariablesPanel(): JSX.Element {
+interface GlobalVariablesPanelProps {
+  staticOnly?: boolean;
+}
+
+export default function GlobalVariablesPanel({
+  staticOnly = false,
+}: GlobalVariablesPanelProps): JSX.Element {
   const variables = useScreenEditorStore((s) => s.project?.globalVariables ?? []);
   const addGlobalVariable = useScreenEditorStore((s) => s.addGlobalVariable);
   const updateGlobalVariable = useScreenEditorStore((s) => s.updateGlobalVariable);
@@ -219,7 +218,7 @@ export default function GlobalVariablesPanel(): JSX.Element {
 
   /** 提交表单：editingId 存在走 update，否则走 add */
   const handleSubmit = (form: FormState): void => {
-    const payload = buildVariablePayload(form);
+    const payload = buildVariablePayload(staticOnly ? { ...form, type: 'static' } : form);
     if (editingId) {
       updateGlobalVariable(editingId, payload);
     } else {
@@ -322,6 +321,7 @@ export default function GlobalVariablesPanel(): JSX.Element {
         onOpenChange={setDialogOpen}
         initial={editingVariable}
         onSubmit={handleSubmit}
+        staticOnly={staticOnly}
       />
 
       {/* 删除确认对话框 */}
@@ -364,6 +364,7 @@ interface GlobalVariableFormDialogProps {
   initial: GlobalVariable | undefined;
   /** 提交回调，参数为表单状态（由调用方决定走 add/update） */
   onSubmit: (form: FormState) => void;
+  staticOnly: boolean;
 }
 
 /**
@@ -382,6 +383,7 @@ function GlobalVariableFormDialog({
   onOpenChange,
   initial,
   onSubmit,
+  staticOnly,
 }: GlobalVariableFormDialogProps): JSX.Element {
   const initialForm = initial ? deriveFormState(initial) : EMPTY_FORM_STATE;
   const [form, setForm] = useState<FormState>(initialForm);
@@ -427,33 +429,34 @@ function GlobalVariableFormDialog({
             />
           </div>
 
-          {/* 类型 */}
-          <div className="space-y-1">
-            <Label htmlFor="gv-type">类型</Label>
-            <Select
-              value={form.type}
-              onValueChange={(v) => update('type', v as GlobalVariableType)}
-            >
-              <SelectTrigger
-                id="gv-type"
-                className="w-full"
-                data-testid="global-variables-form-type"
+          {!staticOnly && (
+            <div className="space-y-1">
+              <Label htmlFor="gv-type">类型</Label>
+              <Select
+                value={form.type}
+                onValueChange={(v) => update('type', v as GlobalVariableType)}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="static" data-testid="global-variables-form-type-static">
-                  静态
-                </SelectItem>
-                <SelectItem value="api" data-testid="global-variables-form-type-api">
-                  API
-                </SelectItem>
-                <SelectItem value="computed" data-testid="global-variables-form-type-computed">
-                  表达式
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+                <SelectTrigger
+                  id="gv-type"
+                  className="w-full"
+                  data-testid="global-variables-form-type"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="static" data-testid="global-variables-form-type-static">
+                    静态
+                  </SelectItem>
+                  <SelectItem value="api" data-testid="global-variables-form-type-api">
+                    API
+                  </SelectItem>
+                  <SelectItem value="computed" data-testid="global-variables-form-type-computed">
+                    表达式
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* 根据类型动态显示字段 */}
           {form.type === 'static' && (
@@ -470,7 +473,7 @@ function GlobalVariableFormDialog({
             </div>
           )}
 
-          {form.type === 'api' && (
+          {!staticOnly && form.type === 'api' && (
             <div className="space-y-2" data-testid="global-variables-form-api-fields">
               <div className="space-y-1">
                 <Label htmlFor="gv-url">URL</Label>
@@ -519,7 +522,7 @@ function GlobalVariableFormDialog({
             </div>
           )}
 
-          {form.type === 'computed' && (
+          {!staticOnly && form.type === 'computed' && (
             <div className="space-y-1" data-testid="global-variables-form-computed-fields">
               <Label htmlFor="gv-expression">表达式</Label>
               <textarea

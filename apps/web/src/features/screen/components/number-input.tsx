@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Input } from '@/components/ui/input';
+import { Input } from '@nebula/screen-sdk';
 
 export interface NumberInputProps {
   /** 当前值（受控） */

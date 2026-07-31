@@ -85,6 +85,7 @@ import { ProblemsPanel } from '../panels/problems-panel';
 import { ExecutionLogPanel } from '../panels/execution-log-panel';
 import { V2NodeConfigPanel, type V2NodeConfigChange } from '../panels/node-config-panel-v2';
 import { ToolbarButton } from '../../components/ui-primitives';
+import { useOptionalScreenEditorEnvironment } from '../../components/screen-editor-environment';
 import {
   alignNodes,
   applyAlignResultToNodes,
@@ -604,6 +605,7 @@ function BlueprintSheetV2Inner({
   onSave,
   onShowHelp,
 }: BlueprintSheetV2InnerProps): JSX.Element {
+  const capabilityProfile = useOptionalScreenEditorEnvironment()?.capabilityProfile ?? 'dynamic';
   const project = useScreenEditorStore((s) => s.project);
   const updateBlueprint = useScreenEditorStore((s) => s.updateBlueprint);
   const beginBlueprintGesture = useScreenEditorStore((s) => s.beginBlueprintGesture);
@@ -1290,11 +1292,11 @@ function BlueprintSheetV2Inner({
 
   // V2 搜索面板选项：合并画布组件选项 + 静态选项；connect 模式过滤为可连线目标
   const searchPanelOptions = useMemo(() => {
-    const allOptions = buildAllNodeOptions(componentsRef.current);
+    const allOptions = buildAllNodeOptions(componentsRef.current, capabilityProfile);
     return searchPanelState.mode === 'connect'
       ? allOptions.filter(isV2ConnectableTarget)
       : allOptions;
-  }, [searchPanelState.mode, components]);
+  }, [capabilityProfile, searchPanelState.mode, components]);
 
   // 任务 8.2 + 9.2：链路高亮 + 过滤视图叠加
   const displayNodes = useMemo(() => {

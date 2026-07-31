@@ -25,23 +25,18 @@ import {
   type LogicConfig,
   type ScreenComponent,
 } from '@nebula/shared';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Button } from '@nebula/screen-sdk';
+import { Input } from '@nebula/screen-sdk';
+import { RadioGroup, RadioGroupItem } from '@nebula/screen-sdk';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
+import { Switch } from '@nebula/screen-sdk';
 import { buildDataSourceMigration } from '../lib/data-source-migration';
 import { extractDataByPath } from '../lib/chart-data-parser';
 import { buildUrlWithParams, API_REQUEST_TIMEOUT_MS } from '../hooks/use-api-data-source';
 import { StyleFields, TextInput, textareaClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
 import { DatasetConfigForm } from './dataset-config-section';
+import { useOptionalScreenEditorEnvironment } from './screen-editor-environment';
 
 interface SectionProps {
   component: ScreenComponent;
@@ -74,12 +69,18 @@ function serializeData(data: unknown): string {
  * 静态数据结构校验（共享 Schema 之外的结构约束）：
  * 必须是数组，且每个条目都是 plain object。
  */
-function validateStaticDataStructure(data: unknown): string | null {
-  if (!Array.isArray(data)) {
-    return '数据结构错误：静态数据需要是对象数组，如 [{"name":"一月","value":30}]';
+function validateStaticDataStructure(data: unknown, dataPath?: string): string | null {
+  const extracted = extractDataByPath(data, dataPath);
+  if (!extracted.ok) {
+    return `数据路径 "${dataPath ?? ''}" 不存在`;
   }
-  for (let i = 0; i < data.length; i++) {
-    const item: unknown = data[i];
+  if (!Array.isArray(extracted.value)) {
+    return dataPath === undefined
+      ? '数据结构错误：静态数据需要是对象数组，或配置数据路径指向对象内的数组'
+      : `数据路径 "${dataPath}" 指向的值不是数组`;
+  }
+  for (let i = 0; i < extracted.value.length; i++) {
+    const item: unknown = extracted.value[i];
     if (item === null || typeof item !== 'object' || Array.isArray(item)) {
       return `数据结构错误：第 ${i + 1} 条数据必须是对象`;
     }
@@ -323,6 +324,9 @@ interface DataSourceFormProps extends SectionProps {
 function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps) {
   const effectiveData = getEffectiveStaticData(component);
   const [draft, setDraft] = useState<string>(() => serializeData(effectiveData));
+  const [dataPathDraft, setDataPathDraft] = useState<string>(
+    () => component.dataSource?.dataPath ?? '',
+  );
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -330,8 +334,9 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
   useEffect(() => {
     if (!dirty) {
       setDraft(serializeData(effectiveData));
+      setDataPathDraft(component.dataSource?.dataPath ?? '');
     }
-  }, [effectiveData, dirty]);
+  }, [component.dataSource?.dataPath, effectiveData, dirty]);
 
   const handleApply = () => {
     let parsed: unknown;
@@ -342,7 +347,8 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
       return;
     }
 
-    const structureError = validateStaticDataStructure(parsed);
+    const dataPath = dataPathDraft.trim() || undefined;
+    const structureError = validateStaticDataStructure(parsed, dataPath);
     if (structureError !== null) {
       setError(structureError);
       return;
@@ -352,6 +358,7 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
       ...(component.dataSource ?? {}),
       type: 'static',
       staticData: parsed,
+      dataPath,
     };
     const schemaResult = DataSourceConfigSchema.safeParse(nextDataSource);
     if (!schemaResult.success) {
@@ -364,7 +371,11 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
     // 无实际变化不写入（不产生空历史）；类型切换（api → static）视为变化需写入
     const typeUnchanged =
       component.dataSource === undefined || component.dataSource.type === 'static';
-    if (typeUnchanged && serializeData(effectiveData) === serializeData(parsed)) {
+    if (
+      typeUnchanged &&
+      serializeData(effectiveData) === serializeData(parsed) &&
+      (component.dataSource?.dataPath ?? '') === (dataPath ?? '')
+    ) {
       onSettled();
       return;
     }
@@ -375,6 +386,7 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
 
   const handleCancel = () => {
     setDraft(serializeData(effectiveData));
+    setDataPathDraft(component.dataSource?.dataPath ?? '');
     setError(null);
     setDirty(false);
     onSettled();
@@ -390,6 +402,16 @@ function StaticDataForm({ component, onUpdate, onSettled }: DataSourceFormProps)
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
+          setDirty(true);
+        }}
+      />
+      <Input
+        aria-label="数据路径"
+        className="h-7 px-2 py-1 text-sm"
+        placeholder="如 payload.rows（根级数组可留空）"
+        value={dataPathDraft}
+        onChange={(event) => {
+          setDataPathDraft(event.target.value);
           setDirty(true);
         }}
       />
@@ -807,11 +829,12 @@ function getEffectiveType(dataSource: ScreenComponent['dataSource']): DataSource
 }
 
 export function BarChartDataSourceSection({ component, onUpdate }: SectionProps) {
-  const effectiveType = getEffectiveType(component.dataSource);
+  const staticOnly = useOptionalScreenEditorEnvironment()?.capabilityProfile === 'static';
+  const effectiveType = staticOnly ? 'static' : getEffectiveType(component.dataSource);
   // 类型切换为草稿态：只切换展示的表单，应用/取消后经 onSettled 落定；
   // 切换类型本身不写入组件，不产生历史
   const [draftType, setDraftType] = useState<DataSourceType | null>(null);
-  const shownType = draftType ?? effectiveType;
+  const shownType = staticOnly ? 'static' : (draftType ?? effectiveType);
   // API 请求测试响应样本（任务 5.4：供字段映射推断可选字段）
   const [apiSample, setApiSample] = useState<unknown>(null);
 
@@ -822,31 +845,33 @@ export function BarChartDataSourceSection({ component, onUpdate }: SectionProps)
 
   return (
     <PanelSection title="数据" collapsible testId="datasource-section" contentClassName="space-y-2">
-      <RadioGroup
-        className="flex gap-4"
-        value={shownType}
-        onValueChange={handleTypeChange}
-        aria-label="数据源类型"
-      >
-        <div className="flex items-center gap-1.5">
-          <RadioGroupItem value="static" aria-label="静态数据" id="datasource-type-static" />
-          <label htmlFor="datasource-type-static" className="text-xs text-foreground">
-            静态数据
-          </label>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <RadioGroupItem value="api" aria-label="API" id="datasource-type-api" />
-          <label htmlFor="datasource-type-api" className="text-xs text-foreground">
-            API
-          </label>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <RadioGroupItem value="dataset" aria-label="数据集" id="datasource-type-dataset" />
-          <label htmlFor="datasource-type-dataset" className="text-xs text-foreground">
-            数据集
-          </label>
-        </div>
-      </RadioGroup>
+      {!staticOnly && (
+        <RadioGroup
+          className="flex gap-4"
+          value={shownType}
+          onValueChange={handleTypeChange}
+          aria-label="数据源类型"
+        >
+          <div className="flex items-center gap-1.5">
+            <RadioGroupItem value="static" aria-label="静态数据" id="datasource-type-static" />
+            <label htmlFor="datasource-type-static" className="text-xs text-foreground">
+              静态数据
+            </label>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <RadioGroupItem value="api" aria-label="API" id="datasource-type-api" />
+            <label htmlFor="datasource-type-api" className="text-xs text-foreground">
+              API
+            </label>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <RadioGroupItem value="dataset" aria-label="数据集" id="datasource-type-dataset" />
+            <label htmlFor="datasource-type-dataset" className="text-xs text-foreground">
+              数据集
+            </label>
+          </div>
+        </RadioGroup>
+      )}
       {shownType === 'static' && (
         <StaticDataForm
           component={component}

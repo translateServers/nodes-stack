@@ -12,11 +12,11 @@
  * 注意：导入会覆盖当前未保存内容，需用户先保存。
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import { Upload, FileJson, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
 import { ScreenProjectSchema, type ScreenProject } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
+import { useScreenEditorNotifications } from './screen-editor-notifications';
 import {
   Dialog,
   DialogContent,
@@ -24,9 +24,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+} from '@nebula/screen-sdk';
+import { Button, Spinner } from '@nebula/screen-sdk';
 
 interface ImportDialogProps {
   open: boolean;
@@ -42,6 +41,8 @@ interface ParsedPreview {
 
 export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDialogProps) {
   const loadProject = useScreenEditorStore((s) => s.loadProject);
+  const { notify } = useScreenEditorNotifications();
+  const fileInputId = useId();
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ParsedPreview | null>(null);
@@ -105,10 +106,10 @@ export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDia
     if (!preview) return;
     // 保留当前路由的 id，避免 URL 失配
     loadProject({ ...preview.project, id: currentProjectId });
-    toast.success(`已导入 ${preview.project.name}`);
+    notify('success', `已导入 ${preview.project.name}`);
     onOpenChange(false);
     reset();
-  }, [preview, loadProject, currentProjectId, onOpenChange, reset]);
+  }, [preview, loadProject, currentProjectId, notify, onOpenChange, reset]);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -158,10 +159,10 @@ export function ImportDialog({ open, onOpenChange, currentProjectId }: ImportDia
               className="hidden"
               onChange={handleInputChange}
               // 用 label 触发更稳妥，这里用包裹式 label 替代会更优雅；为简洁起见用 ref-like 方式
-              id="import-file-input"
+              id={fileInputId}
             />
             <label
-              htmlFor="import-file-input"
+              htmlFor={fileInputId}
               className="cursor-pointer text-xs text-primary underline-offset-2 hover:underline"
             >
               浏览文件

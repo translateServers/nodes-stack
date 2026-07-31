@@ -37,6 +37,7 @@ import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
 import { MoveableContainer, type MoveableHandlers } from './moveable-container';
 import type { RulersHandle } from './canvas-rulers';
+import { useOptionalScreenEditorEnvironment } from './screen-editor-environment';
 
 /**
  * Moveable 事件 datas 袋的类型化描述。
@@ -388,6 +389,7 @@ export function ScreenCanvas({
   // 画布交互模式：interactive 时编辑器画布接入蓝图运行时，组件 onClick 派发 componentClick 事件
   const interactionMode = useScreenEditorStore((s) => s.interactionMode);
   const isInteractive = interactionMode === 'interactive';
+  const editorEnvironment = useOptionalScreenEditorEnvironment();
   const components = useMemo<ScreenComponent[]>(
     () => project?.components ?? [],
     [project?.components],
@@ -404,7 +406,11 @@ export function ScreenCanvas({
     contextValue: blueprintContext,
     onComponentClick,
     onComponentEvent,
-  } = useBlueprintPreviewRuntime(project?.blueprint, components, { enabled: isInteractive });
+  } = useBlueprintPreviewRuntime(project?.blueprint, components, {
+    enabled: isInteractive,
+    onNavigateRequest: editorEnvironment?.requestNavigate,
+    queryRoot: editorEnvironment?.portalRoot?.getRootNode() as ParentNode | undefined,
+  });
   const runtimeVisibilityOverrides = isInteractive
     ? blueprintContext.visibilityOverrides
     : undefined;

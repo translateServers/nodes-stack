@@ -14,6 +14,15 @@ import {
 } from '@nebula/shared';
 import { z } from 'zod';
 import {
+  getScreenSdkSourceHandles,
+  getScreenSdkTargetHandles,
+  isScreenSdkBlueprintNodeKind,
+  isScreenSdkGlobalComponentType,
+  isScreenSdkV1ActionType,
+  isScreenSdkV1TriggerType,
+  SCREEN_SDK_COMPONENT_TYPES,
+} from '../core/static-capability-profile.js';
+import {
   createDiagnostic,
   diagnosticsFromZodError,
   ScreenSdkDiagnosticCode,
@@ -24,14 +33,7 @@ export const SCREEN_DOCUMENT_VERSION = 1 as const;
 export const SCREEN_TRANSFER_FORMAT_VERSION = 1 as const;
 export const SCREEN_TRANSFER_MAX_BYTES = 10 * 1024 * 1024;
 
-export const SCREEN_SDK_COMPONENT_TYPES = [
-  'text',
-  'bar-chart',
-  'rect',
-  'ellipse',
-  'image',
-  'button',
-] as const;
+export { SCREEN_SDK_COMPONENT_TYPES } from '../core/static-capability-profile.js';
 
 export const ScreenSdkComponentTypeSchema = z.enum(SCREEN_SDK_COMPONENT_TYPES);
 export type ScreenSdkComponentType = z.infer<typeof ScreenSdkComponentTypeSchema>;
@@ -129,10 +131,14 @@ export const StaticGlobalVariableSchema = z
 
 export type StaticGlobalVariable = z.infer<typeof StaticGlobalVariableSchema>;
 
+const ScreenSdkCanvasConfigSchema = CanvasConfigSchema.extend({
+  backgroundImage: HttpOrDataUrlSchema.optional(),
+}).strict();
+
 export const ScreenDocumentV1Schema = z
   .object({
     schemaVersion: z.literal(SCREEN_DOCUMENT_VERSION),
-    canvas: CanvasConfigSchema,
+    canvas: ScreenSdkCanvasConfigSchema,
     components: z.array(ScreenSdkComponentSchema),
     blueprint: EventBlueprintV2Schema.optional(),
     globalVariables: z.array(StaticGlobalVariableSchema).default([]),
@@ -327,10 +333,7 @@ function scanV1Blueprint(blueprint: UnknownRecord, diagnostics: ScreenSdkDiagnos
           '蓝图节点类型不在 SDK V1 白名单中',
         ),
       );
-    } else if (
-      node?.kind === 'trigger' &&
-      !['componentClick', 'componentHover', 'pageLoad', 'interval'].includes(String(config?.type))
-    ) {
+    } else if (node?.kind === 'trigger' && !isScreenSdkV1TriggerType(config?.type)) {
       supported = false;
       addUniqueDiagnostic(
         diagnostics,
@@ -350,10 +353,7 @@ function scanV1Blueprint(blueprint: UnknownRecord, diagnostics: ScreenSdkDiagnos
           'SDK V1 不支持网络请求节点',
         ),
       );
-    } else if (
-      node?.kind === 'action' &&
-      !['setVisibility', 'navigate', 'scrollToComponent'].includes(String(config?.type))
-    ) {
+    } else if (node?.kind === 'action' && !isScreenSdkV1ActionType(config?.type)) {
       supported = false;
       addUniqueDiagnostic(
         diagnostics,
@@ -374,7 +374,7 @@ function scanRawV2Blueprint(blueprint: UnknownRecord, diagnostics: ScreenSdkDiag
   for (const [index, rawNode] of blueprint.nodes.entries()) {
     const node = asRecord(rawNode);
     const globalType = typeof node?.globalType === 'string' ? node.globalType : undefined;
-    if (!['component', 'condition', 'delay', 'comment'].includes(String(node?.kind))) {
+    if (!isScreenSdkBlueprintNodeKind(node?.kind)) {
       supported = false;
       addUniqueDiagnostic(
         diagnostics,
@@ -387,7 +387,7 @@ function scanRawV2Blueprint(blueprint: UnknownRecord, diagnostics: ScreenSdkDiag
     } else if (
       node?.kind === 'component' &&
       globalType !== undefined &&
-      !['pageLoad', 'interval', 'navigate', 'scrollTo'].includes(globalType)
+      !isScreenSdkGlobalComponentType(globalType)
     ) {
       supported = false;
       addUniqueDiagnostic(
@@ -404,22 +404,11 @@ function scanRawV2Blueprint(blueprint: UnknownRecord, diagnostics: ScreenSdkDiag
 }
 
 function allowedSourceHandles(node: EventBlueprintV2['nodes'][number]): ReadonlySet<string> {
-  if (node.kind === 'condition') return new Set(['then', 'else']);
-  if (node.kind === 'delay') return new Set(['out']);
-  if (node.kind === 'comment') return new Set();
-  if (node.globalType === 'pageLoad') return new Set(['evt:pageLoad']);
-  if (node.globalType === 'interval') return new Set(['evt:interval']);
-  if (node.globalType !== undefined) return new Set();
-  return new Set(['evt:click', 'evt:hover']);
+  return getScreenSdkSourceHandles(node);
 }
 
 function allowedTargetHandles(node: EventBlueprintV2['nodes'][number]): ReadonlySet<string> {
-  if (node.kind === 'condition' || node.kind === 'delay') return new Set(['in']);
-  if (node.kind === 'comment') return new Set();
-  if (node.globalType === 'navigate') return new Set(['act:navigate']);
-  if (node.globalType === 'scrollTo') return new Set(['act:scrollTo']);
-  if (node.globalType !== undefined) return new Set();
-  return new Set(['act:show', 'act:hide', 'act:toggleVisibility']);
+  return getScreenSdkTargetHandles(node);
 }
 
 function scanV2Blueprint(

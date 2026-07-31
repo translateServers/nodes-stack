@@ -35,7 +35,7 @@
 
 import { useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { cn } from '@/lib/utils';
+import { cn } from '@nebula/screen-sdk';
 
 /**
  * 动态锚点行高（px）。

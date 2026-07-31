@@ -10,14 +10,8 @@
  * 声明式优先，复杂编辑器走 CustomField 逃生舱。
  */
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
+import { Switch } from '@nebula/screen-sdk';
 import { ColorInput, numberInputClass, textareaClass, TextInput } from '../components/panel-fields';
 import { NumberInput } from '../components/number-input';
 import type { FieldControlComponent, FieldControlProps } from './types';

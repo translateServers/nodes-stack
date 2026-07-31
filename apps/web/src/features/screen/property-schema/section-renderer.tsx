@@ -13,7 +13,7 @@
 
 import { Fragment, memo, useMemo, useState, type ComponentType, type JSX } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@nebula/screen-sdk';
 import { PanelSection } from '../components/ui-primitives';
 import { FIELD_CONTROLS } from './field-controls';
 import { buildNestedUpdate, getByPath } from './path-utils';

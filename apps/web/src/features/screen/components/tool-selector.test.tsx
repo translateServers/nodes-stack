@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@nebula/screen-sdk';
 import { ToolSelector } from './tool-selector';
 import { TOOL_REGISTRY, getImplementedTools, type EditorTool } from '../hooks/tool-registry';
 import type { EditorSessionApi } from '../hooks/use-editor-session';

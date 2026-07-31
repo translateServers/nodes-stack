@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@nebula/screen-sdk';
 import { CanvasStatusBar } from './canvas-status-bar';
 import { ToolSelector } from './tool-selector';
 import { useEditorSession } from '../hooks/use-editor-session';

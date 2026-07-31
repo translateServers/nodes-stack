@@ -8,13 +8,7 @@
  */
 
 import { Code2, AlertCircle } from 'lucide-react';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@nebula/screen-sdk';
 
 interface CodeEditorSheetProps {
   open: boolean;

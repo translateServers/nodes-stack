@@ -395,6 +395,22 @@ describe('useBlueprintRuntimeDeps - hasComponent 判定', () => {
 });
 
 describe('useBlueprintRuntimeDeps - 其他执行器依赖', () => {
+  it('优先把 navigate 交给宿主注入的 openUrl', () => {
+    const openUrl = vi.fn();
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const { result } = renderHook(() =>
+      useBlueprintRuntimeDeps([], undefined, undefined, { openUrl }),
+    );
+
+    act(() => {
+      result.current.deps.openUrl('https://example.com', '_blank');
+    });
+
+    expect(openUrl).toHaveBeenCalledWith('https://example.com', '_blank');
+    expect(windowOpenSpy).not.toHaveBeenCalled();
+    windowOpenSpy.mockRestore();
+  });
+
   it('openUrl _blank 调用 window.open', () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     const { result } = renderHook(() => useBlueprintRuntimeDeps([]));
@@ -427,6 +443,22 @@ describe('useBlueprintRuntimeDeps - 其他执行器依赖', () => {
         result.current.deps.scrollToComponent('non-existent');
       });
     }).not.toThrow();
+  });
+
+  it('scrollToComponent 从宿主注入的实例 root 开始查询', () => {
+    const queryRoot = document.createElement('div');
+    const querySpy = vi.spyOn(queryRoot, 'querySelector');
+    const { result } = renderHook(() =>
+      useBlueprintRuntimeDeps([], undefined, undefined, { queryRoot }),
+    );
+
+    act(() => {
+      result.current.deps.scrollToComponent('component-1');
+    });
+
+    expect(querySpy).toHaveBeenCalledWith(
+      '[data-preview-component-id="component-1"], [data-component-id="component-1"]',
+    );
   });
 
   it('logWarning 调用 console.warn', () => {

@@ -310,6 +310,38 @@ describe('screen document contract', () => {
     expect(parseScreenDocument(input).success).toBe(false);
   });
 
+  it.each([
+    'blob:https://example.com/temporary',
+    'file:///tmp/background.png',
+    'ftp://example.com/background.png',
+  ])('rejects non-persistable canvas background URL %s', (backgroundImage) => {
+    const input = structuredClone(createDocument()) as Record<string, unknown>;
+    input.canvas = {
+      ...(input.canvas as Record<string, unknown>),
+      backgroundImage,
+    };
+
+    expect(parseScreenDocument(input)).toMatchObject({
+      success: false,
+      code: 'VALIDATION',
+      diagnostics: [{ path: ['canvas', 'backgroundImage'] }],
+    });
+  });
+
+  it.each([
+    '',
+    'data:image/png;base64,AA==',
+    'https://example.com/background.png',
+  ])('accepts persistable canvas background URL %s', (backgroundImage) => {
+    const input = structuredClone(createDocument()) as Record<string, unknown>;
+    input.canvas = {
+      ...(input.canvas as Record<string, unknown>),
+      backgroundImage,
+    };
+
+    expect(parseScreenDocument(input).success).toBe(true);
+  });
+
   it('migrates a supported V1 blueprint to canonical V2', () => {
     const input = structuredClone(createDocument()) as Record<string, unknown>;
     input.blueprint = {

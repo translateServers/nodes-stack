@@ -20,6 +20,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ScreenComponent, ScreenProject } from '@nebula/shared';
 import { BarChartConfigSections, inferFieldsFromSample } from './bar-chart-config-sections';
 import { createScreenEditorStore } from '../stores/editor-store';
+import { ScreenEditorEnvironmentProvider } from './screen-editor-environment';
 
 const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 
@@ -75,6 +76,21 @@ function renderSections(component: ScreenComponent, onUpdate = vi.fn()) {
   return { onUpdate, ...utils };
 }
 
+function renderStaticSections(component: ScreenComponent, onUpdate = vi.fn()) {
+  const utils = render(
+    <ScreenEditorEnvironmentProvider
+      capabilityProfile="static"
+      portalRoot={null}
+      requestNavigate={vi.fn()}
+      setTheme={vi.fn()}
+      theme="light"
+    >
+      <BarChartConfigSections component={component} onUpdate={onUpdate} />
+    </ScreenEditorEnvironmentProvider>,
+  );
+  return { onUpdate, ...utils };
+}
+
 /** 打开 Radix Select 并选择选项（键盘路径，规避 jsdom 指针捕获差异） */
 async function selectOption(triggerName: string, optionName: string) {
   const trigger = screen.getByRole('combobox', { name: triggerName });
@@ -106,6 +122,32 @@ describe('inferFieldsFromSample', () => {
 });
 
 describe('4.2 静态数据编辑与校验反馈', () => {
+  it('static profile 隐藏 API/数据集并支持对象数据路径', () => {
+    const component = makeBarChart();
+    const { onUpdate } = renderStaticSections(component);
+
+    expect(screen.queryByRole('radio', { name: 'API' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: '数据集' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('static-data-editor'), {
+      target: { value: JSON.stringify({ payload: { rows: CUSTOM_DATA } }) },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: '数据路径' }), {
+      target: { value: 'payload.rows' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '应用' }));
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataSource: {
+          type: 'static',
+          staticData: { payload: { rows: CUSTOM_DATA } },
+          dataPath: 'payload.rows',
+        },
+      }),
+    );
+  });
+
   it('遗留组件预填 props.data 生效数据', () => {
     renderSections(makeBarChart({ props: { title: '销售', data: LEGACY_DATA } }));
     const editor = screen.getByTestId('static-data-editor');

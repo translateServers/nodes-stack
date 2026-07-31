@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 3 已完成，下一步阶段 4）
+> 状态：实施中（阶段 4 已完成，待进入阶段 5 Host Adapter 工作流）
 > 最近更新：2026-07-31
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
@@ -98,32 +98,44 @@
 
 ## 阶段 4：抽离无宿主依赖的编辑器工作台
 
-- [ ] Task 9: 创建 `ScreenEditorWorkbench`
-  - [ ] 从现有 `ScreenEditor` 拆出无 Router、Query 与后端 hook 的 React 工作台
-  - [ ] 通过 props/context 接收项目 Envelope、operation controller、主题和 portal root
-  - [ ] 从 SDK 工具栏移除应用级 back 命令，preview/navigation 改为宿主事件
-  - [ ] 建立 ShadowRoot 内部 notification surface，不要求宿主 toast callback
-  - [ ] 将 `h-screen` 与窗口尺寸假设改为容器尺寸
-  - [ ] 保留工具栏、左右面板、画布、状态栏与蓝图入口
-  - [ ] 将蓝图编辑器改为动态加载边界
+- [x] Task 9: 创建 `ScreenEditorWorkbench`
+  - [x] 从现有 `ScreenEditor` 拆出无 Router、Query 与后端 hook 的 React 工作台
+  - [x] 通过 props/context 接收项目 Envelope、operation controller、主题和 portal root
+  - [x] 从 SDK 工具栏移除应用级 back 命令，static preview/navigation 改为 composed request event
+  - [x] 建立实例内部 notification surface，不要求宿主 toast callback
+  - [x] 将 `h-screen` 与窗口尺寸假设改为容器尺寸
+  - [x] 保留工具栏、左右面板、画布、状态栏与蓝图入口
+  - [x] 将蓝图编辑器改为动态加载边界
 
-- [ ] Task 10: 建立 static SDK capability profile
-  - [ ] BarChart 仅保留 static data path 与解析管线
-  - [ ] 属性面板只显示静态数据表单、字段映射和逻辑层
-  - [ ] 全局变量只允许 static 类型
-  - [ ] 从 SDK 注册定义中移除动态数据事件/动作
-  - [ ] 蓝图只允许 component/condition/delay/comment 节点和 spec 中列出的 evt/act/globalType 白名单
-  - [ ] requestApi/refreshData 不进入 SDK runtime dependency
-  - [ ] navigate 改为 `nebula-navigate-request`
-  - [ ] 确保图片/背景资源加载边界写入文档和测试
+- [x] Task 10: 建立 static SDK capability profile
+  - [x] BarChart 仅保留 static data path 与解析管线
+  - [x] 属性面板只显示静态数据表单、字段映射和逻辑层
+  - [x] 全局变量只允许 static 类型
+  - [x] 从 SDK 注册定义中移除动态数据事件/动作
+  - [x] 蓝图只允许 component/condition/delay/comment 节点和 spec 中列出的 evt/act/globalType 白名单
+  - [x] requestApi/refreshData 不进入 SDK core dependency
+  - [x] navigate 改为 `nebula-navigate-request`
+  - [x] 确保图片/背景资源加载边界写入文档和测试
 
-- [ ] Task 11: 清除应用级依赖
-  - [ ] SDK 源码中不存在 `@/` alias
-  - [ ] SDK 不导入 TanStack Router、TanStack Query、Axios、auth store 或 screen API
-  - [ ] SDK 不导入 dataset feature
-  - [ ] 将 Sonner 调用替换为实例通知/错误状态
-  - [ ] 将 app UI primitives 替换为 SDK 内部 UI primitives
-  - [ ] 通过依赖图测试或静态检查防止应用依赖回流
+- [x] Task 11: 清除应用级依赖
+  - [x] SDK 源码中不存在 `@/` alias
+  - [x] SDK 不导入 TanStack Router、TanStack Query、Axios、auth store 或 screen API
+  - [x] SDK 不导入 dataset feature
+  - [x] 将 Workbench 可达路径的 Sonner 调用替换为实例通知/错误状态
+  - [x] 将 app UI primitives 替换为 SDK 内部 UI primitives
+  - [x] 通过依赖图测试或静态检查防止应用依赖回流
+
+### 阶段 4 执行记录（已完成）
+
+- 已从 Nebula 宿主组件拆出 `ScreenEditorWorkbench`；Router、Query、`window.open` 与浏览器下载留在宿主，Workbench 通过 Envelope 和 operation controller 接收数据与命令。
+- 工具栏不再包含应用级返回命令；根布局改用宿主容器尺寸；V2 蓝图 Sheet 仅在打开时动态加载。
+- Workbench 内建立实例通知面，导入、快照和 V2 蓝图剪贴板不再调用全局 Sonner；static 编辑画布 navigate 通过 composed event 请求宿主执行。
+- static capability profile、6 组件静态注册表和 static-only BarChart 解析入口已进入 `packages/screen-sdk`；通用图表解析管线上移至 shared，Web 动态能力继续复用同一实现。
+- Workbench 默认使用 static profile；Nebula `ScreenEditor` 显式使用 dynamic profile。static profile 在 UI 源头隐藏 API/dataset、固定 static 全局变量、过滤 requestApi 与动态锚点，并在写入 Store 前通过 SDK parser 拒绝动态文档。
+- static profile 的 preview/navigate 只从 Workbench 根节点派发 bubbling + composed CustomEvent；Nebula 宿主外壳监听事件后执行现有预览与导航，dynamic profile 保留原 controller 路径。
+- SDK 新增 TypeScript AST 边界检查，拒绝应用 alias、Router/Query、Axios、Sonner、相对越界和直接业务 `fetch`，并挂入 build。
+- 15 个 Workbench 可达 shadcn primitives 与 `cn` 已收归 `packages/screen-sdk`，浮层组件统一支持实例 portal root；递归依赖图测试阻止应用 UI 回流。
+- 阶段 6 创建 Custom Element React Root 时完成 Workbench 私有桥接到可发布元素入口；阶段 7 兼容验证通过前不切换现有动态项目入口。
 
 ## 阶段 5：实现 Host Adapter 工作流
 

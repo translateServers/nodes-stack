@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@nebula/screen-sdk';
 import {
   SHORTCUTS_REGISTRY,
   SHORTCUT_CATEGORY_LABELS,

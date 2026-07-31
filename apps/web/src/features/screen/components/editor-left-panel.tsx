@@ -11,7 +11,7 @@ import { Layers, Package, PanelLeftClose } from 'lucide-react';
 import { ComponentLibrary } from './component-library';
 import { LayerPanel } from './layer-panel';
 import { PanelResizeHandle, ToolbarButton, useResizablePanel } from './ui-primitives';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@nebula/screen-sdk';
 import { useScreenEditorPreferenceNamespace } from '../stores/editor-store';
 
 type LeftPanelTab = 'library' | 'layers';

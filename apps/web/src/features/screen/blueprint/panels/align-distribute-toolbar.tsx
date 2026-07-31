@@ -26,7 +26,7 @@ import {
   AlignVerticalSpaceBetween,
 } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@nebula/screen-sdk';
 import type { AlignMode, DistributeMode } from '../lib/align-distribute';
 
 export interface AlignDistributeToolbarProps {

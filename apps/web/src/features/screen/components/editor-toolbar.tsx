@@ -10,7 +10,6 @@
 
 import { memo, useEffect, useRef, useState } from 'react';
 import {
-  ArrowLeft,
   Check,
   Eye,
   LoaderCircle,
@@ -28,15 +27,14 @@ import { getShortcutKeys } from '../hooks/shortcuts-registry';
 import { ToolSelector } from './tool-selector';
 import { ProjectMenubar } from './project-menubar';
 import { ToolbarButton } from './ui-primitives';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Button, Separator } from '@nebula/screen-sdk';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+} from '@nebula/screen-sdk';
+import { cn } from '@nebula/screen-sdk';
 
 const ZOOM_PRESETS = [50, 100, 200];
 
@@ -197,7 +195,6 @@ function ZoomControls({
 }
 
 interface EditorToolbarProps {
-  onBack: () => void;
   onSave: () => void;
   onPublish: () => void;
   onPreview: () => void;
@@ -224,7 +221,6 @@ interface EditorToolbarProps {
 }
 
 export const EditorToolbar = memo(function EditorToolbar({
-  onBack,
   onSave,
   onPublish,
   onPreview,
@@ -244,12 +240,8 @@ export const EditorToolbar = memo(function EditorToolbar({
 
   return (
     <header className="flex h-12 items-center gap-2 border-b border-border bg-card px-3">
-      {/* 左段：返回 + 项目名 + 保存状态 */}
+      {/* 左段：项目名 + 保存状态；宿主级返回/关闭命令不进入工作台 */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <ToolbarButton tooltip="返回列表" onClick={onBack} aria-label="返回列表">
-          <ArrowLeft className="size-4" />
-        </ToolbarButton>
-        <Separator orientation="vertical" className="mx-1 h-5" />
         <ProjectName />
         <SaveStatusBadge isSaving={isSaving} lastSavedAt={lastSavedAt} />
       </div>

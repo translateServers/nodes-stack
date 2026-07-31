@@ -18,7 +18,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from '@nebula/screen-sdk';
 import type { BaseDiagnostic } from '../blueprint/hooks/blueprint-diagnostic-context';
 
 interface PublishConfirmDialogProps {

@@ -33,6 +33,11 @@ interface RefreshRequest {
 /** 刷新成功回调：将数据回写到组件的 API 数据源缓存 */
 export type RefreshCompleteHandler = (componentId: string, data: unknown) => void;
 
+export interface BlueprintRuntimeEnvironment {
+  openUrl?: (url: string, target: '_blank' | '_self') => void;
+  queryRoot?: ParentNode;
+}
+
 /**
  * 当前页面的导航函数（用于 _self 链接跳转）。
  *
@@ -80,6 +85,7 @@ export function useBlueprintRuntimeDeps(
   components: readonly ScreenComponent[],
   onRefreshComplete?: RefreshCompleteHandler,
   getComponentDataProp?: (componentId: string) => Record<string, unknown> | undefined,
+  environment: BlueprintRuntimeEnvironment = {},
 ): {
   deps: RuntimeDeps;
   visibilityOverrides: VisibilityOverrides;
@@ -148,23 +154,33 @@ export function useBlueprintRuntimeDeps(
     [visibilityOverrides],
   );
 
-  const openUrl = useCallback((url: string, target: '_blank' | '_self'): void => {
-    if (target === '_blank') {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } else {
-      navigateSelf(url);
-    }
-  }, []);
+  const openUrl = useCallback(
+    (url: string, target: '_blank' | '_self'): void => {
+      if (environment.openUrl !== undefined) {
+        environment.openUrl(url, target);
+        return;
+      }
+      if (target === '_blank') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        navigateSelf(url);
+      }
+    },
+    [environment.openUrl],
+  );
 
-  const scrollToComponent = useCallback((componentId: string): void => {
-    // 优先使用预览专属属性（避免与编辑器 CanvasComponentWrapper 的 data-component-id 冲突）
-    const escaped = cssEscape(componentId);
-    const el = document.querySelector<HTMLElement>(
-      `[data-preview-component-id="${escaped}"], [data-component-id="${escaped}"]`,
-    );
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-  }, []);
+  const scrollToComponent = useCallback(
+    (componentId: string): void => {
+      // 优先使用预览专属属性（避免与编辑器 CanvasComponentWrapper 的 data-component-id 冲突）
+      const escaped = cssEscape(componentId);
+      const el = (environment.queryRoot ?? document).querySelector<HTMLElement>(
+        `[data-preview-component-id="${escaped}"], [data-component-id="${escaped}"]`,
+      );
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    },
+    [environment.queryRoot],
+  );
 
   const logWarning = useCallback((message: string): void => {
     console.warn(`[blueprint-runtime] ${message}`);

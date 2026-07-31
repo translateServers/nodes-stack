@@ -41,7 +41,7 @@ import {
   Keyboard,
   type LucideIcon,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@nebula/screen-sdk';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -52,11 +52,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@nebula/screen-sdk';
 import { useScreenEditorStore } from '../stores/editor-store';
-import { useUiStore } from '@/store';
 import { ShortcutBadge } from './shortcut-badge';
 import { getShortcutKeys } from '../hooks/shortcuts-registry';
+import { useScreenEditorEnvironment } from './screen-editor-environment';
 
 interface ProjectMenubarProps {
   /** 文件级操作回调（在父组件接入 mutation） */
@@ -144,8 +144,7 @@ export const ProjectMenubar = memo(function ProjectMenubar({
   const toggleBorderGuides = useScreenEditorStore((s) => s.toggleBorderGuides);
 
   // 主题
-  const theme = useUiStore((s) => s.theme);
-  const setTheme = useUiStore((s) => s.setTheme);
+  const { theme, setTheme } = useScreenEditorEnvironment();
 
   const hasSelection = deferredSelectedIds.length > 0;
   const hasGuides = guides.vertical.length > 0 || guides.horizontal.length > 0;
@@ -306,7 +305,7 @@ export const ProjectMenubar = memo(function ProjectMenubar({
             <span className="px-1.5 py-1 text-xs font-medium text-muted-foreground">主题</span>
             <DropdownMenuRadioGroup
               value={theme}
-              onValueChange={(v) => setTheme(v as 'light' | 'dark')}
+              onValueChange={(value) => setTheme(value as 'light' | 'dark')}
             >
               <DropdownMenuRadioItem value="light">
                 <Sun className="size-4 text-muted-foreground" />

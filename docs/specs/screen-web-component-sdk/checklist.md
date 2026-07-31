@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 3 已完成，下一步阶段 4）
+> 状态：实施中（阶段 4 已完成，待进入阶段 5 Host Adapter 工作流）
 > 最近更新：2026-07-31
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
@@ -74,36 +74,43 @@
 - [x] 两个实例选中状态互不影响
 - [x] 两个实例 undo/redo 历史互不影响
 - [x] 两个实例临时工具和画布视口互不影响
+- [x] `ScreenEditor` 与快照对话框不再直接读写 localStorage
+- [x] 快照列表与 mutation 通过宿主注入的异步、可取消 Adapter 执行
+- [x] 未注入快照能力时，现有编辑器不挂载快照入口和对话框
+- [x] 项目切换、对话框关闭和组件卸载会取消旧快照请求
+- [x] Nebula 路由宿主注入兼容既有 key、动态项目与 20 条上限的 localStorage Adapter
 
 ## 5. Workbench Extraction
 
-- [ ] `ScreenEditorWorkbench` 不导入 TanStack Router
-- [ ] `ScreenEditorWorkbench` 不导入 TanStack Query
-- [ ] SDK 不导入 Axios、Nebula HTTP Client 或 auth store
-- [ ] SDK 不导入 dataset feature
-- [ ] SDK 源码不使用 apps/web 的 `@/` alias
-- [ ] SDK 不显示应用级返回按钮，宿主自行提供返回/关闭导航
-- [ ] preview/navigate 通过 composed event，操作反馈在 ShadowRoot 内展示并可由事件观测
-- [ ] 编辑器根节点不使用 `h-screen/w-screen`
-- [ ] fitToScreen 基于宿主容器 rect
-- [ ] 蓝图编辑器可动态加载
-- [ ] apps/web API/hooks/route/list/preview 继续留在宿主层
+- [x] `ScreenEditorWorkbench` 不直接导入 TanStack Router
+- [x] `ScreenEditorWorkbench` 不直接导入 TanStack Query 或后端 hooks
+- [x] SDK 不导入 Axios、Nebula HTTP Client 或 auth store
+- [x] SDK 不导入 dataset feature
+- [x] SDK 源码不使用 apps/web 的 `@/` alias
+- [x] SDK 工作台不显示应用级返回按钮，宿主自行提供返回/关闭导航
+- [x] static preview/navigate 通过 bubbling + composed event 请求宿主执行
+- [ ] 操作反馈在 ShadowRoot 内展示并可由事件观测
+- [x] Workbench 可达 UI primitives 与 `cn` 来自 SDK，不依赖应用 UI
+- [x] 编辑器根节点不使用 `h-screen/w-screen`
+- [x] fitToScreen 基于宿主容器 rect
+- [x] 蓝图编辑器可动态加载
+- [x] apps/web API/hooks/route/list/preview 继续留在宿主层
 
 ## 6. Static Capability Profile
 
-- [ ] bar-chart 支持 staticData、dataPath、fieldMapping 和 logic
-- [ ] 数据属性面板不显示 API 与 dataset 类型
-- [ ] SDK 不导入或调用 `useApiDataSource`
-- [ ] SDK 不导入或调用 `useDatasetSource`
-- [ ] 全局变量面板只允许 static
-- [ ] requestApi 节点不在 SDK 蓝图库出现
-- [ ] requestApi global node、refreshData action 和动态数据锚点不在 SDK 出现
-- [ ] condition/delay/comment 与 pageLoad/interval/navigate/scrollTo 按白名单可用
-- [ ] 未知 node kind/globalType/evt/act 被稳定诊断拒绝
-- [ ] navigate 只派发 `nebula-navigate-request`
-- [ ] SDK 不直接 `fetch` 业务数据
-- [ ] 远程图片/背景资源边界有 CSP/CORS 文档说明
-- [ ] 动态文档加载失败时当前项目不被覆盖
+- [x] bar-chart static core 支持 staticData、dataPath、fieldMapping 和 logic
+- [x] 数据属性面板在 static profile 不显示 API 与 dataset 类型
+- [x] SDK 不导入或调用 `useApiDataSource`
+- [x] SDK 不导入或调用 `useDatasetSource`
+- [x] 全局变量面板在 static profile 只允许 static
+- [x] requestApi 节点不在 SDK static profile 出现
+- [x] requestApi global node、refreshData action 和动态数据锚点不在 SDK static profile 出现
+- [x] condition/delay/comment 与 pageLoad/interval/navigate/scrollTo 按白名单可用
+- [x] 未知 node kind/globalType/evt/act 被稳定诊断拒绝
+- [x] static profile 的 navigate 只派发 `nebula-navigate-request`
+- [x] SDK 不直接 `fetch` 业务数据
+- [x] 远程图片/背景资源边界有 CSP/CORS 文档说明
+- [x] static profile 的动态文档校验失败时当前项目不被覆盖
 
 ## 7. Project Operations
 

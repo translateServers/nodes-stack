@@ -21,7 +21,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from '@nebula/screen-sdk';
 
 interface SaveConflictDialogProps {
   open: boolean;

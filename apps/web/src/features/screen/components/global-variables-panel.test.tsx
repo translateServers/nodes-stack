@@ -131,6 +131,38 @@ describe('GlobalVariablesPanel', () => {
     mockUseStore.mockReset();
   });
 
+  describe('static capability profile', () => {
+    it('隐藏类型选择并始终提交 static 变量', () => {
+      const addGlobalVariable = vi.fn();
+      setStoreState({
+        project: { globalVariables: [] },
+        addGlobalVariable,
+        updateGlobalVariable: vi.fn(),
+        removeGlobalVariable: vi.fn(),
+      });
+
+      render(<GlobalVariablesPanel staticOnly />);
+      fireEvent.click(screen.getByTestId('global-variables-add'));
+
+      expect(screen.queryByTestId('global-variables-form-type')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('global-variables-form-api-fields')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('global-variables-form-computed-fields')).not.toBeInTheDocument();
+      fireEvent.change(screen.getByTestId('global-variables-form-name'), {
+        target: { value: 'region' },
+      });
+      fireEvent.change(screen.getByTestId('global-variables-form-value'), {
+        target: { value: 'north' },
+      });
+      fireEvent.click(screen.getByTestId('global-variables-form-submit'));
+
+      expect(addGlobalVariable).toHaveBeenCalledWith({
+        name: 'region',
+        type: 'static',
+        value: 'north',
+      });
+    });
+  });
+
   describe('空状态', () => {
     it('无全局变量时显示空状态', () => {
       setStoreState({

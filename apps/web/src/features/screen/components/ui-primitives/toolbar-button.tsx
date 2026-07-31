@@ -7,9 +7,8 @@
  */
 
 import type { ComponentProps } from 'react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@nebula/screen-sdk';
+import { cn } from '@nebula/screen-sdk';
 
 interface ToolbarButtonProps extends ComponentProps<typeof Button> {
   /** Tooltip 文案；不传则不渲染 Tooltip */

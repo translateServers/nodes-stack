@@ -6,7 +6,7 @@
  */
 
 import { useEffect } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@nebula/screen-sdk';
 
 interface PanelResizeHandleProps {
   /** 拖拽中状态（来自 useResizablePanel） */

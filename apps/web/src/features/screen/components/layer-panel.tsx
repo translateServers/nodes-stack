@@ -23,16 +23,16 @@ import { CSS } from '@dnd-kit/utilities';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ScreenComponent } from '@nebula/shared';
 import { useScreenEditorStore, useScreenEditorStoreApi } from '../stores/editor-store';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@nebula/screen-sdk';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@nebula/screen-sdk';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-} from '@/components/ui/context-menu';
-import { Input } from '@/components/ui/input';
+} from '@nebula/screen-sdk';
+import { Input } from '@nebula/screen-sdk';
 // Phase 2 Slice C：图标注册收敛（registry/icons.ts 单一映射源，两个面板同源引用）
 import { getIconForType } from '../registry/icons';
 import {

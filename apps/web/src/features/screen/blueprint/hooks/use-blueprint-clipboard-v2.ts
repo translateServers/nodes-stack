@@ -27,9 +27,38 @@ import {
 } from '@nebula/shared';
 import { isFormElementFocused } from '../../hooks/use-modifier-keys';
 import { EXEC_EDGE_MARKER_END } from '../edges';
-import { toast } from 'sonner';
+import { useScreenEditorNotifications } from '../../components/screen-editor-notifications';
+import { useOptionalScreenEditorEnvironment } from '../../components/screen-editor-environment';
 
 const PASTE_OFFSET = 20;
+const STATIC_SOURCE_HANDLES = new Set([
+  'evt:click',
+  'evt:hover',
+  'evt:pageLoad',
+  'evt:interval',
+  'then',
+  'else',
+  'out',
+]);
+const STATIC_TARGET_HANDLES = new Set([
+  'act:show',
+  'act:hide',
+  'act:toggleVisibility',
+  'act:navigate',
+  'act:scrollTo',
+  'in',
+]);
+
+export function isStaticClipboardPayload(payload: BlueprintClipboardV2): boolean {
+  return (
+    payload.nodes.every((node) => node.kind !== 'component' || node.globalType !== 'requestApi') &&
+    payload.edges.every(
+      (edge) =>
+        STATIC_SOURCE_HANDLES.has(edge.sourceHandle) &&
+        STATIC_TARGET_HANDLES.has(edge.targetHandle),
+    )
+  );
+}
 
 function generateNodeId(): string {
   return `node-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -210,6 +239,8 @@ export function useBlueprintClipboardV2(
   options: UseBlueprintClipboardV2Options,
 ): UseBlueprintClipboardV2Result {
   const { nodes, edges, setNodes, setEdges } = options;
+  const { notify } = useScreenEditorNotifications();
+  const staticOnly = useOptionalScreenEditorEnvironment()?.capabilityProfile === 'static';
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -226,9 +257,9 @@ export function useBlueprintClipboardV2(
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload));
     } catch {
-      toast.error('复制到剪贴板失败，请检查浏览器权限');
+      notify('error', '复制到剪贴板失败，请检查浏览器权限');
     }
-  }, []);
+  }, [notify]);
 
   const cut = useCallback(async () => {
     const currentNodes = nodesRef.current;
@@ -237,7 +268,7 @@ export function useBlueprintClipboardV2(
     try {
       await navigator.clipboard.writeText(JSON.stringify(payload));
     } catch {
-      toast.error('复制到剪贴板失败，请检查浏览器权限');
+      notify('error', '复制到剪贴板失败，请检查浏览器权限');
       return;
     }
     const selectedIds = new Set(currentNodes.filter((n) => n.selected).map((n) => n.id));
@@ -245,14 +276,14 @@ export function useBlueprintClipboardV2(
     setEdgesRef.current((eds) =>
       eds.filter((e) => !selectedIds.has(e.source) && !selectedIds.has(e.target)),
     );
-  }, []);
+  }, [notify]);
 
   const paste = useCallback(async () => {
     let text: string;
     try {
       text = await navigator.clipboard.readText();
     } catch {
-      toast.error('读取剪贴板失败，请检查浏览器权限');
+      notify('error', '读取剪贴板失败，请检查浏览器权限');
       return;
     }
 
@@ -260,13 +291,17 @@ export function useBlueprintClipboardV2(
     try {
       json = JSON.parse(text);
     } catch {
-      toast.error('剪贴板内容不是有效的 JSON');
+      notify('error', '剪贴板内容不是有效的 JSON');
       return;
     }
 
     const result = BlueprintClipboardV2Schema.safeParse(json);
     if (!result.success) {
-      toast.error('剪贴板内容不是有效的 V2 蓝图数据');
+      notify('error', '剪贴板内容不是有效的 V2 蓝图数据');
+      return;
+    }
+    if (staticOnly && !isStaticClipboardPayload(result.data)) {
+      notify('error', '剪贴板内容包含当前 SDK 不支持的蓝图能力');
       return;
     }
 
@@ -296,7 +331,7 @@ export function useBlueprintClipboardV2(
       ...rfNodes.map((n) => ({ ...n, selected: true })),
     ]);
     setEdgesRef.current((eds) => [...eds, ...rfEdges]);
-  }, []);
+  }, [notify, staticOnly]);
 
   const duplicate = useCallback(() => {
     const payload = buildClipboardPayloadV2(nodesRef.current, edgesRef.current);

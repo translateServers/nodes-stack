@@ -27,7 +27,7 @@ import type {
 import { EVENT_BLUEPRINT_VERSION } from '@nebula/shared';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { PanelSection } from './ui-primitives';
-import { Button } from '@/components/ui/button';
+import { Button } from '@nebula/screen-sdk';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,13 +38,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from '@nebula/screen-sdk';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from '@nebula/screen-sdk';
 
 interface QuickEventEditorProps {
   /** 当前选中组件 id */

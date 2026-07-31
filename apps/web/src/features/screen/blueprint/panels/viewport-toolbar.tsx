@@ -15,7 +15,7 @@
 import type { JSX, MouseEvent } from 'react';
 import { Maximize, Minus, Plus, Target, ZoomIn } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@nebula/screen-sdk';
 
 export interface ViewportToolbarProps {
   /** 当前缩放级别 */

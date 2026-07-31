@@ -13,9 +13,8 @@
 import { memo } from 'react';
 import { TOOL_REGISTRY } from '../hooks/tool-registry';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@nebula/screen-sdk';
+import { cn } from '@nebula/screen-sdk';
 
 interface ToolSelectorProps {
   /** 编辑器会话控制器（任务 2.2 起为优先来源） */

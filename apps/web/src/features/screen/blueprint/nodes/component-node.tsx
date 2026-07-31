@@ -25,6 +25,7 @@ import { BaseNodeShell, type AnchorDescriptor } from './base-node';
 import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
 import type { ComponentNodeData } from './v2-node-data-types';
 import { getComponentActions, getComponentEvents } from '../../registry/component-events-actions';
+import { useOptionalScreenEditorEnvironment } from '../../components/screen-editor-environment';
 
 /** React Flow 组件节点类型实例 */
 export type ComponentNode = Node<ComponentNodeData, 'component'>;
@@ -36,27 +37,37 @@ export type ComponentNode = Node<ComponentNodeData, 'component'>;
  * - 派生结果缓存到 data 上的 events/actions 字段（由调用方预填充可选）
  * - 内部 useMemo 保证同一 componentType 引用稳定时不重算
  */
-function deriveAnchors(componentType: string | undefined): {
+function deriveAnchors(
+  componentType: string | undefined,
+  staticOnly: boolean,
+): {
   events: AnchorDescriptor[];
   actions: AnchorDescriptor[];
 } {
   if (!componentType) {
     return { events: [], actions: [] };
   }
-  const events = getComponentEvents(componentType).map((e) => ({
-    id: `evt:${e.id}`,
-    label: e.name,
-  }));
-  const actions = getComponentActions(componentType).map((a) => ({
-    id: `act:${a.id}`,
-    label: a.name,
-  }));
+  const componentEvents = getComponentEvents(componentType);
+  const componentActions = getComponentActions(componentType);
+  const events = componentEvents
+    .filter((event) => !staticOnly || event.id === 'click' || event.id === 'hover')
+    .map((e) => ({
+      id: `evt:${e.id}`,
+      label: e.name,
+    }));
+  const actions = componentActions
+    .filter((action) => !staticOnly || ['show', 'hide', 'toggleVisibility'].includes(action.id))
+    .map((a) => ({
+      id: `act:${a.id}`,
+      label: a.name,
+    }));
   return { events, actions };
 }
 
 /** 组件节点 React Flow 组件 */
 export function ComponentNode({ id, data, selected }: NodeProps<ComponentNode>): JSX.Element {
   const { componentType, label, dangling, inCycle } = data;
+  const staticOnly = useOptionalScreenEditorEnvironment()?.capabilityProfile === 'static';
 
   // 从诊断上下文获取该节点的诊断等级
   const diagnosticMap = useBlueprintDiagnosticMap();
@@ -73,7 +84,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentNode>):
   const locating = (data as { locating?: boolean }).locating ?? false;
 
   // 派生事件/动作锚点
-  const { events, actions } = deriveAnchors(componentType);
+  const { events, actions } = deriveAnchors(componentType, staticOnly);
 
   return (
     <BaseNodeShell

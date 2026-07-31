@@ -9,7 +9,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@nebula/screen-sdk';
 
 interface PanelSectionProps {
   /** 分区标题 */

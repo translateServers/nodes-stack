@@ -31,6 +31,15 @@ export default defineConfig({
       fileName: (_format, entryName) => `${entryName}.js`,
     },
     rollupOptions: {
+      external: [
+        'class-variance-authority',
+        'clsx',
+        'lucide-react',
+        'radix-ui',
+        'react',
+        'react/jsx-runtime',
+        'tailwind-merge',
+      ],
       output: {
         chunkFileNames: 'chunks/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',

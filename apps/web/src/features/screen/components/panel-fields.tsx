@@ -1,5 +1,5 @@
 import type { ScreenComponent } from '@nebula/shared';
-import { Input } from '@/components/ui/input';
+import { Input } from '@nebula/screen-sdk';
 // 数值字段统一使用 PS 风格 NumberInput（↑↓ 微调 + draft 提交，避免每次按键入历史栈）
 import { NumberInput } from './number-input';
 

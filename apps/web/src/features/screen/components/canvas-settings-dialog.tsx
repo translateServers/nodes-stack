@@ -18,18 +18,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+} from '@nebula/screen-sdk';
+import { Button } from '@nebula/screen-sdk';
+import { Input } from '@nebula/screen-sdk';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
+import { Switch } from '@nebula/screen-sdk';
+import { Label } from '@nebula/screen-sdk';
 
 interface CanvasSettingsDialogProps {
   open: boolean;

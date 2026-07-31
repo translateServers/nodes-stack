@@ -9,7 +9,7 @@
  * - 点击菜单项触发对应回调
  *
  * 测试策略：
- * - mock @/components/ui/context-menu，把 Radix 菜单降级为普通按钮树
+ * - mock SDK ContextMenu，把 Radix 菜单降级为普通按钮树
  *   （与 canvas-context-menu.test.tsx 同一模式），避免 jsdom 下 Radix 定位依赖
  * - mock ShortcutBadge / shortcuts-registry，避免快捷键注册表内容影响断言
  */
@@ -20,7 +20,8 @@ import type { ReactNode } from 'react';
 
 // ===== Mock Radix ContextMenu 为普通按钮树 =====
 
-vi.mock('@/components/ui/context-menu', () => ({
+vi.mock('@nebula/screen-sdk', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nebula/screen-sdk')>()),
   ContextMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
   ContextMenuTrigger: ({ children }: { children: ReactNode }) => (
     <div data-testid="ctx-trigger">{children}</div>

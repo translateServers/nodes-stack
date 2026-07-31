@@ -51,7 +51,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+} from '@nebula/screen-sdk';
 import { ShortcutBadge } from '../../components/shortcut-badge';
 import { getShortcutKeys } from '../../hooks/shortcuts-registry';
 import type { AlignMode, DistributeMode } from '../lib/align-distribute';

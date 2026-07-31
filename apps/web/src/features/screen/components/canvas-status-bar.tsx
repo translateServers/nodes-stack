@@ -18,15 +18,15 @@ import {
 } from '../stores/editor-store';
 import type { EditorSessionApi } from '../hooks/use-editor-session';
 import { getToolById } from '../hooks/tool-registry';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@nebula/screen-sdk';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@nebula/screen-sdk';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+} from '@nebula/screen-sdk';
+import { cn } from '@nebula/screen-sdk';
 
 const ZOOM_PRESETS = [25, 50, 75, 100, 125, 150, 200];
 

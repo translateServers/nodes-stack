@@ -68,7 +68,7 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+} from '@nebula/screen-sdk';
 
 interface CanvasContextMenuProps {
   onShowCanvasSettings: () => void;

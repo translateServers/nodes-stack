@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ScreenProject } from '@nebula/shared';
-import { toast } from 'sonner';
 import type {
   ScreenSnapshotHostAdapter,
   ScreenSnapshotSummary,
@@ -11,14 +10,8 @@ import type {
   SnapshotRestoreInput,
 } from '../adapters/screen-editor-host-adapter';
 import { createScreenEditorStore, ScreenEditorStoreProvider } from '../stores/editor-store';
+import { ScreenEditorNotificationProvider } from './screen-editor-notifications';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
-
-vi.mock('sonner', () => ({
-  toast: {
-    error: vi.fn(),
-    success: vi.fn(),
-  },
-}));
 
 const SNAPSHOT: ScreenSnapshotSummary = {
   id: '1753843200000',
@@ -87,12 +80,14 @@ function renderDialog(adapter: ScreenSnapshotHostAdapter) {
   const onOpenChange = vi.fn();
   const view = render(
     <ScreenEditorStoreProvider store={store}>
-      <SnapshotManagerDialog
-        open
-        onOpenChange={onOpenChange}
-        projectId="screen-1"
-        adapter={adapter}
-      />
+      <ScreenEditorNotificationProvider>
+        <SnapshotManagerDialog
+          open
+          onOpenChange={onOpenChange}
+          projectId="screen-1"
+          adapter={adapter}
+        />
+      </ScreenEditorNotificationProvider>
     </ScreenEditorStoreProvider>,
   );
   return { ...view, store, onOpenChange };
@@ -164,6 +159,6 @@ describe('SnapshotManagerDialog host adapter flow', () => {
     expect(listSignal?.aborted).toBe(false);
     unmount();
     expect(listSignal?.aborted).toBe(true);
-    await waitFor(() => expect(toast.error).not.toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 });

@@ -10,19 +10,14 @@ import {
 } from 'lucide-react';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, CanvasConfig } from '@nebula/shared';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@nebula/screen-sdk';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@nebula/screen-sdk';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@nebula/screen-sdk';
 // 数值字段统一使用 PS 风格 NumberInput（↑↓ 微调 + draft 提交，避免每次按键入历史栈）
 import { NumberInput } from './number-input';
 import { ColorInput, numberInputClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
+import { useOptionalScreenEditorEnvironment } from './screen-editor-environment';
 // Phase 2 Slice B：属性面板 Schema 化（注册表驱动 + 声明式字段 + customRender 逃生舱）
 import { getSchemaForComponentType, PropertySchemaRenderer } from '../property-schema';
 // Task 9：全局变量管理面板（画布设置入口）
@@ -168,6 +163,7 @@ const MultiSelectPanel = memo(function MultiSelectPanel({
 });
 
 export function PropertyPanel() {
+  const capabilityProfile = useOptionalScreenEditorEnvironment()?.capabilityProfile ?? 'dynamic';
   const components = useScreenEditorStore((s) => s.project?.components);
   const canvas = useScreenEditorStore((s) => s.project?.canvas);
   const rawSelectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
@@ -249,7 +245,7 @@ export function PropertyPanel() {
               <CanvasSettingsFields canvas={canvas} onUpdate={updateCanvas} />
             </PanelSection>
             {/* Task 9：全局变量管理面板（替换 Task 5.1 占位分区） */}
-            <GlobalVariablesPanel />
+            <GlobalVariablesPanel staticOnly={capabilityProfile === 'static'} />
           </>
         )}
       </div>

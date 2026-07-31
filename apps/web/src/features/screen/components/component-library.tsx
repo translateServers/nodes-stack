@@ -24,9 +24,8 @@ import {
   type RecentComponentEntry,
 } from '../registry/recent-components';
 import { PanelSection } from './ui-primitives';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { Button, Input } from '@nebula/screen-sdk';
+import { cn } from '@nebula/screen-sdk';
 
 // 静态常量，避免每次 render 重新计算
 const CATEGORIES = [...new Set(COMPONENT_DEFINITIONS.map((d) => d.category))];

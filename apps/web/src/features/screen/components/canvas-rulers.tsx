@@ -1,6 +1,6 @@
-import { memo, useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
+import { memo, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import Ruler from '@scena/react-ruler';
-import { useUiStore } from '@/store';
+import { useScreenEditorEnvironment } from './screen-editor-environment';
 
 export interface RulersHandle {
   syncScroll: (scale?: number, offset?: { x: number; y: number }) => void;
@@ -42,21 +42,7 @@ const DARK_PALETTE: RulerPalette = {
 };
 
 function useIsDark(): boolean {
-  const theme = useUiStore((s) => s.theme);
-  const [systemDark, setSystemDark] = useState<boolean>(
-    () =>
-      typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  return theme === 'dark' || (theme === 'system' && systemDark);
+  return useScreenEditorEnvironment().theme === 'dark';
 }
 
 export const CanvasRulers = memo(

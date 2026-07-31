@@ -192,8 +192,15 @@ export function buildComponentOptions(components: readonly ScreenComponent[]): V
  * 顺序：画布组件 → 全局节点 → 逻辑节点
  * （用户最常添加画布组件节点，置顶便于检索）
  */
-export function buildAllNodeOptions(components: readonly ScreenComponent[]): V2NodeOption[] {
-  return [...buildComponentOptions(components), ...V2_NODE_OPTIONS];
+export function buildAllNodeOptions(
+  components: readonly ScreenComponent[],
+  capabilityProfile: 'dynamic' | 'static' = 'dynamic',
+): V2NodeOption[] {
+  const staticOptions =
+    capabilityProfile === 'static'
+      ? V2_NODE_OPTIONS.filter((option) => option.globalType !== 'requestApi')
+      : V2_NODE_OPTIONS;
+  return [...buildComponentOptions(components), ...staticOptions];
 }
 
 /** V2 待完成连线的源信息（连线松手场景） */

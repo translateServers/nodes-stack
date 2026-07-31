@@ -53,6 +53,8 @@ export interface BlueprintPreviewRuntime {
 export interface BlueprintPreviewRuntimeOptions {
   /** 宿主级运行时总闸门。默认 true，独立预览页无需感知编辑器本地偏好。 */
   enabled?: boolean;
+  onNavigateRequest?: (url: string, target: '_blank' | '_self') => void;
+  queryRoot?: ParentNode;
 }
 
 /** V2 eventId → V1 组件事件类型映射；全局 pageLoad/interval 只允许由运行时调度。 */
@@ -169,7 +171,10 @@ export function useBlueprintPreviewRuntime(
     visibilityOverrides,
     resetVisibility,
     cancelPendingRequests,
-  } = useBlueprintRuntimeDeps(components, onRefreshComplete, getComponentData);
+  } = useBlueprintRuntimeDeps(components, onRefreshComplete, getComponentData, {
+    openUrl: options.onNavigateRequest,
+    queryRoot: options.queryRoot,
+  });
 
   // deps / rules 仅在 commit 后更新，避免并发渲染中事件读取未提交状态。
   const baseDepsRef = useRef(baseDeps);

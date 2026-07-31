@@ -5,7 +5,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
  *
  * 测试策略：
  * - 用 vi.hoisted 声明捕获容器，避免 vi.mock 提升后的 TDZ 问题
- * - mock @/components/ui/context-menu 捕获传入的 onOpenChange
+ * - mock SDK ContextMenu 捕获传入的 onOpenChange
  * - mock editor-store 提供最小 store 数据
  * - mock canvas-event-router 避免真实 DOM 事件绑定
  * - 验证菜单打开/关闭时 dispatchInteraction 被正确调用
@@ -18,7 +18,8 @@ const { capturedRef } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/components/ui/context-menu', () => ({
+vi.mock('@nebula/screen-sdk', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nebula/screen-sdk')>()),
   ContextMenu: ({
     children,
     onOpenChange,

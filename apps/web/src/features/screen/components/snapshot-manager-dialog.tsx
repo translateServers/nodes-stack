@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { History, Inbox, LoaderCircle, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
 import type {
   ScreenSnapshotHostAdapter,
   ScreenSnapshotSummary,
 } from '../adapters/screen-editor-host-adapter';
 import { useScreenEditorStore } from '../stores/editor-store';
+import { useScreenEditorNotifications } from './screen-editor-notifications';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@nebula/screen-sdk';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,9 +22,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+} from '@nebula/screen-sdk';
+import { Button, Separator } from '@nebula/screen-sdk';
 
 interface SnapshotManagerDialogProps {
   open: boolean;
@@ -46,11 +45,6 @@ function formatCreatedAt(createdAt: string): string {
   });
 }
 
-function showOperationError(error: unknown, fallback: string): void {
-  if (error instanceof DOMException && error.name === 'AbortError') return;
-  toast.error(error instanceof Error ? error.message : fallback);
-}
-
 export function SnapshotManagerDialog({
   open,
   onOpenChange,
@@ -59,11 +53,20 @@ export function SnapshotManagerDialog({
 }: SnapshotManagerDialogProps) {
   const storeProject = useScreenEditorStore((s) => s.project);
   const loadProject = useScreenEditorStore((s) => s.loadProject);
+  const { notify } = useScreenEditorNotifications();
   const [snapshots, setSnapshots] = useState<ScreenSnapshotSummary[]>([]);
   const [operation, setOperation] = useState<SnapshotOperation | null>(null);
   const [pendingRestore, setPendingRestore] = useState<ScreenSnapshotSummary | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const operationControllerRef = useRef<AbortController | null>(null);
+
+  const showOperationError = useCallback(
+    (error: unknown, fallback: string): void => {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      notify('error', error instanceof Error ? error.message : fallback);
+    },
+    [notify],
+  );
 
   const beginOperation = useCallback((nextOperation: SnapshotOperation): AbortController => {
     operationControllerRef.current?.abort();
@@ -94,7 +97,7 @@ export function SnapshotManagerDialog({
       .finally(() => finishOperation(controller));
 
     return () => controller.abort();
-  }, [adapter, beginOperation, finishOperation, open, projectId]);
+  }, [adapter, beginOperation, finishOperation, open, projectId, showOperationError]);
 
   useEffect(() => {
     return () => operationControllerRef.current?.abort();
@@ -112,13 +115,21 @@ export function SnapshotManagerDialog({
       });
       if (controller.signal.aborted) return;
       setSnapshots((current) => [snapshot, ...current.filter((item) => item.id !== snapshot.id)]);
-      toast.success('已创建快照');
+      notify('success', '已创建快照');
     } catch (error) {
       if (!controller.signal.aborted) showOperationError(error, '快照创建失败');
     } finally {
       finishOperation(controller);
     }
-  }, [adapter, beginOperation, finishOperation, projectId, storeProject]);
+  }, [
+    adapter,
+    beginOperation,
+    finishOperation,
+    notify,
+    projectId,
+    showOperationError,
+    storeProject,
+  ]);
 
   const handleRestoreConfirm = useCallback(async (): Promise<void> => {
     if (!pendingRestore || !storeProject) return;
@@ -132,7 +143,7 @@ export function SnapshotManagerDialog({
       });
       if (controller.signal.aborted) return;
       loadProject(project);
-      toast.success(`已恢复至 ${formatCreatedAt(pendingRestore.createdAt)} 的快照`);
+      notify('success', `已恢复至 ${formatCreatedAt(pendingRestore.createdAt)} 的快照`);
       setPendingRestore(null);
       onOpenChange(false);
     } catch (error) {
@@ -145,9 +156,11 @@ export function SnapshotManagerDialog({
     beginOperation,
     finishOperation,
     loadProject,
+    notify,
     onOpenChange,
     pendingRestore,
     projectId,
+    showOperationError,
     storeProject,
   ]);
 
@@ -158,14 +171,14 @@ export function SnapshotManagerDialog({
         await adapter.remove({ projectId, snapshotId, signal: controller.signal });
         if (controller.signal.aborted) return;
         setSnapshots((current) => current.filter((snapshot) => snapshot.id !== snapshotId));
-        toast.success('快照已删除');
+        notify('success', '快照已删除');
       } catch (error) {
         if (!controller.signal.aborted) showOperationError(error, '快照删除失败');
       } finally {
         finishOperation(controller);
       }
     },
-    [adapter, beginOperation, finishOperation, projectId],
+    [adapter, beginOperation, finishOperation, notify, projectId, showOperationError],
   );
 
   const handleClearAll = useCallback(async (): Promise<void> => {
@@ -175,13 +188,13 @@ export function SnapshotManagerDialog({
       if (controller.signal.aborted) return;
       setSnapshots([]);
       setShowClearConfirm(false);
-      toast.success('已清空所有快照');
+      notify('success', '已清空所有快照');
     } catch (error) {
       if (!controller.signal.aborted) showOperationError(error, '快照清空失败');
     } finally {
       finishOperation(controller);
     }
-  }, [adapter, beginOperation, finishOperation, projectId]);
+  }, [adapter, beginOperation, finishOperation, notify, projectId, showOperationError]);
 
   const isBusy = operation !== null;
 
