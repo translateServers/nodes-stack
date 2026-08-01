@@ -58,6 +58,7 @@
 | --- | --- | --- |
 | [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-30） | 大屏编辑器功能规格（现状基线） |
 | [screen-web-component-sdk/](./specs/screen-web-component-sdk/spec.md) | 实施中（2026-08-01） | 大屏设计器 Web Component SDK（阶段 8 本地质量门已完成：全仓测试、Web/Host E2E、Chrome/Edge 冒烟与 tarball 消费验证通过；私有 registry 发布延期） |
+| [screen-component-sdk/](./specs/screen-component-sdk/spec.md) | 设计中（2026-08-01） | 大屏组件 SDK 与组件注册表（Manifest + Web Component + 实例注册表，小步纵向切片落地） |
 | [screen-sdk-dynamic-data/](./specs/screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 大屏 SDK 后续动态数据能力独立规格，不改变 V1 static 契约 |
 | [dataset-management/](./specs/dataset-management/README.md) | 实施中（2026-07-28） | 数据集管理设计规格（独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter）。第一阶段 MVP 已完成 |
 | [blueprint-redesign/](./specs/blueprint-redesign/spec.md) | 生效中（2026-07-26） | 事件蓝图 V2 重新设计（组件即节点、锚点即事件、V1→V2 自动迁移，已落地） |
