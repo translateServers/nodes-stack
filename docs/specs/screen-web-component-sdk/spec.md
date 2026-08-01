@@ -1,10 +1,12 @@
 # 大屏设计器 Web Component SDK Spec
 
-> 状态：实施中（阶段 6 已完成：静态 runtime 组合架构落地并通过定向验证；待阶段 7 参考宿主与兼容验证）
-> 最近更新：2026-07-31
+> 状态：实施中（阶段 7 已完成：Vanilla 参考宿主、Nebula Host Adapter 与兼容保护已落地；待阶段 8 质量门与私有发布）
+> 最近更新：2026-08-01
 > 定位：定义大屏设计器以前端 Web Component SDK 交付时的产品边界、宿主适配器、文档协议、元素 API、隔离机制与验收标准
 
 > 阶段 6 复核结论（2026-07-31）：静态 production runtime 已按 ADR-0001 方案 A 落地——新增私有 `@nebula/screen-editor-core`，`packages/screen-sdk` 只组装 static runtime，`apps/web` 基于同一 core 组装 dynamic profile，Vite virtual runtime bridge 已删除；生产构建以源码 AST 检查 + dist module graph 门禁双重拒绝动态能力回流，并完成 tarball 消费验证。阶段 6 定义为“实现完成”，Vanilla 宿主 E2E 与发布冒烟留待阶段 7-8。
+>
+> 阶段 7 复核结论（2026-08-01）：新增无 React 运行时依赖的 `apps/screen-sdk-host`、完整内存 Adapter 与 9 项 Chromium Playwright E2E；Nebula Host Adapter 已复用现有 API/Query/JWT/Toast 管线，并通过统一 parser 建立 static 兼容门控。现有动态生产入口保持不变，路由切换必须满足 14.1 的全部条件。
 
 ## 1. Why
 
@@ -884,6 +886,18 @@ Nebula Web 作为参考宿主，负责：
 - SDK 不区分 Adapter 背后是远端服务、IndexedDB、localStorage 还是测试内存实现。
 
 现有 Nebula API/dataset 项目不能直接进入静态 V1 SDK。迁移期间不得删除当前应用的动态数据实现；其产品迁移或后续 SDK 能力扩展需另立规格。
+
+### 14.1 Production Route Switch Gates
+
+`/screen/$id` 在以下条件全部满足前继续使用 `ScreenEditor` dynamic runtime，不切换到 `<nebula-screen-editor>`：
+
+1. 仅对 `inspectNebulaScreenSdkCompatibility(project).compatible === true` 的项目选择 static SDK；不兼容项目必须保留 dynamic runtime，不删除、不重写、不降级 API/dataset/global API 或动态蓝图配置。
+2. 后端持久化能无损 round-trip SDK draft。当前服务端未持久化 `globalVariables`，且 `description: null` 清空和 `blueprint: undefined` 删除语义尚未完整表达，因此不满足该条件。
+3. Nebula Adapter 的 load/save/publish 通过生产鉴权、401 refresh、AbortSignal、冲突与 Query cache 回归；preview request 继续打开 `/screen-editor-preview/$id`。
+4. 阶段 8 全量单元/集成/E2E、tarball 资源、Chrome/Edge 冒烟与现有动态数据 E2E 全部通过。
+5. 路由切换采用显式兼容分流并具备回退策略，不以 V1 SDK 增加未规格化的 dynamic hook/plugin API。
+
+动态数据 SDK 的后续能力、宿主数据执行边界与迁移策略由 [独立规格](../screen-sdk-dynamic-data/spec.md) 管理。
 
 ## 15. Security
 

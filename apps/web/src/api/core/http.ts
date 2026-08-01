@@ -21,6 +21,10 @@ type PendingRequest = {
   reject: (error: unknown) => void;
 };
 
+export interface HttpRequestOptions {
+  signal?: AbortSignal;
+}
+
 type NebulaRequestConfig<TSchema extends ZodType | undefined = ZodType | undefined> =
   InternalAxiosRequestConfig & {
     meta?: {
@@ -122,6 +126,9 @@ http.interceptors.response.use(
     const { response, config } = error;
 
     if (!response) {
+      if (axios.isCancel(error)) {
+        throw new DOMException('Request aborted', 'AbortError');
+      }
       throwApiError(-1, error.message || '网络异常');
     }
 
@@ -181,9 +188,11 @@ http.interceptors.response.use(
 export async function get<TSchema extends ZodType>(
   url: string,
   schema: TSchema,
+  options?: HttpRequestOptions,
 ): Promise<z.infer<TSchema>> {
   const config = {
     meta: { responseSchema: schema },
+    ...(options?.signal === undefined ? {} : { signal: options.signal }),
   } as NebulaRequestConfig<TSchema>;
   return http.get(url, config);
 }
@@ -192,15 +201,18 @@ export async function post<TSchema extends ZodType, TBody = unknown>(
   url: string,
   body: TBody,
   schema: TSchema,
+  options?: HttpRequestOptions,
 ): Promise<z.infer<TSchema>>;
 export async function post<TBody = unknown>(url: string, body?: TBody): Promise<undefined>;
 export async function post<TSchema extends ZodType, TBody = unknown>(
   url: string,
   body?: TBody,
   schema?: TSchema,
+  options?: HttpRequestOptions,
 ): Promise<z.infer<TSchema> | undefined> {
   const config = {
     meta: { responseSchema: schema },
+    ...(options?.signal === undefined ? {} : { signal: options.signal }),
   } as NebulaRequestConfig<TSchema>;
   return http.post(url, body, config);
 }
@@ -209,9 +221,11 @@ export async function patch<TSchema extends ZodType, TBody = unknown>(
   url: string,
   body: TBody,
   schema: TSchema,
+  options?: HttpRequestOptions,
 ): Promise<z.infer<TSchema>> {
   const config = {
     meta: { responseSchema: schema },
+    ...(options?.signal === undefined ? {} : { signal: options.signal }),
   } as NebulaRequestConfig<TSchema>;
   return http.patch(url, body, config);
 }
@@ -219,14 +233,17 @@ export async function patch<TSchema extends ZodType, TBody = unknown>(
 export async function del<TSchema extends ZodType>(
   url: string,
   schema: TSchema,
+  options?: HttpRequestOptions,
 ): Promise<z.infer<TSchema>>;
 export async function del(url: string): Promise<undefined>;
 export async function del<TSchema extends ZodType>(
   url: string,
   schema?: TSchema,
+  options?: HttpRequestOptions,
 ): Promise<z.infer<TSchema> | undefined> {
   const config = {
     meta: { responseSchema: schema },
+    ...(options?.signal === undefined ? {} : { signal: options.signal }),
   } as NebulaRequestConfig<TSchema>;
   return http.delete(url, config);
 }

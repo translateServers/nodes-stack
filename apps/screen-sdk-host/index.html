@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Nebula Screen SDK Host</title>
+  </head>
+  <body>
+    <header class="host-toolbar">
+      <div class="host-brand">
+        <strong>Nebula Screen SDK</strong>
+        <span id="host-status" role="status">正在加载</span>
+      </div>
+      <label class="scenario-control">
+        <span>场景</span>
+        <select id="scenario-select" aria-label="测试场景">
+          <option value="single">单实例</option>
+          <option value="dual">双实例</option>
+          <option value="hostile">冲突样式</option>
+          <option value="small">小容器</option>
+        </select>
+      </label>
+      <div class="host-actions" aria-label="宿主命令">
+        <button id="save-command" type="button">保存</button>
+        <button id="publish-command" type="button">发布</button>
+        <button id="conflict-command" type="button">下次保存冲突</button>
+        <button id="theme-command" type="button">切换主题</button>
+        <button id="remount-command" type="button">重新挂载</button>
+      </div>
+    </header>
+    <main class="host-main">
+      <section id="editor-stage" class="editor-stage" aria-label="SDK 编辑器宿主"></section>
+      <aside class="event-rail" aria-label="宿主事件">
+        <div class="event-rail-heading">
+          <strong>宿主事件</strong>
+          <span id="operation-count">0</span>
+        </div>
+        <ol id="event-log" aria-live="polite"></ol>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,5 +1,9 @@
 import {
   ScreenAdapterErrorCode,
+  type ImportProjectInput,
+  type LoadProjectInput,
+  type PublishProjectInput,
+  type SaveProjectInput,
   type ScreenHostAdapter,
   type ScreenSnapshotSummary,
 } from '../contracts/adapter.js';
@@ -436,6 +440,73 @@ describe('ScreenHostController', () => {
       revision: 'revision-imported',
     });
     expect(commands.at(-1)?.source).toBe('import');
+  });
+
+  it('preserves the receiver for class-based optional adapter methods', async () => {
+    class ReceiverAwareAdapter implements ScreenHostAdapter {
+      readonly #prefix = 'receiver';
+
+      loadProject(input: LoadProjectInput): Promise<ScreenProjectEnvelopeInput> {
+        return Promise.resolve(createEnvelope(input.projectId));
+      }
+
+      saveProject(input: SaveProjectInput): Promise<ScreenProjectEnvelopeInput> {
+        return Promise.resolve({
+          ...createEnvelope(input.projectId),
+          ...input.draft,
+          revision: `${this.#prefix}-saved`,
+        });
+      }
+
+      publishProject(input: PublishProjectInput): Promise<ScreenProjectEnvelopeInput> {
+        return Promise.resolve(
+          createEnvelope(input.projectId, {
+            revision: `${this.#prefix}-published`,
+            status: 'published',
+          }),
+        );
+      }
+
+      importProject(input: ImportProjectInput): Promise<ScreenProjectEnvelopeInput> {
+        return Promise.resolve(
+          createEnvelope(input.projectId, {
+            name: input.transfer.name,
+            revision: `${this.#prefix}-imported`,
+          }),
+        );
+      }
+
+      exportProject() {
+        return Promise.resolve({
+          fileName: `${this.#prefix}.json`,
+          blob: new Blob(['{}'], { type: 'application/json' }),
+        });
+      }
+    }
+
+    const { session } = createSession();
+    const controller = new ScreenHostController({ session });
+    await loadController(controller, new ReceiverAwareAdapter());
+
+    await expect(controller.publish()).resolves.toMatchObject({
+      revision: 'receiver-published',
+    });
+    const transfer = {
+      format: 'nebula-screen',
+      formatVersion: 1,
+      name: 'Imported by class adapter',
+      description: null,
+      document: createEnvelope().document,
+    };
+    const prepared = await controller.prepareImport(
+      new File([JSON.stringify(transfer)], 'screen.json', { type: 'application/json' }),
+    );
+    await expect(controller.importProject(prepared)).resolves.toMatchObject({
+      revision: 'receiver-imported',
+    });
+    await expect(controller.exportProject()).resolves.toMatchObject({
+      fileName: 'receiver.json',
+    });
   });
 
   it('validates snapshot and export adapter responses', async () => {

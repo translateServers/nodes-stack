@@ -17,18 +17,22 @@ import {
 type CreateScreenProjectInput = z.infer<typeof _CreateScreenProjectSchema>;
 type UpdateScreenProjectInput = z.infer<typeof _UpdateScreenProjectSchema>;
 
-const SCREEN_QUERY_KEY = ['screen-projects'] as const;
+export const screenQueryKeys = {
+  all: ['screen-projects'] as const,
+  detail: (id: string) => ['screen-projects', id] as const,
+  preview: (id: string) => ['screen-preview', id] as const,
+};
 
 export function useScreenProjects() {
   return useQuery({
-    queryKey: SCREEN_QUERY_KEY,
+    queryKey: screenQueryKeys.all,
     queryFn: _getScreenProjects,
   });
 }
 
 export function useScreenProject(id: string) {
   return useQuery({
-    queryKey: [...SCREEN_QUERY_KEY, id],
+    queryKey: screenQueryKeys.detail(id),
     queryFn: () => _getScreenProject(id),
     enabled: Boolean(id),
   });
@@ -36,7 +40,7 @@ export function useScreenProject(id: string) {
 
 export function useScreenPreview(id: string) {
   return useQuery({
-    queryKey: ['screen-preview', id],
+    queryKey: screenQueryKeys.preview(id),
     queryFn: () => _getScreenPreview(id),
     enabled: Boolean(id),
   });
@@ -47,7 +51,7 @@ export function useCreateScreenProject() {
   return useMutation({
     mutationFn: (params: CreateScreenProjectInput) => _createScreenProject(params),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: SCREEN_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: screenQueryKeys.all });
     },
   });
 }
@@ -59,9 +63,9 @@ export function useUpdateScreenProject() {
       _updateScreenProject(input.id, input.params),
     onSuccess: async (response, variables) => {
       // 用服务端响应（含新 updatedAt 与 draft 状态）更新详情缓存，作为下次保存基线
-      queryClient.setQueryData([...SCREEN_QUERY_KEY, variables.id], response);
+      queryClient.setQueryData(screenQueryKeys.detail(variables.id), response);
       // 仅失效列表查询（exact 匹配 ['screen-projects']），不重复 refetch 刚写入的详情
-      await queryClient.invalidateQueries({ queryKey: SCREEN_QUERY_KEY, exact: true });
+      await queryClient.invalidateQueries({ queryKey: screenQueryKeys.all, exact: true });
     },
   });
 }
@@ -73,11 +77,11 @@ export function usePublishScreenProject() {
       _publishScreenProject(input.id, { expectedUpdatedAt: input.expectedUpdatedAt }),
     onSuccess: async (response, variables) => {
       // 用服务端响应（含新 updatedAt 与 published 状态）更新详情缓存，作为下次保存/发布基线
-      queryClient.setQueryData([...SCREEN_QUERY_KEY, variables.id], response);
+      queryClient.setQueryData(screenQueryKeys.detail(variables.id), response);
       // 仅失效列表查询（exact 匹配 ['screen-projects']），不重复 refetch 刚写入的详情
-      await queryClient.invalidateQueries({ queryKey: SCREEN_QUERY_KEY, exact: true });
+      await queryClient.invalidateQueries({ queryKey: screenQueryKeys.all, exact: true });
       // 失效公开预览缓存，确保发布后匿名预览立即拉取最新已发布内容
-      await queryClient.invalidateQueries({ queryKey: ['screen-preview', variables.id] });
+      await queryClient.invalidateQueries({ queryKey: screenQueryKeys.preview(variables.id) });
     },
   });
 }
@@ -87,7 +91,7 @@ export function useDeleteScreenProject() {
   return useMutation({
     mutationFn: (id: string) => _deleteScreenProject(id),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: SCREEN_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: screenQueryKeys.all });
     },
   });
 }

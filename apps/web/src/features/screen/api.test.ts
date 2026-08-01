@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ScreenProjectSchema, type ScreenProject } from '@nebula/shared';
 import { ENDPOINTS } from '@/api/core/endpoints';
-import { publishScreenProject, updateScreenProject } from './api';
+import { getScreenProject, publishScreenProject, updateScreenProject } from './api';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -80,6 +80,24 @@ describe('screen api', () => {
 
       expect(result.updatedAt).toBe(SERVER_UPDATED_AT);
     });
+
+    it('将 AbortSignal 传给 HTTP client', async () => {
+      const controller = new AbortController();
+      mocks.patch.mockResolvedValue(mockScreenProject);
+
+      await updateScreenProject(
+        'screen-1',
+        { expectedUpdatedAt: BASELINE_UPDATED_AT },
+        controller.signal,
+      );
+
+      expect(mocks.patch).toHaveBeenCalledWith(
+        `${ENDPOINTS.screen}/screen-1`,
+        { expectedUpdatedAt: BASELINE_UPDATED_AT },
+        ScreenProjectSchema,
+        { signal: controller.signal },
+      );
+    });
   });
 
   describe('publishScreenProject', () => {
@@ -116,6 +134,37 @@ describe('screen api', () => {
       });
 
       expect(result.updatedAt).toBe(SERVER_UPDATED_AT);
+    });
+
+    it('将 AbortSignal 传给 HTTP client', async () => {
+      const controller = new AbortController();
+      mocks.post.mockResolvedValue(mockScreenProject);
+
+      await publishScreenProject(
+        'screen-1',
+        { expectedUpdatedAt: BASELINE_UPDATED_AT },
+        controller.signal,
+      );
+
+      expect(mocks.post).toHaveBeenCalledWith(
+        `${ENDPOINTS.screen}/screen-1/publish`,
+        { expectedUpdatedAt: BASELINE_UPDATED_AT },
+        ScreenProjectSchema,
+        { signal: controller.signal },
+      );
+    });
+  });
+
+  describe('getScreenProject', () => {
+    it('将 AbortSignal 传给 HTTP client', async () => {
+      const controller = new AbortController();
+      mocks.get.mockResolvedValue(mockScreenProject);
+
+      await getScreenProject('screen-1', controller.signal);
+
+      expect(mocks.get).toHaveBeenCalledWith(`${ENDPOINTS.screen}/screen-1`, ScreenProjectSchema, {
+        signal: controller.signal,
+      });
     });
   });
 });

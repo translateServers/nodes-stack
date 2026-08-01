@@ -1,7 +1,7 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 6 已完成：静态 runtime 组合架构落地并通过定向验证；待阶段 7 参考宿主与兼容验证）
-> 最近更新：2026-07-31
+> 状态：实施中（阶段 7 已完成：参考宿主、Nebula Adapter 与兼容验证通过；待阶段 8 质量门与私有发布）
+> 最近更新：2026-08-01
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
 ## 1. 阶段 1 契约
@@ -216,12 +216,12 @@
 
 ## 12. Host Integration and Regression
 
-- [ ] Vanilla TS 宿主不安装 React即可使用 SDK
-- [ ] Fake Adapter 覆盖全部 V1 服务能力
-- [ ] Nebula Host Adapter 复用现有 screen API
-- [ ] `updatedAt` 仅在宿主 Adapter 内映射为 revision
+- [x] Vanilla TS 宿主不安装 React 即可使用 SDK
+- [x] Fake Adapter 覆盖全部 V1 服务能力
+- [x] Nebula Host Adapter 复用现有 screen API
+- [x] `updatedAt` 仅在宿主 Adapter 内映射为 revision
 - [x] Nebula JWT、401 refresh 和 Query cache 保留在 apps/web
-- [ ] preview request 由宿主打开现有预览路由
+- [x] preview request 由宿主打开现有预览路由
 - [x] 本功能未修改 NestJS、Prisma 或数据库迁移
 - [x] apps/web 的 API/dataset 能力未被删除或静默降级
 - [x] 动态项目在迁移条件满足前继续使用现有应用入口
@@ -234,10 +234,10 @@
 - [x] Store factory 与双实例单测通过
 - [x] Custom Element 生命周期测试通过
 - [x] Shadow Portal 与宿主 CSS 隔离测试通过
-- [ ] Vanilla 宿主 Playwright E2E 通过
+- [x] Vanilla 宿主 Playwright E2E 通过
 - [ ] 当前稳定版 Chrome 与 Edge 发布冒烟通过
-- [ ] 双实例焦点/快捷键 E2E 通过
-- [ ] 保存冲突、导入导出和快照 E2E 通过
+- [x] 双实例焦点/快捷键 E2E 通过
+- [x] 保存冲突、导入导出和快照 E2E 通过
 - [x] 现有画布、工具、属性、历史与蓝图核心测试通过
 - [x] `pnpm --filter @nebula/screen-sdk typecheck` 通过
 - [x] `pnpm --filter @nebula/screen-sdk lint` 通过

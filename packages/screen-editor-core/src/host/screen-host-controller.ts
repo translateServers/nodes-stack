@@ -313,7 +313,7 @@ export class ScreenHostController {
       if (adapter === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
       const snapshot = this.requireSession(binding.projectId);
       if (snapshot.dirty) throw createWorkflowError(ScreenAdapterErrorCode.DIRTY_STATE);
-      const response = await adapter({
+      const response = await adapter.call(binding.adapter, {
         projectId: binding.projectId,
         revision: snapshot.revision,
         signal: context.signal,
@@ -381,7 +381,7 @@ export class ScreenHostController {
       }
       const snapshot = this.requireSession(binding.projectId);
       const transfer = parseTransfer(prepared.transfer);
-      const response = await adapter({
+      const response = await adapter.call(binding.adapter, {
         projectId: binding.projectId,
         revision: snapshot.revision,
         file: prepared.file,
@@ -407,7 +407,7 @@ export class ScreenHostController {
       const adapter = binding.adapter.exportProject;
       if (adapter === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
       const snapshot = this.requireSession(binding.projectId);
-      const response = await adapter({
+      const response = await adapter.call(binding.adapter, {
         projectId: binding.projectId,
         revision: snapshot.revision,
         signal: context.signal,

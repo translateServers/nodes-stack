@@ -1,7 +1,7 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 6 已完成：静态 runtime 组合架构落地并通过定向验证；待阶段 7 参考宿主与兼容验证）
-> 最近更新：2026-07-31
+> 状态：实施中（阶段 7 已完成：Vanilla 参考宿主、Nebula Host Adapter 与兼容保护已落地；待阶段 8 质量门与私有发布）
+> 最近更新：2026-08-01
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
 ## 阶段 1：冻结规格与公共契约
@@ -277,26 +277,37 @@
 
 ## 阶段 7：参考宿主与兼容验证
 
-- [ ] Task 19: 创建 Vanilla TS SDK 消费宿主
-  - [ ] 不安装 React，仅安装 workspace SDK
-  - [ ] 实现完整内存 Fake Adapter
-  - [ ] 展示加载、保存、发布、导入导出和快照流程
-  - [ ] 提供双实例与宿主冲突 CSS 测试页面
-  - [ ] 作为 Playwright SDK E2E 宿主
+- [x] Task 19: 创建 Vanilla TS SDK 消费宿主
+  - [x] 不安装 React，仅安装 workspace SDK
+  - [x] 实现完整内存 Fake Adapter
+  - [x] 展示加载、保存、发布、导入导出和快照流程
+  - [x] 提供双实例与宿主冲突 CSS 测试页面
+  - [x] 作为 Playwright SDK E2E 宿主
 
-- [ ] Task 20: 创建 Nebula Host Adapter
-  - [ ] 将现有 screen API 映射为 load/save/publish Adapter
-  - [ ] 将 `updatedAt` 映射为不透明 revision
-  - [ ] 将 BizCode/HTTP error 映射为 `ScreenAdapterError`
-  - [ ] 保留 Query cache invalidation、JWT 和 toast 在 apps/web
-  - [ ] 监听 preview request 并打开现有预览路由
-  - [ ] 不修改 NestJS 后端
+- [x] Task 20: 创建 Nebula Host Adapter
+  - [x] 将现有 screen API 映射为 load/save/publish Adapter
+  - [x] 将 `updatedAt` 映射为不透明 revision
+  - [x] 将 BizCode/HTTP error 映射为 `ScreenAdapterError`
+  - [x] 保留 Query cache invalidation、JWT 和 toast 在 apps/web
+  - [x] 监听 preview request 并打开现有预览路由
+  - [x] 不修改 NestJS 后端
 
-- [ ] Task 21: 保护现有动态数据能力
-  - [ ] SDK 静态 profile 不删除 apps/web 的 API/dataset 实现
-  - [ ] 对现有动态项目明确阻止进入静态 SDK，不做静默降级
-  - [ ] 记录生产路由切换条件，未满足前保留现有编辑器入口
-  - [ ] 为后续动态数据 SDK 能力单独建立规格，不在 V1 偷渡接口
+- [x] Task 21: 保护现有动态数据能力
+  - [x] SDK 静态 profile 不删除 apps/web 的 API/dataset 实现
+  - [x] 对现有动态项目明确阻止进入静态 SDK，不做静默降级
+  - [x] 记录生产路由切换条件，未满足前保留现有编辑器入口
+  - [x] 为后续动态数据 SDK 能力单独建立规格，不在 V1 偷渡接口
+
+### 阶段 7 执行记录（已完成）
+
+- 新增 `apps/screen-sdk-host` Vanilla TypeScript 参考宿主，运行时仅声明 `@nebula/screen-sdk` 依赖；单实例、双实例、宿主冲突 CSS 与小容器场景共享完整 `InMemoryScreenHostAdapter`。
+- Fake Adapter 覆盖 load/save/publish/import/export 与 snapshot list/create/restore/remove/clear，执行 revision 冲突检查、AbortSignal 取消、detached clone、安全 JSON 文件名和标准快照摘要。
+- 独立 Chromium Playwright 套件 9 项通过，覆盖六组件渲染、自动注册、预览事件、断连重挂、保存发布、冲突、导入导出、完整快照流程、双实例焦点快捷键、Portal、宿主 CSS 和 ResizeObserver 尺寸提示。
+- 浏览器消费验证发现并修复 class Adapter 的可选方法调用接收者丢失问题；`ScreenHostController` 现在为 publish/import/export 保留 Adapter receiver，并增加单元回归测试。
+- 新增 `createNebulaScreenHostAdapter`，复用现有 screen API、QueryClient 和 JWT/Toast 管线；load/save/publish 全程传递 AbortSignal，`updatedAt` 仅在 Adapter 边界映射为 revision，BizCode/HTTP error 映射为安全 `ScreenAdapterError`。
+- `inspectNebulaScreenSdkCompatibility` 复用 SDK parser 拒绝 API/dataset 等动态项目；生产 `/screen/$id` 仍使用 dynamic runtime，切换条件记录在 spec 14.1。
+- 后续动态数据 SDK 能力独立进入 [screen-sdk-dynamic-data](../screen-sdk-dynamic-data/spec.md) 设计规格，不修改 V1 static 契约。
+- 阶段 7 验证：宿主 E2E 9 项、Web 定向 65 项、core Controller 16 项、SDK 97 项全部通过；宿主与 SDK build、受影响包及全仓 typecheck/lint、变更范围 Biome 均通过（core lint 仅 2 条既有 warning）。
 
 ## 阶段 8：质量门与私有发布
 

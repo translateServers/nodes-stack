@@ -285,7 +285,11 @@ describe('ScreenEditor 保存冲突对话框接入（任务 9.3）', () => {
         document: { schemaVersion: 1 },
       },
     });
-    expect(openSpy).toHaveBeenCalledWith('/screen-editor-preview/screen-1', '_blank');
+    expect(openSpy).toHaveBeenCalledWith(
+      '/screen-editor-preview/screen-1',
+      '_blank',
+      'noopener,noreferrer',
+    );
     openSpy.mockRestore();
   });
 

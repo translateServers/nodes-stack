@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { usePublishScreenProject, useScreenProject, useUpdateScreenProject } from '../hooks';
+import { openNebulaScreenEditorPreview } from '../adapters/nebula-screen-host-adapter';
 import { DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE } from '../runtime/dynamic-runtime-profile';
 
 export interface ScreenEditorProps {
@@ -170,7 +171,7 @@ function NebulaScreenEditorHost({
   );
 
   const preview = useCallback((): void => {
-    window.open(`/screen-editor-preview/${id}`, '_blank');
+    openNebulaScreenEditorPreview({ projectId: id });
   }, [id]);
 
   const navigate = useCallback((url: string, target: '_blank' | '_self'): void => {
