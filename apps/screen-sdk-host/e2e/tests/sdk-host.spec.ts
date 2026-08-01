@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { getEditor, waitForEditor, waitForOperation } from '../helpers/host.helper';
 
 test.describe('Vanilla SDK host', () => {
-  test('auto-registers and renders all six static components without React in the host', async ({
+  test('@release auto-registers and renders all six static components without React in the host', async ({
     page,
   }) => {
     await page.goto('/?scenario=single');

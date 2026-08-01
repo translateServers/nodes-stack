@@ -7,8 +7,9 @@
     "build": "tsc --noEmit && vite build",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "vite --host 127.0.0.1",
-    "e2e": "playwright test --config=e2e/playwright.config.ts",
+    "e2e": "playwright test --config=e2e/playwright.config.ts --project=chromium",
     "e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed",
+    "e2e:release": "playwright test --config=e2e/playwright.config.ts --project=chrome --project=edge --grep @release",
     "e2e:install": "playwright install chromium",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json"

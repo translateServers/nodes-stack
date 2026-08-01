@@ -34,6 +34,12 @@ export interface ScreenEditorProps {
   theme?: ScreenEditorTheme;
 }
 
+declare global {
+  interface Window {
+    __screenEditorStore?: ScreenEditorStore;
+  }
+}
+
 export function ScreenEditor({
   debug = import.meta.env.DEV,
   hostAdapter,
@@ -52,6 +58,15 @@ export function ScreenEditor({
       providedStore ??
       createScreenEditorStore({ instanceId, persistPreferences, preferenceNamespace });
   }
+
+  useEffect(() => {
+    const store = storeRef.current;
+    if (!debug || store === null) return;
+    window.__screenEditorStore = store;
+    return () => {
+      if (window.__screenEditorStore === store) delete window.__screenEditorStore;
+    };
+  }, [debug]);
 
   return (
     <ScreenEditorStoreProvider

@@ -1,6 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
+interface CapturedBarOption {
+  tooltip?: { show?: boolean; trigger?: string; formatter?: string };
+  xAxis?: { data?: string[] };
+  series?: Array<{ data?: number[] }>;
+}
+
+const echartsMocks = vi.hoisted(() => {
+  const setOption = vi.fn<(option: unknown, settings?: unknown) => void>();
+  const chart = {
+    setOption,
+    resize: vi.fn<() => void>(),
+    dispose: vi.fn<() => void>(),
+  };
+
+  return {
+    setOption,
+    init: vi.fn(() => chart),
+    use: vi.fn(),
+    modifyAlpha: vi.fn((color: string, alpha: number) => `${color}@${alpha}`),
+  };
+});
+
+vi.mock('echarts/core', () => ({
+  color: { modifyAlpha: echartsMocks.modifyAlpha },
+  init: echartsMocks.init,
+  use: echartsMocks.use,
+}));
+
+vi.mock('echarts/charts', () => ({ BarChart: { type: 'bar' } }));
+
+vi.mock('echarts/components', () => ({
+  GridComponent: { type: 'grid' },
+  TitleComponent: { type: 'title' },
+  TooltipComponent: { type: 'tooltip' },
+}));
+
+vi.mock('echarts/renderers', () => ({ CanvasRenderer: { type: 'canvas' } }));
+
 /**
  * 阶段 2 任务 3.4：公开预览接入同一数据解析路径。
  *
@@ -8,7 +46,7 @@ import { render, screen } from '@testing-library/react';
  * 预览走真实渲染链路（PreviewCanvas → ComponentRenderer → BarChartComponent
  * → useChartData → parseChartData），与编辑器画布（screen-canvas.tsx）完全同源，
  * 用于断言：
- * - 数据层静态数据在预览真实可见（渲染内容来自解析结果，而非默认示例）
+ * - 数据层静态数据进入 ECharts option（渲染内容来自解析结果，而非默认示例）
  * - 编辑器渲染路径与预览渲染结果一致（同一 ComponentRenderer）
  * - 旧项目（仅 props.data、无数据层配置）预览不回退
  * - 逻辑层（排序/条数限制）与交互层（悬停提示）配置在预览透传生效
@@ -68,18 +106,27 @@ function setProject(project: ScreenProject): void {
   mockUseScreenPreview.mockReturnValue({ data: project, isLoading: false });
 }
 
-/** 收集容器内全部 SVG text 节点的文本内容（柱条名称与数值标签） */
-function collectSvgTexts(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('svg text')).map((node) => node.textContent ?? '');
+function getLatestOption(): CapturedBarOption {
+  const call = echartsMocks.setOption.mock.calls.at(-1);
+  if (call === undefined) throw new Error('ECharts setOption was not called');
+  return call[0] as CapturedBarOption;
+}
+
+function expectChartData(names: string[], values: number[]): void {
+  const option = getLatestOption();
+  expect(option.xAxis?.data).toEqual(names);
+  expect(option.series?.[0]?.data).toEqual(values);
 }
 
 describe('ScreenPreview 数据解析链路（任务 3.4）', () => {
   beforeEach(() => {
     mockUseParams.mockReset();
     mockUseScreenPreview.mockReset();
+    echartsMocks.init.mockClear();
+    echartsMocks.setOption.mockClear();
   });
 
-  it('数据层静态数据在预览真实渲染（名称与数值来自解析结果）', () => {
+  it('数据层静态数据在预览真实渲染（ECharts option 来自解析结果）', () => {
     const chart = makeBarChart({
       dataSource: {
         type: 'static',
@@ -89,15 +136,12 @@ describe('ScreenPreview 数据解析链路（任务 3.4）', () => {
     });
     setProject(makeProject([chart]));
 
-    const { container } = render(<ScreenPreview />);
+    render(<ScreenPreview />);
 
-    const texts = collectSvgTexts(container);
-    for (const row of STATIC_ROWS) {
-      expect(texts).toContain(row.category);
-      expect(texts).toContain(String(row.sales));
-    }
-    // 渲染柱条数量与解析结果一致
-    expect(container.querySelectorAll('svg rect')).toHaveLength(STATIC_ROWS.length);
+    expectChartData(
+      STATIC_ROWS.map((row) => row.category),
+      STATIC_ROWS.map((row) => row.sales),
+    );
   });
 
   it('预览渲染结果与编辑器渲染路径（同一 ComponentRenderer）一致', () => {
@@ -112,13 +156,14 @@ describe('ScreenPreview 数据解析链路（任务 3.4）', () => {
 
     // 编辑器画布路径：screen-canvas.tsx 直接渲染 <ComponentRenderer component={...} />
     const editorRender = render(<ComponentRenderer component={chart} />);
-    const editorTexts = collectSvgTexts(editorRender.container);
+    const editorOption = getLatestOption();
     editorRender.unmount();
 
-    const previewRender = render(<ScreenPreview />);
-    const previewTexts = collectSvgTexts(previewRender.container);
+    render(<ScreenPreview />);
+    const previewOption = getLatestOption();
 
-    expect(previewTexts).toEqual(editorTexts);
+    expect(previewOption.xAxis?.data).toEqual(editorOption.xAxis?.data);
+    expect(previewOption.series?.[0]?.data).toEqual(editorOption.series?.[0]?.data);
   });
 
   it('旧项目预览不回退：仅 props.data 的组件仍渲染遗留数据', () => {
@@ -129,14 +174,12 @@ describe('ScreenPreview 数据解析链路（任务 3.4）', () => {
     const chart = makeBarChart({ props: { data: legacyRows } });
     setProject(makeProject([chart]));
 
-    const { container } = render(<ScreenPreview />);
+    render(<ScreenPreview />);
 
-    const texts = collectSvgTexts(container);
-    for (const row of legacyRows) {
-      expect(texts).toContain(row.name);
-      expect(texts).toContain(String(row.value));
-    }
-    expect(container.querySelectorAll('svg rect')).toHaveLength(legacyRows.length);
+    expectChartData(
+      legacyRows.map((row) => row.name),
+      legacyRows.map((row) => row.value),
+    );
   });
 
   it('逻辑层配置在预览透传生效（按数值降序 + 条数限制 2）', () => {
@@ -150,19 +193,13 @@ describe('ScreenPreview 数据解析链路（任务 3.4）', () => {
     });
     setProject(makeProject([chart]));
 
-    const { container } = render(<ScreenPreview />);
+    render(<ScreenPreview />);
 
     // 数值降序前两条：橙子 200、苹果 120；香蕉 80 被截断
-    expect(container.querySelectorAll('svg rect')).toHaveLength(2);
-    const texts = collectSvgTexts(container);
-    expect(texts).toContain('橙子');
-    expect(texts).toContain('苹果');
-    expect(texts).not.toContain('香蕉');
-    // 排序生效：橙子的名称标签先于苹果出现
-    expect(texts.indexOf('橙子')).toBeLessThan(texts.indexOf('苹果'));
+    expectChartData(['橙子', '苹果'], [200, 120]);
   });
 
-  it('交互层悬停提示开启时预览渲染 <title>，默认关闭时不渲染', () => {
+  it('交互层悬停提示开启时启用 ECharts tooltip，默认关闭', () => {
     const base = {
       type: 'static' as const,
       staticData: STATIC_ROWS,
@@ -176,18 +213,16 @@ describe('ScreenPreview 数据解析链路（任务 3.4）', () => {
     });
     setProject(makeProject([withTooltip]));
     const enabled = render(<ScreenPreview />);
-    const titles = Array.from(enabled.container.querySelectorAll('svg title')).map(
-      (node) => node.textContent,
+    expect(getLatestOption().tooltip).toEqual(
+      expect.objectContaining({ show: true, trigger: 'item', formatter: '{b}: {c}' }),
     );
-    expect(titles).toContain('苹果: 120');
-    expect(titles).toHaveLength(STATIC_ROWS.length);
     enabled.unmount();
 
     // 默认关闭
     const withoutTooltip = makeBarChart({ dataSource: base });
     setProject(makeProject([withoutTooltip]));
-    const disabled = render(<ScreenPreview />);
-    expect(disabled.container.querySelectorAll('svg title')).toHaveLength(0);
+    render(<ScreenPreview />);
+    expect(getLatestOption().tooltip?.show).toBe(false);
   });
 
   it('空静态数据在预览展示统一空态而非错误', () => {

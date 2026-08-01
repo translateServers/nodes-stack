@@ -42,8 +42,20 @@ function listJavaScriptFiles(directory) {
   });
 }
 
-/** @param {string} filePath @returns {string[]} */
-function bareModuleSpecifiers(filePath) {
+/** @param {string} directory @returns {string[]} */
+function listFiles(directory) {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) return listFiles(path);
+    return [path];
+  });
+}
+
+/**
+ * @param {string} filePath
+ * @returns {{ executable: boolean; specifiers: Array<{ dynamic: boolean; value: string }> }}
+ */
+function inspectJavaScript(filePath) {
   const sourceFile = ts.createSourceFile(
     filePath,
     readFileSync(filePath, 'utf8'),
@@ -51,12 +63,13 @@ function bareModuleSpecifiers(filePath) {
     true,
     ts.ScriptKind.JS,
   );
-  /** @type {string[]} */
+  /** @type {Array<{ dynamic: boolean; value: string }>} */
   const specifiers = [];
 
   /** @param {import('typescript').Node} node */
   function visit(node) {
     let specifier;
+    let dynamic = false;
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       specifier =
         node.moduleSpecifier !== undefined && ts.isStringLiteral(node.moduleSpecifier)
@@ -69,15 +82,22 @@ function bareModuleSpecifiers(filePath) {
       ts.isStringLiteral(node.arguments[0])
     ) {
       specifier = node.arguments[0].text;
+      dynamic = true;
     }
-    if (specifier !== undefined && !specifier.startsWith('.') && !specifier.startsWith('/')) {
-      specifiers.push(specifier);
-    }
+    if (specifier !== undefined) specifiers.push({ dynamic, value: specifier });
     ts.forEachChild(node, visit);
   }
 
   visit(sourceFile);
-  return specifiers;
+  return {
+    executable: sourceFile.statements.some(
+      (statement) =>
+        !ts.isImportDeclaration(statement) &&
+        !ts.isExportDeclaration(statement) &&
+        !ts.isEmptyStatement(statement),
+    ),
+    specifiers,
+  };
 }
 
 const consumerRoot = mkdtempSync(join(tmpdir(), 'nebula-screen-sdk-consumer-'));
@@ -184,12 +204,83 @@ document.body.append(editor);
   );
   if (!existsSync(installedManifestPath)) throw new Error('Packed SDK was not installed');
   const installedPackageRoot = dirname(installedManifestPath);
-  const bareImports = listJavaScriptFiles(join(installedPackageRoot, 'dist')).flatMap((filePath) =>
-    bareModuleSpecifiers(filePath).map((specifier) => `${filePath}: ${specifier}`),
+  const packageEntries = readdirSync(installedPackageRoot).sort();
+  if (JSON.stringify(packageEntries) !== JSON.stringify(['dist', 'package.json'])) {
+    throw new Error(`Packed SDK root contains unexpected entries: ${packageEntries.join(', ')}`);
+  }
+
+  const installedDistRoot = join(installedPackageRoot, 'dist');
+  const javaScriptInspections = listJavaScriptFiles(installedDistRoot).map((filePath) => ({
+    filePath,
+    ...inspectJavaScript(filePath),
+  }));
+  const bareImports = javaScriptInspections.flatMap(({ filePath, specifiers }) =>
+    specifiers
+      .filter(({ value }) => !value.startsWith('.') && !value.startsWith('/'))
+      .map(({ value }) => `${filePath}: ${value}`),
   );
   if (bareImports.length > 0) {
     throw new Error(`Packed SDK contains bare runtime imports:\n${bareImports.join('\n')}`);
   }
+
+  const unresolvedImports = javaScriptInspections.flatMap(({ filePath, specifiers }) =>
+    specifiers.flatMap(({ value }) => {
+      if (!value.startsWith('.')) return [];
+      const target = resolve(dirname(filePath), value.replace(/[?#].*$/u, ''));
+      return existsSync(target) ? [] : [`${filePath}: ${value}`];
+    }),
+  );
+  if (unresolvedImports.length > 0) {
+    throw new Error(
+      `Packed SDK contains unresolved relative imports:\n${unresolvedImports.join('\n')}`,
+    );
+  }
+
+  const dynamicImports = javaScriptInspections.flatMap(({ specifiers }) =>
+    specifiers.filter(({ dynamic }) => dynamic).map(({ value }) => value),
+  );
+  for (const expectedChunk of ['blueprint-sheet-v2', 'static-runtime']) {
+    if (!dynamicImports.some((specifier) => specifier.includes(expectedChunk))) {
+      throw new Error(`Packed SDK is missing the ${expectedChunk} dynamic chunk import`);
+    }
+  }
+
+  for (const { executable, filePath } of javaScriptInspections) {
+    if (!executable) continue;
+    const sourceMapPath = `${filePath}.map`;
+    if (!existsSync(sourceMapPath)) {
+      throw new Error(`Packed executable is missing a source map: ${filePath}`);
+    }
+    /** @type {unknown} */
+    const sourceMapValue = JSON.parse(readFileSync(sourceMapPath, 'utf8'));
+    const sourceMap =
+      typeof sourceMapValue === 'object' && sourceMapValue !== null
+        ? /** @type {Record<string, unknown>} */ (sourceMapValue)
+        : {};
+    const sources = sourceMap['sources'];
+    const sourcesContent = sourceMap['sourcesContent'];
+    if (
+      !Array.isArray(sources) ||
+      sources.length === 0 ||
+      !Array.isArray(sourcesContent) ||
+      sourcesContent.length !== sources.length ||
+      sourcesContent.some((source) => typeof source !== 'string')
+    ) {
+      throw new Error(`Packed source map is incomplete: ${sourceMapPath}`);
+    }
+  }
+
+  const runtimeAssetText = listFiles(installedDistRoot)
+    .filter((filePath) => /\.(?:css|js)$/u.test(filePath))
+    .map((filePath) => readFileSync(filePath, 'utf8'))
+    .join('\n');
+  if (!runtimeAssetText.includes('Geist Variable')) {
+    throw new Error('Packed SDK does not declare the Geist Variable font family');
+  }
+  if (!/data:font\/woff2;base64,/u.test(runtimeAssetText)) {
+    throw new Error('Packed SDK does not contain embedded WOFF2 font resources');
+  }
+
   /** @type {unknown} */
   const installedManifest = JSON.parse(readFileSync(installedManifestPath, 'utf8'));
   const manifest =
@@ -198,15 +289,17 @@ document.body.append(editor);
       : {};
   for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
     const dependencies = manifest[field];
-    if (
-      typeof dependencies === 'object' &&
-      dependencies !== null &&
-      Object.hasOwn(dependencies, '@nebula/screen-editor-core')
-    ) {
-      throw new Error(`Packed SDK exposes the private core package in ${field}`);
+    if (typeof dependencies === 'object' && dependencies !== null) {
+      const names = Object.keys(dependencies).sort();
+      const expected = field === 'dependencies' ? ['zod'] : [];
+      if (JSON.stringify(names) !== JSON.stringify(expected)) {
+        throw new Error(
+          `Packed SDK has unexpected ${field}: ${names.length > 0 ? names.join(', ') : '(none)'}`,
+        );
+      }
     }
   }
-  console.log('screen-sdk tarball consumer: ok');
+  console.log('screen-sdk tarball consumer, chunks, fonts, and source maps: ok');
 } finally {
   rmSync(consumerRoot, { recursive: true, force: true });
 }

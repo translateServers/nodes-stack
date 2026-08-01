@@ -23,6 +23,14 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'chrome',
+      use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    },
+    {
+      name: 'edge',
+      use: { ...devices['Desktop Edge'], channel: 'msedge' },
+    },
   ],
   webServer: {
     command: 'pnpm turbo run dev --filter=@nebula/screen-sdk-host',

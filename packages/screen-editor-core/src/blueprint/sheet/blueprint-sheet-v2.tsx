@@ -43,7 +43,6 @@ import {
   type OnNodeDrag,
   type OnNodesChange,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { Cable, Filter, MousePointerClick, Play, RotateCcw, Workflow, X } from 'lucide-react';
 import type {
   BlueprintNodeV2,

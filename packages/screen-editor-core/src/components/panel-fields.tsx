@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
 import { Input } from '@nebula/screen-editor-core/internal';
 // 数值字段统一使用 PS 风格 NumberInput（↑↓ 微调 + draft 提交，避免每次按键入历史栈）
@@ -19,10 +20,14 @@ export function TextInput({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const inputId = useId();
   return (
     <div className="flex items-center gap-2">
-      <label className="w-14 shrink-0 text-xs text-muted-foreground">{label}</label>
+      <label htmlFor={inputId} className="w-14 shrink-0 text-xs text-muted-foreground">
+        {label}
+      </label>
       <Input
+        id={inputId}
         type="text"
         className="h-7 px-2 py-1 text-sm"
         value={value}

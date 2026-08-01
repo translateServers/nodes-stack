@@ -168,6 +168,7 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     persistedState.columnFilters ?? [],
   );
+  const [globalFilter, setGlobalFilter] = useState('');
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     persistedState.columnVisibility ?? {},
   );
@@ -250,6 +251,7 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
     state: {
       sorting,
       columnFilters,
+      globalFilter,
       columnVisibility,
       columnSizing,
       columnOrder: columnOrder.length > 0 ? columnOrder : undefined,
@@ -259,6 +261,7 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
     onRowSelectionChange: setRowSelection,
@@ -268,6 +271,8 @@ export function DataTable<TData>(allProps: DataTableProps<TData>) {
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: enableServerSide ? undefined : getPaginationRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: 'includesString',
+    getColumnCanGlobalFilter: (column) => searchColumnIds?.includes(column.id) ?? false,
     getExpandedRowModel: getExpandedRowModel(),
     getSubRows,
     enableRowSelection,

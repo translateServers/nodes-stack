@@ -67,6 +67,19 @@ async function expectSelectionText(
   await expect(selectionInfo(page)).toContainText(text, { timeout });
 }
 
+async function readRenderedPosition(
+  element: import('@playwright/test').Locator,
+): Promise<{ x: number; y: number }> {
+  return element.evaluate((node) => {
+    const transform = (node as HTMLElement).style.transform;
+    const match = /translate(?:3d)?\(\s*([-\d.]+)px,\s*([-\d.]+)px/.exec(transform);
+    if (match?.[1] === undefined || match[2] === undefined) {
+      throw new Error(`Component transform does not contain a translation: ${transform}`);
+    }
+    return { x: Number(match[1]), y: Number(match[2]) };
+  });
+}
+
 test.describe('任务 10.2：选择、拖拽和视口平移冒烟', () => {
   test('点击选择组件 → 拖拽改变坐标 → 保存持久化 → Undo 恢复', async ({ adminPage }) => {
     const { project, components } = await createProjectWithMixedComponents('e2e-drag');
@@ -96,8 +109,8 @@ test.describe('任务 10.2：选择、拖拽和视口平移冒烟', () => {
       await adminPage.mouse.move(startX + 50, startY + 50, { steps: 5 });
       await adminPage.mouse.up();
 
-      // 4. 验证拖拽已生效：Moveable onDrag 会更新 style.left，但 onDragEnd 在 Playwright
-      //    合成事件下可能不触发，导致 store 未更新。先检查 store，若未更新则从 style.left
+      // 4. 验证拖拽已生效：Moveable onDrag 会更新 transform，但 onDragEnd 在 Playwright
+      //    合成事件下可能不触发，导致 store 未更新。先检查 store，若未更新则从 transform
       //    读取新位置并手动调用 store.updateComponent（入历史栈，确保后续 Undo 可用）
       const storeUpdated = await adminPage.evaluate(
         (args: { rectId: string; origX: number }) => {
@@ -118,11 +131,8 @@ test.describe('任务 10.2：选择、拖拽和视口平移冒烟', () => {
       );
 
       if (!storeUpdated) {
-        // Moveable onDragEnd 未触发：从 style.left 读取视觉新位置，手动更新 store（入历史栈）
-        const newPos = await rectElement.evaluate((el: Element) => ({
-          x: parseFloat((el as HTMLElement).style.left) || 0,
-          y: parseFloat((el as HTMLElement).style.top) || 0,
-        }));
+        // Moveable onDragEnd 未触发：从 transform 读取视觉新位置，手动更新 store（入历史栈）
+        const newPos = await readRenderedPosition(rectElement);
         await adminPage.evaluate(
           (args: { rectId: string; x: number; y: number; w: number; h: number }) => {
             const store = (
@@ -317,15 +327,10 @@ test.describe('任务 10.2：选择、拖拽和视口平移冒烟', () => {
       expect(afterBox!.x).not.toBeCloseTo(beforeBox!.x, 0);
       expect(afterBox!.y).not.toBeCloseTo(beforeBox!.y, 0);
 
-      // 5. 但组件的项目坐标（DOM style.left/top）应保持不变
-      const projectCoords = await rectElement.evaluate((el) => {
-        return {
-          left: (el as HTMLElement).style.left,
-          top: (el as HTMLElement).style.top,
-        };
-      });
-      expect(parseFloat(projectCoords.left)).toBeCloseTo(rect.position.x, 0);
-      expect(parseFloat(projectCoords.top)).toBeCloseTo(rect.position.y, 0);
+      // 5. 但组件自身 transform 中的项目坐标应保持不变
+      const projectCoords = await readRenderedPosition(rectElement);
+      expect(projectCoords.x).toBeCloseTo(rect.position.x, 0);
+      expect(projectCoords.y).toBeCloseTo(rect.position.y, 0);
     } finally {
       try {
         await deleteScreenProject(project.id);
@@ -420,32 +425,23 @@ test.describe('任务 10.3：框选后拖拽多个组件', () => {
       await adminPage.mouse.up();
 
       // 4. 验证 rect1 和 rect2 的 DOM 位置都发生了相同位移
-      const rect1After = await adminPage
-        .locator(`[data-component-id="${rect1.id}"]`)
-        .evaluate((el) => ({
-          left: parseFloat((el as HTMLElement).style.left),
-          top: parseFloat((el as HTMLElement).style.top),
-        }));
-      const rect2After = await adminPage
-        .locator(`[data-component-id="${rect2.id}"]`)
-        .evaluate((el) => ({
-          left: parseFloat((el as HTMLElement).style.left),
-          top: parseFloat((el as HTMLElement).style.top),
-        }));
+      const rect1After = await readRenderedPosition(
+        adminPage.locator(`[data-component-id="${rect1.id}"]`),
+      );
+      const rect2After = await readRenderedPosition(
+        adminPage.locator(`[data-component-id="${rect2.id}"]`),
+      );
 
       // 两组件都应发生位移
-      expect(rect1After.left).not.toBeCloseTo(rect1.position.x, 0);
-      expect(rect2After.left).not.toBeCloseTo(rect2.position.x, 0);
+      expect(rect1After.x).not.toBeCloseTo(rect1.position.x, 0);
+      expect(rect2After.x).not.toBeCloseTo(rect2.position.x, 0);
 
       // 5. ellipse 未被选中，坐标不变
-      const ellipseAfter = await adminPage
-        .locator(`[data-component-id="${ellipse.id}"]`)
-        .evaluate((el) => ({
-          left: parseFloat((el as HTMLElement).style.left),
-          top: parseFloat((el as HTMLElement).style.top),
-        }));
-      expect(ellipseAfter.left).toBeCloseTo(ellipse.position.x, 0);
-      expect(ellipseAfter.top).toBeCloseTo(ellipse.position.y, 0);
+      const ellipseAfter = await readRenderedPosition(
+        adminPage.locator(`[data-component-id="${ellipse.id}"]`),
+      );
+      expect(ellipseAfter.x).toBeCloseTo(ellipse.position.x, 0);
+      expect(ellipseAfter.y).toBeCloseTo(ellipse.position.y, 0);
 
       // 6. 拖拽结束后仍可继续选择（点击椭圆选中它）
       await adminPage.locator(`[data-component-id="${ellipse.id}"]`).click();
@@ -806,7 +802,21 @@ test.describe('任务 10.7：快捷键缩放及默认行为隔离', () => {
       expect(canvasBox).not.toBeNull();
       await adminPage.mouse.move(canvasBox!.x + 100, canvasBox!.y + 100);
       await adminPage.keyboard.down('Alt');
-      await adminPage.mouse.wheel(0, -100); // deltaY 负值向上
+      await canvas.evaluate(
+        (element, coordinates) => {
+          element.dispatchEvent(
+            new WheelEvent('wheel', {
+              altKey: true,
+              bubbles: true,
+              cancelable: true,
+              clientX: coordinates.x,
+              clientY: coordinates.y,
+              deltaY: -100,
+            }),
+          );
+        },
+        { x: canvasBox!.x + 100, y: canvasBox!.y + 100 },
+      );
       await adminPage.keyboard.up('Alt');
       await expect(zoomButton).not.toContainText('100');
     } finally {
@@ -848,7 +858,7 @@ test.describe('任务 10.4：双击进入分组', () => {
       //    但 setActiveGroupId 是核心业务逻辑，直接调用可验证分组进入/退出语义
       let enteredGroup = false;
       try {
-        await adminPage.getByRole('button', { name: '图层' }).click({ timeout: 2000 });
+        await adminPage.getByRole('tab', { name: '图层' }).click({ timeout: 2000 });
         const child1Row = adminPage
           .getByTestId('layer-row')
           .filter({ hasText: child1.name })
@@ -895,13 +905,15 @@ test.describe('任务 10.4：双击进入分组', () => {
       }
       // 切回组件库 tab 避免影响后续画布交互（若当前在图层 tab）
       try {
-        await adminPage.getByRole('button', { name: '组件库' }).click({ timeout: 1500 });
+        await adminPage.getByRole('tab', { name: '组件库' }).click({ timeout: 1500 });
       } catch {
         // 可能已经在组件库 tab，忽略
       }
 
       // 4. 进入分组后单击子组件 2 → 仅选中该子组件
-      const child2Element = adminPage.locator(`[data-component-id="${child2.id}"]`);
+      const child2Element = adminPage
+        .getByTestId('canvas-surface')
+        .locator(`[data-component-id="${child2.id}"]`);
       await child2Element.click();
       await expectSelectionText(adminPage, /已选中 1 个|分组子-2/);
 
@@ -925,7 +937,9 @@ test.describe('任务 10.4：双击进入分组', () => {
       await expectSelectionText(adminPage, '未选中');
 
       // 7. 顶层组件不受分组退出影响：单击顶层文本组件可正常选中
-      const topLevelElement = adminPage.locator(`[data-component-id="${topLevelComponent.id}"]`);
+      const topLevelElement = adminPage
+        .getByTestId('canvas-surface')
+        .locator(`[data-component-id="${topLevelComponent.id}"]`);
       await topLevelElement.click();
       await expectSelectionText(adminPage, /已选中 1 个|顶层文本/);
 
@@ -933,7 +947,7 @@ test.describe('任务 10.4：双击进入分组', () => {
       //    layer-panel.tsx 的 handleComponentDoubleClick 对顶层组件只退出活动分组，不进入分组
       let verifiedTopLevelNoGroup = false;
       try {
-        await adminPage.getByRole('button', { name: '图层' }).click({ timeout: 1500 });
+        await adminPage.getByRole('tab', { name: '图层' }).click({ timeout: 1500 });
         const topLevelRow = adminPage
           .getByTestId('layer-row')
           .filter({ hasText: topLevelComponent.name })
@@ -943,7 +957,7 @@ test.describe('任务 10.4：双击进入分组', () => {
         await expect(adminPage.getByText('编辑中')).not.toBeVisible({ timeout: 1000 });
         verifiedTopLevelNoGroup = true;
         // 切回组件库
-        await adminPage.getByRole('button', { name: '组件库' }).click({ timeout: 1500 });
+        await adminPage.getByRole('tab', { name: '组件库' }).click({ timeout: 1500 });
       } catch {
         verifiedTopLevelNoGroup = false;
       }
@@ -1000,7 +1014,7 @@ test.describe('任务 10.6：图层拖拽排序', () => {
       await loadEditor(adminPage, project.id, project.name);
 
       // 1. 切换到图层 tab
-      await adminPage.getByRole('button', { name: '图层' }).click();
+      await adminPage.getByRole('tab', { name: '图层' }).click();
 
       // 2. 验证初始顺序：图层面板按 zIndex 降序（顶层在前）
       //    期望顺序：椭圆-A, 矩形-B, 矩形-A, 文本-A
@@ -1079,7 +1093,7 @@ test.describe('任务 10.6：图层拖拽排序', () => {
       expect(filteredAfterFinal).toHaveLength(4);
 
       // 5. 切回组件库 tab，验证画布上 DOM 顺序反映新层级
-      await adminPage.getByRole('button', { name: '组件库' }).click();
+      await adminPage.getByRole('tab', { name: '组件库' }).click();
 
       // 6. 保存并重新加载，验证层级已持久化
       const saveResponse = adminPage.waitForResponse(
@@ -1096,7 +1110,7 @@ test.describe('任务 10.6：图层拖拽排序', () => {
       await adminPage.reload();
       await adminPage.waitForLoadState('networkidle');
       await expect(adminPage.getByText(project.name)).toBeVisible();
-      await adminPage.getByRole('button', { name: '图层' }).click();
+      await adminPage.getByRole('tab', { name: '图层' }).click();
       const reloadedNames = await adminPage
         .getByTestId('layer-row')
         .locator('span.truncate')
@@ -1105,33 +1119,24 @@ test.describe('任务 10.6：图层拖拽排序', () => {
       expect(filteredReloaded[0]).toBe('E2E 文本-A');
 
       // 8. 验证组件本身未被画布拖拽移动（坐标不变）
-      await adminPage.getByRole('button', { name: '组件库' }).click();
-      const textStyle = await adminPage
-        .locator(`[data-component-id="${text.id}"]`)
-        .evaluate((el) => ({
-          left: parseFloat((el as HTMLElement).style.left),
-          top: parseFloat((el as HTMLElement).style.top),
-        }));
-      expect(textStyle.left).toBeCloseTo(text.position.x, 0);
-      expect(textStyle.top).toBeCloseTo(text.position.y, 0);
+      await adminPage.getByRole('tab', { name: '组件库' }).click();
+      const textStyle = await readRenderedPosition(
+        adminPage.locator(`[data-component-id="${text.id}"]`),
+      );
+      expect(textStyle.x).toBeCloseTo(text.position.x, 0);
+      expect(textStyle.y).toBeCloseTo(text.position.y, 0);
       // 其他组件也保持原坐标
-      const rect1Style = await adminPage
-        .locator(`[data-component-id="${rect1.id}"]`)
-        .evaluate((el) => ({
-          left: parseFloat((el as HTMLElement).style.left),
-          top: parseFloat((el as HTMLElement).style.top),
-        }));
-      expect(rect1Style.left).toBeCloseTo(rect1.position.x, 0);
-      expect(rect1Style.top).toBeCloseTo(rect1.position.y, 0);
+      const rect1Style = await readRenderedPosition(
+        adminPage.locator(`[data-component-id="${rect1.id}"]`),
+      );
+      expect(rect1Style.x).toBeCloseTo(rect1.position.x, 0);
+      expect(rect1Style.y).toBeCloseTo(rect1.position.y, 0);
       // 椭圆与矩形 B 也未变
-      const ellipseStyle = await adminPage
-        .locator(`[data-component-id="${ellipse.id}"]`)
-        .evaluate((el) => ({
-          left: parseFloat((el as HTMLElement).style.left),
-          top: parseFloat((el as HTMLElement).style.top),
-        }));
-      expect(ellipseStyle.left).toBeCloseTo(ellipse.position.x, 0);
-      expect(ellipseStyle.top).toBeCloseTo(ellipse.position.y, 0);
+      const ellipseStyle = await readRenderedPosition(
+        adminPage.locator(`[data-component-id="${ellipse.id}"]`),
+      );
+      expect(ellipseStyle.x).toBeCloseTo(ellipse.position.x, 0);
+      expect(ellipseStyle.y).toBeCloseTo(ellipse.position.y, 0);
       void rect2; // rect2 仅作上下文，不强制断言
     } finally {
       try {
@@ -1226,12 +1231,9 @@ test.describe('任务 10.8：右键菜单组合交互', () => {
       await adminPage.mouse.up();
 
       // 6. 验证坐标已改变
-      const movedStyle = await rect2Element.evaluate((el) => ({
-        left: parseFloat((el as HTMLElement).style.left),
-        top: parseFloat((el as HTMLElement).style.top),
-      }));
-      expect(movedStyle.left).not.toBeCloseTo(rect2.position.x, 0);
-      expect(movedStyle.top).not.toBeCloseTo(rect2.position.y, 0);
+      const movedStyle = await readRenderedPosition(rect2Element);
+      expect(movedStyle.x).not.toBeCloseTo(rect2.position.x, 0);
+      expect(movedStyle.y).not.toBeCloseTo(rect2.position.y, 0);
 
       // 7. 右键菜单与文本编辑互斥：双击文本进入编辑后，右键画布应仍可打开画布菜单
       const textElement = adminPage.locator(

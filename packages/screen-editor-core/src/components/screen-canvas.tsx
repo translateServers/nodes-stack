@@ -1150,7 +1150,7 @@ export function ScreenCanvas({
 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
-  }, [setCanvasScaleAndOffset, rulersRef]);
+  }, [project?.id, setCanvasScaleAndOffset, rulersRef]);
 
   /**
    * H2 性能优化：构建组件 ID → 组件的 Map，替代 12 处 Array.find 查找。

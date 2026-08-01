@@ -51,7 +51,7 @@ export default defineConfig({
     rollupOptions: {
       // spec 13: React、ReactDOM、Zustand、Radix、Moveable、Selecto 等实现依赖
       // 打入 SDK，避免宿主 React 版本冲突。@nebula/shared 类型由 dts bundle,
-      // 运行时由 Vite 内联，consumer 不需要安装任何 peer/runtime 依赖。
+      // 运行时由 Vite 内联；consumer 仅为公开 Zod schema 的声明类型安装 zod。
       external: [],
       output: {
         chunkFileNames: 'chunks/[name]-[hash].js',

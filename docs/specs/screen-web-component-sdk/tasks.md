@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Tasks
 
-> 状态：实施中（阶段 7 已完成：Vanilla 参考宿主、Nebula Host Adapter 与兼容保护已落地；待阶段 8 质量门与私有发布）
+> 状态：实施中（阶段 8 本地质量门已完成；私有 registry 发布延期）
 > 最近更新：2026-08-01
 > 定位：按可独立验证的阶段拆解 SDK 契约、实例化改造、宿主适配、Web Component 封装、集成与发布任务
 
@@ -124,7 +124,7 @@
   - [x] 将 Workbench 可达路径的 Sonner 调用替换为实例通知/错误状态
   - [x] 将 app UI primitives 替换为 SDK 内部 UI primitives
    - [x] 通过依赖图测试或静态检查防止应用依赖回流
-   - [ ] SDK production runtime 依赖图不包含 `apps/web`、API/dataset hooks、Axios、Sonner、TanStack Router/Query 或直接业务 `fetch`
+    - [x] SDK production runtime 依赖图不包含 `apps/web`、API/dataset hooks、Axios、Sonner、TanStack Router/Query 或直接业务 `fetch`
 
 ### 阶段 4 执行记录（已完成）
 
@@ -311,28 +311,33 @@
 
 ## 阶段 8：质量门与私有发布
 
-- [ ] Task 22: 执行 SDK 单元与集成测试
-  - [ ] 文档、Adapter、错误、Store 和 capability 测试通过
-  - [ ] Custom Element、Shadow Portal、双实例和断连测试通过
-  - [ ] 迁移既有画布、工具、属性、蓝图核心测试
-  - [ ] 建立首个构建的 gzip 体积基线
+- [x] Task 22: 执行 SDK 单元与集成测试
+  - [x] 文档、Adapter、错误、Store 和 capability 测试通过
+  - [x] Custom Element、Shadow Portal、双实例和断连测试通过
+  - [x] 迁移既有画布、工具、属性、蓝图核心测试
+  - [x] 建立首个构建的 gzip 体积基线（`882.9 KiB gzip`，限制 `976.6 KiB`）
 
-- [ ] Task 23: 执行浏览器 E2E 与全仓回归
-  - [ ] Vanilla 宿主完整流程通过
-  - [ ] 双实例、冲突 CSS、resize、焦点快捷键通过
-  - [ ] text/bar-chart/rect/ellipse/image/button 六组件渲染和属性编辑通过
-  - [ ] 图层/历史/蓝图 condition/delay/comment 与允许动作核心流程通过
-  - [ ] `pnpm biome:check`、`pnpm typecheck`、`pnpm lint` 通过
-  - [ ] Nebula Web 相关单元测试与现有 E2E 无回归
-  - [ ] 在当前稳定版 Chrome 与 Edge 各执行一次发布冒烟用例
+- [x] Task 23: 执行浏览器 E2E 与全仓回归
+  - [x] Vanilla 宿主完整流程通过
+  - [x] 双实例、冲突 CSS、resize、焦点快捷键通过
+  - [x] text/bar-chart/rect/ellipse/image/button 六组件渲染和属性编辑通过
+  - [x] 图层/历史/蓝图 condition/delay/comment 与允许动作核心流程通过
+  - [x] `pnpm biome:check`、`pnpm typecheck`、`pnpm lint` 通过
+  - [x] Nebula Web 相关单元测试与现有 E2E 无回归
+  - [x] 在当前稳定版 Chrome 与 Edge 各执行一次发布冒烟用例
 
 - [ ] Task 24: 验证并发布私有 npm 包
-  - [ ] 配置 exports/files/publishConfig/版本
-  - [ ] `pnpm pack` 检查 tarball 内容
-  - [ ] 空白 Vanilla Vite 项目安装 tarball 后 typecheck/build 成功
-  - [ ] 验证 source map、字体与动态 chunk URL
+  - [x] 配置 exports/files/版本
+  - [ ] 私有 registry URL 到位后配置 `publishConfig`
+  - [x] `pnpm pack` 检查 tarball 内容
+  - [x] 空白 Vanilla Vite 项目安装 tarball 后 typecheck/build 成功
+  - [x] 验证 source map、字体与动态 chunk URL
   - [ ] 发布 `0.1.0` 到私有 registry
-  - [ ] 更新 spec/checklist 状态与全局文档索引
+  - [x] 更新 spec/checklist 状态与全局文档索引
+
+> 阶段 8 本地验证结果（2026-08-01）：根 `pnpm test`、`pnpm typecheck`、`pnpm lint`、`pnpm biome:check` 均通过；Nebula Web E2E 为 60/60，SDK Host Chromium E2E 为 11/11，稳定 Chrome/Edge 发布冒烟为 4/4。`verify:tarball` 覆盖 tarball 内容、空白 Vite 消费者、source map、字体和动态 chunk URL。
+>
+> 发布延期：用户选择暂不实际发布。包继续保持 `private: true`；待提供私有 registry URL 与对应凭据后配置 `publishConfig` 并发布 `0.1.0`。
 
 ## Task Dependencies
 

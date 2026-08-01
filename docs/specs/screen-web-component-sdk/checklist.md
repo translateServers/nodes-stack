@@ -1,6 +1,6 @@
 # 大屏设计器 Web Component SDK Checklist
 
-> 状态：实施中（阶段 7 已完成：参考宿主、Nebula Adapter 与兼容验证通过；待阶段 8 质量门与私有发布）
+> 状态：实施中（阶段 8 本地质量门已完成；私有 registry 发布延期）
 > 最近更新：2026-08-01
 > 定位：用于开发自验、集成验收和私有 npm 发布判定的检查清单
 
@@ -197,7 +197,7 @@
 - [x] 宿主变量覆盖优先，画布用户颜色不被 UI theme 覆盖
 - [x] readonly 禁止所有设计和服务端 mutation，但允许导出、列表、预览和视口操作
 - [x] readonly 下 save/publish reject FORBIDDEN，undo/redo no-op，Adapter mutation 调用数为 0
-- [ ] 字体资源在 tarball 消费项目中可加载
+- [x] 字体资源在 tarball 消费项目中可加载（`verify:tarball` 通过）
 - [x] 首版没有承诺未记录的 slot、class 或 `::part` API
 
 ## 11. DOM, Focus, and Layout
@@ -235,7 +235,7 @@
 - [x] Custom Element 生命周期测试通过
 - [x] Shadow Portal 与宿主 CSS 隔离测试通过
 - [x] Vanilla 宿主 Playwright E2E 通过
-- [ ] 当前稳定版 Chrome 与 Edge 发布冒烟通过
+- [x] 当前稳定版 Chrome 与 Edge 发布冒烟通过（4/4）
 - [x] 双实例焦点/快捷键 E2E 通过
 - [x] 保存冲突、导入导出和快照 E2E 通过
 - [x] 现有画布、工具、属性、历史与蓝图核心测试通过
@@ -244,9 +244,9 @@
 - [x] `pnpm --filter @nebula/screen-sdk test` 通过
 - [x] `pnpm --filter @nebula/screen-sdk build` 通过（含源码边界检查与 production module graph 门禁）
 - [x] 空白 Vanilla Vite 项目安装 tarball 后 typecheck/build 通过（`verify:tarball` 通过，且不暴露私有 core 依赖）
-- [ ] `pnpm biome:check` 通过
+- [x] `pnpm biome:check` 通过
 - [x] 根 `pnpm typecheck` 与 `pnpm lint` 通过
-- [ ] 首次 gzip 体积基线已记录
-- [ ] `pnpm pack` tarball 内容正确
-- [ ] 字体、source map 与动态 chunk URL 在 tarball 消费场景正常
-- [ ] 私有 registry `0.1.0` 发布成功
+- [x] 首次 gzip 体积基线已记录（`882.9 KiB gzip`，限制 `976.6 KiB`）
+- [x] `pnpm pack` tarball 内容正确
+- [x] 字体、source map 与动态 chunk URL 在 tarball 消费场景正常
+- [ ] 私有 registry `0.1.0` 发布成功（等待 registry URL 与凭据；包保持 `private: true`）

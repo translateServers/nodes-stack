@@ -21,7 +21,7 @@
  *
  * 已知限制：
  * - Playwright dblclick() 可能因 Moveable 控制框拦截第二次点击而无法触发
- *   Selecto 的双击检测。fallback 到 window.__startTextEditing（DEV 暴露）。
+ *   Selecto 的双击检测。fallback 到实例化编辑器的 DEV debug handle。
  */
 
 import { test, expect } from '../fixtures/auth.fixture';
@@ -104,7 +104,7 @@ async function readComponentCount(page: import('@playwright/test').Page): Promis
 
 /**
  * 进入文本编辑：优先尝试 dblclick()，若文本编辑器未出现则 fallback 到
- * window.__startTextEditing（Moveable 控制框拦截第二次点击时使用）。
+ * DEV debug handle（Moveable 控制框拦截第二次点击时使用）。
  */
 async function enterTextEditing(
   page: import('@playwright/test').Page,
@@ -136,11 +136,14 @@ async function enterTextEditing(
     // 两次点击仍失败，继续 fallback
   }
 
-  // 尝试 3：直接调用 window.__startTextEditing（DEV fallback）
+  // 尝试 3：通过实例化编辑器的 DEV debug handle 进入编辑
   await page.evaluate((id: string) => {
-    const fn = (window as unknown as { __startTextEditing?: (componentId: string) => void })
-      .__startTextEditing;
-    fn?.(id);
+    const registry = (
+      window as unknown as {
+        __nebulaScreenEditors?: Map<string, { startTextEditing?: (componentId: string) => void }>;
+      }
+    ).__nebulaScreenEditors;
+    registry?.get('nebula-web-screen-editor')?.startTextEditing?.(id);
   }, componentId);
   const editor = page.getByTestId('text-editor');
   await expect(editor).toBeVisible({ timeout: 3000 });

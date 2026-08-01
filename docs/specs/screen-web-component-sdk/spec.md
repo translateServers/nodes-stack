@@ -1,12 +1,14 @@
 # 大屏设计器 Web Component SDK Spec
 
-> 状态：实施中（阶段 7 已完成：Vanilla 参考宿主、Nebula Host Adapter 与兼容保护已落地；待阶段 8 质量门与私有发布）
+> 状态：实施中（阶段 8 本地质量门已完成；私有 registry 发布延期）
 > 最近更新：2026-08-01
 > 定位：定义大屏设计器以前端 Web Component SDK 交付时的产品边界、宿主适配器、文档协议、元素 API、隔离机制与验收标准
 
 > 阶段 6 复核结论（2026-07-31）：静态 production runtime 已按 ADR-0001 方案 A 落地——新增私有 `@nebula/screen-editor-core`，`packages/screen-sdk` 只组装 static runtime，`apps/web` 基于同一 core 组装 dynamic profile，Vite virtual runtime bridge 已删除；生产构建以源码 AST 检查 + dist module graph 门禁双重拒绝动态能力回流，并完成 tarball 消费验证。阶段 6 定义为“实现完成”，Vanilla 宿主 E2E 与发布冒烟留待阶段 7-8。
 >
 > 阶段 7 复核结论（2026-08-01）：新增无 React 运行时依赖的 `apps/screen-sdk-host`、完整内存 Adapter 与 9 项 Chromium Playwright E2E；Nebula Host Adapter 已复用现有 API/Query/JWT/Toast 管线，并通过统一 parser 建立 static 兼容门控。现有动态生产入口保持不变，路由切换必须满足 14.1 的全部条件。
+>
+> 阶段 8 复核结论（2026-08-01）：根测试、类型检查、lint 与 Biome 均通过；Nebula Web E2E 为 60/60，SDK Host Chromium E2E 为 11/11，稳定 Chrome/Edge 冒烟为 4/4。SDK tarball 经空白 Vite 消费者、source map、字体和动态 chunk 验证，首个 gzip 基线为 `882.9 KiB`（限制 `976.6 KiB`）。用户选择暂不实际发布，包保持 `private: true`，待私有 registry URL 与凭据就绪后再配置 `publishConfig` 并发布 `0.1.0`。
 
 ## 1. Why
 

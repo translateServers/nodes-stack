@@ -49,7 +49,6 @@ import {
   type OnNodeDrag,
   type OnNodesChange,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { X } from 'lucide-react';
 import type {
   EventBlueprint,
