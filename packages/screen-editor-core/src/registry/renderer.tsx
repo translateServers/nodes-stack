@@ -6,6 +6,7 @@ import type {
   LogicConfig,
   ScreenComponent,
 } from '@nebula/shared';
+import type { ScreenComponentDataState } from '@nebula/screen-component-sdk/dynamic';
 import { getRendererFromRegistry } from './registry-derive';
 import { useOptionalRegistry } from './registry-context';
 
@@ -18,6 +19,14 @@ interface ComponentRendererProps {
    * 仅图表类组件消费此 prop，其他组件忽略。
    */
   apiRawDataOverride?: unknown;
+  /** 运行模式透传（screen-dynamic-sdk：viewer 模式） */
+  mode?: 'design' | 'preview' | 'viewer';
+  /** 是否允许派发业务事件（screen-dynamic-sdk viewer 默认 true） */
+  interactive?: boolean;
+  /** 组件数据能力（组件 API v2） */
+  dataCapability?: 'none' | 'static' | 'host-metric';
+  /** 组件运行数据状态（screen-dynamic-sdk viewer 回写） */
+  dataState?: ScreenComponentDataState;
 }
 
 /**
@@ -50,10 +59,11 @@ export interface RendererComponentProps {
    * 运行模式（Spec §9.1）。
    * - 'design'：编辑器画布（默认）
    * - 'preview'：真实预览
+   * - 'viewer'：独立查看器（screen-dynamic-sdk）
    * 仅 host 组件桥接消费；legacy renderer 忽略。
    * Phase 2 默认 'design'，Phase 5 接入预览路径时由上层透传。
    */
-  mode?: 'design' | 'preview';
+  mode?: 'design' | 'preview' | 'viewer';
   /**
    * 是否允许派发业务事件（Spec §9.1）。
    * design 模式下为 false，SDK 忽略组件派发的 nebula-component-event。
@@ -66,6 +76,16 @@ export interface RendererComponentProps {
    * legacy renderer 忽略（其尺寸由外层 Canvas wrapper CSS 控制）。
    */
   size?: { readonly width: number; readonly height: number };
+  /**
+   * 组件数据能力（组件 API v2，screen-dynamic-sdk）。
+   * 提供时 host 组件桥接写入 model v2；缺省按 v1 model 赋值。
+   */
+  dataCapability?: 'none' | 'static' | 'host-metric';
+  /**
+   * 组件运行数据状态（screen-dynamic-sdk viewer 回写）。
+   * 提供时随 model v2 写入，组件只读展示。
+   */
+  dataState?: ScreenComponentDataState;
 }
 
 /**
@@ -89,6 +109,10 @@ export interface RendererComponentProps {
 export const ComponentRenderer = memo(function ComponentRenderer({
   component,
   apiRawDataOverride,
+  mode = 'design',
+  interactive = false,
+  dataCapability,
+  dataState,
 }: ComponentRendererProps) {
   const registry = useOptionalRegistry();
   const Renderer = getRendererFromRegistry(registry, component.type) as
@@ -114,9 +138,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({
       // - mode='design'：编辑器画布当前为设计模式，Phase 5 接入预览时由上层透传
       // - interactive=false：设计模式忽略业务事件，Phase 4 接入事件桥接时由上层控制
       // - size 来自 component.position.width/height，写入 host 组件 model.size
-      mode="design"
-      interactive={false}
+      // - dataCapability/dataState：screen-dynamic-sdk 提供时写入 model v2
+      mode={mode}
+      interactive={interactive}
       size={{ width: component.position.width, height: component.position.height }}
+      dataCapability={dataCapability}
+      dataState={dataState}
     />
   );
 });

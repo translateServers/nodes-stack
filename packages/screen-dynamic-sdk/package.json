@@ -1,0 +1,62 @@
+{
+  "name": "@nebula/screen-dynamic-sdk",
+  "version": "0.3.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "description": "大屏动态 SDK：Nebula 大屏设计器与查看器 Web Components，动态数据能力由宿主 adapter 委托执行",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./auto-register": {
+      "types": "./dist/auto-register.d.ts",
+      "import": "./dist/auto-register.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "./dist/auto-register.js"
+  ],
+  "scripts": {
+    "prebuild": "pnpm --filter @nebula/screen-component-sdk build && pnpm --filter @nebula/screen-editor-core build",
+    "build": "pnpm check:boundaries && vite build && tsc -p tsconfig.build.json && node ./scripts/normalize-declarations.mjs",
+    "check:boundaries": "node ./scripts/check-boundaries.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint .",
+    "size": "node ./scripts/measure-package-size.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify:tarball": "node ./scripts/verify-tarball-consumer.mjs"
+  },
+  "dependencies": {
+    "@nebula/screen-component-sdk": "workspace:*",
+    "@nebula/screen-editor-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@nebula/eslint-config": "workspace:*",
+    "@nebula/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.0",
+    "eslint": "^9.18.0",
+    "jsdom": "^29.1.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.9"
+  }
+}

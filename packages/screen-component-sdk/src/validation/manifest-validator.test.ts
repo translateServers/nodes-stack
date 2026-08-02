@@ -22,9 +22,17 @@ describe('manifest validation - identity', () => {
     expectManifestOk(createMinimalManifest());
   });
 
-  it('apiVersion 不匹配返回 UNSUPPORTED_COMPONENT_API_VERSION', () => {
-    const m = withOverrides({ apiVersion: 'nebula.screen-component/v2' as never });
+  it('apiVersion 不匹配（未知版本）返回 UNSUPPORTED_COMPONENT_API_VERSION', () => {
+    const m = withOverrides({ apiVersion: 'nebula.screen-component/v9' as never });
     expectManifestInvalid(m, 'UNSUPPORTED_COMPONENT_API_VERSION');
+  });
+
+  it('apiVersion v2（动态组件契约）通过校验', () => {
+    const m = withOverrides({
+      apiVersion: 'nebula.screen-component/v2' as never,
+      dataCapability: 'host-metric',
+    });
+    expectManifestOk(m);
   });
 
   it('外部 type 缺少命名空间返回 INVALID_COMPONENT_TYPE', () => {

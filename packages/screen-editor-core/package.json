@@ -8,6 +8,10 @@
       "types": "./dist/index.d.ts",
       "import": "./src/index.ts"
     },
+    "./dynamic": {
+      "types": "./dist/dynamic-entry.d.ts",
+      "import": "./src/dynamic-entry.ts"
+    },
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./src/internal.ts"

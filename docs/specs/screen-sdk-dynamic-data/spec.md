@@ -1,8 +1,21 @@
 # 大屏 SDK 动态数据能力 Spec
 
-> 状态：设计中
-> 最近更新：2026-08-01
+> 状态：生效中（A1 契约切片已完成；A2 起进入 XJ 对接实施）
+> 最近更新：2026-08-03
 > 定位：定义 Web Component SDK 后续动态数据能力的独立演进边界；当前不改变 `@nebula/screen-sdk` V1 static 契约
+
+## 0. 实施状态（A1 切片）
+
+- 新增 `@nebula/screen-dynamic-sdk`（0.3.0-alpha.0，private）：
+  `<nebula-screen-designer>` / `<nebula-screen-viewer>` Web Components
+- 文档 V3（`DynamicScreenDocumentV3`，schemaVersion=3）+ 两阶段 parser（wire + registry-aware）
+- 数据执行契约 `ScreenDataAdapterPort` + 实例级 `ScreenDataCoordinator`（去重/取消/超时/迟到防护）
+- 组件 API v2（`nebula.screen-component/v2`，`dataCapability = none | static | host-metric`）
+- 契约 fixture 组件 `xj.metric-card/v1`、`xj.chart.bar/v1` + fake adapter（测试/E2E）
+- Vue 3 consumer（`apps/dynamic-sdk-vue-consumer`）Playwright smoke 通过
+- 静态 `@nebula/screen-sdk` 未改动，V3 文档对其 fail-closed（V2 parser 拒绝 schemaVersion=3）
+- 详见 `packages/screen-dynamic-sdk/README.md`
+
 
 ## 1. Background
 

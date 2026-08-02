@@ -281,7 +281,7 @@ describe('createScreenComponentRegistry', () => {
 
     it('apiVersion 不匹配拒绝为 UNSUPPORTED_COMPONENT_API_VERSION', async () => {
       const plugin = makeHostPlugin({
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       await expect(createScreenComponentRegistry({ components: [plugin] })).rejects.toMatchObject({
@@ -329,7 +329,7 @@ describe('createScreenComponentRegistry', () => {
     it('manifest 校验失败时不返回部分 registry', async () => {
       const goodPlugin = makeHostPlugin({ name: 'Good' });
       const badPlugin = makeHostPlugin({
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       await expect(
@@ -345,7 +345,7 @@ describe('createScreenComponentRegistry', () => {
 
     it('manifest 校验失败映射为安全 V2 diagnostics', async () => {
       const plugin = makeHostPlugin({
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       try {
@@ -556,7 +556,7 @@ describe('createScreenComponentRegistry', () => {
   describe('原子性与失败处理（Spec §3.4 Fail Closed）', () => {
     it('失败时不返回部分 registry', async () => {
       const badPlugin = makeHostPlugin({
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       // reject 时 Promise 不会 resolve，因此没有部分 registry
@@ -569,7 +569,7 @@ describe('createScreenComponentRegistry', () => {
       const pluginA = makeHostPlugin({ name: 'A' });
       const pluginB = makeHostPlugin({
         name: 'B',
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       await expect(
@@ -583,7 +583,7 @@ describe('createScreenComponentRegistry', () => {
   describe('isScreenComponentRegistryError 类型守卫', () => {
     it('ScreenComponentRegistryErrorImpl 实例被识别', async () => {
       const plugin = makeHostPlugin({
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       try {
@@ -631,7 +631,7 @@ describe('createScreenComponentRegistry', () => {
   describe('错误诊断脱敏（Spec §8.2 安全约束）', () => {
     it('错误消息包含 type 但不包含完整 manifest 源码', async () => {
       const plugin = makeHostPlugin({
-        apiVersion: 'nebula.screen-component/v2' as typeof SCREEN_COMPONENT_API_VERSION,
+        apiVersion: 'nebula.screen-component/v9' as typeof SCREEN_COMPONENT_API_VERSION,
       });
 
       try {

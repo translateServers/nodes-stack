@@ -14,6 +14,7 @@ import {
   SCREEN_COMPONENT_ICON_TOKENS,
   type ScreenComponentManifest,
 } from '../contracts/manifest.js';
+import { SCREEN_COMPONENT_API_VERSION_V2 } from '../dynamic/data-capability.js';
 import {
   createValidationDiagnostic,
   type ScreenComponentValidationDiagnostic,
@@ -70,14 +71,17 @@ export function validateManifestIdentity(
 ): boolean {
   let valid = true;
 
-  // apiVersion
+  // apiVersion（v1 与 v2 均为合法组件协议版本；v2 携带 dataCapability 扩展）
   const apiVersion: string = manifest.apiVersion;
-  if (apiVersion !== SCREEN_COMPONENT_API_VERSION) {
+  if (
+    apiVersion !== SCREEN_COMPONENT_API_VERSION &&
+    apiVersion !== SCREEN_COMPONENT_API_VERSION_V2
+  ) {
     diagnostics.push(
       createValidationDiagnostic(
         'UNSUPPORTED_COMPONENT_API_VERSION',
         ['apiVersion'],
-        `apiVersion 必须为 ${SCREEN_COMPONENT_API_VERSION}，实际为 ${apiVersion}`,
+        `apiVersion 必须为 ${SCREEN_COMPONENT_API_VERSION} 或 ${SCREEN_COMPONENT_API_VERSION_V2}，实际为 ${apiVersion}`,
       ),
     );
     valid = false;

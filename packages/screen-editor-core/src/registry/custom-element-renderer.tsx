@@ -40,6 +40,11 @@ import {
   type ScreenComponentProps,
   type ScreenComponentValidationDiagnostic,
 } from '@nebula/screen-component-sdk';
+import type {
+  ScreenComponentDataState,
+  ScreenComponentElementModelV2,
+  ScreenDynamicComponentElement,
+} from '@nebula/screen-component-sdk/dynamic';
 import { useComponentEvent } from '../blueprint/runtime/component-event-context.js';
 import type { RendererComponentProps } from './renderer';
 
@@ -93,21 +98,39 @@ function omitUndefinedObjectProperties(value: unknown): ScreenComponentJsonValue
  *
  * - props / style 经 sanitizeToJson 清洗为合法 ScreenComponentJsonValue
  * - 整体 model 通过 structuredClone 形成独立快照，组件修改不影响编辑器 Store
+ * - 提供 dataCapability 时构造 model v2（组件 API v2），否则构造 model v1
  *
  * @throws 当 props 或 style 含函数/symbol/bigint 等非法 JSON 值时抛错
  */
 function buildDetachedModel(
   componentId: string,
-  mode: 'design' | 'preview',
+  mode: 'design' | 'preview' | 'viewer',
   interactive: boolean,
   props: Record<string, unknown>,
   style: ComponentStyle,
   size: { width: number; height: number },
-): ScreenComponentElementModel {
+  dataCapability?: 'none' | 'static' | 'host-metric',
+  dataState?: ScreenComponentDataState,
+): ScreenComponentElementModel | ScreenComponentElementModelV2 {
+  if (dataCapability !== undefined) {
+    const modelV2: ScreenComponentElementModelV2 = {
+      apiVersion: 2,
+      componentId,
+      mode,
+      interactive,
+      props: sanitizeToJson(props) as ScreenComponentProps,
+      style: sanitizeToJson(style) as Record<string, ScreenComponentJsonValue>,
+      size,
+      dataCapability,
+      dataState: dataState ?? { status: 'idle' },
+    };
+    return structuredClone(modelV2);
+  }
   const model: ScreenComponentElementModel = {
     apiVersion: 1,
     componentId,
-    mode,
+    // v1 model 仅支持 design/preview；viewer 模式仅在提供 dataCapability（v2）时使用
+    mode: mode === 'viewer' ? 'preview' : mode,
     interactive,
     props: sanitizeToJson(props) as ScreenComponentProps,
     style: sanitizeToJson(style) as Record<string, ScreenComponentJsonValue>,
@@ -129,8 +152,8 @@ export interface CustomElementRendererProps {
   readonly tagName: string;
   /** 组件实例 ID（写入 model.componentId；事件回调中以该可信值回传，不信任 event.detail） */
   readonly componentId: string;
-  /** 运行模式（design：编辑器画布；preview：真实预览） */
-  readonly mode: 'design' | 'preview';
+  /** 运行模式（design：编辑器画布；preview：真实预览；viewer：独立查看器） */
+  readonly mode: 'design' | 'preview' | 'viewer';
   /** 是否允许派发业务事件（design=false） */
   readonly interactive: boolean;
   /** 组件专属配置（写入 model.props） */
@@ -150,6 +173,13 @@ export interface CustomElementRendererProps {
    * 同一 tagName 多次渲染使用同一 events 引用（避免 effect 频繁重绑定）。
    */
   readonly events?: readonly ScreenComponentEventDefinition[];
+  /**
+   * 组件数据能力（组件 API v2）。提供时写入 model v2（含 dataState）；
+   * 缺省按 model v1 赋值（编辑器路径保持不变）。
+   */
+  readonly dataCapability?: 'none' | 'static' | 'host-metric';
+  /** 组件运行数据状态（screen-dynamic-sdk viewer 回写，随 model v2 赋值） */
+  readonly dataState?: ScreenComponentDataState;
 }
 
 function resolveHostStyle(tagName: string, style: ComponentStyle): CSSProperties {
@@ -206,9 +236,11 @@ export function CustomElementRenderer({
   style,
   size,
   events,
+  dataCapability,
+  dataState,
 }: CustomElementRendererProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
-  const elementRef = useRef<ScreenComponentElement | null>(null);
+  const elementRef = useRef<ScreenComponentElement | ScreenDynamicComponentElement | null>(null);
   const prevTagNameRef = useRef<string | null>(null);
   // Phase 4 Task 4.1：预览态由上层 BlueprintEventProvider 注入回调；编辑态返回 null
   const onComponentEvent = useComponentEvent();
@@ -245,12 +277,18 @@ export function CustomElementRenderer({
       return;
     }
 
-    const model = buildDetachedModel(componentId, mode, interactive, props, style, {
-      width: size.width,
-      height: size.height,
-    });
+    const model = buildDetachedModel(
+      componentId,
+      mode,
+      interactive,
+      props,
+      style,
+      { width: size.width, height: size.height },
+      dataCapability,
+      dataState,
+    );
     el.model = model;
-  }, [tagName, componentId, mode, interactive, props, style, size]);
+  }, [tagName, componentId, mode, interactive, props, style, size, dataCapability, dataState]);
 
   // Phase 4 Task 4.1：nebula-component-event 监听与校验（Spec §9.2）
   //
@@ -347,6 +385,8 @@ export function createHostElementRenderer(
     mode = 'design',
     interactive = false,
     size,
+    dataCapability,
+    dataState,
   }: RendererComponentProps): React.JSX.Element {
     return (
       <CustomElementRenderer
@@ -358,6 +398,8 @@ export function createHostElementRenderer(
         style={style}
         size={size ?? { width: 0, height: 0 }}
         events={events}
+        dataCapability={dataCapability}
+        dataState={dataState}
       />
     );
   }

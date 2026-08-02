@@ -1,0 +1,33 @@
+{
+  "name": "@nebula/dynamic-sdk-vue-consumer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vue-tsc --noEmit && vite build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "dev": "vite --host 127.0.0.1",
+    "e2e": "playwright test --config=e2e/playwright.config.ts --project=chromium",
+    "e2e:install": "playwright install chromium",
+    "lint": "eslint .",
+    "typecheck": "vue-tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json"
+  },
+  "dependencies": {
+    "@nebula/screen-dynamic-sdk": "workspace:*",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@nebula/eslint-config": "workspace:*",
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "eslint": "^9.18.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.0",
+    "vue-tsc": "^3.0.0"
+  }
+}
