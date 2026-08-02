@@ -13,7 +13,7 @@ import {
   type EventBlueprintV2,
 } from '@nebula/shared';
 import { z } from 'zod';
-import { validateValueAgainstSchema } from '@nebula/screen-component-sdk';
+import { checkJsonValue, validateValueAgainstSchema } from '@nebula/screen-component-sdk';
 import type { ScreenComponentValidationDiagnostic } from '@nebula/screen-component-sdk';
 import {
   getScreenSdkSourceHandles,
@@ -943,6 +943,23 @@ function addUniqueV2Diagnostic(
   }
 }
 
+function appendJsonBoundaryDiagnostics(
+  value: unknown,
+  path: ReadonlyArray<string | number>,
+  code: ScreenSdkDiagnosticCode,
+  diagnostics: ScreenSdkDiagnosticV2[],
+): void {
+  const validationDiagnostics: ScreenComponentValidationDiagnostic[] = [];
+  if (checkJsonValue(value, path, validationDiagnostics)) return;
+
+  for (const diagnostic of validationDiagnostics) {
+    addUniqueV2Diagnostic(
+      diagnostics,
+      createV2Diagnostic(code, diagnostic.path, diagnostic.message),
+    );
+  }
+}
+
 /**
  * 获取 V2 蓝图组件节点的允许 source handle 集合（Spec §12.2: registry-derived allowlist）。
  *
@@ -1094,9 +1111,10 @@ function validateV2Blueprint(
  * 解析 ScreenDocumentV2（Spec §12.2 两阶段校验 + Requirement 8 + Requirement 14）。
  *
  * 两阶段校验：
- * 1. **Wire 校验**：`ScreenDocumentV2WireSchema` 校验文档容器、组件公共字段和 JSON 边界。
+ * 1. **Wire 校验**：`ScreenDocumentV2WireSchema` 校验文档容器和组件公共字段。
  *    拒绝 tagName/moduleUrl/script（Requirement 12）。
  * 2. **Registry-aware 校验**（本函数核心）：
+ *    - 对 props/staticData/global variable value 执行 JSON boundary 校验
  *    - 按 `component.type` 查询 registry → 缺失返回 `MISSING_COMPONENT_DEFINITION`
  *    - 用 `manifest.propsSchema` 校验 props → 不合法返回 `INVALID_COMPONENT_PROPS`
  *    - 外部组件（source='host'）出现 dataSource/logic/interaction 返回
@@ -1128,6 +1146,17 @@ export function parseScreenDocumentV2(
   const wire = wireResult.data;
   const diagnostics: ScreenSdkDiagnosticV2[] = [];
 
+  for (const [index, variable] of wire.globalVariables.entries()) {
+    if (Object.hasOwn(variable, 'value')) {
+      appendJsonBoundaryDiagnostics(
+        variable.value,
+        ['globalVariables', index, 'value'],
+        ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
+        diagnostics,
+      );
+    }
+  }
+
   // 构建 componentId → registration 映射，供蓝图 source handle 校验使用
   const registrationByComponentId = new Map<string, ScreenComponentRegistration | undefined>();
   const componentIds = new Set<string>();
@@ -1135,6 +1164,20 @@ export function parseScreenDocumentV2(
   // Phase 2: Registry-aware 组件校验（Spec §12.2 第 2 阶段 + Requirement 8 + 14）
   for (const [index, component] of wire.components.entries()) {
     componentIds.add(component.id);
+    appendJsonBoundaryDiagnostics(
+      component.props,
+      ['components', index, 'props'],
+      ScreenSdkDiagnosticCode.INVALID_COMPONENT_PROPS,
+      diagnostics,
+    );
+    if (component.dataSource !== undefined && Object.hasOwn(component.dataSource, 'staticData')) {
+      appendJsonBoundaryDiagnostics(
+        component.dataSource.staticData,
+        ['components', index, 'dataSource', 'staticData'],
+        ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
+        diagnostics,
+      );
+    }
     const registration = registry.get(component.type);
     registrationByComponentId.set(component.id, registration);
 
@@ -1150,7 +1193,7 @@ export function parseScreenDocumentV2(
       continue;
     }
 
-    // 校验 props 与 manifest.propsSchema（Requirement 8）
+    // 先统一校验 wire props 的 JSON 边界，再校验 manifest.propsSchema。
     const propsDiagnostics: ScreenComponentValidationDiagnostic[] = [];
     validateValueAgainstSchema(
       component.props,

@@ -29,6 +29,7 @@ import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import type { ComponentStyle } from '@nebula/shared';
 import {
+  checkJsonValue,
   COMPONENT_EVENT_TYPE,
   validateComponentEvent,
   type ScreenComponentElement,
@@ -37,6 +38,7 @@ import {
   type ScreenComponentEventDefinition,
   type ScreenComponentJsonValue,
   type ScreenComponentProps,
+  type ScreenComponentValidationDiagnostic,
 } from '@nebula/screen-component-sdk';
 import { useComponentEvent } from '../blueprint/runtime/component-event-context.js';
 import type { RendererComponentProps } from './renderer';
@@ -53,30 +55,37 @@ import type { RendererComponentProps } from './renderer';
  * 不允许 undefined）。
  */
 function sanitizeToJson(value: unknown): ScreenComponentJsonValue {
+  const diagnostics: ScreenComponentValidationDiagnostic[] = [];
+  if (
+    !checkJsonValue(value, [], diagnostics, new WeakSet(), { allowUndefinedObjectProperties: true })
+  ) {
+    const diagnostic = diagnostics[0];
+    throw new Error(
+      `[custom-element-renderer] ScreenComponentJsonValue 边界校验失败: ${diagnostic?.message ?? '值不符合 JSON 边界（Spec §7.1）'}`,
+    );
+  }
+
+  return omitUndefinedObjectProperties(value);
+}
+
+function omitUndefinedObjectProperties(value: unknown): ScreenComponentJsonValue {
   if (value === null) return null;
-  if (value === undefined) return null;
   const t = typeof value;
   if (t === 'string' || t === 'number' || t === 'boolean') {
     return value as ScreenComponentJsonValue;
   }
-  if (t === 'function' || t === 'symbol' || t === 'bigint') {
-    throw new Error(
-      `[custom-element-renderer] 值类型 ${t} 不符合 ScreenComponentJsonValue 边界（Spec §7.1）`,
-    );
-  }
   if (Array.isArray(value)) {
-    return value.map(sanitizeToJson);
+    return value.map(omitUndefinedObjectProperties);
   }
   if (t === 'object') {
     const result: Record<string, ScreenComponentJsonValue> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
       if (val === undefined) continue;
-      result[key] = sanitizeToJson(val);
+      result[key] = omitUndefinedObjectProperties(val);
     }
     return result;
   }
-  // 兜底：未知类型转 null，避免污染 model
-  return null;
+  throw new Error('[custom-element-renderer] 值不符合 ScreenComponentJsonValue 边界');
 }
 
 /**

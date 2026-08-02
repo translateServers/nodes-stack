@@ -226,6 +226,23 @@ describe('parseScreenDocumentV2 — registry-aware component validation (Require
       expect(result.diagnostics.some((d) => d.code === 'INVALID_COMPONENT_PROPS')).toBe(true);
     }
   });
+
+  it('rejects non-finite props before schema validation', () => {
+    const registry = buildTestRegistry([createTextRegistration()]);
+    const doc = createV2Document([createTextComponent({ props: { content: Number.NaN } })]);
+
+    const result = parseScreenDocumentV2(doc, registry);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: 'INVALID_COMPONENT_PROPS',
+          path: ['components', 0, 'props', 'content'],
+        }),
+      );
+    }
+  });
 });
 
 describe('parseScreenDocumentV2 — external component capability (Requirement 14)', () => {
@@ -558,5 +575,36 @@ describe('parseScreenDocumentV2 — fail-closed behavior', () => {
     parseScreenDocumentV2(doc, registry);
 
     expect(doc).toEqual(original);
+  });
+
+  it('rejects non-JSON static data and global variable values', () => {
+    class InvalidValue {
+      public readonly value = 1;
+    }
+    const registry = buildTestRegistry([createTextRegistration()]);
+    const doc = createV2Document([
+      createTextComponent({ dataSource: { type: 'static', staticData: Number.POSITIVE_INFINITY } }),
+    ]);
+    doc.globalVariables = [
+      { id: 'global-1', name: 'Invalid', type: 'static', value: new InvalidValue() },
+    ];
+
+    const result = parseScreenDocumentV2(doc, registry);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'INVALID_DOCUMENT',
+            path: ['components', 0, 'dataSource', 'staticData'],
+          }),
+          expect.objectContaining({
+            code: 'INVALID_DOCUMENT',
+            path: ['globalVariables', 0, 'value'],
+          }),
+        ]),
+      );
+    }
   });
 });

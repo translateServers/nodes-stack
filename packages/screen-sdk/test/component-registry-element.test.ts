@@ -10,7 +10,7 @@
  * - V2 事件 map：ready/change/error 事件签名
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ScreenHostAdapter,
   ScreenHostAdapterV2,
@@ -19,6 +19,7 @@ import type {
 import { defineNebulaScreenEditor } from '../src/element/define.js';
 import { NEBULA_SCREEN_EDITOR_TAG_NAME } from '../src/element/define.js';
 import { NebulaScreenEditorElement } from '../src/element/nebula-screen-editor-element.js';
+import { createScreenComponentRegistry } from '../src/components/index.js';
 import type {
   NebulaScreenEditorEventMapV2,
   ScreenComponentRegistry,
@@ -77,29 +78,43 @@ function createV2Adapter(overrides: Partial<ScreenHostAdapterV2> = {}): ScreenHo
   };
 }
 
-/** 创建仅含 built-in 组件的 registry stub（无 host 组件） */
+let builtinRegistry: ScreenComponentRegistry;
+let secondaryBuiltinRegistry: ScreenComponentRegistry;
+let hostRegistry: ScreenComponentRegistry;
+
+class TestHostElement extends HTMLElement {}
+
+beforeAll(async () => {
+  builtinRegistry = await createScreenComponentRegistry();
+  secondaryBuiltinRegistry = await createScreenComponentRegistry();
+  hostRegistry = await createScreenComponentRegistry({
+    components: [
+      {
+        manifest: {
+          apiVersion: 'nebula.screen-component/v1',
+          type: 'acme.kpi/v1',
+          implementationVersion: '1.0.0',
+          tagName: 'acme-kpi-v1',
+          name: 'KPI',
+          category: 'chart',
+          defaultSize: { width: 320, height: 180 },
+          defaultProps: {},
+          propsSchema: { type: 'object', additionalProperties: false },
+        },
+        define: () => TestHostElement,
+      },
+    ],
+  });
+});
+
+/** 返回 public factory 创建的 built-in facade。 */
 function createBuiltinOnlyRegistry(): ScreenComponentRegistry {
-  return {
-    size: 6,
-    get: () => undefined,
-    has: () => false,
-    list: () => [],
-  };
+  return builtinRegistry;
 }
 
-/** 创建含 host 组件的 registry stub */
+/** 返回 public factory 创建的 host facade。 */
 function createHostRegistry(): ScreenComponentRegistry {
-  const hostReg = {
-    source: 'host' as const,
-    manifest: { type: 'acme.kpi', apiVersion: 1, tagName: 'acme-kpi' } as never,
-    elementConstructor: class extends HTMLElement {} as CustomElementConstructor,
-  };
-  return {
-    size: 1,
-    get: (type: string) => (type === 'acme.kpi' ? hostReg : undefined),
-    has: (type: string) => type === 'acme.kpi',
-    list: () => [hostReg],
-  };
+  return hostRegistry;
 }
 
 async function flush(): Promise<void> {
@@ -295,6 +310,34 @@ describe('NebulaScreenEditorElement componentRegistry (Task 6.1)', () => {
       const event = errorListener.mock
         .calls[0]?.[0] as NebulaScreenEditorEventMapV2['nebula-error'];
       expect(event.detail.operation).toBe('load');
+      expect(event.detail.error.code).toBe('VALIDATION');
+      expect(adapter.loadProject).not.toHaveBeenCalled();
+    });
+
+    it('rejects a structurally forged registry before calling a V2 adapter', async () => {
+      const adapter = createV2Adapter();
+      const forgedRegistry: ScreenComponentRegistry = {
+        size: 1,
+        get: () => undefined,
+        has: () => false,
+        list: () => [
+          {
+            source: 'host',
+            manifest: { type: 'acme.forged/v1' } as never,
+            elementConstructor: TestHostElement,
+          },
+        ],
+      };
+      const element = createConnectedElement();
+      const errorListener = vi.fn();
+      element.addEventListener('nebula-error', errorListener);
+      element.componentRegistry = forgedRegistry;
+      element.adapter = adapter;
+      element.projectId = 'screen-forged-registry';
+
+      await vi.waitFor(() => expect(errorListener).toHaveBeenCalled());
+      const event = errorListener.mock
+        .calls[0]?.[0] as NebulaScreenEditorEventMapV2['nebula-error'];
       expect(event.detail.error.code).toBe('VALIDATION');
       expect(adapter.loadProject).not.toHaveBeenCalled();
     });
@@ -503,12 +546,7 @@ describe('NebulaScreenEditorElement componentRegistry (Task 6.1)', () => {
         await flush();
 
         const element2 = createConnectedElement();
-        const smallRegistry: ScreenComponentRegistry = {
-          size: 1,
-          get: () => undefined,
-          has: () => false,
-          list: () => [],
-        };
+        const smallRegistry = secondaryBuiltinRegistry;
         element2.componentRegistry = smallRegistry;
         element2.adapter = adapter;
         element2.projectId = 'screen-2';
@@ -516,7 +554,9 @@ describe('NebulaScreenEditorElement componentRegistry (Task 6.1)', () => {
         await waitForReady(element2);
 
         await vi.waitFor(() => {
-          expect(queryRuntimeRoot(element2)?.dataset['componentRegistrySize']).toBe('1');
+          expect(queryRuntimeRoot(element2)?.dataset['componentRegistrySize']).toBe(
+            String(smallRegistry.size),
+          );
         });
       });
     });

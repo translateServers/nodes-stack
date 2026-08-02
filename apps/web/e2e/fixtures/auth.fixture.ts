@@ -1,40 +1,26 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { test as base, type Page } from '@playwright/test';
-import { type AuthTokens, refreshToken, isTokenExpiringSoon } from '../helpers/api-client';
+import { register, type AuthTokens } from '../helpers/api-client';
+import {
+  clearWorkerAuthTokens,
+  setWorkerAuthTokens,
+  type E2eAuthRole,
+  type WorkerAuthTokens,
+} from '../helpers/auth-state';
 import { UsersPage } from '../pages/users.page';
 import { RolesPage } from '../pages/roles.page';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const TEST_DATA_DIR = path.join(__dirname, '..', 'test-data');
-
-function loadTokens(role: 'admin' | 'viewer'): AuthTokens {
-  const filePath = path.join(TEST_DATA_DIR, `${role}-auth.json`);
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw) as AuthTokens;
+async function registerWorkerUser(role: E2eAuthRole, parallelIndex: number): Promise<AuthTokens> {
+  const suffix = `${parallelIndex}-${randomUUID().slice(0, 8)}`;
+  return register({
+    email: `e2e-${role}-${suffix}@test.local`,
+    username: `e2e_${role}_${suffix}`,
+    password: 'Test@12345',
+    name: `E2E ${role}`,
+  });
 }
 
-function saveTokens(role: 'admin' | 'viewer', tokens: AuthTokens): void {
-  const filePath = path.join(TEST_DATA_DIR, `${role}-auth.json`);
-  fs.writeFileSync(filePath, JSON.stringify(tokens, null, 2), 'utf-8');
-}
-
-async function ensureValidTokens(role: 'admin' | 'viewer'): Promise<AuthTokens> {
-  const tokens = loadTokens(role);
-  if (isTokenExpiringSoon(tokens.accessToken, 60)) {
-    const refreshed = await refreshToken(tokens.refreshToken);
-    saveTokens(role, refreshed);
-    return refreshed;
-  }
-  return tokens;
-}
-
-async function createAuthenticatedPage(page: Page, role: 'admin' | 'viewer'): Promise<Page> {
-  const tokens = await ensureValidTokens(role);
-
+async function createAuthenticatedPage(page: Page, tokens: AuthTokens): Promise<Page> {
   // 先导航到应用以建立 localStorage 的 origin 上下文
   await page.goto('/');
   // 注入 Zustand 持久化格式的认证状态到 localStorage
@@ -63,19 +49,39 @@ export interface AuthFixtures {
   rolesPage: RolesPage;
 }
 
-export const test = base.extend<AuthFixtures>({
-  adminPage: async ({ browser }, use) => {
+interface WorkerFixtures {
+  workerAuthTokens: WorkerAuthTokens;
+}
+
+export const test = base.extend<AuthFixtures, WorkerFixtures>({
+  workerAuthTokens: [
+    async (_fixtures, use, workerInfo) => {
+      const tokens: WorkerAuthTokens = {
+        admin: await registerWorkerUser('admin', workerInfo.parallelIndex),
+        viewer: await registerWorkerUser('viewer', workerInfo.parallelIndex),
+      };
+      setWorkerAuthTokens(tokens);
+      try {
+        await use(tokens);
+      } finally {
+        clearWorkerAuthTokens();
+      }
+    },
+    { scope: 'worker', auto: true },
+  ],
+
+  adminPage: async ({ browser, workerAuthTokens }, use) => {
     const context = await browser.newContext();
     const page = await context.newPage();
-    await createAuthenticatedPage(page, 'admin');
+    await createAuthenticatedPage(page, workerAuthTokens.admin);
     await use(page);
     await context.close();
   },
 
-  viewerPage: async ({ browser }, use) => {
+  viewerPage: async ({ browser, workerAuthTokens }, use) => {
     const context = await browser.newContext();
     const page = await context.newPage();
-    await createAuthenticatedPage(page, 'viewer');
+    await createAuthenticatedPage(page, workerAuthTokens.viewer);
     await use(page);
     await context.close();
   },

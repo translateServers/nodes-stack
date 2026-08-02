@@ -1,15 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
 import { type AuthTokens } from './api-client';
+import { getWorkerAuthTokens, type E2eAuthRole } from './auth-state';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000/api/v1';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const TEST_DATA_DIR = path.join(__dirname, '..', 'test-data');
 
 interface ApiResponse<T> {
   code: number;
@@ -17,10 +10,8 @@ interface ApiResponse<T> {
   data: T;
 }
 
-function loadTokens(role: 'admin' | 'viewer'): AuthTokens {
-  const filePath = path.join(TEST_DATA_DIR, `${role}-auth.json`);
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw) as AuthTokens;
+function loadTokens(role: E2eAuthRole): AuthTokens {
+  return getWorkerAuthTokens(role);
 }
 
 async function request<T>(

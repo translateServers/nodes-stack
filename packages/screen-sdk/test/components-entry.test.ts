@@ -97,6 +97,17 @@ describe('@nebula/screen-sdk/components entry point', () => {
       expect(internalRegistry?.get('bar-chart')).toHaveProperty('internalRenderer');
     });
 
+    it('does not resolve a structurally forged facade into a core registry', () => {
+      const forgedRegistry = {
+        size: 0,
+        get: () => undefined,
+        has: () => false,
+        list: () => [],
+      } as ScreenComponentRegistry;
+
+      expect(resolveScreenComponentRegistryForRuntime(forgedRegistry)).toBeUndefined();
+    });
+
     it('get() returns undefined for unknown type', async () => {
       const registry = await createScreenComponentRegistry();
       expect(registry.get('nonexistent')).toBeUndefined();

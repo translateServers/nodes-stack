@@ -348,7 +348,7 @@ export function defineScreenComponent(
 ): ScreenComponentPluginV1;
 ```
 
-`defineScreenComponent()` 在组件包初始化时执行纯契约校验，不注册编辑器、不扫描 DOM、不发请求。`plugin.define()` 必须幂等，并返回 manifest tagName 对应的构造器：首次调用负责定义元素，后续调用返回同一个构造器。
+`defineScreenComponent()` 在组件包初始化时执行纯契约校验，不注册编辑器、不扫描 DOM、不发请求。`plugin.define()` 必须幂等，并返回 manifest tagName 对应的构造器；它不得自行调用 `customElements.define()`。registry factory 会在全部插件通过预检和构造器解析后，串行提交全局 Custom Element 定义。
 
 ## 8. Component Registry Contract
 
@@ -434,6 +434,8 @@ export function isScreenComponentRegistryError(
 - factory 只以 `ScreenComponentRegistryError` reject，宿主可按稳定 code 处理；diagnostics 不包含 manifest 原始对象或构造器源码。
 - SDK 同时导出 `isScreenComponentRegistryError()`，调用方不需要不安全类型断言处理失败。
 - 外部代码修改传入 plugin/manifest 不得影响已创建快照。
+- public `ScreenComponentRegistry` 是结构化 TypeScript 接口，但运行时只接受 factory 关联的 facade；手写对象在 Element load 前以 `VALIDATION` 拒绝。
+- factory 依次执行 manifest/duplicate 预检、全部 constructor resolution、串行 Custom Element commit；前两个阶段失败不得留下 SDK 产生的新 tagName 定义。
 
 ### 8.3 Duplicate Rules
 
@@ -576,8 +578,8 @@ export type ScreenSdkDocument = ScreenDocumentV1 | ScreenDocumentV2;
 
 V2 使用两阶段校验：
 
-1. `ScreenDocumentV2WireSchema` 校验文档容器、组件公共字段和 JSON 边界。
-2. `parseScreenDocumentV2(input, registry)` 按 `component.type` 查询 manifest，并用对应 propsSchema 和事件能力校验。
+1. `ScreenDocumentV2WireSchema` 校验文档容器和组件公共字段。
+2. `parseScreenDocumentV2(input, registry)` 先校验 component props、staticData 和 global variable value 的 JSON 边界，再按 `component.type` 查询 manifest，并用对应 propsSchema 和事件能力校验。
 
 组件特定 schema 由注册表在运行时提供，因此 V2 的静态 JSON Schema 只能描述 wire shape；组件包分别发布 manifest/props schema。
 
@@ -592,7 +594,7 @@ V2 只扩展组件 type/props/events，不扩大 SDK 的数据或蓝图执行权
 - 注入含外部组件的 registry 时必须同时注入 `ScreenHostAdapterV2`；V1 输入在该显式模式下无损规范化为 V2，首次成功保存输出 V2。
 - V1 输入在 V2 模式下设置 `documentMigrationPending=true`，不创建 undo 历史，但按 dirty/publish gate 处理；保存 V2 成功后清除。迁移完成前禁止直接发布。
 - V2 文档只保存稳定 type，不保存 tagName、脚本 URL 或 Custom Element constructor。
-- 外部组件 props 必须为 JSON object，并通过当前 registry 的 schema。
+- 外部组件 props 必须为 JSON object，并通过当前 registry 的 schema；`NaN`/`Infinity`、class instance、DOM Node、Promise、循环引用和 prototype pollution key 必须拒绝。普通共享引用不是循环引用。
 - 旧 SDK 遇到 schemaVersion=2 时继续返回 `UNSUPPORTED_SCHEMA_VERSION`，不得误解析。
 - V1 Transfer、Envelope、Snapshot 和 Adapter 类型保持不变；V2 使用独立版本化契约。
 

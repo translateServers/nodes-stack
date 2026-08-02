@@ -63,6 +63,8 @@ export const metricCardPlugin: ScreenComponentPluginV1 = {
 
 组件通过 `model` property 接收 detached snapshot。不要读取编辑器 Store、Adapter、Router、QueryClient、Token 或 Cookie。
 
+`define()` 只返回稳定的构造器引用，不能自行调用 `customElements.define()`。registry factory 会在所有 manifest、重复项和构造器都通过校验后统一注册 Custom Element；组件包需要让重复调用 `define()` 返回同一个构造器。
+
 ## 2. 派发标准事件
 
 组件只能派发 manifest 声明过的 `nebula-component-event`。SDK 使用 renderer 上下文里的可信 component id，不信任事件 detail 中的 component id。
@@ -114,6 +116,8 @@ document.body.append(editor);
 
 React 和 Vue 宿主必须通过 ref 设置 property，示例见 [0.2 迁移指南](./migration-0.2.md)。
 
+`componentRegistry` 必须是 `createScreenComponentRegistry()` 返回的 facade。Element 不接受手写的 `{ size, get, has, list }` 对象；项目加载前会以 `VALIDATION` 拒绝，避免绕过 manifest、constructor 和不可变快照校验。
+
 ## 4. 安全边界
 
 - 文档不能加载脚本、模块 URL、构造函数或任意 HTML。
@@ -122,6 +126,7 @@ React 和 Vue 宿主必须通过 ref 设置 property，示例见 [0.2 迁移指�
 - Shadow DOM 只隔离样式，不是安全沙箱。
 - 外部组件代码是受信任代码，应由宿主显式导入并注册。
 - V2 缺少组件定义、props 不合法或能力不支持时 fail-closed，不覆盖当前项目。
+- props、静态数据和全局变量只接受 JSON 值：不接受 `undefined`、`NaN`、`Infinity`、function、class instance、DOM Node、Promise、循环引用或 prototype pollution key。
 
 ## 5. 验证命令
 

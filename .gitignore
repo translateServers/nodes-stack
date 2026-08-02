@@ -42,7 +42,6 @@ lerna-debug.log*
 *.sw?
 
 # Playwright
-apps/web/e2e/test-data/*.json
 apps/web/e2e/playwright-report/
 apps/web/e2e/test-results/
 playwright-report/

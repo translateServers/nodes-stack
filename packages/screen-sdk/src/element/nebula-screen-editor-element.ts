@@ -1,5 +1,6 @@
 import {
   dispatchScreenEditorEvent,
+  isPublicScreenComponentRegistryFacade,
   normalizeScreenAdapterError,
   resolveScreenComponentRegistryForRuntime,
   ScreenAdapterErrorCode,
@@ -266,8 +267,14 @@ export class NebulaScreenEditorElement extends HTMLElement {
 
   #configuration(): ScreenEditorRuntimeConfiguration {
     const adapter = this.#adapter;
+    const hasRecognizedRegistry =
+      this.#componentRegistry === undefined ||
+      isPublicScreenComponentRegistryFacade(this.#componentRegistry);
     const isRejectedCombo =
-      adapter !== undefined && this.#hasHostRegistry() && !this.#isV2Adapter(adapter);
+      adapter !== undefined &&
+      hasRecognizedRegistry &&
+      this.#hasHostRegistry() &&
+      !this.#isV2Adapter(adapter);
     const v2Adapter =
       adapter !== undefined && this.#isV2Adapter(adapter) && this.#componentRegistry !== undefined
         ? adapter
@@ -280,9 +287,12 @@ export class NebulaScreenEditorElement extends HTMLElement {
       adapter: v1Adapter,
       ...(v2Adapter === undefined ? {} : { adapterV2: v2Adapter }),
       // Task 6.2: registry is part of runtime configuration so it is ready
-      // before React mount. Public facades resolve to the matching core snapshot;
-      // direct internal registries remain supported for workspace hosts.
-      componentRegistry: resolveScreenComponentRegistryForRuntime(this.#componentRegistry),
+      // before React mount. Only factory-created public facades resolve to the
+      // matching core snapshot; unknown structural objects are ignored here and
+      // rejected before project load by #updateRuntime().
+      componentRegistry: hasRecognizedRegistry
+        ? resolveScreenComponentRegistryForRuntime(this.#componentRegistry)
+        : undefined,
       documentMode: v2Adapter === undefined ? 'v1' : 'v2',
       options: {
         debug: this.#options?.debug ?? false,
@@ -379,7 +389,15 @@ export class NebulaScreenEditorElement extends HTMLElement {
       this.#registryFrozen = true;
       // Requirement 13: external registry + V1 adapter rejection before load.
       // V2 adapter is identified by `documentVersion: 2` marker (Spec §12.3).
-      if (this.#hasHostRegistry() && !this.#isV2Adapter(adapter)) {
+      if (
+        this.#componentRegistry !== undefined &&
+        !isPublicScreenComponentRegistryFacade(this.#componentRegistry)
+      ) {
+        this.#rejectUnrecognizedRegistry();
+        return;
+      }
+      const hasHostRegistry = this.#hasHostRegistry();
+      if (hasHostRegistry && !this.#isV2Adapter(adapter)) {
         this.#rejectAdapterRegistryCombo();
         return;
       }
@@ -442,6 +460,20 @@ export class NebulaScreenEditorElement extends HTMLElement {
 
   /** V2 adapters require an explicit registry facade to select the V2 runtime. */
   #rejectV2AdapterWithoutRegistry(): void {
+    const error = new ElementCommandError(ScreenAdapterErrorCode.VALIDATION);
+    const publicError = toScreenPublicError(error);
+    this.#mountError = error;
+    this.#runtimeErrorMessage.textContent = publicError.message;
+    this.#runtimeError.hidden = false;
+    dispatchScreenEditorEvent(this, 'nebula-error', {
+      ...(this.projectId === '' ? {} : { projectId: this.projectId }),
+      operation: 'load',
+      error: publicError,
+    });
+  }
+
+  /** Public SDK registry must come from createScreenComponentRegistry(). */
+  #rejectUnrecognizedRegistry(): void {
     const error = new ElementCommandError(ScreenAdapterErrorCode.VALIDATION);
     const publicError = toScreenPublicError(error);
     this.#mountError = error;

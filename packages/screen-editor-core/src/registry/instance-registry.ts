@@ -132,6 +132,7 @@ export interface ScreenComponentInstanceRegistry {
 }
 
 const publicRegistryFacades = new WeakMap<object, ScreenComponentInstanceRegistry>();
+const internalRegistrySnapshots = new WeakSet<object>();
 
 /**
  * 将公开 registry facade 关联到 core 所需的内部 registration snapshot。
@@ -148,16 +149,29 @@ export function linkScreenComponentRegistryFacade(
 }
 
 /**
+ * 判断 registry 是否由 SDK public factory 创建。
+ *
+ * 这不是安全边界；它用于保护 factory 已建立的 manifest、constructor 和 snapshot
+ * 不变量，避免公开 Custom Element 接受结构化伪造对象。
+ */
+export function isPublicScreenComponentRegistryFacade(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && publicRegistryFacades.has(value);
+}
+
+/**
  * 解析 SDK public facade 为 core registry。
  *
- * core 内部调用者仍可直接传入内部 registry；手写的结构化 registry 也保持当前
- * fallback 行为，方便测试和受控的内部宿主使用。
+ * 只接受已关联的 public facade 或 `buildInstanceRegistry()` 创建的内部快照；未知的
+ * 结构化对象不会进入 runtime。公开 Element 仍单独使用 facade 守卫给出稳定错误。
  */
 export function resolveScreenComponentRegistryForRuntime(
   registry: ScreenComponentInstanceRegistry | undefined,
 ): ScreenComponentInstanceRegistry | undefined {
   if (registry === undefined || typeof registry !== 'object' || registry === null) return registry;
-  return publicRegistryFacades.get(registry) ?? registry;
+  return (
+    publicRegistryFacades.get(registry) ??
+    (internalRegistrySnapshots.has(registry) ? registry : undefined)
+  );
 }
 
 /**
@@ -284,5 +298,7 @@ export function buildInstanceRegistry(
     map.set(snapshot.manifest.type, snapshot);
   }
 
-  return new InstanceRegistryImpl(map);
+  const registry = new InstanceRegistryImpl(map);
+  internalRegistrySnapshots.add(registry);
+  return registry;
 }

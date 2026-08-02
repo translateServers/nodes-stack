@@ -8,6 +8,12 @@
 | --- | --- | --- |
 | [screen-designer-drag-performance/](./screen-designer-drag-performance/README.md) | 生效中 | 大屏设计器拖拽卡顿优化：高频状态订阅隔离、外壳组件渲染解耦 |
 
+## 已归档
+
+| 文档 | 状态 | 说明 |
+| --- | --- | --- |
+| [screen-web-component-sdk-hardening/](./archive/screen-web-component-sdk-hardening/README.md) | 已归档 | Web Component SDK 架构加固：registry 原子性、JSON 边界、renderer 隔离、public facade 品牌 |
+
 ## 归属规则
 
 - 文档是"有时间线、有步骤的落地计划" → 放本目录

@@ -16,14 +16,16 @@ import {
  * @param value 待检查的值
  * @param path 当前路径（用于诊断）
  * @param diagnostics 诊断收集数组
- * @param seen 用于循环引用检测的 WeakSet
+ * @param ancestors 当前递归路径上的对象，用于循环引用检测
+ * @param options 可选的边界兼容行为
  * @returns true 表示值合法
  */
 export function checkJsonValue(
   value: unknown,
   path: ReadonlyArray<string | number>,
   diagnostics: ScreenComponentValidationDiagnostic[],
-  seen: WeakSet<object> = new WeakSet(),
+  ancestors: WeakSet<object> = new WeakSet(),
+  options?: { readonly allowUndefinedObjectProperties?: boolean },
 ): boolean {
   // null 是合法的 JSON 值
   if (value === null) return true;
@@ -87,55 +89,60 @@ export function checkJsonValue(
   }
 
   // 循环引用检测
-  if (seen.has(obj)) {
+  if (ancestors.has(obj)) {
     diagnostics.push(
       createValidationDiagnostic('INVALID_JSON_VALUE', path, 'JSON 边界值不允许循环引用'),
     );
     return false;
   }
-  seen.add(obj);
+  ancestors.add(obj);
 
   let valid = true;
-
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      if (!checkJsonValue(value[i], [...path, i], diagnostics, seen)) {
-        valid = false;
+  try {
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        if (!checkJsonValue(value[i], [...path, i], diagnostics, ancestors, options)) {
+          valid = false;
+        }
       }
-    }
-  } else {
-    // 检查是否为 plain object（原型为 Object.prototype 或 null）
-    const proto = Reflect.getPrototypeOf(obj);
-    if (proto !== null && proto !== Object.prototype) {
-      diagnostics.push(
-        createValidationDiagnostic(
-          'INVALID_JSON_VALUE',
-          path,
-          'JSON 边界值不允许 class instance（仅接受 plain object）',
-        ),
-      );
-      return false;
-    }
-
-    // 检查自身可枚举属性（避免 prototype pollution 键如 __proto__）
-    for (const key of Object.keys(value)) {
-      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+    } else {
+      // 检查是否为 plain object（原型为 Object.prototype 或 null）
+      const proto = Reflect.getPrototypeOf(obj);
+      if (proto !== null && proto !== Object.prototype) {
         diagnostics.push(
           createValidationDiagnostic(
             'INVALID_JSON_VALUE',
-            [...path, key],
-            `JSON 边界值不允许 prototype pollution 键: ${key}`,
+            path,
+            'JSON 边界值不允许 class instance（仅接受 plain object）',
           ),
         );
-        valid = false;
-        continue;
+        return false;
       }
-      if (
-        !checkJsonValue((value as Record<string, unknown>)[key], [...path, key], diagnostics, seen)
-      ) {
-        valid = false;
+
+      // 检查自身可枚举属性（避免 prototype pollution 键如 __proto__）
+      for (const key of Object.keys(value)) {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+          diagnostics.push(
+            createValidationDiagnostic(
+              'INVALID_JSON_VALUE',
+              [...path, key],
+              `JSON 边界值不允许 prototype pollution 键: ${key}`,
+            ),
+          );
+          valid = false;
+          continue;
+        }
+        const nestedValue = (value as Record<string, unknown>)[key];
+        if (nestedValue === undefined && options?.allowUndefinedObjectProperties === true) {
+          continue;
+        }
+        if (!checkJsonValue(nestedValue, [...path, key], diagnostics, ancestors, options)) {
+          valid = false;
+        }
       }
     }
+  } finally {
+    ancestors.delete(obj);
   }
 
   return valid;

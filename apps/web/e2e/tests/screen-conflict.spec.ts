@@ -1,20 +1,11 @@
 import { type Browser, type BrowserContext, type Page, type Response } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { test, expect } from '../fixtures/auth.fixture';
 import { type AuthTokens } from '../helpers/api-client';
+import { getWorkerAuthTokens } from '../helpers/auth-state';
 import { createScreenProject, deleteScreenProject } from '../helpers/screen-api.helper';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const TEST_DATA_DIR = path.join(__dirname, '..', 'test-data');
-
 function loadAdminTokens(): AuthTokens {
-  const filePath = path.join(TEST_DATA_DIR, 'admin-auth.json');
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw) as AuthTokens;
+  return getWorkerAuthTokens('admin');
 }
 
 interface ApiResponseData<T> {

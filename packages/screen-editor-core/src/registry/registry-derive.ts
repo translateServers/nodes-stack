@@ -32,7 +32,11 @@ import {
 } from './component-events-actions';
 import { createHostElementRenderer } from './custom-element-renderer';
 import { DEFAULT_ICON, getIconForType } from './icons';
-import type { LegacyRendererProps, ScreenComponentInstanceRegistry } from './instance-registry';
+import type {
+  LegacyRendererProps,
+  ScreenComponentInstanceRegistry,
+  ScreenComponentRegistration,
+} from './instance-registry';
 import { getRenderer } from './registry';
 import { DEFAULT_SCHEMA, getSchemaForComponentType } from '../property-schema/schemas';
 
@@ -42,15 +46,18 @@ import { DEFAULT_SCHEMA, getSchemaForComponentType } from '../property-schema/sc
  * 同一 tagName 多次调用 `getRendererFromRegistry` 应返回同一组件引用，
  * 避免 React 在 memo diff 时因引用变化触发不必要的重渲染。
  *
- * 缓存 key 为 tagName（每个 manifest.tagName 全局唯一，Spec §7.2 命名约束）。
- * 缓存 value 为 `createHostElementRenderer(tagName)` 返回的组件。
+ * 缓存 key 为 immutable registration snapshot，避免不同 registry 的同 tagName
+ * 组件复用错误的 manifest.events allowlist 闭包。
  *
  * 缓存生命周期：
  * - 模块级单例，与 `customElements` 全局注册对齐（Spec §8.4: customElements 是 Document 全局能力）
  * - 不随 registry 实例销毁而清理：tagName → constructor 一致性由 registry-factory 保证
  * - Phase 6 接入 SDK 公开 registry 时升级为 per-registry 缓存
  */
-const hostRendererCache = new Map<string, React.ComponentType<LegacyRendererProps>>();
+const hostRendererCache = new WeakMap<
+  ScreenComponentRegistration,
+  React.ComponentType<LegacyRendererProps>
+>();
 
 /**
  * 从实例注册表派生 renderer（Spec §13.2 Phase 1 + Phase 2 Task 2.2）。
@@ -83,13 +90,13 @@ export function getRendererFromRegistry(
     // Phase 4: 将 manifest.events 透传给 createHostElementRenderer 作为事件校验 allowlist。
     if (reg.elementConstructor !== undefined) {
       const tagName = reg.manifest.tagName;
-      let cached = hostRendererCache.get(tagName);
+      let cached = hostRendererCache.get(reg);
       if (cached === undefined) {
         cached = createHostElementRenderer(
           tagName,
           reg.manifest.events,
         ) as React.ComponentType<LegacyRendererProps>;
-        hostRendererCache.set(tagName, cached);
+        hostRendererCache.set(reg, cached);
       }
       return cached;
     }

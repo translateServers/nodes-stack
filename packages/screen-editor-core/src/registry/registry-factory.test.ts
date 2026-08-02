@@ -292,8 +292,9 @@ describe('createScreenComponentRegistry', () => {
         createScreenComponentRegistry({ components: [goodPlugin, badPlugin] }),
       ).rejects.toBeInstanceOf(ScreenComponentRegistryErrorImpl);
 
-      // goodPlugin 已 define + customElements.define，但 registry 未构建
-      // 重试时 goodPlugin 的 define 应幂等返回同一构造器
+      // 预检在任何 define/customElements 副作用前完成。
+      expect(customElements.get(goodPlugin.manifest.tagName)).toBeUndefined();
+      // 重试时 goodPlugin 正常进入 define/commit 阶段。
       const registry = await createScreenComponentRegistry({ components: [goodPlugin] });
       expect(registry.has(goodPlugin.manifest.type)).toBe(true);
     });
@@ -366,6 +367,7 @@ describe('createScreenComponentRegistry', () => {
       await expect(
         createScreenComponentRegistry({ components: [goodPlugin, badPlugin] }),
       ).rejects.toMatchObject({ code: 'COMPONENT_DEFINE_FAILED' });
+      expect(customElements.get(goodPlugin.manifest.tagName)).toBeUndefined();
     });
   });
 
@@ -463,6 +465,24 @@ describe('createScreenComponentRegistry', () => {
       }
     });
 
+    it('并发构造 registry 时串行复用同一个全局 Custom Element 定义', async () => {
+      const plugin = makeHostPlugin();
+
+      const [registryA, registryB] = await Promise.all([
+        createScreenComponentRegistry({ components: [plugin] }),
+        createScreenComponentRegistry({ components: [plugin] }),
+      ]);
+
+      const registrationA = registryA.get(plugin.manifest.type);
+      const registrationB = registryB.get(plugin.manifest.type);
+      expect(registrationA?.source).toBe('host');
+      expect(registrationB?.source).toBe('host');
+      if (registrationA?.source === 'host' && registrationB?.source === 'host') {
+        expect(registrationA.elementConstructor).toBe(registrationB.elementConstructor);
+      }
+      expect(customElements.get(plugin.manifest.tagName)).toBe(registrationA?.elementConstructor);
+    });
+
     it('不同 host plugin 使用相同 tagName 但不同构造器拒绝', async () => {
       // 先用 plugin A 定义某 tagName
       // 再用 plugin B 试图用同一 tagName 但不同构造器 → 拒绝
@@ -500,10 +520,8 @@ describe('createScreenComponentRegistry', () => {
       await expect(promise).rejects.toBeInstanceOf(ScreenComponentRegistryErrorImpl);
     });
 
-    it('失败时 customElements 副作用不撤销（Spec §8.4）但 registry 不构建', async () => {
-      // plugin A 会成功 define + customElements.define
-      // plugin B manifest 非法 → 整个 reject
-      // customElements 中 pluginA 的 tagName 已定义（无法撤销），但 registry 不存在
+    it('manifest 预检失败时不产生 customElements 副作用', async () => {
+      // plugin B manifest 非法 → plugin A 不会进入 define 或 customElements.define。
       const pluginA = makeHostPlugin({ name: 'A' });
       const pluginB = makeHostPlugin({
         name: 'B',
@@ -514,8 +532,7 @@ describe('createScreenComponentRegistry', () => {
         createScreenComponentRegistry({ components: [pluginA, pluginB] }),
       ).rejects.toMatchObject({ code: 'UNSUPPORTED_COMPONENT_API_VERSION' });
 
-      // customElements 全局副作用仍存在（Spec §8.4）
-      expect(customElements.get(pluginA.manifest.tagName)).toBeDefined();
+      expect(customElements.get(pluginA.manifest.tagName)).toBeUndefined();
     });
   });
 

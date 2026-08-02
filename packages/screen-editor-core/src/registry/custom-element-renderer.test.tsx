@@ -19,9 +19,12 @@ import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentStyle } from '@nebula/shared';
 import type {
+  ScreenComponentEventDefinition,
   ScreenComponentElement,
   ScreenComponentElementModelV1,
 } from '@nebula/screen-component-sdk';
+import { COMPONENT_EVENT_TYPE } from '@nebula/screen-component-sdk';
+import { BlueprintEventProvider } from '../blueprint/runtime/component-event-context';
 import { createHostElementRenderer, CustomElementRenderer } from './custom-element-renderer';
 import { buildInstanceRegistry, type ScreenComponentRegistration } from './instance-registry';
 import { getRendererFromRegistry } from './registry-derive';
@@ -439,6 +442,28 @@ describe('CustomElementRenderer', () => {
         ),
       ).toThrow(/ScreenComponentJsonValue/);
     });
+
+    it('props 含 class instance 时抛错（不将其扁平化为 JSON object）', () => {
+      class InvalidProps {
+        public readonly value = 1;
+      }
+      const tagName = nextTagName();
+      defineMockElement(tagName);
+
+      expect(() =>
+        render(
+          <CustomElementRenderer
+            tagName={tagName}
+            componentId="comp-1"
+            mode="design"
+            interactive={false}
+            props={{ invalid: new InvalidProps() }}
+            style={{}}
+            size={{ width: 100, height: 100 }}
+          />,
+        ),
+      ).toThrow(/ScreenComponentJsonValue/);
+    });
   });
 });
 
@@ -526,7 +551,10 @@ describe('createHostElementRenderer', () => {
 });
 
 describe('getRendererFromRegistry 集成（host source 分支）', () => {
-  function makeHostManifest(tagName: string): ScreenComponentManifestV1 {
+  function makeHostManifest(
+    tagName: string,
+    events?: readonly ScreenComponentEventDefinition[],
+  ): ScreenComponentManifestV1 {
     return {
       apiVersion: 'nebula.screen-component/v1',
       type: `test.bridge.${tagName}/v1`,
@@ -537,6 +565,7 @@ describe('getRendererFromRegistry 集成（host source 分支）', () => {
       defaultSize: { width: 200, height: 200 },
       defaultProps: {},
       propsSchema: { type: 'object', additionalProperties: false },
+      ...(events === undefined ? {} : { events }),
     };
   }
 
@@ -592,6 +621,45 @@ describe('getRendererFromRegistry 集成（host source 分支）', () => {
     const r1 = getRendererFromRegistry(registry, manifest.type);
     const r2 = getRendererFromRegistry(registry, manifest.type);
     expect(r1).toBe(r2);
+  });
+
+  it('does not share event allowlists between registries with the same tagName', () => {
+    const tagName = nextTagName();
+    const MockCtor = defineMockElement(tagName);
+    const registryA = buildInstanceRegistry([
+      makeHostRegistration(makeHostManifest(tagName, [{ id: 'alpha', name: 'Alpha' }]), MockCtor),
+    ]);
+    const registryB = buildInstanceRegistry([
+      makeHostRegistration(makeHostManifest(tagName, [{ id: 'beta', name: 'Beta' }]), MockCtor),
+    ]);
+    const registrationA = registryA.list()[0];
+    const registrationB = registryB.list()[0];
+    const RendererA = getRendererFromRegistry(registryA, registrationA.manifest.type)!;
+    const RendererB = getRendererFromRegistry(registryB, registrationB.manifest.type)!;
+    const onEventA = vi.fn();
+    const onEventB = vi.fn();
+
+    const first = render(
+      <BlueprintEventProvider value={onEventA}>
+        <RendererA componentId="comp-a" props={{}} style={{}} />
+      </BlueprintEventProvider>,
+    );
+    const second = render(
+      <BlueprintEventProvider value={onEventB}>
+        <RendererB componentId="comp-b" props={{}} style={{}} />
+      </BlueprintEventProvider>,
+    );
+
+    expect(RendererA).not.toBe(RendererB);
+    first.container
+      .querySelector(tagName)
+      ?.dispatchEvent(new CustomEvent(COMPONENT_EVENT_TYPE, { detail: { name: 'alpha' } }));
+    second.container
+      .querySelector(tagName)
+      ?.dispatchEvent(new CustomEvent(COMPONENT_EVENT_TYPE, { detail: { name: 'alpha' } }));
+
+    expect(onEventA).toHaveBeenCalledWith('comp-a', 'alpha', undefined);
+    expect(onEventB).not.toHaveBeenCalled();
   });
 
   it('source=built-in 未迁移组件返回 internalRenderer', () => {

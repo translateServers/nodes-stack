@@ -84,6 +84,10 @@ const REGISTRY_DIAGNOSTIC_MESSAGES: Record<ScreenComponentRegistryErrorCode, str
   COMPONENT_DEFINE_FAILED: '组件定义失败。',
 };
 
+// customElements 是 Document 级全局注册表。将“检查已有构造器 + 定义新 tagName”放入
+// 同一个串行任务，避免并发 registry factory 在异步 define() 恢复后观察到过期状态。
+let customElementCommitQueue: Promise<void> = Promise.resolve();
+
 function toRegistryDiagnostics(
   code: ScreenComponentRegistryErrorCode,
   diagnostics: readonly ScreenComponentValidationDiagnostic[],
@@ -97,36 +101,20 @@ function toRegistryDiagnostics(
 }
 
 /**
- * 处理单个 host plugin：校验 manifest → 调用 define() → 验证构造器一致性。
+ * 解析单个已预检 host plugin 的 element constructor。
  *
- * 步骤（Spec §7.6 + §8.3）：
- * 1. validateManifest 纯校验；失败时直接 reject
- * 2. 调用 plugin.define()（必须幂等，返回 manifest.tagName 对应构造器）
- * 3. 检查 customElements.get(tagName)：
- *    - 未定义 → customElements.define(tagName, constructor)
- *    - 已定义且构造器一致 → 幂等，跳过
- *    - 已定义但构造器不一致 → DUPLICATE_COMPONENT_TAG_NAME
+ * 预检已由调用方完成；本函数只调用 plugin.define() 并验证其返回构造器。所有
+ * Custom Element 的全局检查和注册由后续串行 commit 阶段统一处理。
  *
  * @returns host ScreenComponentRegistration（manifest 为 detached clone）
  * @throws ScreenComponentRegistryErrorImpl 任一步骤失败时
  */
-async function processHostPlugin(
+async function resolveHostPlugin(
   plugin: ScreenComponentPluginV1,
-): Promise<ScreenComponentRegistration> {
+): Promise<Extract<ScreenComponentRegistration, { source: 'host' }>> {
   const { manifest } = plugin;
 
-  // 1. manifest 纯校验
-  const validationResult = validateManifest(manifest);
-  if (!validationResult.ok) {
-    const code = mapValidationDiagnosticsToErrorCode(validationResult.diagnostics);
-    throw new ScreenComponentRegistryErrorImpl(
-      code,
-      `[registry-factory] host plugin manifest 校验失败 (type=${manifest.type})`,
-      toRegistryDiagnostics(code, validationResult.diagnostics),
-    );
-  }
-
-  // 2. 调用 plugin.define()（必须幂等）
+  // define() 只解析构造器；全局 Custom Element 注册在全部插件解析成功后统一提交。
   let constructor: CustomElementConstructor;
   try {
     constructor = await plugin.define();
@@ -146,30 +134,7 @@ async function processHostPlugin(
     );
   }
 
-  // 3. 验证构造器与 customElements 全局注册结果一致（Spec §8.3 + §8.4）
-  const tagName = manifest.tagName;
-  const existing = customElements.get(tagName);
-  if (existing === undefined) {
-    // 尚未定义：调用 customElements.define
-    try {
-      customElements.define(tagName, constructor);
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      throw new ScreenComponentRegistryErrorImpl(
-        'COMPONENT_DEFINE_FAILED',
-        `[registry-factory] customElements.define("${tagName}") 失败 (type=${manifest.type}): ${reason}`,
-      );
-    }
-  } else if (existing !== constructor) {
-    // 已定义但构造器不一致（Spec §8.3: tagName 已由不同构造器定义）
-    throw new ScreenComponentRegistryErrorImpl(
-      'DUPLICATE_COMPONENT_TAG_NAME',
-      `[registry-factory] tagName "${tagName}" 已由不同构造器定义 (type=${manifest.type})`,
-    );
-  }
-  // else: existing === constructor，幂等成功
-
-  // 4. 构建 host registration（manifest 深拷贝，Spec §8.2: 外部修改不得影响快照）
+  // 构建 host registration（manifest 深拷贝，Spec §8.2: 外部修改不得影响快照）
   return {
     source: 'host',
     manifest: structuredClone(manifest),
@@ -177,15 +142,87 @@ async function processHostPlugin(
   };
 }
 
+function validateHostManifests(hostPlugins: readonly ScreenComponentPluginV1[]): void {
+  for (const plugin of hostPlugins) {
+    const validationResult = validateManifest(plugin.manifest);
+    if (!validationResult.ok) {
+      const code = mapValidationDiagnosticsToErrorCode(validationResult.diagnostics);
+      throw new ScreenComponentRegistryErrorImpl(
+        code,
+        `[registry-factory] host plugin manifest 校验失败 (type=${plugin.manifest.type})`,
+        toRegistryDiagnostics(code, validationResult.diagnostics),
+      );
+    }
+  }
+}
+
+function assertUniqueManifestIdentities(hostPlugins: readonly ScreenComponentPluginV1[]): void {
+  const seenTypes = new Set(BUILTIN_COMPONENT_REGISTRATIONS.map((reg) => reg.manifest.type));
+  const seenTagNames = new Set(BUILTIN_COMPONENT_REGISTRATIONS.map((reg) => reg.manifest.tagName));
+
+  for (const plugin of hostPlugins) {
+    const { type, tagName } = plugin.manifest;
+    if (seenTypes.has(type)) {
+      throw new ScreenComponentRegistryErrorImpl(
+        'DUPLICATE_COMPONENT_TYPE',
+        `[registry-factory] 重复注册组件 type: "${type}"`,
+      );
+    }
+    if (seenTagNames.has(tagName)) {
+      throw new ScreenComponentRegistryErrorImpl(
+        'DUPLICATE_COMPONENT_TAG_NAME',
+        `[registry-factory] 重复注册组件 tagName: "${tagName}"`,
+      );
+    }
+    seenTypes.add(type);
+    seenTagNames.add(tagName);
+  }
+}
+
+function commitCustomElementDefinitions(
+  registrations: readonly Extract<ScreenComponentRegistration, { source: 'host' }>[],
+): void {
+  for (const registration of registrations) {
+    const existing = customElements.get(registration.manifest.tagName);
+    if (existing !== undefined && existing !== registration.elementConstructor) {
+      throw new ScreenComponentRegistryErrorImpl(
+        'DUPLICATE_COMPONENT_TAG_NAME',
+        `[registry-factory] tagName "${registration.manifest.tagName}" 已由不同构造器定义 (type=${registration.manifest.type})`,
+      );
+    }
+  }
+
+  for (const registration of registrations) {
+    if (customElements.get(registration.manifest.tagName) !== undefined) continue;
+    try {
+      customElements.define(registration.manifest.tagName, registration.elementConstructor);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new ScreenComponentRegistryErrorImpl(
+        'COMPONENT_DEFINE_FAILED',
+        `[registry-factory] customElements.define("${registration.manifest.tagName}") 失败 (type=${registration.manifest.type}): ${reason}`,
+      );
+    }
+  }
+}
+
+function enqueueCustomElementCommit(
+  registrations: readonly Extract<ScreenComponentRegistration, { source: 'host' }>[],
+): Promise<void> {
+  const commit = customElementCommitQueue.then(() => commitCustomElementDefinitions(registrations));
+  // 后续 registry 构建不能被前一次失败的 commit 永久阻塞。
+  customElementCommitQueue = commit.catch(() => undefined);
+  return commit;
+}
+
 /**
  * 异步构建实例注册表（Spec §8.1 + §8.2）。
  *
  * 流程：
- * 1. 逐个处理 host plugin：校验 manifest → 调用 define() → 验证构造器
- * 2. 收集 host registrations（manifest 为 detached clone）
- * 3. 与 BUILTIN_COMPONENT_REGISTRATIONS 合并
- * 4. 调用 buildInstanceRegistry 原子检测重复 type/tagName
- * 5. 返回不可变 ScreenComponentInstanceRegistry
+ * 1. 预检全部 host manifest 与 type/tagName 重复项
+ * 2. 解析全部 plugin constructor，不触碰 customElements
+ * 3. 串行检查并提交全局 Custom Element 定义
+ * 4. 与 BUILTIN_COMPONENT_REGISTRATIONS 合并并构建不可变 snapshot
  *
  * 失败行为（Spec §3.4 Fail Closed）：
  * - manifest 校验失败 → INVALID_COMPONENT_MANIFEST / UNSUPPORTED_COMPONENT_API_VERSION
@@ -201,21 +238,27 @@ export async function createScreenComponentRegistry(
   options?: CreateScreenComponentRegistryOptions,
 ): Promise<ScreenComponentInstanceRegistry> {
   const hostPlugins = options?.components ?? [];
-  const hostRegistrations: ScreenComponentRegistration[] = [];
+  // 1. 在任何 define()/customElements 副作用前完成 manifest 和重复项预检。
+  validateHostManifests(hostPlugins);
+  assertUniqueManifestIdentities(hostPlugins);
 
-  // 1. 逐个处理 host plugin（任一失败立即 reject）
+  const hostRegistrations: Extract<ScreenComponentRegistration, { source: 'host' }>[] = [];
+  // 2. 解析全部构造器，任一失败时 factory 自身尚未注册任何 Custom Element。
   for (const plugin of hostPlugins) {
-    const registration = await processHostPlugin(plugin);
+    const registration = await resolveHostPlugin(plugin);
     hostRegistrations.push(registration);
   }
 
-  // 2. 合并内置 + 宿主 registrations
+  // 3. 所有可失败校验通过后才接触 browser-global customElements registry。
+  await enqueueCustomElementCommit(hostRegistrations);
+
+  // 4. 合并内置 + 宿主 registrations
   const allRegistrations: readonly ScreenComponentRegistration[] = [
     ...BUILTIN_COMPONENT_REGISTRATIONS,
     ...hostRegistrations,
   ];
 
-  // 3. 原子构建（buildInstanceRegistry 检测重复 type/tagName）
+  // 5. 构建不可变 snapshot（保留 buildInstanceRegistry 的最终防御性重复检测）
   try {
     return buildInstanceRegistry(allRegistrations);
   } catch (err) {

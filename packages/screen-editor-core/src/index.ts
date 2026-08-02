@@ -36,7 +36,10 @@ export { createLocalSnapshotAdapter } from './adapters/local-snapshot-adapter.js
 export * from './registry/component-container-style.js';
 export * from './registry/index.js';
 export * from './registry/renderer.js';
-export { resolveScreenComponentRegistryForRuntime } from './registry/instance-registry.js';
+export {
+  isPublicScreenComponentRegistryFacade,
+  resolveScreenComponentRegistryForRuntime,
+} from './registry/instance-registry.js';
 // Registry Context（Spec §13.2 Phase 1, Task 1.3）— 宿主应用（如 apps/web）
 // 需要在 PreviewCanvas 等非 Workbench 渲染路径注入 registry 实例。
 // Task 6.4: Nebula Web 共享注册配置，编辑/预览/公开预览复用同一 registry。

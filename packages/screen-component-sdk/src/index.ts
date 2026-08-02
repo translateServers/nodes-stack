@@ -18,6 +18,7 @@ export {
   extractTagNameMajorVersion,
 } from './validation/identity.js';
 export { validateValueAgainstSchema } from './validation/props-schema.js';
+export { checkJsonProps, checkJsonValue } from './validation/json-boundary.js';
 
 // JSON Pointer props 工具（Task 3.1：属性面板 read/update/reset）
 export {

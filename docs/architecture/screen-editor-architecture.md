@@ -129,6 +129,16 @@ withHistory(set, actionName, updater)
 
 组件库、属性面板、图层和蓝图锚点都从当前实例 registry 派生，支持同页两个编辑器使用不同组件集合。
 
+### 构建与运行时不变量
+
+registry factory 分为 manifest/duplicate 预检、constructor resolution 和串行 `customElements` commit 三个阶段。插件的 `define()` 只返回幂等构造器，不负责全局注册；因此任一预检或 constructor failure 不会留下 SDK 产生的部分 Custom Element 定义。
+
+public registry facade 通过 core 的弱引用品牌关联到冻结的内部 snapshot。`<nebula-screen-editor>` 仅接受该 factory facade，未知结构化对象在 load 前拒绝；core 内部路径只接受 `buildInstanceRegistry()` 创建的 snapshot。
+
+Custom Element renderer 缓存按 immutable registration snapshot 的 `WeakMap` 隔离，而不是按全局 `tagName` 缓存。这保证同 tagName/constructor 在不同 registry 的事件 allowlist 不会交叉污染。
+
+V2 parser 对组件 props、内置 staticData 和 globalVariables value 统一校验 JSON 边界。检测循环时只追踪当前递归路径，允许普通共享引用；renderer 仅在剥离 `ComponentStyle` 的 optional `undefined` 后创建 detached model。
+
 ### 渲染器分发
 
 `renderer.tsx` 通过当前 registry 查询 renderer。外部组件与已迁移内置组件走 Custom Element bridge；`bar-chart` 通过内部 renderer bridge 保留数据源、逻辑层、交互层和 `refreshDataSource` 能力，但这些能力不进入外部组件 ABI。
