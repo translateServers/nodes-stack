@@ -99,6 +99,8 @@ describe('ComponentJsonEditorDialog', () => {
 
     const dialog = screen.getByTestId('component-json-editor-dialog');
     expect(dialog.getAttribute('data-slot')).toBe('dialog-content');
+    expect(dialog.className).not.toContain('data-open:animate-in');
+    expect(dialog.className).not.toContain('data-closed:animate-out');
     expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
   });
 

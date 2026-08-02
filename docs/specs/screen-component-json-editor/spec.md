@@ -97,6 +97,7 @@ Nebula Web 提供两个入口：
 - 高度为 `min(72dvh, 48rem)`，宽度为 `min(46rem, calc(100vw - 2rem))`。
 - 窄视口保留四周边距并从顶部开始展示，最大化可用编辑面积。
 - Dialog 为非模态工具窗，不渲染编辑器遮罩层；画布保持可见和可交互。
+- 主编辑器 Dialog 打开和关闭时不使用淡入、缩放或其他过渡动画。
 - 标题栏提供拖拽手柄，拖拽位置限制在视口边距内。移动帧仅更新 GPU transform，松开时才提交最终位置，避免 Monaco 触发每帧 React 重渲染。
 - 头部、诊断区和操作栏固定；Monaco 占据剩余空间。
 - Monaco 启用 `automaticLayout`，跟随 Dialog 和视口尺寸变化。

@@ -379,6 +379,7 @@ export function ComponentJsonEditorDialog({
           ref={dialogContentRef}
           className="top-4 right-4 left-auto flex h-[min(72dvh,48rem)] w-[min(46rem,calc(100vw-2rem))] max-w-none flex-col translate-x-0 translate-y-0 gap-0 overflow-hidden p-0 sm:top-16 sm:right-6 sm:max-w-none"
           data-testid="component-json-editor-dialog"
+          disableAnimation
           onInteractOutside={(event) => event.preventDefault()}
           showOverlay={false}
           style={

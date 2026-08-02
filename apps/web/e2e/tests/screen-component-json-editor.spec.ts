@@ -91,7 +91,18 @@ test.describe('组件 JSON 编辑器', () => {
 
       const dialog = adminPage.getByTestId('component-json-editor-dialog');
       await expect(dialog).toBeVisible();
-      await adminPage.waitForTimeout(150);
+      await expect
+        .poll(() =>
+          dialog.evaluate((element) => {
+            const computedStyle = window.getComputedStyle(element);
+            return {
+              animationDuration: computedStyle.animationDuration,
+              animationName: computedStyle.animationName,
+              transitionDuration: computedStyle.transitionDuration,
+            };
+          }),
+        )
+        .toEqual({ animationDuration: '0s', animationName: 'none', transitionDuration: '0s' });
       const dialogBox = await dialog.boundingBox();
       const viewport = adminPage.viewportSize();
       expect(dialogBox).not.toBeNull();
