@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 const E2E_API_ORIGIN = 'http://localhost:3001';
 const E2E_API_BASE_URL = `${E2E_API_ORIGIN}/api/v1`;
-const E2E_WEB_ORIGIN = 'http://localhost:5174';
+const E2E_WEB_PORT = Number(process.env.E2E_WEB_PORT ?? '5174');
+const E2E_WEB_ORIGIN = `http://localhost:${E2E_WEB_PORT}`;
 
 // Helpers run in Playwright worker processes, so publish the dedicated API origin before workers spawn.
 process.env.API_BASE_URL = E2E_API_BASE_URL;
@@ -55,7 +56,7 @@ export default defineConfig({
       },
     },
     {
-      command: 'pnpm --filter @nebula/web exec vite --port 5174',
+      command: `pnpm --filter @nebula/web exec vite --port ${E2E_WEB_PORT}`,
       url: E2E_WEB_ORIGIN,
       reuseExistingServer: false,
       timeout: 120_000,

@@ -1,93 +1,94 @@
 # 大屏组件 JSON 配置编辑器 Tasks
 
-> 状态：设计中
+> 状态：实施中
 > 最近更新：2026-08-02
 > 定位：将组件 JSON 编辑器规格拆分为可执行、可验证并可追溯到 Requirement 的实现任务
 
-> 执行约束：用户当前仅要求产出规格文档。所有任务保持未开始，未经用户再次明确确认不得进入功能实现。
+> 执行状态：P0、P1、Web Monaco 基础链路和 SDK 发布边界已实现并通过自动化质量门。未勾选项是尚待补充的专属提示和手工验收矩阵。
 
 ## P0：配置契约与安全边界
 
-- [ ] Task 1：建立可编辑组件配置契约和纯函数管线
-  - [ ] 定义 `EditableScreenComponentConfig`、受保护身份类型和稳定字段顺序
-  - [ ] 实现组件配置序列化、严格 JSON 解析和结构等价比较
-  - [ ] 建立 strict 公共配置 Schema，拒绝未知顶层和嵌套字段
-  - [ ] 接入 JSON boundary、`ScreenComponentSchema`、registry 和 manifest `propsSchema` 校验
-  - [ ] 区分 static/dynamic profile 与 built-in/host registration 能力
-  - [ ] 输出包含路径、级别和用户可读消息的去重诊断
-  - [ ] 为合法、非法和能力边界分支补充纯函数单测
+- [x] Task 1：建立可编辑组件配置契约和纯函数管线
+  - [x] 定义 `EditableScreenComponentConfig`、受保护身份类型和稳定字段顺序
+  - [x] 实现组件配置序列化、严格 JSON 解析和结构等价比较
+  - [x] 建立 strict 公共配置 Schema，拒绝未知顶层和嵌套字段
+  - [x] 接入 JSON boundary、`ScreenComponentSchema`、registry 和 manifest `propsSchema` 校验
+  - [x] 区分 static/dynamic profile 与 built-in/host registration 能力
+  - [x] 输出包含路径、级别和用户可读消息的去重诊断
+  - [x] 为合法、非法和能力边界分支补充纯函数单测
   - _Requirements: R1, R3, R4, R9_
 
-- [ ] Task 2：生成选中组件专属 Draft 7 JSON Schema
-  - [ ] 从公共 Zod Schema 生成 Draft 7 JSON Schema
-  - [ ] 将当前 manifest `propsSchema` 注入 `props` 节点
-  - [ ] 从 `defaultProps` 补充缺失的默认值提示，不自动写入配置
-  - [ ] 保留 manifest 的 title、description、enum、范围和 pattern 元数据
-  - [ ] 根据 capability profile 过滤数据源分支
-  - [ ] 根据 registration source 移除宿主组件不支持的配置建议
-  - [ ] 为文本、柱状图、指标卡、static/dynamic 和 host 场景补充 Schema 快照或结构断言
+- [x] Task 2：生成选中组件专属 Draft 7 JSON Schema
+  - [x] 从公共 Zod Schema 生成 Draft 7 JSON Schema
+  - [x] 将当前 manifest `propsSchema` 注入 `props` 节点
+  - [x] 从 `defaultProps` 补充缺失的默认值提示，不自动写入配置
+  - [x] 保留 manifest 的 title、description、enum、范围和 pattern 元数据
+  - [x] 根据 capability profile 过滤数据源分支
+  - [x] 根据 registration source 移除宿主组件不支持的配置建议
+  - [x] 为文本、柱状图、指标卡、static/dynamic 和 host 场景补充 Schema 结构断言
   - _Requirements: R3, R4, R9_
 
-- [ ] Task 3：新增原子组件配置替换 Store action
-  - [ ] 定义 `ReplaceComponentConfigCommand` 和结果判别类型
-  - [ ] 在 Store 内原子检查目标、只读状态、baseline 冲突和无变化
-  - [ ] 保留 `id`、`type`、`parentId`，精确替换其余可编辑字段
-  - [ ] 确保删除 optional 字段不会因浅合并而残留
-  - [ ] 一次成功应用只进入一次 `withHistory`
-  - [ ] 将 action 纳入只读 Store 包装器
-  - [ ] 补充 updated/unchanged/conflict/missing/readonly、dirty 和 undo/redo 测试
+- [x] Task 3：新增原子组件配置替换 Store action
+  - [x] 定义 `ReplaceComponentConfigCommand` 和结果判别类型
+  - [x] 在 Store 内原子检查目标、只读状态、baseline 冲突和无变化
+  - [x] 保留 `id`、`type`、`parentId`，精确替换其余可编辑字段
+  - [x] 确保删除 optional 字段不会因浅合并而残留
+  - [x] 一次成功应用只进入一次 `withHistory`
+  - [x] 将 action 纳入只读 Store 包装器
+  - [x] 补充 updated/unchanged/conflict/missing/readonly、dirty 和 undo/redo 测试
   - _Requirements: R5, R6, R7_
 
 ## P1：Core 编辑器壳层
 
-- [ ] Task 4：定义宿主可选的 JSON 编辑器注入能力
-  - [ ] 在 `screen-editor-core` 定义编辑器 Props、诊断和组件类型契约
-  - [ ] 为 `ScreenEditorWorkbenchProps` 增加可选 `componentJsonEditor`
-  - [ ] 将能力沿 Workbench 内部链路传递，不引入 Monaco 类型或运行时代码
-  - [ ] 未注入能力时隐藏工具菜单和属性面板入口
-  - [ ] 将 Monaco 包加入 core/SDK boundary 禁止依赖清单
-  - [ ] 补充依赖边界和能力显隐测试
+- [x] Task 4：定义宿主可选的 JSON 编辑器注入能力
+  - [x] 在 `screen-editor-core` 定义编辑器 Props、诊断和组件类型契约
+  - [x] 为 `ScreenEditorWorkbenchProps` 增加可选 `componentJsonEditor`
+  - [x] 将能力沿 Workbench 内部链路传递，不引入 Monaco 类型或运行时代码
+  - [x] 未注入能力时隐藏工具菜单和属性面板入口
+  - [x] 将 Monaco 包加入 core/SDK boundary 禁止依赖清单
+  - [x] 补充依赖边界和能力显隐测试
   - _Requirements: R1, R2, R7, R9_
 
-- [ ] Task 5：将占位 Sheet 改为正式组件 JSON 编辑器
-  - [ ] 将通用“代码编辑”命名收敛为“组件 JSON”
-  - [ ] 打开时固定 componentId、identity、baseline、草稿和 model session
-  - [ ] 渲染组件名称、类型、ID、编辑器、诊断区和操作栏
-  - [ ] 实现本地格式化、取消、应用和加载失败重试状态
-  - [ ] 实现脏草稿关闭确认
-  - [ ] 处理目标删除、registry 缺失、baseline conflict 和无变化应用
-  - [ ] 只读模式允许查看复制，隐藏写操作
-  - [ ] Sheet 打开期间挂起设计器快捷键
-  - [ ] 使用假编辑器补充 Core 组件测试
+- [x] Task 5：将占位 Dialog 改为正式组件 JSON 编辑器
+  - [x] 将通用“代码编辑”命名收敛为“组件 JSON”
+  - [x] 打开时固定 componentId、identity、baseline、草稿和 model session
+  - [x] 渲染组件名称、类型、ID、编辑器、诊断区和操作栏
+  - [x] 使用右上非模态浮动 Dialog，提供无蒙层的标题栏拖拽
+  - [x] 实现本地格式化、取消、应用和加载失败重试状态
+  - [x] 实现脏草稿关闭确认
+  - [x] 处理目标删除、registry 缺失、baseline conflict 和无变化应用
+  - [x] 只读模式允许查看复制，隐藏写操作
+  - [x] Dialog 打开期间挂起设计器快捷键
+  - [x] 使用假编辑器补充 Core 组件测试
   - _Requirements: R1, R4, R5, R6, R7, R10_
 
-- [ ] Task 6：接入属性面板和工具菜单入口
-  - [ ] 在单选组件的属性面板头部增加 `Braces` 图标按钮和 tooltip
-  - [ ] 将工具菜单命令改为“组件 JSON...”
-  - [ ] 明确未选中、多选、只读和能力缺失时的显示/禁用规则
-  - [ ] 调整右侧面板头部操作布局，避免与折叠按钮重叠
-  - [ ] 补充单选、多选、只读、能力缺失和可访问名称测试
+- [x] Task 6：接入属性面板和工具菜单入口
+  - [x] 在单选组件的属性面板头部增加 `Braces` 图标按钮和 tooltip
+  - [x] 将工具菜单命令改为“组件 JSON...”
+  - [x] 明确未选中、多选、只读和能力缺失时的显示/禁用规则
+  - [x] 调整右侧面板头部操作布局，避免与折叠按钮重叠
+  - [x] 补充单选、多选、只读、能力缺失和可访问名称测试
   - _Requirements: R1, R7, R10_
 
 ## P2：Nebula Web Monaco 实现
 
-- [ ] Task 7：建立 Web-only Monaco 懒加载与 Worker 运行时
-  - [ ] 仅在 `apps/web` 添加 `monaco-editor` 与 `@monaco-editor/react` 运行时依赖
-  - [ ] 新增 Web Monaco 适配器并通过 `React.lazy` 注入 Workbench
-  - [ ] 配置本地 ESM Monaco，禁止默认 CDN loader
-  - [ ] 仅配置 JSON Worker 和 Editor Worker
-  - [ ] 为 Monaco 加载、失败、重试和主题切换提供稳定状态
-  - [ ] 确认未打开 Sheet 时不请求 Monaco 资产
+- [x] Task 7：建立 Web-only Monaco 懒加载与 Worker 运行时
+  - [x] 仅在 `apps/web` 添加 `monaco-editor` 与 `@monaco-editor/react` 运行时依赖
+  - [x] 新增 Web Monaco 适配器并通过 `React.lazy` 注入 Workbench
+  - [x] 配置本地 ESM Monaco，禁止默认 CDN loader
+  - [x] 仅配置 JSON Worker 和 Editor Worker
+  - [x] 为 Monaco 加载、失败、重试和主题切换提供稳定状态
+  - [x] 确认未打开 Dialog 时不请求 Monaco 资产
   - _Requirements: R2, R7, R9, R10_
 
 - [ ] Task 8：实现 Monaco model、Schema 与诊断生命周期
-  - [ ] 为每次会话生成唯一 `inmemory://` model URI
-  - [ ] 实现活动 JSON Schema 协调器，支持同页多实例注册与注销
-  - [ ] 将最终 Schema 绑定到精确 `fileMatch`
+  - [x] 为每次会话生成唯一 `inmemory://` model URI
+  - [x] 实现活动 JSON Schema 协调器，支持同页多实例注册与注销
+  - [x] 将最终 Schema 绑定到精确 `fileMatch`
   - [ ] 配置 JSON 补全、Hover、marker、搜索、折叠、格式化和本地 undo
-  - [ ] 将 Monaco marker 转为 Core 通用诊断类型
-  - [ ] 关闭时 dispose model、Schema 注册、listener 和 ResizeObserver 相关资源
-  - [ ] 补充协调器、多实例、注销、主题和 marker 转换测试
+  - [x] 将 Monaco marker 转为 Core 通用诊断类型
+  - [x] 关闭时 dispose model、Schema 注册、listener 和 ResizeObserver 相关资源
+  - [x] 补充协调器、多实例、注销、主题和 marker 转换测试
   - _Requirements: R3, R4, R8, R10_
 
 - [ ] Task 9：完善内置与外部组件提示质量
@@ -111,20 +112,20 @@
   - [ ] 验证浅色、深色、桌面和窄视口无布局重叠
   - _Requirements: R2, R3, R4, R5, R6, R7, R10_
 
-- [ ] Task 11：验证 Web 构建和 SDK 隔离
-  - [ ] 构建 Web 并确认 Monaco、JSON Worker、Editor Worker 为按需资产
-  - [ ] 检查 Web 产物不存在 CDN 地址和不必要 language worker
-  - [ ] 构建 SDK 并检查源码、产物和 sourcemap 不包含 Monaco
-  - [ ] 运行 SDK size 门并保持现有 `976.6 KiB gzip` 上限
-  - [ ] 运行 SDK tarball consumer 验证
-  - [ ] 记录 Monaco 懒加载资产体积，不以提高 SDK 门槛掩盖依赖泄漏
+- [x] Task 11：验证 Web 构建和 SDK 隔离
+  - [x] 构建 Web 并确认 Monaco、JSON Worker、Editor Worker 为按需资产
+  - [x] 检查 Web 产物不存在 CDN 地址和不必要 language worker
+  - [x] 构建 SDK 并检查源码、产物和 sourcemap 不包含 Monaco
+  - [x] 运行 SDK size 门并保持现有 `976.6 KiB gzip` 上限
+  - [x] 运行 SDK tarball consumer 验证
+  - [x] 记录 Monaco 懒加载资产体积，不以提高 SDK 门槛掩盖依赖泄漏
   - _Requirements: R2, R8, R9_
 
 - [ ] Task 12：同步现状文档并完成质量门
-  - [ ] 实现完成后更新 `docs/specs/screen-editor/README.md`
-  - [ ] 实现完成后更新 `docs/architecture/screen-editor-architecture.md`
-  - [ ] 更新本目录 `checklist.md` 和文档状态
-  - [ ] 运行 Biome、core/web 测试、typecheck、lint、Web build、SDK build/size/tarball 和定向 E2E
+  - [x] 实现完成后更新 `docs/specs/screen-editor/README.md`
+  - [x] 实现完成后更新 `docs/architecture/screen-editor-architecture.md`
+  - [x] 更新本目录 `checklist.md` 和文档状态
+  - [x] 运行 Biome、core/web 测试、typecheck、lint、Web build、SDK build/size/tarball 和定向 E2E
   - [ ] 完成浏览器手动验收并记录未验证项
   - _Requirements: R1-R10_
 

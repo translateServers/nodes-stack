@@ -10,7 +10,6 @@ import {
   ParamBindingSchema,
   RefreshStrategySchema,
   ScreenComponentSchema,
-  type DataSourceConfig,
   type ScreenComponent,
 } from '@nebula/shared';
 import {
@@ -44,6 +43,19 @@ export type EditableScreenComponentConfig = Pick<
 >;
 
 export type ProtectedScreenComponentIdentity = Pick<ScreenComponent, 'id' | 'type' | 'parentId'>;
+
+export interface ReplaceComponentConfigCommand {
+  readonly baseline: EditableScreenComponentConfig;
+  readonly componentId: string;
+  readonly next: EditableScreenComponentConfig;
+}
+
+export type ReplaceComponentConfigResult =
+  | 'conflict'
+  | 'missing'
+  | 'readonly'
+  | 'unchanged'
+  | 'updated';
 
 export interface ComponentJsonConfigDiagnostic {
   readonly message: string;
@@ -179,7 +191,7 @@ function createEditableComponentConfigSchema(
     options.capabilityProfile === 'static'
       ? StrictStaticDataSourceConfigSchema
       : StrictDynamicDataSourceConfigSchema;
-  const shape: z.ZodRawShape = {
+  const baseShape = {
     name: z.string().min(1).describe('组件名称'),
     position: StrictComponentPositionSchema.describe('位置与尺寸'),
     props: z.record(z.string(), z.unknown()).describe('组件专属配置'),
@@ -187,12 +199,14 @@ function createEditableComponentConfigSchema(
     style: StrictComponentStyleSchema.describe('基础样式'),
     zIndex: z.number().int().describe('层级'),
   };
-
-  if (supportsComponentDataConfig) {
-    shape['dataSource'] = dataSourceSchema.optional().describe('数据源配置');
-    shape['logic'] = StrictLogicConfigSchema.optional().describe('数据逻辑配置');
-    shape['interaction'] = StrictInteractionConfigSchema.optional().describe('交互配置');
-  }
+  const shape = supportsComponentDataConfig
+    ? {
+        ...baseShape,
+        dataSource: dataSourceSchema.optional().describe('数据源配置'),
+        interaction: StrictInteractionConfigSchema.optional().describe('交互配置'),
+        logic: StrictLogicConfigSchema.optional().describe('数据逻辑配置'),
+      }
+    : baseShape;
 
   return z.object(shape).strict();
 }
@@ -352,7 +366,7 @@ export function validateEditableComponentJson(
 ): ComponentJsonConfigValidationResult {
   let input: unknown;
   try {
-    input = JSON.parse(value) as unknown;
+    input = JSON.parse(value);
   } catch {
     return {
       diagnostics: [{ message: 'JSON 格式错误，请检查输入', path: [], severity: 'error' }],
@@ -451,10 +465,4 @@ export function validateEditableComponentJson(
     diagnostics: [],
     success: true,
   };
-}
-
-export function componentConfigUsesDynamicDataSource(
-  dataSource: DataSourceConfig | undefined,
-): boolean {
-  return dataSource !== undefined && dataSource.type !== 'static';
 }

@@ -19,6 +19,11 @@ import {
   type PreferenceRepository,
   type PreferenceValues,
 } from '../lib/preferences-persist';
+import {
+  extractEditableComponentConfig,
+  type ReplaceComponentConfigCommand,
+  type ReplaceComponentConfigResult,
+} from '../lib/component-json-config.js';
 export {
   ScreenEditorStoreProvider,
   useAlignmentLinesStore,
@@ -204,6 +209,7 @@ interface ScreenEditorActions {
   /** 重命名组件（入历史栈；trim 后为空或与原名相同则忽略） */
   renameComponent: (id: string, name: string) => void;
   updateComponent: (id: string, updates: Partial<ScreenComponent>) => void;
+  replaceComponentConfig: (command: ReplaceComponentConfigCommand) => ReplaceComponentConfigResult;
   updateComponentsBatch: (
     updates: Array<{ id: string; changes: Partial<ScreenComponent> }>,
   ) => void;
@@ -741,6 +747,39 @@ export function createScreenEditorStore(
               },
             };
           });
+        },
+
+        replaceComponentConfig: (command) => {
+          const project = get().project;
+          if (project === null) return 'missing';
+          const target = project.components.find(
+            (component) => component.id === command.componentId,
+          );
+          if (target === undefined) return 'missing';
+
+          const currentConfig = extractEditableComponentConfig(target);
+          if (!isStructurallyEqual(currentConfig, command.baseline)) return 'conflict';
+          if (isStructurallyEqual(currentConfig, command.next)) return 'unchanged';
+
+          withHistory(set, 'replaceComponentConfig', (state) => {
+            if (state.project === null) return {};
+            return {
+              project: {
+                ...state.project,
+                components: state.project.components.map((component: ScreenComponent) =>
+                  component.id === command.componentId
+                    ? {
+                        id: component.id,
+                        type: component.type,
+                        parentId: component.parentId,
+                        ...command.next,
+                      }
+                    : component,
+                ),
+              },
+            };
+          });
+          return 'updated';
         },
 
         updateComponentsBatch: (updates) => {
@@ -1662,6 +1701,9 @@ export function createScreenEditorStore(
     },
     updateComponent: (id, updates) => {
       if (!isReadonly()) actions.updateComponent(id, updates);
+    },
+    replaceComponentConfig: (command) => {
+      return isReadonly() ? 'readonly' : actions.replaceComponentConfig(command);
     },
     updateComponentsBatch: (updates) => {
       if (!isReadonly()) actions.updateComponentsBatch(updates);

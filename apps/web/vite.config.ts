@@ -10,6 +10,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom'],
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@monaco-editor/loader': path.resolve(__dirname, './src/lib/monaco-loader.ts'),
       // Resolve SDK from source in dev environment to avoid duplicate React
       // instances (SDK dist bundles React for external consumers).
       '@nebula/screen-sdk/components': path.resolve(

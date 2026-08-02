@@ -23,6 +23,7 @@ import { openNebulaScreenEditorPreview } from '../adapters/nebula-screen-host-ad
 import { DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE } from '../runtime/dynamic-runtime-profile';
 import { useScreenComponentRegistry } from '../runtime/use-screen-component-registry';
 import type { ScreenComponentRegistry } from '@nebula/screen-sdk/components';
+import { ComponentJsonMonacoEditorLoader } from './component-json-monaco-editor-loader';
 
 export interface ScreenEditorProps {
   debug?: boolean;
@@ -316,6 +317,7 @@ function NebulaScreenEditorHost({
   return (
     <div ref={workbenchHostRef} className="h-full min-h-0 w-full">
       <ScreenEditorWorkbench
+        componentJsonEditor={ComponentJsonMonacoEditorLoader}
         operations={operations}
         capabilityProfile={capabilityProfile}
         componentRegistry={componentRegistry}

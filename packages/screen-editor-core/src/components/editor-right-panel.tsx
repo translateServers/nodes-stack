@@ -15,10 +15,12 @@ import { useScreenEditorPreferenceNamespace } from '../stores/editor-store';
 // （如选中态变化、视口状态变化）完全跳过右侧面板子树（含 PropertyPanel），
 // 避免不必要的重渲染（已有 contain: layout style paint 进一步隔离布局/绘制）。
 interface EditorRightPanelProps {
+  onOpenComponentJsonEditor?: (componentId: string) => void;
   readonly?: boolean;
 }
 
 export const EditorRightPanel = memo(function EditorRightPanel({
+  onOpenComponentJsonEditor,
   readonly = false,
 }: EditorRightPanelProps) {
   const preferenceNamespace = useScreenEditorPreferenceNamespace();
@@ -57,9 +59,10 @@ export const EditorRightPanel = memo(function EditorRightPanel({
       <div className="flex h-full min-w-0 flex-1 flex-col border-l border-border bg-card">
         {/* 折叠按钮放在属性面板头部的右侧操作位 */}
         <div className="relative flex h-full min-h-0 flex-1 flex-col">
-          <div className={readonly ? 'pointer-events-none h-full opacity-80' : 'h-full'}>
-            <PropertyPanel />
-          </div>
+          <PropertyPanel
+            onOpenComponentJsonEditor={onOpenComponentJsonEditor}
+            readonly={readonly}
+          />
           <ToolbarButton
             tooltip="收起面板"
             tooltipSide="left"

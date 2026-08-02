@@ -1,7 +1,7 @@
 # 大屏编辑器功能规格
 
 > 状态：生效中
-> 最近更新：2026-07-30
+> 最近更新：2026-08-02
 > 定位：已实现功能的现状描述（非设计方案）。供新人快速了解"已经有什么"，作为后续需求变更的基线
 
 ## 1. 功能概述
@@ -13,6 +13,7 @@
 - **画布**：拖拽式布局，支持选择/移动/缩放/旋转/框选/创建
 - **组件库**：6 种内置组件（文本/柱状图/矩形/椭圆/图片/按钮），可扩展
 - **属性面板**：声明式 Schema 驱动，按组件类型动态渲染
+- **组件 JSON 编辑器**：Nebula Web 可通过 Monaco 编辑单个选中组件的完整可变配置，并走严格校验与原子历史
 - **图层管理**：z-index 排序、显隐、锁定、分组
 - **历史栈**：撤销/重做，三重快照（components + canvas + blueprint）
 - **事件蓝图**：节点编辑器编排交互逻辑
@@ -183,6 +184,13 @@
 
 - `customField`：单字段自定义渲染
 - `customRender`：整个 section 自定义渲染（bar-chart 各 tab 与 QuickEventEditor 均用）
+
+### 5.5 组件 JSON 编辑器
+
+- 单选组件时，属性面板头部和“工具”菜单提供“组件 JSON...”入口；SDK 未注入 Web 编辑器能力时不显示入口。
+- 草稿仅保存在无蒙层的右上浮动 Dialog 内；标题栏支持拖拽，应用前依次执行 JSON boundary、共享组件 Schema、实例 registry、manifest `propsSchema` 和能力 profile 校验。
+- Store 的 `replaceComponentConfig` 保留 `id`、`type`、`parentId`，精确替换可变配置并只产生一条项目历史。
+- Monaco 仅在 `apps/web` 按需加载，使用同源 Editor/JSON Worker，不进入 `@nebula/screen-sdk`。
 
 ## 6. 数据层
 

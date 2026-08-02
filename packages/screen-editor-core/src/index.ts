@@ -21,12 +21,14 @@ export {
 } from './blueprint/lib/template-interpolation.js';
 export * from './blueprint/runtime/index.js';
 export * from './components/preview-component-renderer.js';
+export * from './components/component-json-editor.js';
 export * from './components/screen-canvas.js';
 export * from './components/screen-editor-environment.js';
 export * from './components/screen-editor-workbench.js';
 export * from './components/screen-host-adapter-workbench.js';
 export * from './components/ui-primitives/index.js';
 export * from './lib/canvas-interaction-context.js';
+export * from './lib/component-json-config.js';
 export * from './lib/data-source-migration.js';
 export * from './lib/is-save-conflict-error.js';
 export { createLocalSnapshotAdapter } from './adapters/local-snapshot-adapter.js';

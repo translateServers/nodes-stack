@@ -7,6 +7,7 @@ import {
   AlignStartVertical,
   AlignCenterVertical,
   AlignEndVertical,
+  Braces,
 } from 'lucide-react';
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, CanvasConfig } from '@nebula/shared';
@@ -30,6 +31,7 @@ import {
 import { NumberInput } from './number-input';
 import { ColorInput, numberInputClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
+import { ToolbarButton } from './ui-primitives';
 import { useOptionalScreenEditorEnvironment } from './screen-editor-environment';
 // Phase 2 Slice B：属性面板 Schema 化（注册表驱动 + 声明式字段 + customRender 逃生舱）
 import { PropertySchemaRenderer } from '../property-schema';
@@ -178,7 +180,12 @@ const MultiSelectPanel = memo(function MultiSelectPanel({
   );
 });
 
-export function PropertyPanel() {
+export interface PropertyPanelProps {
+  readonly onOpenComponentJsonEditor?: (componentId: string) => void;
+  readonly?: boolean;
+}
+
+export function PropertyPanel({ onOpenComponentJsonEditor, readonly = false }: PropertyPanelProps) {
   const capabilityProfile = useOptionalScreenEditorEnvironment()?.capabilityProfile ?? 'dynamic';
   const components = useScreenEditorStore((s) => s.project?.components);
   const canvas = useScreenEditorStore((s) => s.project?.canvas);
@@ -245,14 +252,33 @@ export function PropertyPanel() {
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col bg-card text-foreground">
-      <div className="flex h-10 items-center border-b border-border px-3 text-sm font-medium">
-        {selectedComponent
-          ? selectedComponent.name
-          : isMultiSelect
-            ? `多选 (${selectedComponentIds.length})`
-            : '属性'}
+      <div className="flex h-10 items-center gap-2 border-b border-border px-3 text-sm font-medium">
+        <span className="min-w-0 flex-1 truncate">
+          {selectedComponent
+            ? selectedComponent.name
+            : isMultiSelect
+              ? `多选 (${selectedComponentIds.length})`
+              : '属性'}
+        </span>
+        {selectedComponent && onOpenComponentJsonEditor && (
+          <ToolbarButton
+            aria-label={readonly ? '查看组件 JSON' : '编辑组件 JSON'}
+            className="mr-6 shrink-0"
+            onClick={() => onOpenComponentJsonEditor(selectedComponent.id)}
+            tooltip={readonly ? '查看组件 JSON' : '编辑组件 JSON'}
+            tooltipSide="left"
+          >
+            <Braces className="size-3.5" />
+          </ToolbarButton>
+        )}
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className={
+          readonly
+            ? 'pointer-events-none flex-1 overflow-y-auto opacity-80'
+            : 'flex-1 overflow-y-auto'
+        }
+      >
         {selectedComponent ? (
           <>
             {/* Phase 2 Slice B：Schema 驱动渲染（声明式字段 + customRender 逃生舱） */}

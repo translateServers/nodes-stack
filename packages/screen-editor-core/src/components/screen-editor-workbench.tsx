@@ -52,7 +52,8 @@ import { CanvasGuides } from './canvas-guides';
 import { CanvasRulers, type RulersHandle } from './canvas-rulers';
 import { CanvasSettingsDialog } from './canvas-settings-dialog';
 import { CanvasStatusBar } from './canvas-status-bar';
-import { CodeEditorSheet } from './code-editor-sheet';
+import { ComponentJsonEditorDialog } from './component-json-editor-dialog';
+import type { ComponentJsonEditorComponent } from './component-json-editor';
 import { useCanvasDrop } from './component-library';
 import { EditorLeftPanel } from './editor-left-panel';
 import { EditorRightPanel } from './editor-right-panel';
@@ -117,6 +118,8 @@ export interface ScreenEditorWorkbenchOperationController {
 export type { ScreenEditorWorkbenchEnvelope } from '../lib/screen-editor-workbench-project';
 
 export interface ScreenEditorWorkbenchProps {
+  /** 可选的宿主 JSON 编辑器实现；Nebula Web 注入 Monaco，SDK 不注入。 */
+  componentJsonEditor?: ComponentJsonEditorComponent;
   operations: ScreenEditorWorkbenchOperationController;
   capabilityProfile?: ScreenEditorCapabilityProfile;
   /**
@@ -145,6 +148,7 @@ export const ScreenEditorWorkbench = forwardRef<
   ScreenEditorWorkbenchProps
 >(function ScreenEditorWorkbench(
   {
+    componentJsonEditor,
     operations,
     componentRegistry,
     isActive = () => true,
@@ -199,6 +203,7 @@ export const ScreenEditorWorkbench = forwardRef<
                 imperativeRef={ref}
                 operations={operations}
                 project={project}
+                componentJsonEditor={componentJsonEditor}
               />
             </div>
           </ScreenEditorNotificationProvider>
@@ -209,6 +214,7 @@ export const ScreenEditorWorkbench = forwardRef<
 });
 
 interface ScreenEditorWorkbenchContentProps {
+  componentJsonEditor?: ComponentJsonEditorComponent;
   eventTarget: RefObject<HTMLDivElement | null>;
   imperativeRef: Ref<ScreenEditorWorkbenchHandle>;
   operations: ScreenEditorWorkbenchOperationController;
@@ -216,6 +222,7 @@ interface ScreenEditorWorkbenchContentProps {
 }
 
 function ScreenEditorWorkbenchContent({
+  componentJsonEditor,
   eventTarget,
   imperativeRef,
   operations,
@@ -254,7 +261,9 @@ function ScreenEditorWorkbenchContent({
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
   const [showCanvasSettings, setShowCanvasSettings] = useState(false);
   const [showEventBlueprint, setShowEventBlueprint] = useState(false);
-  const [showCodeEditor, setShowCodeEditor] = useState(false);
+  const [componentJsonEditorTargetId, setComponentJsonEditorTargetId] = useState<string | null>(
+    null,
+  );
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [publishDiagnostics, setPublishDiagnostics] = useState<BaseDiagnostic[]>([]);
@@ -263,6 +272,7 @@ function ScreenEditorWorkbenchContent({
   const toolStateMachine = useToolStateMachine({ ownerWindow });
   const interactionStateMachine = useInteractionStateMachine({ ownerWindow });
   const editorSession = useEditorSession({ toolStateMachine, interactionStateMachine });
+  const showComponentJsonEditor = componentJsonEditorTargetId !== null;
 
   useEffect(() => {
     if (operations.host !== undefined) return;
@@ -274,6 +284,24 @@ function ScreenEditorWorkbenchContent({
     }
     loadProject(result.project);
   }, [capabilityProfile, loadProject, notify, operations.host, project]);
+
+  useEffect(() => {
+    setComponentJsonEditorTargetId(null);
+  }, [loadedProject?.id]);
+
+  const openComponentJsonEditor = useCallback(
+    (componentId?: string): void => {
+      if (componentJsonEditor === undefined) return;
+      const selectedIds = store.getState().selectedComponentIds;
+      const targetId = componentId ?? (selectedIds.length === 1 ? selectedIds[0] : undefined);
+      if (targetId === undefined) return;
+      const exists = store
+        .getState()
+        .project?.components.some((component) => component.id === targetId);
+      if (exists) setComponentJsonEditorTargetId(targetId);
+    },
+    [componentJsonEditor, store],
+  );
 
   useEffect(() => {
     if (operations.host?.state.phase !== 'awaiting-render' || loadedProject === null) return;
@@ -565,7 +593,8 @@ function ScreenEditorWorkbenchContent({
     isActive,
     readonly,
     focusRoot: portalRoot?.getRootNode() as Document | ShadowRoot | undefined,
-    suspended: showEventBlueprint || blueprintSheetOpen || showCodeEditor || hostMutationPending,
+    suspended:
+      showEventBlueprint || blueprintSheetOpen || showComponentJsonEditor || hostMutationPending,
   });
 
   const isInitialLoading =
@@ -641,7 +670,9 @@ function ScreenEditorWorkbenchContent({
                 canUseSnapshots === true ? () => setShowSnapshotManager(true) : undefined,
               onShowCanvasSettings: () => setShowCanvasSettings(true),
               onShowEventBlueprint: () => setShowEventBlueprint(true),
-              onShowCodeEditor: () => setShowCodeEditor(true),
+              ...(componentJsonEditor === undefined
+                ? {}
+                : { onShowComponentJsonEditor: () => openComponentJsonEditor() }),
               onShowShortcutsHelp: () => setShowHelp(true),
             }}
           />
@@ -702,7 +733,14 @@ function ScreenEditorWorkbenchContent({
               )}
             </div>
           </CanvasContextMenu>
-          {showPanels && <EditorRightPanel readonly={readonly} />}
+          {showPanels && (
+            <EditorRightPanel
+              onOpenComponentJsonEditor={
+                componentJsonEditor === undefined ? undefined : openComponentJsonEditor
+              }
+              readonly={readonly}
+            />
+          )}
         </div>
         {showPanels && <CanvasStatusBar editorSession={editorSession} />}
         {hostState?.phase === 'loading' && hostState.retainedProject && (
@@ -763,7 +801,16 @@ function ScreenEditorWorkbenchContent({
           />
         </Suspense>
       )}
-      <CodeEditorSheet open={showCodeEditor} onOpenChange={setShowCodeEditor} />
+      {componentJsonEditor !== undefined && (
+        <ComponentJsonEditorDialog
+          componentId={componentJsonEditorTargetId}
+          editor={componentJsonEditor}
+          onOpenChange={(nextOpen) => {
+            if (!nextOpen) setComponentJsonEditorTargetId(null);
+          }}
+          open={showComponentJsonEditor}
+        />
+      )}
       <SaveConflictDialog
         open={showConflictDialog}
         onReload={() => void handleReloadFromConflict()}

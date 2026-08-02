@@ -8,6 +8,7 @@ vi.mock('../stores/editor-store', () => ({
 }));
 
 import { useScreenEditorStore } from '../stores/editor-store';
+import { TooltipProvider } from '@nebula/screen-editor-core/internal';
 import { PropertyPanel } from './property-panel';
 import type { ScreenComponent, CanvasConfig } from '@nebula/shared';
 
@@ -90,6 +91,47 @@ describe('PropertyPanel', () => {
 
       expect(screen.getByText('矩形 A')).toBeDefined();
       expect(screen.getByText('位置与尺寸')).toBeDefined();
+    });
+
+    it('注入 JSON 编辑能力时，单选组件显示并触发 JSON 入口', () => {
+      const component = makeComponent({ id: 'comp-a', name: '矩形 A' });
+      const onOpenComponentJsonEditor = vi.fn();
+      setStoreState({
+        project: { components: [component], canvas: createCanvas() },
+        selectedComponentIds: ['comp-a'],
+        updateComponent: vi.fn(),
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+
+      render(
+        <TooltipProvider>
+          <PropertyPanel onOpenComponentJsonEditor={onOpenComponentJsonEditor} />
+        </TooltipProvider>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '编辑组件 JSON' }));
+      expect(onOpenComponentJsonEditor).toHaveBeenCalledWith('comp-a');
+    });
+
+    it('多选时不显示 JSON 编辑入口', () => {
+      const first = makeComponent({ id: 'comp-a' });
+      const second = makeComponent({ id: 'comp-b' });
+      setStoreState({
+        project: { components: [first, second], canvas: createCanvas() },
+        selectedComponentIds: ['comp-a', 'comp-b'],
+        updateComponent: vi.fn(),
+        updateCanvas: vi.fn(),
+        removeComponent: vi.fn(),
+      });
+
+      render(
+        <TooltipProvider>
+          <PropertyPanel onOpenComponentJsonEditor={vi.fn()} />
+        </TooltipProvider>,
+      );
+
+      expect(screen.queryByRole('button', { name: '编辑组件 JSON' })).toBeNull();
     });
 
     it('未选中组件时显示画布设置', () => {

@@ -57,7 +57,7 @@
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
 | [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-30） | 大屏编辑器功能规格（现状基线） |
-| [screen-component-json-editor/](./specs/screen-component-json-editor/spec.md) | 设计中（2026-08-02） | 大屏组件 JSON 配置编辑器（Monaco、动态补全、严格校验、Web-only 发布边界） |
+| [screen-component-json-editor/](./specs/screen-component-json-editor/spec.md) | 实施中（2026-08-02） | 大屏组件 JSON 配置编辑器（Monaco、动态补全、严格校验、Web-only 发布边界） |
 | [screen-web-component-sdk/](./specs/screen-web-component-sdk/spec.md) | 已归档（2026-08-02） | 早期 Web Component SDK rollout 方案；现行宿主接入以 architecture 开发指南为准 |
 | [screen-component-sdk/](./specs/screen-component-sdk/component-author-guide.md) | 生效中（2026-08-02） | 大屏组件 SDK 与组件注册表（外部组件 registry、真实拖入、正式 document 持久化/transfer/snapshot/preview 与迁移指南已验证） |
 | [screen-sdk-dynamic-data/](./specs/screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 大屏 SDK 后续动态数据能力独立规格，不改变 static 能力边界 |

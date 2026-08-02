@@ -37,7 +37,7 @@ import {
   Moon,
   Settings,
   Workflow,
-  Code2,
+  Braces,
   Keyboard,
   type LucideIcon,
 } from 'lucide-react';
@@ -69,7 +69,7 @@ interface ProjectMenubarProps {
   onShowSnapshotManager?: () => void;
   onShowCanvasSettings: () => void;
   onShowEventBlueprint: () => void;
-  onShowCodeEditor: () => void;
+  onShowComponentJsonEditor?: () => void;
   onShowShortcutsHelp: () => void;
   /** 视图操作回调 */
   onZoomIn: () => void;
@@ -109,7 +109,7 @@ export const ProjectMenubar = memo(function ProjectMenubar({
   onShowSnapshotManager,
   onShowCanvasSettings,
   onShowEventBlueprint,
-  onShowCodeEditor,
+  onShowComponentJsonEditor,
   onShowShortcutsHelp,
   onZoomIn,
   onZoomOut,
@@ -144,7 +144,7 @@ export const ProjectMenubar = memo(function ProjectMenubar({
   const toggleBorderGuides = useScreenEditorStore((s) => s.toggleBorderGuides);
 
   // 主题
-  const { theme, setTheme } = useScreenEditorEnvironment();
+  const { readonly, theme, setTheme } = useScreenEditorEnvironment();
 
   const hasSelection = deferredSelectedIds.length > 0;
   const hasGuides = guides.vertical.length > 0 || guides.horizontal.length > 0;
@@ -355,13 +355,15 @@ export const ProjectMenubar = memo(function ProjectMenubar({
                 Beta
               </span>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onShowCodeEditor}>
-              <Code2 className="size-4 text-muted-foreground" />
-              <span className="flex-1">代码编辑</span>
-              <span className="ml-auto rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                Beta
-              </span>
-            </DropdownMenuItem>
+            {onShowComponentJsonEditor !== undefined && (
+              <DropdownMenuItem
+                disabled={deferredSelectedIds.length !== 1}
+                onSelect={onShowComponentJsonEditor}
+              >
+                <Braces className="size-4 text-muted-foreground" />
+                <span className="flex-1">{readonly ? '查看组件 JSON...' : '组件 JSON...'}</span>
+              </DropdownMenuItem>
+            )}
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onShowShortcutsHelp}>

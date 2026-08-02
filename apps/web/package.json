@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
+    "@monaco-editor/react": "^4.7.0",
     "@nebula-example/indicator-card-vanilla": "workspace:^",
     "@nebula/screen-editor-core": "workspace:*",
     "@nebula/screen-sdk": "workspace:*",
@@ -31,7 +32,9 @@
     "axios": "^1.17.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "jsonc-parser": "^3.3.1",
     "lucide-react": "^1.18.0",
+    "monaco-editor": "^0.56.0",
     "radix-ui": "^1.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

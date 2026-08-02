@@ -389,7 +389,7 @@ createApp(VueHost).mount(root);
   const dynamicImports = javaScriptInspections.flatMap(({ specifiers }) =>
     specifiers.filter(({ dynamic }) => dynamic).map(({ value }) => value),
   );
-  for (const expectedChunk of ['blueprint-sheet-v2', 'static-runtime']) {
+  for (const expectedChunk of ['blueprint-sheet', 'static-runtime']) {
     if (!dynamicImports.some((specifier) => specifier.includes(expectedChunk))) {
       throw new Error(`Packed SDK is missing the ${expectedChunk} dynamic chunk import`);
     }
@@ -441,7 +441,7 @@ createApp(VueHost).mount(root);
     const dependencies = manifest[field];
     if (typeof dependencies === 'object' && dependencies !== null) {
       const names = Object.keys(dependencies).sort();
-      const expected = field === 'dependencies' ? ['zod'] : [];
+      const expected = field === 'dependencies' ? ['lucide-react', 'zod'] : [];
       if (JSON.stringify(names) !== JSON.stringify(expected)) {
         throw new Error(
           `Packed SDK has unexpected ${field}: ${names.length > 0 ? names.join(', ') : '(none)'}`,

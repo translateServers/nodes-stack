@@ -1,8 +1,10 @@
 # 大屏组件 JSON 配置编辑器 Spec
 
-> 状态：设计中
+> 状态：实施中
 > 最近更新：2026-08-02
 > 定位：定义在 Nebula Web 大屏设计器中使用 Monaco Editor 直接编辑选中组件完整可变配置的产品、架构、校验、补全和验收契约
+
+> 实施状态：核心配置替换、Core 注入壳层、Web Monaco、同源 Worker、动态 Schema、自动化测试和 SDK 发布边界已落实；完整手工验收矩阵见 [checklist.md](./checklist.md)。
 
 ## 1. 背景
 
@@ -14,7 +16,7 @@
 - 外部组件通过 manifest 扩展后，希望直接按组件 Schema 编辑 `props`。
 - 排查属性面板与实际持久化配置之间的差异。
 
-现有“工具 → 代码编辑”仅提供占位 Sheet，没有编辑、校验、历史记录或持久化能力。系统需要提供正式的组件 JSON 配置编辑器，并确保直接编辑不能绕过组件注册表、能力边界和项目历史栈。
+现有“工具 → 代码编辑”仅提供占位入口，没有编辑、校验、历史记录或持久化能力。系统需要提供正式的组件 JSON 配置编辑器，并确保直接编辑不能绕过组件注册表、能力边界和项目历史栈。
 
 ## 2. 目标
 
@@ -71,9 +73,9 @@ Nebula Web 提供两个入口：
 - 未注入 JSON 编辑器能力时不显示命令；因此 SDK 编辑器不展示该入口。
 - 只读模式下命令显示为“查看组件 JSON...”，允许查看和复制，不允许修改或应用。
 
-### 5.2 编辑 Sheet
+### 5.2 浮动 Dialog
 
-编辑器使用底部 Sheet，布局如下：
+编辑器使用右上浮动 Dialog，不使用居中弹窗或底部 Sheet，布局如下：
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -91,10 +93,15 @@ Nebula Web 提供两个入口：
 
 稳定尺寸约束：
 
-- 高度约为 `75dvh`，最大高度不超过可视区域。
+- 桌面端锚定在右上角，避开顶部工具栏；不使用 `top/left: 50%` 或居中 translate。
+- 高度为 `min(72dvh, 48rem)`，宽度为 `min(46rem, calc(100vw - 2rem))`。
+- 窄视口保留四周边距并从顶部开始展示，最大化可用编辑面积。
+- Dialog 为非模态工具窗，不渲染编辑器遮罩层；画布保持可见和可交互。
+- 标题栏提供拖拽手柄，拖拽位置限制在视口边距内。移动帧仅更新 GPU transform，松开时才提交最终位置，避免 Monaco 触发每帧 React 重渲染。
 - 头部、诊断区和操作栏固定；Monaco 占据剩余空间。
-- Monaco 启用 `automaticLayout`，跟随 Sheet 和视口尺寸变化。
+- Monaco 启用 `automaticLayout`，跟随 Dialog 和视口尺寸变化。
 - 不使用嵌套卡片，不在编辑器内容上叠加说明性遮罩。
+- 主编辑器 Dialog 不使用 overlay；草稿放弃确认仍使用独立 AlertDialog。
 - 在窄视口中操作按钮允许换行，但不得与标题、诊断或编辑器重叠。
 
 ### 5.3 视觉规格
@@ -108,14 +115,14 @@ Nebula Web 提供两个入口：
 
 ### 5.4 草稿与关闭行为
 
-- 打开 Sheet 时捕获固定的 `componentId` 和配置 baseline。
-- Sheet 打开后，即使外部选择状态变化，也不得静默切换编辑目标。
+- 打开 Dialog 时捕获固定的 `componentId` 和配置 baseline。
+- Dialog 打开后，即使外部选择状态变化，也不得静默切换编辑目标。
 - Monaco 输入只更新本地草稿，不写 Store、不设置 `isDirty`、不进入项目历史。
-- 草稿有变化时关闭 Sheet，系统必须要求确认是否放弃修改。
+- 草稿有变化时关闭 Dialog，系统必须要求确认是否放弃修改。
 - 草稿无变化时可直接关闭。
 - “格式化”只格式化本地草稿，不写 Store。
 - “取消”放弃草稿并关闭。
-- “应用”成功后关闭 Sheet；失败时保留草稿和诊断。
+- “应用”成功后关闭 Dialog；失败时保留草稿和诊断。
 
 ## 6. 编辑数据契约
 
@@ -146,7 +153,7 @@ export type ProtectedScreenComponentIdentity = Pick<
 - 使用 `JSON.stringify(config, null, 2)`。
 - 可选字段值为 `undefined` 时不输出该字段。
 - 属性顺序以固定的可编辑字段顺序输出，减少无意义 diff。
-- `id`、`type`、`parentId` 只在 Sheet 头部展示，不进入 Monaco model。
+- `id`、`type`、`parentId` 只在 Dialog 头部展示，不进入 Monaco model。
 
 ### 6.2 精确替换命令
 
@@ -208,7 +215,7 @@ export interface ComponentJsonEditorProps {
 export type ComponentJsonEditorComponent = ComponentType<ComponentJsonEditorProps>;
 ```
 
-`ScreenEditorWorkbenchProps` 增加可选的 `componentJsonEditor`。只有传入该能力时，Workbench 才显示入口并允许打开 Sheet。
+`ScreenEditorWorkbenchProps` 增加可选的 `componentJsonEditor`。只有传入该能力时，Workbench 才显示入口并允许打开 Dialog。
 
 ## 7. 动态 JSON Schema 与代码补全
 
@@ -264,11 +271,12 @@ export type ComponentJsonEditorComponent = ComponentType<ComponentJsonEditorProp
 
 ```ts
 const editorOptions = {
+  acceptSuggestionOnCommitCharacter: false,
   automaticLayout: true,
   formatOnPaste: true,
   formatOnType: true,
   minimap: { enabled: false },
-  quickSuggestions: { comments: false, other: true, strings: true },
+  quickSuggestions: false,
   scrollBeyondLastLine: false,
   stickyScroll: { enabled: false },
   suggestOnTriggerCharacters: true,
@@ -279,7 +287,7 @@ const editorOptions = {
 } as const;
 ```
 
-用户可通过自动触发或 Monaco 默认的 `Ctrl+Space` 打开建议，通过 Hover 查看字段说明，通过 Monaco 内置搜索和格式化命令操作草稿。
+适配器基于当前 model 的最终 Schema 注册属性建议；输入 `{`、`,` 或 `"` 会触发建议，用户也可通过 Monaco 默认的 `Ctrl+Space` 打开建议。关闭 `acceptSuggestionOnCommitCharacter`，避免连续输入或粘贴 JSON 时意外接受建议。格式化仅作用于本地草稿。
 
 ## 8. Monaco Web 集成边界
 
@@ -290,6 +298,7 @@ const editorOptions = {
 ```json
 {
   "@monaco-editor/react": "^4.7.0",
+  "jsonc-parser": "^3.3.1",
   "monaco-editor": "^0.56.0"
 }
 ```
@@ -303,9 +312,9 @@ const editorOptions = {
 ### 8.2 懒加载
 
 - Web Monaco 适配器必须通过 `React.lazy` 或等价动态导入加载。
-- 访问大屏编辑器但未打开组件 JSON Sheet 时，不得请求 Monaco 主 chunk 或 Worker。
-- 打开 Sheet 后显示明确加载状态；加载失败时显示可重试错误，不得退回 CDN。
-- 关闭 Sheet 后销毁当前 model 和注册资源，但 Monaco 模块本身可由浏览器模块缓存复用。
+- 访问大屏编辑器但未打开组件 JSON Dialog 时，不得请求 Monaco 主 chunk 或 Worker。
+- 打开 Dialog 后显示明确加载状态；加载失败时显示可重试错误，不得退回 CDN。
+- 关闭 Dialog 后销毁当前 model 和注册资源，但 Monaco 模块本身可由浏览器模块缓存复用。
 
 ### 8.3 Worker 与离线边界
 
@@ -317,7 +326,7 @@ const editorOptions = {
 规则：
 
 - 通过 `self.MonacoEnvironment.getWorker` 分发 Worker。
-- 使用 `loader.config({ monaco })` 强制使用本地 ESM Monaco。
+- 使用 Vite 本地 loader shim 的 `loader.config({ monaco })` 强制使用本地 ESM Monaco；不得让 `@monaco-editor/loader` 的 CDN fallback 进入产物。
 - 不加载 CSS、HTML、TypeScript 等无关 language worker。
 - 所有 Monaco 和 Worker 请求必须为当前站点同源请求。
 - 生产产物不得包含 jsDelivr、unpkg 或其他 Monaco CDN URL。
@@ -340,7 +349,7 @@ Monaco JSON diagnostics 是全局配置，Web 适配层必须使用协调器维�
 
 ### 8.5 SDK 体积边界
 
-规格制定时，`@nebula/screen-sdk` 产物约为 `889.4 KiB gzip`，现有门槛为 `976.6 KiB`。本功能必须满足：
+当前 `@nebula/screen-sdk` 产物为 `893.0 KiB gzip`，现有门槛为 `976.6 KiB`。本功能必须满足：
 
 - SDK 源码与产物不包含 `monaco-editor` 或 `@monaco-editor/react`。
 - SDK 未注入编辑器能力时不显示占位或不可用入口。
@@ -376,7 +385,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 ### 10.1 历史语义
 
 - Monaco 本地输入和本地撤销不进入项目 history。
-- Sheet 打开期间设计器快捷键挂起，`Ctrl/Cmd+Z` 由 Monaco 消费。
+- Dialog 打开期间设计器快捷键挂起，`Ctrl/Cmd+Z` 由 Monaco 消费。
 - 成功应用后项目 history.past 只增加一个应用前快照。
 - 项目级 undo/redo 可恢复整次 JSON 配置替换。
 - 删除可选字段后，undo 必须恢复被删除字段，redo 必须再次删除。
@@ -427,7 +436,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 
 - **GIVEN** 用户在 Nebula Web 中单选一个组件
 - **WHEN** 用户执行“编辑组件 JSON”
-- **THEN** 系统打开该组件的 JSON Sheet
+- **THEN** 系统打开该组件的 JSON Dialog
 - **AND** JSON 包含全部可编辑字段
 - **AND** `id`、`type`、`parentId` 只读展示且不出现在可编辑 JSON 中
 - **AND** `blueprint` 不出现在组件 JSON 中
@@ -440,7 +449,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 
 ### R2：Monaco 按需加载
 
-系统 SHALL 仅在 Nebula Web 首次打开组件 JSON Sheet 时加载本地 Monaco 和必要 Worker。
+系统 SHALL 仅在 Nebula Web 首次打开组件 JSON Dialog 时加载本地 Monaco 和必要 Worker。
 
 #### Scenario：未打开编辑器
 
@@ -515,7 +524,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 
 ### R6：草稿隔离与冲突保护
 
-系统 SHALL 在 Sheet 内隔离草稿，并阻止草稿覆盖打开后发生的外部组件更新。
+系统 SHALL 在 Dialog 内隔离草稿，并阻止草稿覆盖打开后发生的外部组件更新。
 
 #### Scenario：未应用草稿
 
@@ -524,7 +533,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 
 #### Scenario：外部配置变化
 
-- **GIVEN** Sheet 打开后当前组件配置已被其他来源修改
+- **GIVEN** Dialog 打开后当前组件配置已被其他来源修改
 - **WHEN** 用户应用原草稿
 - **THEN** Store 原子命令返回 conflict
 - **AND** 系统保留草稿并提示重新打开
@@ -553,9 +562,9 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 - **THEN** 每个 model 只接收与自身 URI 匹配的 Schema
 - **AND** 一个实例关闭不会移除另一个实例的 Schema
 
-#### Scenario：关闭 Sheet
+#### Scenario：关闭 Dialog
 
-- **WHEN** 用户关闭组件 JSON Sheet
+- **WHEN** 用户关闭组件 JSON Dialog
 - **THEN** 当前 model、Schema 注册和事件订阅被释放
 - **AND** 不存在持续增长的 model 或 listener
 
@@ -572,7 +581,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 
 ### R10：可访问性与响应式
 
-系统 SHALL 使组件 JSON Sheet 可通过键盘和辅助技术操作，并在支持的设计器视口内保持布局稳定。
+系统 SHALL 使组件 JSON Dialog 可通过键盘和辅助技术操作，并在支持的设计器视口内保持布局稳定。
 
 #### Scenario：键盘编辑
 
@@ -597,7 +606,7 @@ Monaco Schema 用于编辑体验，不能替代应用边界的权威校验。点
 | Web 适配测试 | 本地 loader 配置、唯一 model URI、Schema 注册/注销、主题切换、marker 转换、资源 dispose |
 | Web E2E | 懒加载、补全可见、非法指标卡配置、合法应用、画布更新、撤销重做、保存、重载、无 CDN 请求 |
 | SDK 回归 | boundary、build、size、tarball、SDK UI 无组件 JSON 入口 |
-| 视觉检查 | 桌面与窄视口 Sheet 截图、无重叠、浅色/深色 Monaco、加载和错误状态 |
+| 视觉检查 | 桌面与窄视口 Dialog 截图、无重叠、浅色/深色 Monaco、加载和错误状态 |
 
 测试原则：
 
@@ -641,7 +650,7 @@ pnpm --filter @nebula/web e2e -- screen-component-json-editor.spec.ts
 3. 非法 JSON 和违反 manifest/能力边界的配置无法进入 Store。
 4. 合法应用形成一条历史，支持可选字段删除、undo/redo、保存和重载。
 5. 草稿、并发变化、目标删除和只读状态均 fail closed。
-6. Monaco 仅在 Web 打开 Sheet 后按需加载，全部资源同源。
+6. Monaco 仅在 Web 打开 Dialog 后按需加载，全部资源同源。
 7. SDK 不包含 Monaco，现有 size 门通过。
 8. 自动化测试、浏览器验收和文档同步全部完成。
 

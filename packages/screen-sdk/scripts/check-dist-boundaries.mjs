@@ -13,13 +13,17 @@ const FORBIDDEN_SOURCE_PATTERNS = [
   /features\/dataset\//i,
   /api\/core\//i,
   /node_modules\/(?:.*\/)?axios(?:\/|$)/i,
+  /node_modules\/(?:.*\/)?@monaco-editor(?:\/|$)/i,
+  /node_modules\/(?:.*\/)?monaco-editor(?:\/|$)/i,
   /node_modules\/(?:.*\/)?sonner(?:\/|$)/i,
   /node_modules\/(?:.*\/)?@tanstack[+/]react-(?:query|router)(?:\/|$)/i,
 ];
 const FORBIDDEN_PACKAGES = new Set([
+  '@monaco-editor/react',
   '@tanstack/react-query',
   '@tanstack/react-router',
   'axios',
+  'monaco-editor',
   'sonner',
 ]);
 

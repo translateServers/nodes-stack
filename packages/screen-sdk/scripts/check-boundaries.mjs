@@ -12,9 +12,11 @@ export const SOURCE_ROOT = resolve(PACKAGE_ROOT, 'src');
 export const CORE_SOURCE_ROOT = resolve(PACKAGE_ROOT, '../screen-editor-core/src');
 
 const FORBIDDEN_PACKAGES = new Set([
+  '@monaco-editor/react',
   '@tanstack/react-query',
   '@tanstack/react-router',
   'axios',
+  'monaco-editor',
   'sonner',
 ]);
 

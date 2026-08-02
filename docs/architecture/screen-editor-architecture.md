@@ -13,6 +13,7 @@
 - **属性面板**：声明式 Schema 驱动渲染
 - **事件蓝图**：节点编辑器编排交互逻辑（单独文档说明，见 [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md)）
 - **数据层**：静态数据 / API 数据源 + 字段映射 + 逻辑层
+- **组件 JSON 编辑器**：Web 专属 Monaco 适配层，通过 Core 注入契约编辑单个组件可变配置
 
 **不在本文档范围**：蓝图系统（见独立文档）、后端 ScreenProject 持久化（见系统总览）。
 
@@ -82,6 +83,12 @@ withHistory(set, actionName, updater)
 ```
 
 自动推入快照、清空 future、置 `isDirty=true`。`updateCanvas` / `updateBlueprint` 含"无变化不入栈"短路（深比较 JSON.stringify）。
+
+### 组件 JSON 配置替换
+
+`replaceComponentConfig(command)` 在 Store 内比较固定 baseline、当前可编辑配置和下一份配置：目标缺失、只读、冲突或无变化均不会写入历史。成功时保留组件 `id`、`type`、`parentId`，精确替换其余可编辑字段并通过一次 `withHistory` 写入。
+
+Core 只定义 `ComponentJsonEditorComponent` 注入契约和右上非模态浮动 Dialog；窗口不使用主编辑器 overlay，标题栏拖拽通过 `requestAnimationFrame` 直接更新 transform，松开时才提交 React state。Web 在 `component-json-monaco-editor-loader.tsx` 中懒加载 Monaco。适配层为每个会话使用独立 model URI 和 JSON Schema 注册，并在关闭时注销。该边界保证 `@nebula/screen-sdk` 不包含 Monaco。
 
 ### 蓝图手势模式
 
