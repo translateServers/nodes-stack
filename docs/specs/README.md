@@ -11,6 +11,7 @@ specs 是本文档体系中**最重要的开发依据**。每个 spec 必须包�
 | 功能 | 索引 | 状态 | 说明 |
 | --- | --- | --- | --- |
 | 大屏编辑器 | [screen-editor/](./screen-editor/README.md) | 生效中（2026-07-30） | 已实现功能的现状描述：画布/组件/工具/属性面板/图层/数据层/历史栈/快捷键/蓝图/预览/保存发布 |
+| 大屏组件 JSON 配置编辑器 | [screen-component-json-editor/](./screen-component-json-editor/spec.md) | 设计中（2026-08-02） | Nebula Web 使用 Monaco 直接编辑选中组件完整可变配置，提供 registry 驱动补全、严格校验、原子历史并保持 SDK 无 Monaco 依赖 |
 | 大屏设计器 Web Component SDK | [screen-web-component-sdk/](./screen-web-component-sdk/spec.md) | 已归档（2026-08-02） | 早期 SDK rollout 方案；现行 SDK 宿主接入以 architecture 开发指南为准 |
 | 大屏组件 SDK 与组件注册表 | [screen-component-sdk/](./screen-component-sdk/component-author-guide.md) | 生效中（2026-08-02） | 正式 Manifest + Web Component + 实例注册表、Web 共享接入、transfer/preview/snapshot 与迁移指南；旧 rollout spec 已归档 |
 | 大屏 SDK 动态数据能力 | [screen-sdk-dynamic-data/](./screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 后续版本的 API/dataset、动态全局变量与蓝图数据动作独立规格；不改变 static 能力边界 |
