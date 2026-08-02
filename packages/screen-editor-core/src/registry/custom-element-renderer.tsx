@@ -33,7 +33,7 @@ import {
   COMPONENT_EVENT_TYPE,
   validateComponentEvent,
   type ScreenComponentElement,
-  type ScreenComponentElementModelV1,
+  type ScreenComponentElementModel,
   type ScreenComponentEventDetail,
   type ScreenComponentEventDefinition,
   type ScreenComponentJsonValue,
@@ -103,8 +103,8 @@ function buildDetachedModel(
   props: Record<string, unknown>,
   style: ComponentStyle,
   size: { width: number; height: number },
-): ScreenComponentElementModelV1 {
-  const model: ScreenComponentElementModelV1 = {
+): ScreenComponentElementModel {
+  const model: ScreenComponentElementModel = {
     apiVersion: 1,
     componentId,
     mode,

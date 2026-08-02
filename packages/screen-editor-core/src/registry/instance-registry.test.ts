@@ -15,7 +15,7 @@ import {
   InstanceRegistryBuildError,
   type ScreenComponentRegistration,
 } from './instance-registry';
-import type { ScreenComponentManifestV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentManifest } from '@nebula/screen-component-sdk';
 
 const SCREEN_COMPONENT_API_VERSION = 'nebula.screen-component/v1' as const;
 
@@ -24,7 +24,7 @@ const SCREEN_COMPONENT_API_VERSION = 'nebula.screen-component/v1' as const;
  *
  * 默认 type/text-v1/tagName/nebula-screen-text-v1，调用方可覆盖任意字段。
  */
-function makeManifest(overrides: Partial<ScreenComponentManifestV1>): ScreenComponentManifestV1 {
+function makeManifest(overrides: Partial<ScreenComponentManifest>): ScreenComponentManifest {
   return {
     apiVersion: SCREEN_COMPONENT_API_VERSION,
     type: 'text',
@@ -47,7 +47,7 @@ function makeManifest(overrides: Partial<ScreenComponentManifestV1>): ScreenComp
  * 构造最小 built-in registration。
  */
 function makeBuiltIn(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   legacy?: Omit<ScreenComponentRegistration, 'source' | 'manifest'>,
 ): ScreenComponentRegistration {
   return {

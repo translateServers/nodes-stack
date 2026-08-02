@@ -13,7 +13,7 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
-import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentElementModel } from '@nebula/screen-component-sdk';
 import { Image } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -83,7 +83,7 @@ export class ImageCustomElement extends HTMLElement {
     return root;
   }
 
-  set model(model: ScreenComponentElementModelV1) {
+  set model(model: ScreenComponentElementModel) {
     const root = this.#ensureRoot();
     const style = model.style;
     const src = model.props['src'];

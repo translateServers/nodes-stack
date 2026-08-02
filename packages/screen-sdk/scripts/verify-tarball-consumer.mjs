@@ -172,14 +172,14 @@ import './vue-host';
 import type { NebulaScreenEditorElement } from '@nebula/screen-sdk';
 import {
   createScreenComponentRegistry,
-  type ScreenComponentManifestV1,
-  type ScreenComponentPluginV1,
-  type ScreenHostAdapterV2,
+  type ScreenComponentManifest,
+  type ScreenComponentPlugin,
+  type ScreenHostAdapter,
 } from '@nebula/screen-sdk/components';
-import { ScreenDocumentV1Schema } from '@nebula/screen-sdk/contracts';
+import { ScreenDocumentWireSchema } from '@nebula/screen-sdk/contracts';
 import screenDocumentSchema from '@nebula/screen-sdk/contracts/screen-document.schema.json';
 
-void ScreenDocumentV1Schema;
+void ScreenDocumentWireSchema;
 void screenDocumentSchema;
 
 class ConsumerMetricCard extends HTMLElement {
@@ -189,7 +189,7 @@ class ConsumerMetricCard extends HTMLElement {
   }
 }
 
-const metricManifest: ScreenComponentManifestV1 = {
+const metricManifest: ScreenComponentManifest = {
   apiVersion: 'nebula.screen-component/v1',
   type: 'consumer.metric-card/v1',
   implementationVersion: '1.0.0',
@@ -209,15 +209,14 @@ const metricManifest: ScreenComponentManifestV1 = {
   },
 };
 
-const metricPlugin: ScreenComponentPluginV1 = {
+const metricPlugin: ScreenComponentPlugin = {
   manifest: metricManifest,
   define: () => ConsumerMetricCard,
 };
 
 const componentRegistry = await createScreenComponentRegistry({ components: [metricPlugin] });
 
-const adapter: ScreenHostAdapterV2 = {
-  documentVersion: 2,
+const adapter: ScreenHostAdapter = {
   loadProject: async ({ projectId }) => ({
     id: projectId,
     name: 'Consumer project',

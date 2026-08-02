@@ -28,14 +28,14 @@ export const SCREEN_SDK_COMPONENT_ACTION_HANDLES = [
   'act:toggleVisibility',
 ] as const;
 
-export const SCREEN_SDK_V1_TRIGGER_TYPES = [
+export const LEGACY_SCREEN_SDK_TRIGGER_TYPES = [
   'componentClick',
   'componentHover',
   'pageLoad',
   'interval',
 ] as const;
 
-export const SCREEN_SDK_V1_ACTION_TYPES = [
+export const LEGACY_SCREEN_SDK_ACTION_TYPES = [
   'setVisibility',
   'navigate',
   'scrollToComponent',
@@ -43,8 +43,8 @@ export const SCREEN_SDK_V1_ACTION_TYPES = [
 
 const NODE_KIND_SET: ReadonlySet<string> = new Set(SCREEN_SDK_BLUEPRINT_NODE_KINDS);
 const GLOBAL_COMPONENT_TYPE_SET: ReadonlySet<string> = new Set(SCREEN_SDK_GLOBAL_COMPONENT_TYPES);
-const V1_TRIGGER_TYPE_SET: ReadonlySet<string> = new Set(SCREEN_SDK_V1_TRIGGER_TYPES);
-const V1_ACTION_TYPE_SET: ReadonlySet<string> = new Set(SCREEN_SDK_V1_ACTION_TYPES);
+const legacyTriggerTypeSet: ReadonlySet<string> = new Set(LEGACY_SCREEN_SDK_TRIGGER_TYPES);
+const legacyActionTypeSet: ReadonlySet<string> = new Set(LEGACY_SCREEN_SDK_ACTION_TYPES);
 
 export function isScreenSdkBlueprintNodeKind(value: unknown): boolean {
   return typeof value === 'string' && NODE_KIND_SET.has(value);
@@ -54,12 +54,12 @@ export function isScreenSdkGlobalComponentType(value: unknown): boolean {
   return typeof value === 'string' && GLOBAL_COMPONENT_TYPE_SET.has(value);
 }
 
-export function isScreenSdkV1TriggerType(value: unknown): boolean {
-  return typeof value === 'string' && V1_TRIGGER_TYPE_SET.has(value);
+export function isLegacyScreenSdkTriggerType(value: unknown): boolean {
+  return typeof value === 'string' && legacyTriggerTypeSet.has(value);
 }
 
-export function isScreenSdkV1ActionType(value: unknown): boolean {
-  return typeof value === 'string' && V1_ACTION_TYPE_SET.has(value);
+export function isLegacyScreenSdkActionType(value: unknown): boolean {
+  return typeof value === 'string' && legacyActionTypeSet.has(value);
 }
 
 export interface ScreenSdkBlueprintNodeCapability {

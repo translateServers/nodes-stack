@@ -9,14 +9,8 @@
  * - 类型图标容器与标签布局
  * - 深色主题配色
  *
- * V1 节点类型配色：
- * - trigger：琥珀色（amber）
- * - action：绿色（emerald）
- * - comment：灰色（gray）
- * - condition：紫色（purple）
- *
- * V2 节点类型配色（与 V1 共用同一套配色方案）：
- * - component：绿色（emerald）—— V2 主色，突出"组件即节点"理念
+ * 节点类型配色：
+ * - component：绿色（emerald），突出"组件即节点"理念
  * - global：绿色（emerald）+ 虚线边框 —— 全局节点子类型
  * - delay：琥珀色（amber）
  * - condition：紫色（purple）
@@ -28,9 +22,7 @@
  * - condition then / else：emerald / rose
  * - 其他静态引脚：muted 中性色
  *
- * 同时支持：
- * - V1 静态引脚模式（showInputHandle / showOutputHandle / outputHandleMode）
- * - V2 动态锚点模式（dynamicAnchors：传入 events[]/actions[] 数组自动派生 Handle）
+ * 同时支持静态引脚和从事件/动作定义派生的动态锚点。
  */
 
 import { useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react';
@@ -45,16 +37,10 @@ import { cn } from '@nebula/screen-editor-core/internal';
  */
 const ANCHOR_ROW_HEIGHT = 24;
 
-/** 节点类型配色方案（V1 + V2 共用） */
-export type NodeColorScheme =
-  | 'trigger'
-  | 'action'
-  | 'comment'
-  | 'condition'
-  | 'component'
-  | 'delay';
+/** 节点类型配色方案。 */
+export type NodeColorScheme = 'comment' | 'condition' | 'component' | 'delay';
 
-/** V2 动态锚点描述（组件节点派生的事件/动作锚点） */
+/** 动态锚点描述（组件节点派生的事件/动作锚点）。 */
 export interface AnchorDescriptor {
   /** 锚点 ID（如 'evt:click' / 'act:show' / 'in' / 'out' / 'then' / 'else'） */
   id: string;
@@ -102,12 +88,12 @@ interface BaseNodeShellProps {
    */
   outputHandleMode?: 'single' | 'then-else';
   /**
-   * V2：是否启用虚线边框（全局节点专用）。
+   * 是否启用虚线边框（全局节点专用）。
    * 与 colorScheme=component + globalType 共同标识全局节点。
    */
   dashed?: boolean;
   /**
-   * V2：动态锚点模式。
+   * 动态锚点模式。
    * - sourceAnchors：输出锚点列表（左侧或上侧，每个锚点一个 Handle）
    * - targetAnchors：输入锚点列表（右侧或下侧，每个锚点一个 Handle）
    * 启用后忽略 showInputHandle / showOutputHandle / outputHandleMode。
@@ -135,20 +121,6 @@ const COLOR_SCHEMES: Record<
     accentBar: string;
   }
 > = {
-  trigger: {
-    bg: 'bg-amber-500/[0.07] dark:bg-amber-500/10',
-    border: 'border-amber-500/40 dark:border-amber-400/40',
-    text: 'text-amber-700 dark:text-amber-300',
-    iconBg: 'bg-amber-500/15 dark:bg-amber-500/25',
-    accentBar: 'bg-amber-500',
-  },
-  action: {
-    bg: 'bg-emerald-500/[0.07] dark:bg-emerald-500/10',
-    border: 'border-emerald-500/40 dark:border-emerald-400/40',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    iconBg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
-    accentBar: 'bg-emerald-500',
-  },
   comment: {
     bg: 'bg-gray-500/[0.07] dark:bg-gray-500/10',
     border: 'border-gray-500/40 dark:border-gray-400/40',
@@ -163,7 +135,7 @@ const COLOR_SCHEMES: Record<
     iconBg: 'bg-purple-500/15 dark:bg-purple-500/25',
     accentBar: 'bg-purple-500',
   },
-  // V2 component 节点：emerald 配色（与 action 一致），与 V1 action 节点视觉延续
+  // Component nodes use the primary execution-flow color.
   component: {
     bg: 'bg-emerald-500/[0.07] dark:bg-emerald-500/10',
     border: 'border-emerald-500/40 dark:border-emerald-400/40',
@@ -171,7 +143,7 @@ const COLOR_SCHEMES: Record<
     iconBg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
     accentBar: 'bg-emerald-500',
   },
-  // V2 delay 节点：amber 配色（与 trigger 一致）
+  // Delay nodes use the timing color.
   delay: {
     bg: 'bg-amber-500/[0.07] dark:bg-amber-500/10',
     border: 'border-amber-500/40 dark:border-amber-400/40',
@@ -195,8 +167,8 @@ const HANDLE_NEUTRAL_CLASS = `${HANDLE_BASE_CLASS} !bg-muted-foreground`;
 /**
  * 节点共享外壳组件。
  *
- * 不直接作为 React Flow 节点渲染，由 trigger-node / action-node / comment-node /
- * condition-node / component-node / global-node / delay-node 包装使用。
+ * 不直接作为 React Flow 节点渲染，由 comment、condition、component、global 与 delay
+ * 节点包装使用。
  */
 export function BaseNodeShell({
   colorScheme,

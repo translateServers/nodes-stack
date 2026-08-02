@@ -1,7 +1,7 @@
 # 系统总览
 
 > 状态：生效中
-> 最近更新：2026-07-24
+> 最近更新：2026-08-02
 > 定位：新人入职第一篇必读。读完应能回答"项目是什么、用什么技术、怎么跑起来、怎么动手"
 
 ## 1. 项目是什么
@@ -154,7 +154,7 @@ Prisma 多文件 schema（Prisma 7 特性）：根 `schema.prisma` 仅含 genera
 | `DictType` / `DictValue` | dict_types / dict_values | 字典类型与值（级联） |
 | `File` | files | 通用附件（靠 rowId 软关联业务行，无外键） |
 | `RefreshToken` | refresh_tokens | JWT refresh token（可撤销） |
-| `ScreenProject` | screen_projects | 大屏项目（canvas/components/blueprint 均为 JSON 字符串） |
+| `ScreenProject` | screen_projects | 大屏项目（`document` 为正式 JSON；旧 canvas/components/blueprint 列仅用于迁移读取） |
 
 ## 6. 前端路由结构
 

@@ -1,11 +1,11 @@
 /**
- * 事件蓝图 V2 端到端验收（任务 7.1）
+ * 事件蓝图端到端验收（任务 7.1）
  *
  * 覆盖全链路：打开蓝图 Sheet → 搜索插入节点 → 连线 → 配置参数 → 保存 → 公开预览点击触发"点击 A → 隐藏 B"。
  *
  * 实施策略：
  * - UI 操作覆盖：打开 Sheet、双击空白呼出搜索面板、键盘选择并插入两个组件节点
- * - 节点连线：通过开发模式 debug store 写入 V2 evt:click → act:hide 连线，
+ * - 节点连线：通过开发模式 debug store 写入 evt:click → act:hide 连线，
  *   通过 `window.__screenEditorStore.updateBlueprint` 直接写入完整蓝图（含参数 + 连线）。
  *   editor-store 已在 import.meta.env.DEV 时暴露给 window，dev server 模式可用。
  * - 持久化验证：保存请求 PATCH 载荷与 GET 响应均含 blueprint 字段
@@ -16,7 +16,7 @@
  */
 
 import { type BrowserContext } from '@playwright/test';
-import type { EventBlueprintV2 } from '@nebula/shared';
+import type { EventBlueprint } from '@nebula/shared';
 
 import { test, expect } from '../fixtures/auth.fixture';
 import {
@@ -53,13 +53,13 @@ async function insertNodeViaSearchPanel(
   canvasPosition: { x: number; y: number },
   query: string,
 ): Promise<void> {
-  const canvas = sheet.getByTestId('blueprint-v2-canvas');
+  const canvas = sheet.getByTestId('blueprint-canvas');
   await canvas.dblclick({ position: canvasPosition });
 
-  const searchPanel = sheet.getByTestId('v2-search-panel');
+  const searchPanel = sheet.getByTestId('blueprint-search-panel');
   await expect(searchPanel).toBeVisible({ timeout: 3000 });
 
-  const input = searchPanel.getByTestId('v2-search-panel-input');
+  const input = searchPanel.getByTestId('blueprint-search-panel-input');
   await input.fill(query);
   await input.press('Enter');
 
@@ -67,7 +67,7 @@ async function insertNodeViaSearchPanel(
 }
 
 /**
- * 通过 `window.__screenEditorStore` 为两个 V2 组件节点写入点击隐藏连线。
+ * 通过 `window.__screenEditorStore` 为两个组件节点写入点击隐藏连线。
  */
 async function configureBlueprintViaStore(
   page: import('@playwright/test').Page,
@@ -80,8 +80,8 @@ async function configureBlueprintViaStore(
         window as unknown as {
           __screenEditorStore?: {
             getState: () => {
-              project: { blueprint?: EventBlueprintV2 } | null;
-              updateBlueprint: (bp: EventBlueprintV2 | undefined) => void;
+              project: { blueprint?: EventBlueprint } | null;
+              updateBlueprint: (bp: EventBlueprint | undefined) => void;
             };
           };
         }
@@ -92,7 +92,7 @@ async function configureBlueprintViaStore(
       const current = state.project?.blueprint;
       if (!current) throw new Error('blueprint not initialized');
 
-      if (current.version !== 2) throw new Error('V2 blueprint was not initialized');
+      if (current.version !== 2) throw new Error('Blueprint was not initialized');
       const sourceNode = current.nodes.find(
         (node) => node.kind === 'component' && node.componentId === args.componentAId,
       );
@@ -102,7 +102,7 @@ async function configureBlueprintViaStore(
       if (!sourceNode) throw new Error('source component node not found');
       if (!targetNode) throw new Error('target component node not found');
 
-      const newBlueprint: EventBlueprintV2 = {
+      const newBlueprint: EventBlueprint = {
         version: 2,
         nodes: current.nodes,
         edges: [
@@ -121,7 +121,7 @@ async function configureBlueprintViaStore(
   );
 }
 
-test.describe('事件蓝图 V2 端到端验收（任务 7.1）', () => {
+test.describe('事件蓝图端到端验收（任务 7.1）', () => {
   test('可视化搭建到预览执行：点击 A → 隐藏 B', async ({ adminPage, browser }) => {
     const ts = Date.now();
     const project = await createScreenProject({ name: `e2e-bp-7.1-${ts}` });
@@ -164,10 +164,10 @@ test.describe('事件蓝图 V2 端到端验收（任务 7.1）', () => {
       await adminPage.getByRole('button', { name: '工具' }).click();
       await adminPage.getByRole('menuitem', { name: /^事件蓝图/ }).click();
 
-      const sheet = adminPage.getByRole('dialog', { name: '事件蓝图 V2' });
+      const sheet = adminPage.getByRole('dialog', { name: '事件蓝图' });
       await expect(sheet).toBeVisible({ timeout: 5000 });
-      await expect(sheet.getByTestId('blueprint-v2-canvas')).toBeVisible();
-      await sheet.getByTestId('blueprint-v2-start-from-scratch').click();
+      await expect(sheet.getByTestId('blueprint-canvas')).toBeVisible();
+      await sheet.getByTestId('blueprint-start-from-scratch').click();
 
       // 4. UI 创建触发组件节点（双击空白 → 搜索面板 → 输入 → Enter）
       await insertNodeViaSearchPanel(sheet, { x: 200, y: 200 }, 'E2E 蓝图触发器');
@@ -180,7 +180,7 @@ test.describe('事件蓝图 V2 端到端验收（任务 7.1）', () => {
       );
       await expect(componentNodes).toHaveCount(2, { timeout: 5000 });
 
-      // 6. 通过 store 写入 V2 点击隐藏连线
+      // 6. 通过 store 写入点击隐藏连线
       await configureBlueprintViaStore(adminPage, componentA.id, componentB.id);
 
       // 节点标签应保持对应画布组件名称
@@ -188,7 +188,7 @@ test.describe('事件蓝图 V2 端到端验收（任务 7.1）', () => {
       await expect(componentNodes.filter({ hasText: 'E2E 蓝图目标' })).toHaveCount(1);
 
       // 7. 关闭 Sheet（点击关闭按钮，比 Esc 分层更稳定）
-      await sheet.getByTestId('blueprint-v2-sheet-close').click();
+      await sheet.getByTestId('blueprint-sheet-close').click();
       await expect(sheet).not.toBeVisible({ timeout: 3000 });
 
       // 8. 保存：等待 PATCH 响应并验证载荷含 blueprint
@@ -203,7 +203,7 @@ test.describe('事件蓝图 V2 端到端验收（任务 7.1）', () => {
       expect(saveResponse.ok()).toBeTruthy();
 
       const saveBody = saveResponse.request().postDataJSON() as {
-        blueprint?: EventBlueprintV2;
+        blueprint?: EventBlueprint;
       };
       expect(saveBody.blueprint).toBeDefined();
       expect(saveBody.blueprint?.nodes).toHaveLength(2);

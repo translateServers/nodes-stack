@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import {
   parseScreenDocument,
+  DEFAULT_BUILTIN_REGISTRY,
   ScreenHostController,
   validateScreenSdkCapabilities,
   type ScreenProjectEnvelope,
@@ -17,6 +18,7 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
   const root = createRoot(options.mountRoot, { identifierPrefix: options.identifierPrefix });
   const controller = new ScreenHostController({
     eventTarget: options.eventTarget,
+    registry: options.componentRegistry ?? DEFAULT_BUILTIN_REGISTRY,
     session: {
       applyEnvelope: (command) => {
         envelope = structuredClone(command.envelope);
@@ -57,8 +59,6 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
         data-readonly={configuration.readonly ? '' : undefined}
         data-theme={configuration.theme}
         data-component-registry-size={registry === undefined ? 'none' : String(registry.size)}
-        data-document-mode={configuration.documentMode ?? 'v1'}
-        data-v2-adapter={configuration.adapterV2 === undefined ? undefined : ''}
       />,
     );
   };
@@ -98,7 +98,10 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
     update,
     validate: () => {
       if (envelope === null) return [];
-      const parsed = parseScreenDocument(envelope.document);
+      const parsed = parseScreenDocument(
+        envelope.document,
+        configuration.componentRegistry ?? DEFAULT_BUILTIN_REGISTRY,
+      );
       return parsed.success ? validateScreenSdkCapabilities(parsed.data) : parsed.diagnostics;
     },
     whenReady: () => controller.whenReady(),

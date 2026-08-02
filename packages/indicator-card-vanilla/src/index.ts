@@ -11,7 +11,7 @@
  * - 不导出 propertyPanel / events（暂未声明）
  */
 
-import type { ScreenComponentPluginV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentPlugin } from '@nebula/screen-component-sdk';
 import { defineScreenComponent } from '@nebula/screen-component-sdk';
 import { IndicatorCardElement } from './indicator-card-element.js';
 import { indicatorCardManifest } from './manifest.js';
@@ -34,7 +34,7 @@ export {
  * - registry-factory 在 customElements.define 失败时不会重试
  * - customElements.get(tagName) 已存在且构造器一致时跳过注册
  */
-export const indicatorCardPlugin: ScreenComponentPluginV1 = defineScreenComponent({
+export const indicatorCardPlugin: ScreenComponentPlugin = defineScreenComponent({
   manifest: indicatorCardManifest,
   define: () => IndicatorCardElement,
 });

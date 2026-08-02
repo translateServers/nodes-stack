@@ -11,20 +11,20 @@
 ```ts
 import {
   SCREEN_COMPONENT_API_VERSION,
-  type ScreenComponentElementModelV1,
-  type ScreenComponentManifestV1,
-  type ScreenComponentPluginV1,
+  type ScreenComponentElementModel,
+  type ScreenComponentManifest,
+  type ScreenComponentPlugin,
 } from '@nebula/screen-component-sdk';
 
 class MetricCardElement extends HTMLElement {
-  set model(model: ScreenComponentElementModelV1) {
+  set model(model: ScreenComponentElementModel) {
     const title = typeof model.props.title === 'string' ? model.props.title : 'Metric';
     const value = typeof model.props.value === 'number' ? model.props.value : 0;
     this.textContent = `${title}: ${value}`;
   }
 }
 
-export const metricCardManifest: ScreenComponentManifestV1 = {
+export const metricCardManifest: ScreenComponentManifest = {
   apiVersion: SCREEN_COMPONENT_API_VERSION,
   type: 'acme.metric-card/v1',
   implementationVersion: '1.0.0',
@@ -55,7 +55,7 @@ export const metricCardManifest: ScreenComponentManifestV1 = {
   events: [{ id: 'valueClick', name: 'Value Click' }],
 };
 
-export const metricCardPlugin: ScreenComponentPluginV1 = {
+export const metricCardPlugin: ScreenComponentPlugin = {
   manifest: metricCardManifest,
   define: () => MetricCardElement,
 };
@@ -93,7 +93,7 @@ import '@nebula/screen-sdk/auto-register';
 import type { NebulaScreenEditorElement } from '@nebula/screen-sdk';
 import {
   createScreenComponentRegistry,
-  type ScreenHostAdapterV2,
+  type ScreenHostAdapter,
 } from '@nebula/screen-sdk/components';
 import { metricCardPlugin } from './metric-card';
 
@@ -101,8 +101,7 @@ const componentRegistry = await createScreenComponentRegistry({
   components: [metricCardPlugin],
 });
 
-const adapter: ScreenHostAdapterV2 = {
-  documentVersion: 2,
+const adapter: ScreenHostAdapter = {
   loadProject: async ({ projectId }) => loadProject(projectId),
   saveProject: async ({ projectId, draft, revision }) => saveProject(projectId, draft, revision),
 };
@@ -125,7 +124,7 @@ React 和 Vue 宿主必须通过 ref 设置 property，示例见 [0.2 迁移指�
 - 外部组件不支持 `dataSource`、`logic`、`interaction` 或自定义 action。
 - Shadow DOM 只隔离样式，不是安全沙箱。
 - 外部组件代码是受信任代码，应由宿主显式导入并注册。
-- V2 缺少组件定义、props 不合法或能力不支持时 fail-closed，不覆盖当前项目。
+- 缺少组件定义、props 不合法或能力不支持时 fail-closed，不覆盖当前项目。
 - props、静态数据和全局变量只接受 JSON 值：不接受 `undefined`、`NaN`、`Infinity`、function、class instance、DOM Node、Promise、循环引用或 prototype pollution key。
 
 ## 5. 验证命令
@@ -137,4 +136,4 @@ pnpm --filter @nebula/screen-component-sdk test
 pnpm --filter @nebula/screen-sdk verify:tarball
 ```
 
-`verify:tarball` 覆盖 Vanilla V2 registry、React ref 赋值和 Vue ref 赋值的构建 smoke。
+`verify:tarball` 覆盖 Vanilla registry、React ref 赋值和 Vue ref 赋值的构建 smoke。

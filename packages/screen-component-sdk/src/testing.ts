@@ -4,8 +4,8 @@
  * 供组件作者和 SDK 测试使用，提供 manifest 构造辅助和断言工具。
  */
 
-import type { ScreenComponentManifestV1 } from './contracts/manifest.js';
-import type { ScreenComponentPluginV1 } from './contracts/plugin.js';
+import type { ScreenComponentManifest } from './contracts/manifest.js';
+import type { ScreenComponentPlugin } from './contracts/plugin.js';
 import { validateManifest } from './validation/manifest-validator.js';
 import type { ScreenComponentValidationResult } from './contracts/diagnostic.js';
 
@@ -16,7 +16,7 @@ export function createMinimalManifest(overrides?: {
   type?: string;
   tagName?: string;
   implementationVersion?: string;
-}): ScreenComponentManifestV1 {
+}): ScreenComponentManifest {
   return {
     apiVersion: 'nebula.screen-component/v1',
     type: overrides?.type ?? 'acme.kpi/v1',
@@ -49,7 +49,7 @@ export function createMinimalManifest(overrides?: {
 export function createMinimalPlugin(
   manifestOverrides?: Parameters<typeof createMinimalManifest>[0],
   defineImpl?: () => CustomElementConstructor | Promise<CustomElementConstructor>,
-): ScreenComponentPluginV1 {
+): ScreenComponentPlugin {
   return {
     manifest: createMinimalManifest(manifestOverrides),
     define:
@@ -65,7 +65,7 @@ export function createMinimalPlugin(
  * 断言 manifest 校验通过。
  */
 export function expectManifestOk(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
 ): ScreenComponentValidationResult {
   const result = validateManifest(manifest);
   if (!result.ok) {
@@ -81,7 +81,7 @@ export function expectManifestOk(
  * 断言 manifest 校验失败，并可选检查 code。
  */
 export function expectManifestInvalid(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   expectedCode?: string,
 ): ScreenComponentValidationResult {
   const result = validateManifest(manifest);

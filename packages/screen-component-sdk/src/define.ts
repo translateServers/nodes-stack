@@ -5,7 +5,7 @@
  * plugin.define() 必须幂等，返回 manifest.tagName 对应的构造器。
  */
 
-import type { ScreenComponentPluginV1 } from './contracts/plugin.js';
+import type { ScreenComponentPlugin } from './contracts/plugin.js';
 import { validateManifest } from './validation/manifest-validator.js';
 
 /**
@@ -18,7 +18,7 @@ import { validateManifest } from './validation/manifest-validator.js';
  * @param plugin 组件插件 `{ manifest, define }`
  * @throws Error 当 manifest 校验失败时
  */
-export function defineScreenComponent(plugin: ScreenComponentPluginV1): ScreenComponentPluginV1 {
+export function defineScreenComponent(plugin: ScreenComponentPlugin): ScreenComponentPlugin {
   const result = validateManifest(plugin.manifest);
   if (!result.ok) {
     const summary = result.diagnostics

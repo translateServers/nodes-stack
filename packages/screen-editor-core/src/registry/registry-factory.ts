@@ -22,10 +22,10 @@
 
 import {
   validateManifest,
-  type ScreenComponentPluginV1,
+  type ScreenComponentPlugin,
   type ScreenComponentValidationDiagnostic,
 } from '@nebula/screen-component-sdk';
-import type { ScreenSdkDiagnosticV2 } from '../contracts/diagnostics.js';
+import type { ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
 import { BUILTIN_COMPONENT_REGISTRATIONS } from './builtin-manifests';
 import {
   buildInstanceRegistry,
@@ -58,7 +58,7 @@ export {
  */
 export interface CreateScreenComponentRegistryOptions {
   /** 宿主额外注册的组件 plugin 列表 */
-  readonly components?: readonly ScreenComponentPluginV1[];
+  readonly components?: readonly ScreenComponentPlugin[];
 }
 
 /**
@@ -91,7 +91,7 @@ let customElementCommitQueue: Promise<void> = Promise.resolve();
 function toRegistryDiagnostics(
   code: ScreenComponentRegistryErrorCode,
   diagnostics: readonly ScreenComponentValidationDiagnostic[],
-): ScreenSdkDiagnosticV2[] {
+): ScreenSdkDiagnostic[] {
   return diagnostics.map((diagnostic) => ({
     code,
     path: [...diagnostic.path],
@@ -110,7 +110,7 @@ function toRegistryDiagnostics(
  * @throws ScreenComponentRegistryErrorImpl 任一步骤失败时
  */
 async function resolveHostPlugin(
-  plugin: ScreenComponentPluginV1,
+  plugin: ScreenComponentPlugin,
 ): Promise<Extract<ScreenComponentRegistration, { source: 'host' }>> {
   const { manifest } = plugin;
 
@@ -142,7 +142,7 @@ async function resolveHostPlugin(
   };
 }
 
-function validateHostManifests(hostPlugins: readonly ScreenComponentPluginV1[]): void {
+function validateHostManifests(hostPlugins: readonly ScreenComponentPlugin[]): void {
   for (const plugin of hostPlugins) {
     const validationResult = validateManifest(plugin.manifest);
     if (!validationResult.ok) {
@@ -156,7 +156,7 @@ function validateHostManifests(hostPlugins: readonly ScreenComponentPluginV1[]):
   }
 }
 
-function assertUniqueManifestIdentities(hostPlugins: readonly ScreenComponentPluginV1[]): void {
+function assertUniqueManifestIdentities(hostPlugins: readonly ScreenComponentPlugin[]): void {
   const seenTypes = new Set(BUILTIN_COMPONENT_REGISTRATIONS.map((reg) => reg.manifest.type));
   const seenTagNames = new Set(BUILTIN_COMPONENT_REGISTRATIONS.map((reg) => reg.manifest.tagName));
 

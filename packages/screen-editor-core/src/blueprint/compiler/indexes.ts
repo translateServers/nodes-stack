@@ -1,82 +1,79 @@
-/**
- * 蓝图索引构建（任务 2.1/2.2 共用工具）
- *
- * 将线性 nodes[]/edges[] 转换为 O(1) 查找的索引结构。
- * 同时检测重复节点 id 与重复边 id。
- */
+import type { BlueprintEdge, BlueprintNode, EventBlueprint } from '@nebula/shared';
 
-import type { EventBlueprint } from '@nebula/shared';
-import type { BlueprintIndexes, Diagnostic, EdgeIndex, NodeIndex } from './types.js';
+import type { BlueprintDiagnostic } from './types.js';
 
-/** 构建节点与边索引，返回诊断（重复 id 等） */
-export function buildIndexes(blueprint: EventBlueprint): {
-  indexes: BlueprintIndexes;
-  diagnostics: Diagnostic[];
-} {
+export interface NodeIndexEntry {
+  readonly id: string;
+  readonly kind: 'component' | 'condition' | 'delay' | 'comment';
+  readonly componentId?: string;
+  readonly globalType?: string;
+  readonly node: BlueprintNode;
+}
+
+export type NodeIndex = Map<string, NodeIndexEntry>;
+export type EdgeIndex = Map<string, BlueprintEdge[]>;
+
+export interface BlueprintIndexes {
+  readonly nodes: NodeIndex;
+  readonly outgoingEdges: EdgeIndex;
+  readonly incomingEdges: EdgeIndex;
+  readonly diagnostics: BlueprintDiagnostic[];
+}
+
+export function buildIndexes(blueprint: EventBlueprint): BlueprintIndexes {
   const nodes: NodeIndex = new Map();
   const outgoingEdges: EdgeIndex = new Map();
   const incomingEdges: EdgeIndex = new Map();
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics: BlueprintDiagnostic[] = [];
 
-  // 节点索引 + 重复 id 检测
   for (const node of blueprint.nodes) {
     if (nodes.has(node.id)) {
       diagnostics.push({
         level: 'error',
         code: 'duplicate-node-id',
-        message: `节点 id 重复：${node.id}`,
+        message: `Duplicate node id: ${node.id}`,
         nodeId: node.id,
       });
       continue;
     }
-    nodes.set(node.id, node);
+    nodes.set(node.id, createNodeIndexEntry(node));
   }
 
-  // 边索引 + 重复 id 检测 + 引用合法性检测
-  const seenEdgeIds = new Set<string>();
+  const edgeIds = new Set<string>();
   for (const edge of blueprint.edges) {
-    if (seenEdgeIds.has(edge.id)) {
+    if (edgeIds.has(edge.id)) {
       diagnostics.push({
         level: 'error',
         code: 'duplicate-edge-id',
-        message: `边 id 重复：${edge.id}`,
+        message: `Duplicate edge id: ${edge.id}`,
         edgeId: edge.id,
       });
       continue;
     }
-    seenEdgeIds.add(edge.id);
+    edgeIds.add(edge.id);
 
-    // source/target 必须存在于节点索引中
-    if (!nodes.has(edge.source)) {
-      diagnostics.push({
-        level: 'error',
-        code: 'invalid-edge',
-        message: `边的 source 节点不存在：${edge.source}`,
-        edgeId: edge.id,
-      });
-      continue;
-    }
-    if (!nodes.has(edge.target)) {
-      diagnostics.push({
-        level: 'error',
-        code: 'invalid-edge',
-        message: `边的 target 节点不存在：${edge.target}`,
-        edgeId: edge.id,
-      });
-      continue;
-    }
+    const outgoing = outgoingEdges.get(edge.source) ?? [];
+    outgoing.push(edge);
+    outgoingEdges.set(edge.source, outgoing);
 
-    const out = outgoingEdges.get(edge.source) ?? [];
-    out.push(edge);
-    outgoingEdges.set(edge.source, out);
+    const incoming = incomingEdges.get(edge.target) ?? [];
+    incoming.push(edge);
+    incomingEdges.set(edge.target, incoming);
+  }
 
-    const inc = incomingEdges.get(edge.target) ?? [];
-    inc.push(edge);
-    incomingEdges.set(edge.target, inc);
+  return { nodes, outgoingEdges, incomingEdges, diagnostics };
+}
+
+function createNodeIndexEntry(node: BlueprintNode): NodeIndexEntry {
+  if (node.kind !== 'component') {
+    return { id: node.id, kind: node.kind, node };
   }
 
   return {
-    indexes: { nodes, outgoingEdges, incomingEdges },
-    diagnostics,
+    id: node.id,
+    kind: node.kind,
+    componentId: node.componentId,
+    globalType: node.globalType,
+    node,
   };
 }

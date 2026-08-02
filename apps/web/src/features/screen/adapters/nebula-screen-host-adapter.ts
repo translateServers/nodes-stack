@@ -16,6 +16,7 @@ import {
   type ScreenSdkDiagnostic,
 } from '@nebula/screen-sdk/contracts';
 import type { ScreenPreviewRequestDetail } from '@nebula/screen-sdk';
+import { DEFAULT_BUILTIN_REGISTRY } from '@nebula/screen-editor-core';
 import { getScreenProject, publishScreenProject, updateScreenProject } from '../api';
 import { screenQueryKeys } from '../hooks';
 
@@ -124,7 +125,7 @@ export function screenProjectToSdkEnvelope(project: ScreenProject): ScreenProjec
     status: project.status,
     revision: project.updatedAt,
     document: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       canvas: project.canvas,
       components: project.components,
       blueprint: project.blueprint,
@@ -136,7 +137,10 @@ export function screenProjectToSdkEnvelope(project: ScreenProject): ScreenProjec
 export function inspectNebulaScreenSdkCompatibility(
   project: ScreenProject,
 ): NebulaScreenSdkCompatibility {
-  const result = parseScreenDocument(screenProjectToSdkEnvelope(project).document);
+  const result = parseScreenDocument(
+    screenProjectToSdkEnvelope(project).document,
+    DEFAULT_BUILTIN_REGISTRY,
+  );
   return result.success
     ? { compatible: true }
     : {

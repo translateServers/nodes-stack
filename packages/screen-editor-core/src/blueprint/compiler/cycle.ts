@@ -1,89 +1,70 @@
-/**
- * 环检测（任务 2.3）
- *
- * 基于 DFS 三色标记法：white（未访问）/ gray（在当前 DFS 栈中）/ black（已完成）。
- * 遇到 gray 节点即发现环，记录构成环的节点与边。
- *
- * 仅检测从 trigger 出发可达的环；不可达子图不产生环诊断（由 orphan 诊断处理）。
- */
+import type { BlueprintIndexes } from './indexes.js';
+import type { BlueprintDiagnostic } from './types.js';
 
-import type { BlueprintNode } from '@nebula/shared';
-import type { BlueprintIndexes, Diagnostic } from './types.js';
+type Color = 0 | 1 | 2;
 
-type Color = 'white' | 'gray' | 'black';
+const WHITE: Color = 0;
+const GRAY: Color = 1;
+const BLACK: Color = 2;
 
-interface CycleDetectionState {
-  colors: Map<string, Color>;
-  /** DFS 栈：当前路径上的节点 id */
-  pathStack: string[];
-  /** 已发现的环（节点 id 列表，从入环节点开始） */
-  cycles: string[][];
-}
+export function detectCycles(indexes: BlueprintIndexes): BlueprintDiagnostic[] {
+  const colors = new Map<string, Color>();
+  const pathStack: string[] = [];
+  const diagnostics: BlueprintDiagnostic[] = [];
 
-/**
- * 检测从 trigger 节点出发可达的所有环。
- * 返回每个环的节点 id 列表（从入环节点开始，到再次回到入环节点结束）。
- */
-export function detectCycles(
-  triggers: BlueprintNode[],
-  indexes: BlueprintIndexes,
-): { cycles: string[][]; diagnostics: Diagnostic[] } {
-  const state: CycleDetectionState = {
-    colors: new Map(),
-    pathStack: [],
-    cycles: [],
-  };
-
-  // 初始化所有节点为 white
   for (const nodeId of indexes.nodes.keys()) {
-    state.colors.set(nodeId, 'white');
+    colors.set(nodeId, WHITE);
   }
 
-  const diagnostics: Diagnostic[] = [];
-
-  // 仅从 trigger 出发检测可达环
-  for (const trigger of triggers) {
-    visitNode(trigger.id, indexes, state, diagnostics);
+  for (const nodeId of indexes.nodes.keys()) {
+    if (colors.get(nodeId) === WHITE) {
+      visitNode(nodeId, indexes, colors, pathStack, diagnostics);
+    }
   }
 
-  return { cycles: state.cycles, diagnostics };
+  return diagnostics;
 }
 
 function visitNode(
   nodeId: string,
   indexes: BlueprintIndexes,
-  state: CycleDetectionState,
-  diagnostics: Diagnostic[],
+  colors: Map<string, Color>,
+  pathStack: string[],
+  diagnostics: BlueprintDiagnostic[],
 ): void {
-  const color = state.colors.get(nodeId);
-  if (color === 'black') return; // 已完成
-  if (color === 'gray') {
-    // 发现环：从 pathStack 中找到当前节点位置，截取环
-    const cycleStartIdx = state.pathStack.indexOf(nodeId);
-    if (cycleStartIdx !== -1) {
-      const cycleNodes = [...state.pathStack.slice(cycleStartIdx), nodeId];
-      state.cycles.push(cycleNodes);
+  const color = colors.get(nodeId);
+  if (color === BLACK) {
+    return;
+  }
+  if (color === GRAY) {
+    const cycleStart = pathStack.indexOf(nodeId);
+    if (cycleStart >= 0) {
       diagnostics.push({
         level: 'error',
         code: 'cycle',
-        message: `检测到执行流环：${cycleNodes.join(' → ')}`,
+        message: `Execution cycle detected: ${[...pathStack.slice(cycleStart), nodeId].join(' -> ')}`,
         nodeId,
       });
     }
     return;
   }
 
-  // white → gray，进入 DFS
-  state.colors.set(nodeId, 'gray');
-  state.pathStack.push(nodeId);
+  colors.set(nodeId, GRAY);
+  pathStack.push(nodeId);
 
-  // 遍历出边
-  const outEdges = indexes.outgoingEdges.get(nodeId) ?? [];
-  for (const edge of outEdges) {
-    visitNode(edge.target, indexes, state, diagnostics);
+  for (const edge of indexes.outgoingEdges.get(nodeId) ?? []) {
+    const source = indexes.nodes.get(nodeId);
+    if (
+      source?.kind === 'component' &&
+      edge.source === edge.target &&
+      edge.sourceHandle.startsWith('evt:') &&
+      edge.targetHandle.startsWith('act:')
+    ) {
+      continue;
+    }
+    visitNode(edge.target, indexes, colors, pathStack, diagnostics);
   }
 
-  // 离开 DFS
-  state.pathStack.pop();
-  state.colors.set(nodeId, 'black');
+  pathStack.pop();
+  colors.set(nodeId, BLACK);
 }

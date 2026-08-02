@@ -145,7 +145,7 @@ function PreviewCanvasContent({ project }: PreviewCanvasContentProps) {
                       onComponentClick(component.id);
                     }}
                     onMouseEnter={() => {
-                      // V2 任务 7.2：派发 hover 事件（V2 蓝图匹配 evt:hover 锚点）
+                      // Dispatch hover events for evt:hover blueprint anchors.
                       onComponentEvent(component.id, 'hover');
                     }}
                   >

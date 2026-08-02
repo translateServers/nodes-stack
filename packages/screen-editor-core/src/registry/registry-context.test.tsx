@@ -13,7 +13,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ReactNode } from 'react';
-import type { ScreenComponentManifestV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentManifest } from '@nebula/screen-component-sdk';
 import { buildInstanceRegistry, type ScreenComponentRegistration } from './instance-registry';
 import {
   DEFAULT_BUILTIN_REGISTRY,
@@ -22,7 +22,7 @@ import {
   useRegistry,
 } from './registry-context';
 
-function makeManifest(type: string, tagName: string): ScreenComponentManifestV1 {
+function makeManifest(type: string, tagName: string): ScreenComponentManifest {
   return {
     apiVersion: 'nebula.screen-component/v1',
     type,
@@ -36,7 +36,7 @@ function makeManifest(type: string, tagName: string): ScreenComponentManifestV1 
   };
 }
 
-function makeBuiltIn(manifest: ScreenComponentManifestV1): ScreenComponentRegistration {
+function makeBuiltIn(manifest: ScreenComponentManifest): ScreenComponentRegistration {
   return { source: 'built-in', manifest };
 }
 

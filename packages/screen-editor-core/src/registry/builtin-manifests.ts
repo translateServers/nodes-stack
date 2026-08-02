@@ -2,7 +2,7 @@
  * 内置组件 manifest 构造（Spec §13.2 Phase 1, Task 1.2）
  *
  * 为 6 个内置组件（text / bar-chart / rect / ellipse / image / button）构造
- * `ScreenComponentManifestV1`，并包裹为 `ScreenComponentRegistration`（source='built-in'）。
+ * `ScreenComponentManifest`，并包裹为 `ScreenComponentRegistration`（source='built-in'）。
  *
  * 每个注册项同时保留 legacy 兼容字段（internalRenderer / legacySchema / legacyIcon /
  * legacyEvents / legacyActions），使 Phase 1.5 的 registry-derive 能在不改动 6 个
@@ -19,7 +19,7 @@
 import type {
   ScreenComponentIconToken,
   ScreenComponentJsonValue,
-  ScreenComponentManifestV1,
+  ScreenComponentManifest,
 } from '@nebula/screen-component-sdk';
 import { SCREEN_COMPONENT_API_VERSION, validateManifest } from '@nebula/screen-component-sdk';
 import type { ComponentEventDefinition } from '@nebula/shared';
@@ -63,7 +63,7 @@ function toManifestEvents(
 }
 
 /**
- * 按组件 type 返回最小化 propsSchema（Spec §7.3 V1 受限子集）。
+ * 按组件 type 返回最小化 propsSchema（Spec §7.3 受限子集）。
  *
  * 根 schema 必须为 object + additionalProperties: false。
  * 仅声明 defaultProps 中出现的字段，bar-chart 的 data 数组 items 使用
@@ -119,7 +119,7 @@ function getPropsSchemaForType(type: string): Readonly<Record<string, ScreenComp
 }
 
 /**
- * 从 ComponentModule 构造 ScreenComponentManifestV1。
+ * 从 ComponentModule 构造 ScreenComponentManifest。
  *
  * 字段映射策略（Spec §13.2 Phase 1）：
  * - apiVersion / implementationVersion / tagName / icon / propsSchema: 新建
@@ -128,7 +128,7 @@ function getPropsSchemaForType(type: string): Readonly<Record<string, ScreenComp
  * - events: 从 definition.events 转换为 ScreenComponentEventDefinition[]
  * - propertyPanel: undefined（仍由 legacy Schema 驱动）
  */
-function buildManifest(mod: ComponentModule): ScreenComponentManifestV1 {
+function buildManifest(mod: ComponentModule): ScreenComponentManifest {
   const def = mod.definition;
   return {
     apiVersion: SCREEN_COMPONENT_API_VERSION,

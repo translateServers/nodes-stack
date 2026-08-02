@@ -28,10 +28,7 @@ import {
   ScreenComponentRegistryErrorImpl,
   type ScreenComponentRegistryError,
 } from './registry-factory';
-import type {
-  ScreenComponentManifestV1,
-  ScreenComponentPluginV1,
-} from '@nebula/screen-component-sdk';
+import type { ScreenComponentManifest, ScreenComponentPlugin } from '@nebula/screen-component-sdk';
 
 const SCREEN_COMPONENT_API_VERSION = 'nebula.screen-component/v1' as const;
 
@@ -63,9 +60,9 @@ function nextTestId(): string {
  * @param namespace type/tagName 命名空间前缀，默认 'acme'
  */
 function makeHostManifest(
-  overrides: Partial<ScreenComponentManifestV1>,
+  overrides: Partial<ScreenComponentManifest>,
   namespace = 'acme',
-): ScreenComponentManifestV1 {
+): ScreenComponentManifest {
   const id = nextTestId();
   const defaultType = `${namespace}.kpi${id}/v1`;
   const defaultTagName = `${namespace}-kpi${id}-v1`;
@@ -103,10 +100,10 @@ function makeHostManifest(
  * 默认实现：首次调用创建 class 并缓存，后续调用返回同一引用（幂等，Spec §7.6）。
  */
 function makeHostPlugin(
-  manifestOverrides?: Partial<ScreenComponentManifestV1>,
+  manifestOverrides?: Partial<ScreenComponentManifest>,
   defineImpl?: () => CustomElementConstructor | Promise<CustomElementConstructor>,
   namespace = 'acme',
-): ScreenComponentPluginV1 {
+): ScreenComponentPlugin {
   const manifest = makeHostManifest(manifestOverrides ?? {}, namespace);
   const fallbackImpl = () => {
     class TestKpiElement extends HTMLElement {}
@@ -347,7 +344,7 @@ describe('createScreenComponentRegistry', () => {
     });
 
     it('plugin.define() 返回非函数拒绝为 COMPONENT_DEFINE_FAILED', async () => {
-      const plugin: ScreenComponentPluginV1 = {
+      const plugin: ScreenComponentPlugin = {
         manifest: makeHostManifest({}),
         // 故意返回非函数（type system 上不合法，但运行时需检测）
         define: () => 'not-a-constructor' as unknown as CustomElementConstructor,
@@ -431,7 +428,7 @@ describe('createScreenComponentRegistry', () => {
       // 首次 define 创建 class A 并 customElements.define
       // 第二次 registry 构造时 define 创建 class B，customElements.get 返回 A，B !== A
       const manifest = makeHostManifest({});
-      const plugin: ScreenComponentPluginV1 = {
+      const plugin: ScreenComponentPlugin = {
         manifest,
         define: () => {
           class FreshElement extends HTMLElement {}
@@ -490,7 +487,7 @@ describe('createScreenComponentRegistry', () => {
       const sharedTagName = pluginA.manifest.tagName;
       const sharedTypeMajor = 'v1';
 
-      const pluginB: ScreenComponentPluginV1 = {
+      const pluginB: ScreenComponentPlugin = {
         manifest: makeHostManifest({
           type: `acme.b${nextTestId()}/${sharedTypeMajor}`,
           tagName: sharedTagName, // 同 tagName
@@ -613,7 +610,7 @@ describe('createScreenComponentRegistry', () => {
         class SpyElement extends HTMLElement {}
         return SpyElement;
       });
-      const plugin: ScreenComponentPluginV1 = {
+      const plugin: ScreenComponentPlugin = {
         manifest: makeHostManifest({}),
         define: () => {
           const result = defineSpy();

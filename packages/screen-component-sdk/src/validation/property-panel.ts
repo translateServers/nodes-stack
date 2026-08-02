@@ -14,7 +14,7 @@ import {
   type ScreenComponentPropertyField,
   type ScreenComponentPropertySection,
 } from '../contracts/property.js';
-import type { ScreenComponentManifestV1 } from '../contracts/manifest.js';
+import type { ScreenComponentManifest } from '../contracts/manifest.js';
 import {
   createValidationDiagnostic,
   type ScreenComponentValidationDiagnostic,
@@ -78,7 +78,7 @@ function isControlCompatible(
  * 校验 manifest 的 propertyPanel（Spec §7.4）。
  */
 export function validatePropertyPanel(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   diagnostics: ScreenComponentValidationDiagnostic[],
 ): boolean {
   const { propertyPanel } = manifest;

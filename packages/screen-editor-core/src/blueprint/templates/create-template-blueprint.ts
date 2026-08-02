@@ -1,24 +1,20 @@
 /**
- * 模板蓝图构造纯函数（任务 9.3 / 任务 6.1 V2 重写）
+ * 模板蓝图构造纯函数。
  *
- * 根据 templateId 构造完整的 EventBlueprintV2（含组件节点 / 全局节点 / 逻辑节点 + 边）。
+ * 根据 templateId 构造完整的 EventBlueprint（含组件节点 / 全局节点 / 逻辑节点 + 边）。
  *
- * V2 设计约定：
+ * 设计约定：
  * - 节点 ID 使用语义化固定值（'comp-a' / 'comp-b' / 'global-pageLoad' / 'delay-1' 等），
  *   便于测试断言；与运行时随机 ID 区分（运行时使用 timestamp+random），模板插入后用户可继续编辑。
  * - componentId / targetComponentId 等使用空字符串占位，用户通过属性面板填充；
  *   与 Schema 中"空字符串视为未配置，由编译器诊断"对齐。
  * - 节点位置使用预设布局（左→右水平流水线，间距 240px），用户后续可拖拽调整。
- * - 边使用 V2 语义化 handle 格式：evt:{eventId} → act:{actionId} / in → out / then / else。
+ * - 边使用语义化 handle 格式：evt:{eventId} → act:{actionId} / in → out / then / else。
  *
  * 不做 Schema 校验（由 build-validated-template.ts 负责），仅负责结构构造。
  */
 
-import {
-  EVENT_BLUEPRINT_VERSION_V2,
-  GLOBAL_COMPONENT_ID,
-  type EventBlueprintV2,
-} from '@nebula/shared';
+import { EVENT_BLUEPRINT_VERSION, GLOBAL_COMPONENT_ID, type EventBlueprint } from '@nebula/shared';
 import type { BlueprintTemplateId } from './template-definitions';
 
 /** 节点位置常量（水平流水线，左→右） */
@@ -42,9 +38,9 @@ const EDGE_ID = 'edge-1';
  * - 组件节点 A：componentId 为空（用户后续选择触发组件），锚点从注册表派生
  * - 全局 navigate 节点：固定锚点 act:navigate，url 为空（用户后续填入 URL），target 默认 _blank
  */
-function createClickNavigateTemplate(): EventBlueprintV2 {
+function createClickNavigateTemplate(): EventBlueprint {
   return {
-    version: EVENT_BLUEPRINT_VERSION_V2,
+    version: EVENT_BLUEPRINT_VERSION,
     nodes: [
       {
         id: COMPONENT_A_ID,
@@ -83,9 +79,9 @@ function createClickNavigateTemplate(): EventBlueprintV2 {
  * - 组件节点 A：componentId 为空（用户后续选择触发组件）
  * - 组件节点 B：componentId 为空（用户后续选择目标组件），锚点从注册表派生
  */
-function createClickToggleVisibilityTemplate(): EventBlueprintV2 {
+function createClickToggleVisibilityTemplate(): EventBlueprint {
   return {
-    version: EVENT_BLUEPRINT_VERSION_V2,
+    version: EVENT_BLUEPRINT_VERSION,
     nodes: [
       {
         id: COMPONENT_A_ID,
@@ -118,9 +114,9 @@ function createClickToggleVisibilityTemplate(): EventBlueprintV2 {
  * - 全局 pageLoad 节点：固定锚点 evt:pageLoad，无 config
  * - 组件节点 B：componentId 为空（用户后续选择数据源组件），锚点从注册表派生
  */
-function createPageLoadRefreshTemplate(): EventBlueprintV2 {
+function createPageLoadRefreshTemplate(): EventBlueprint {
   return {
-    version: EVENT_BLUEPRINT_VERSION_V2,
+    version: EVENT_BLUEPRINT_VERSION,
     nodes: [
       {
         id: GLOBAL_PAGELOAD_ID,
@@ -157,9 +153,9 @@ function createPageLoadRefreshTemplate(): EventBlueprintV2 {
  *
  * 三节点流水线：A → delay → B，演示延时逻辑节点的用法。
  */
-function createClickDelayShowTemplate(): EventBlueprintV2 {
+function createClickDelayShowTemplate(): EventBlueprint {
   return {
-    version: EVENT_BLUEPRINT_VERSION_V2,
+    version: EVENT_BLUEPRINT_VERSION,
     nodes: [
       {
         id: COMPONENT_A_ID,
@@ -203,11 +199,11 @@ function createClickDelayShowTemplate(): EventBlueprintV2 {
  * 根据 templateId 构造模板蓝图。
  *
  * @param templateId  模板标识
- * @returns 完整的 EventBlueprintV2（含组件节点 / 全局节点 / 逻辑节点 + 边）
+ * @returns 完整的 EventBlueprint（含组件节点 / 全局节点 / 逻辑节点 + 边）
  * @throws 当 templateId 不在已知模板列表时抛出 Error（不应在运行时发生，
  *         调用方应通过 build-validated-template 包装捕获）
  */
-export function createTemplateBlueprint(templateId: BlueprintTemplateId): EventBlueprintV2 {
+export function createTemplateBlueprint(templateId: BlueprintTemplateId): EventBlueprint {
   switch (templateId) {
     case 'click-navigate':
       return createClickNavigateTemplate();

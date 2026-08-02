@@ -21,14 +21,14 @@ import type { ComponentStyle } from '@nebula/shared';
 import type {
   ScreenComponentEventDefinition,
   ScreenComponentElement,
-  ScreenComponentElementModelV1,
+  ScreenComponentElementModel,
 } from '@nebula/screen-component-sdk';
 import { COMPONENT_EVENT_TYPE } from '@nebula/screen-component-sdk';
 import { BlueprintEventProvider } from '../blueprint/runtime/component-event-context';
 import { createHostElementRenderer, CustomElementRenderer } from './custom-element-renderer';
 import { buildInstanceRegistry, type ScreenComponentRegistration } from './instance-registry';
 import { getRendererFromRegistry } from './registry-derive';
-import type { ScreenComponentManifestV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentManifest } from '@nebula/screen-component-sdk';
 
 let tagNameCounter = 0;
 
@@ -47,21 +47,21 @@ function nextTagName(): string {
  */
 function defineMockElement(tagName: string): {
   new (): ScreenComponentElement;
-  modelAssignments: ScreenComponentElementModelV1[];
+  modelAssignments: ScreenComponentElementModel[];
 } {
-  const modelAssignments: ScreenComponentElementModelV1[] = [];
+  const modelAssignments: ScreenComponentElementModel[] = [];
 
   class MockElement extends HTMLElement implements ScreenComponentElement {
-    private _model: ScreenComponentElementModelV1 | null = null;
+    private _model: ScreenComponentElementModel | null = null;
 
-    get model(): ScreenComponentElementModelV1 {
+    get model(): ScreenComponentElementModel {
       if (this._model === null) {
         throw new Error('model accessed before assignment');
       }
       return this._model;
     }
 
-    set model(value: ScreenComponentElementModelV1) {
+    set model(value: ScreenComponentElementModel) {
       this._model = value;
       modelAssignments.push(value);
     }
@@ -554,7 +554,7 @@ describe('getRendererFromRegistry 集成（host source 分支）', () => {
   function makeHostManifest(
     tagName: string,
     events?: readonly ScreenComponentEventDefinition[],
-  ): ScreenComponentManifestV1 {
+  ): ScreenComponentManifest {
     return {
       apiVersion: 'nebula.screen-component/v1',
       type: `test.bridge.${tagName}/v1`,
@@ -570,7 +570,7 @@ describe('getRendererFromRegistry 集成（host source 分支）', () => {
   }
 
   function makeHostRegistration(
-    manifest: ScreenComponentManifestV1,
+    manifest: ScreenComponentManifest,
     ctor: CustomElementConstructor,
   ): ScreenComponentRegistration {
     return {

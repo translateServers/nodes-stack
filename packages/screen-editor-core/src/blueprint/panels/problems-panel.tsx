@@ -11,10 +11,10 @@
 
 import { useCallback } from 'react';
 import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from 'lucide-react';
-import type { Diagnostic } from '../compiler';
+import type { BlueprintDiagnostic } from '../compiler';
 
 interface ProblemsPanelProps {
-  diagnostics: Diagnostic[];
+  diagnostics: readonly BlueprintDiagnostic[];
   errorCount: number;
   warningCount: number;
   infoCount: number;
@@ -55,7 +55,7 @@ export function ProblemsPanel({
   onLocateNode,
 }: ProblemsPanelProps) {
   const handleClick = useCallback(
-    (diagnostic: Diagnostic) => {
+    (diagnostic: BlueprintDiagnostic) => {
       if (diagnostic.nodeId) {
         onLocateNode(diagnostic.nodeId);
       }
@@ -76,7 +76,7 @@ export function ProblemsPanel({
   }
 
   // 单次遍历按 severity 分组（避免对 diagnostics 数组多次 filter）
-  const buckets = new Map<string, Diagnostic[]>();
+  const buckets = new Map<string, BlueprintDiagnostic[]>();
   for (const d of diagnostics) {
     const list = buckets.get(d.level);
     if (list) list.push(d);

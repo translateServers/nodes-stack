@@ -137,7 +137,7 @@ public registry facade 通过 core 的弱引用品牌关联到冻结的内部 sn
 
 Custom Element renderer 缓存按 immutable registration snapshot 的 `WeakMap` 隔离，而不是按全局 `tagName` 缓存。这保证同 tagName/constructor 在不同 registry 的事件 allowlist 不会交叉污染。
 
-V2 parser 对组件 props、内置 staticData 和 globalVariables value 统一校验 JSON 边界。检测循环时只追踪当前递归路径，允许普通共享引用；renderer 仅在剥离 `ComponentStyle` 的 optional `undefined` 后创建 detached model。
+正式 document parser 对组件 props、内置 staticData 和 globalVariables value 统一校验 JSON 边界。检测循环时只追踪当前递归路径，允许普通共享引用；renderer 仅在剥离 `ComponentStyle` 的 optional `undefined` 后创建 detached model。
 
 ### 渲染器分发
 
@@ -162,11 +162,11 @@ V2 parser 对组件 props、内置 staticData 和 globalVariables value 统一�
 
 ### 新增组件步骤
 
-1. 在组件包中实现 Custom Element 和 `ScreenComponentManifestV1`
-2. 用 `ScreenComponentPluginV1` 暴露 `manifest + define()`
+1. 在组件包中实现 Custom Element 和 `ScreenComponentManifest`
+2. 用 `ScreenComponentPlugin` 暴露 `manifest + define()`
 3. 宿主调用 `createScreenComponentRegistry({ components })`
 4. 在 `<nebula-screen-editor>` 首次 load 前设置 `componentRegistry`
-5. 使用 `ScreenHostAdapterV2` 保存 V2 文档
+5. 使用 `ScreenHostAdapter` 保存正式文档
 
 详见 [development-guide.md](./development-guide.md)。
 

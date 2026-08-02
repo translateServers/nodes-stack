@@ -1,15 +1,4 @@
 import {
-  type ScreenDocumentV1,
-  type ScreenHostAdapter,
-  type ScreenProjectDraft,
-  type ScreenSdkDiagnostic,
-  validateScreenSdkCapabilities,
-} from '@nebula/screen-editor-core/internal';
-import {
-  ScreenHostController,
-  type ScreenHostControllerState,
-} from '../host/screen-host-controller.js';
-import {
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -17,48 +6,48 @@ import {
   useRef,
   useSyncExternalStore,
 } from 'react';
-import { createScreenHostSessionPort } from '../lib/screen-host-session';
-import { createV1ScreenImportControllerPort } from '../host/screen-import-controller-port.js';
-import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry';
-import { useScreenEditorStoreApi } from '../stores/editor-store';
+
+import type { ScreenHostAdapter } from '../contracts/adapter.js';
+import {
+  parseScreenDocument,
+  type ScreenDocument,
+  type ScreenProjectDraft,
+} from '../contracts/document.js';
+import type { ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
+import type { ScreenChangeReason } from '../events.js';
+import { ScreenHostController } from '../host/screen-host-controller.js';
+import { createScreenImportControllerPort } from '../host/screen-import-controller-port.js';
+import { createScreenHostSessionPort } from '../lib/screen-host-session.js';
+import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry.js';
+import { useScreenEditorStoreApi } from '../stores/editor-store.js';
+import type { ScreenEditorTheme } from './screen-editor-environment.js';
 import {
   ScreenEditorWorkbench,
   type ScreenEditorWorkbenchHandle,
   type ScreenEditorWorkbenchOperationController,
-} from './screen-editor-workbench';
-import type { ScreenEditorTheme } from './screen-editor-environment';
+} from './screen-editor-workbench.js';
 
 export interface ScreenHostAdapterWorkbenchProps {
-  adapter?: ScreenHostAdapter;
-  /**
-   * 注入的实例注册表（Spec §13.2 Phase 6, Task 6.2）。
-   *
-   * 缺省时由 `ScreenEditorWorkbench` 使用 `DEFAULT_BUILTIN_REGISTRY`（仅 6 个内置组件）。
-   * SDK 通过 `<nebula-screen-editor>` element 的 `componentRegistry` property 透传，
-   * 确保 React runtime mount 前 registry 已就绪，project parser、Workbench 和
-   * Host Controller 共享同一 snapshot（Requirement 4, 8）。
-   *
-   * 公共 `ScreenComponentRegistry`（spec §8.2）结构化兼容此类型，可直接赋值。
-   */
-  componentRegistry?: ScreenComponentInstanceRegistry;
-  portalRoot?: HTMLElement | null;
-  projectId?: string;
-  isActive?: () => boolean;
-  readonly?: boolean;
-  setTheme: (theme: ScreenEditorTheme) => void;
-  theme: ScreenEditorTheme;
+  readonly adapter?: ScreenHostAdapter;
+  readonly componentRegistry: ScreenComponentInstanceRegistry;
+  readonly isActive?: () => boolean;
+  readonly portalRoot?: HTMLElement | null;
+  readonly projectId?: string;
+  readonly readonly?: boolean;
+  readonly setTheme: (theme: ScreenEditorTheme) => void;
+  readonly theme: ScreenEditorTheme;
 }
 
 export interface ScreenHostAdapterWorkbenchHandle {
   readonly controller: ScreenHostController;
-  dispose(): void;
-  fitToScreen(): void;
-  focusComponent(componentId: string): boolean;
-  getDocument(): ScreenDocumentV1 | null;
-  getDraft(): ScreenProjectDraft | null;
-  redo(): void;
-  undo(): void;
-  validate(): ScreenSdkDiagnostic[];
+  readonly dispose: () => void;
+  readonly fitToScreen: () => void;
+  readonly focusComponent: (componentId: string) => boolean;
+  readonly getDocument: () => ScreenDocument | null;
+  readonly getDraft: () => ScreenProjectDraft | null;
+  readonly redo: () => void;
+  readonly undo: () => void;
+  readonly validate: () => ScreenSdkDiagnostic[];
 }
 
 export const ScreenHostAdapterWorkbench = forwardRef<
@@ -82,9 +71,11 @@ export const ScreenHostAdapterWorkbench = forwardRef<
   const controllerRef = useRef<ScreenHostController | null>(null);
   const applyingEnvelopeRef = useRef(false);
   const mountedRef = useRef(false);
+
   if (controllerRef.current === null) {
-    const session = createScreenHostSessionPort(store);
+    const session = createScreenHostSessionPort(store, componentRegistry);
     controllerRef.current = new ScreenHostController({
+      registry: componentRegistry,
       session: {
         ...session,
         applyEnvelope: (command) => {
@@ -99,7 +90,7 @@ export const ScreenHostAdapterWorkbench = forwardRef<
     });
   }
   const controller = controllerRef.current;
-  const state = useSyncExternalStore<ScreenHostControllerState>(
+  const state = useSyncExternalStore(
     (listener) => controller.subscribe(listener),
     () => controller.getState(),
     () => controller.getState(),
@@ -107,33 +98,37 @@ export const ScreenHostAdapterWorkbench = forwardRef<
 
   useEffect(
     () =>
-      store.subscribe((state, previousState) => {
-        if (applyingEnvelopeRef.current) return;
-        if (state.selectedComponentIds !== previousState.selectedComponentIds) {
-          controller.notifySelection(state.selectedComponentIds);
+      store.subscribe((nextState, previousState) => {
+        if (applyingEnvelopeRef.current) {
+          return;
         }
-        if (state.blueprintGesture.active) return;
-        if (state.project === previousState.project) {
-          if (previousState.blueprintGesture.active && !state.blueprintGesture.active) {
+        if (nextState.selectedComponentIds !== previousState.selectedComponentIds) {
+          controller.notifySelection(nextState.selectedComponentIds);
+        }
+        if (nextState.blueprintGesture.active) {
+          return;
+        }
+        if (nextState.project === previousState.project) {
+          if (previousState.blueprintGesture.active && !nextState.blueprintGesture.active) {
             controller.notifyChange('blueprint');
           }
           return;
         }
 
-        let reason: Parameters<ScreenHostController['notifyChange']>[0] = 'history';
-        if (state.project !== null && previousState.project !== null) {
+        let reason: ScreenChangeReason = 'history';
+        if (nextState.project !== null && previousState.project !== null) {
           if (
-            state.project.name !== previousState.project.name ||
-            state.project.description !== previousState.project.description
+            nextState.project.name !== previousState.project.name ||
+            nextState.project.description !== previousState.project.description
           ) {
             reason = 'project-metadata';
-          } else if (state.project.canvas !== previousState.project.canvas) {
+          } else if (nextState.project.canvas !== previousState.project.canvas) {
             reason = 'canvas';
-          } else if (state.project.components !== previousState.project.components) {
+          } else if (nextState.project.components !== previousState.project.components) {
             reason = 'component';
-          } else if (state.project.blueprint !== previousState.project.blueprint) {
+          } else if (nextState.project.blueprint !== previousState.project.blueprint) {
             reason = 'blueprint';
-          } else if (state.project.globalVariables !== previousState.project.globalVariables) {
+          } else if (nextState.project.globalVariables !== previousState.project.globalVariables) {
             reason = 'global-variable';
           }
         }
@@ -145,7 +140,6 @@ export const ScreenHostAdapterWorkbench = forwardRef<
   useEffect(() => {
     controller.setBinding(projectId, adapter);
   }, [adapter, controller, projectId]);
-
   useEffect(() => {
     controller.setReadonly(readonly);
   }, [controller, readonly]);
@@ -158,25 +152,33 @@ export const ScreenHostAdapterWorkbench = forwardRef<
       fitToScreen: () => workbenchRef.current?.fitToScreen(),
       focusComponent: (componentId) => workbenchRef.current?.focusComponent(componentId) ?? false,
       getDocument: () => {
-        const snapshot = createScreenHostSessionPort(store).getSnapshot();
+        const snapshot = createScreenHostSessionPort(store, componentRegistry).getSnapshot();
         return snapshot === null ? null : structuredClone(snapshot.draft.document);
       },
       getDraft: () => {
-        const snapshot = createScreenHostSessionPort(store).getSnapshot();
+        const snapshot = createScreenHostSessionPort(store, componentRegistry).getSnapshot();
         return snapshot === null ? null : structuredClone(snapshot.draft);
       },
       redo: () => {
-        if (!readonly) store.getState().redo();
+        if (!readonly) {
+          store.getState().redo();
+        }
       },
       undo: () => {
-        if (!readonly) store.getState().undo();
+        if (!readonly) {
+          store.getState().undo();
+        }
       },
       validate: () => {
-        const snapshot = createScreenHostSessionPort(store).getSnapshot();
-        return snapshot === null ? [] : validateScreenSdkCapabilities(snapshot.draft.document);
+        const snapshot = createScreenHostSessionPort(store, componentRegistry).getSnapshot();
+        if (snapshot === null) {
+          return [];
+        }
+        const result = parseScreenDocument(snapshot.draft.document, componentRegistry);
+        return result.success ? [] : result.diagnostics;
       },
     }),
-    [controller, readonly, store],
+    [componentRegistry, controller, readonly, store],
   );
 
   useEffect(() => {
@@ -184,7 +186,9 @@ export const ScreenHostAdapterWorkbench = forwardRef<
     return () => {
       mountedRef.current = false;
       queueMicrotask(() => {
-        if (!mountedRef.current) controller.dispose();
+        if (!mountedRef.current) {
+          controller.dispose();
+        }
       });
     };
   }, [controller]);
@@ -192,11 +196,12 @@ export const ScreenHostAdapterWorkbench = forwardRef<
   const operations = useMemo<ScreenEditorWorkbenchOperationController>(
     () => ({
       host: { controller, state },
-      importController: createV1ScreenImportControllerPort(controller),
+      importController: createScreenImportControllerPort(controller),
       navigate: () => undefined,
       preview: () => undefined,
       projectId: projectId ?? '',
       snapshotController: controller,
+      staticPreviewAvailable: true,
     }),
     [controller, projectId, state],
   );
@@ -204,10 +209,10 @@ export const ScreenHostAdapterWorkbench = forwardRef<
   return (
     <ScreenEditorWorkbench
       ref={workbenchRef}
-      operations={operations}
       capabilityProfile="static"
       componentRegistry={componentRegistry}
       isActive={isActive}
+      operations={operations}
       portalRoot={portalRoot}
       project={undefined}
       readonly={readonly}

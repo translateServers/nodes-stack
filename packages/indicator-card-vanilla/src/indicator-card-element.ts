@@ -23,7 +23,7 @@
 import {
   COMPONENT_EVENT_TYPE,
   type ScreenComponentElement,
-  type ScreenComponentElementModelV1,
+  type ScreenComponentElementModel,
 } from '@nebula/screen-component-sdk';
 
 /**
@@ -115,7 +115,7 @@ function readNumberProp(props: Record<string, unknown>, key: string): number {
  * - mode='preview'：纯展示模式
  */
 export class IndicatorCardElement extends HTMLElement implements ScreenComponentElement {
-  private _model: ScreenComponentElementModelV1 | null = null;
+  private _model: ScreenComponentElementModel | null = null;
   private readonly _card: HTMLDivElement;
   private readonly _titleEl: HTMLDivElement;
   private readonly _valueEl: HTMLDivElement;
@@ -140,14 +140,14 @@ export class IndicatorCardElement extends HTMLElement implements ScreenComponent
     });
   }
 
-  get model(): ScreenComponentElementModelV1 {
+  get model(): ScreenComponentElementModel {
     if (this._model === null) {
       throw new Error('IndicatorCardElement: model accessed before assignment');
     }
     return this._model;
   }
 
-  set model(value: ScreenComponentElementModelV1) {
+  set model(value: ScreenComponentElementModel) {
     this._model = value;
     this._render();
   }

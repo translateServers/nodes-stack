@@ -1,5 +1,5 @@
 /**
- * V2 全局节点
+ * Global blueprint node.
  *
  * 全局节点是组件节点的子类型（componentId === 'global'），承载页面级触发与全局动作：
  * - pageLoad：页面加载触发，仅输出 evt:pageLoad 锚点
@@ -24,7 +24,7 @@ import type { Node, NodeProps } from '@xyflow/react';
 import { Globe } from 'lucide-react';
 import { BaseNodeShell, type AnchorDescriptor } from './base-node';
 import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
-import type { GlobalNodeData } from './v2-node-data-types';
+import type { GlobalNodeData } from './node-data-types';
 
 /** React Flow 全局节点类型实例 */
 export type GlobalNode = Node<GlobalNodeData, 'global'>;

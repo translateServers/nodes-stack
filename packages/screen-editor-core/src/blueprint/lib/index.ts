@@ -10,20 +10,18 @@
  */
 
 export {
-  getCompatibleTargetPins,
+  getCompatibleTargetNodes,
   hasDuplicateEdge,
-  hasPin,
   isConnectionValid,
-  INPUT_PINS,
-  OUTPUT_PINS,
 } from './pin-compatibility';
 export type {
+  BlueprintGraphEdge,
+  BlueprintNodeIndex,
+  BlueprintNodeIndexEntry,
+  BlueprintNodeKind,
   ConnectionCandidate,
-  NodeIndex,
-  PinCompatibility,
-  PinId,
-  PinIncompatibilityReason,
-  PinKind,
+  ConnectionIncompatibilityReason,
+  ConnectionValidationResult,
 } from './pin-compatibility';
 
 export {

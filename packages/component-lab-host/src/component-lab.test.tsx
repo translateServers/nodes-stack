@@ -95,7 +95,7 @@ describe('buildLabRegistry', () => {
 });
 
 describe('ComponentLabHost 渲染', () => {
-  it('通过真实组件库拖入 V2 画布并渲染外部指标卡', async () => {
+  it('通过真实组件库拖入画布并渲染外部指标卡', async () => {
     const { container } = render(<ComponentLabHost />);
 
     await waitFor(() => {
@@ -132,7 +132,7 @@ describe('ComponentLabHost 渲染', () => {
     });
   });
 
-  it('真实 V2 Workbench 预览事件携带 schemaVersion=2 文档', async () => {
+  it('真实 Workbench 预览事件携带 schemaVersion=2 文档', async () => {
     const { container } = render(<ComponentLabHost />);
 
     await waitFor(() => {
@@ -140,7 +140,7 @@ describe('ComponentLabHost 渲染', () => {
     });
 
     const editorSection = container.querySelector('[data-lab-section="editor"]');
-    if (!(editorSection instanceof HTMLElement)) throw new Error('V2 editor section was not found');
+    if (!(editorSection instanceof HTMLElement)) throw new Error('Editor section was not found');
     const previewRequest = vi.fn<(event: Event) => void>();
     editorSection.addEventListener('nebula-preview-request', previewRequest);
 
@@ -281,7 +281,7 @@ describe('Checkpoint 2: 移除指标卡 plugin 后行为不变', () => {
     expect(registry.has('bar-chart')).toBe(true);
   });
 
-  it('indicatorCardPlugin 是合法的 ScreenComponentPluginV1', () => {
+  it('indicatorCardPlugin 是合法的 ScreenComponentPlugin', () => {
     expect(indicatorCardPlugin.manifest).toBe(indicatorCardManifest);
     expect(typeof indicatorCardPlugin.define).toBe('function');
   });

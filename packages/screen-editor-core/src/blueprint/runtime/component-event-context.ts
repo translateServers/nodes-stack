@@ -9,16 +9,14 @@
  * - 主编辑画布会保持稳定 Provider，并由运行时 enabled 闸门丢弃关闭期间的事件，
  *   避免关闭后重开时因回调换绑补发旧 dataLoaded/dataError 状态
  * - 独立预览注入 Provider，组件通过 `useComponentEvent` 获取回调并绑定到事件
- * - 与 V1 `BlueprintPreviewContext`（visibilityOverrides / apiDataOverrides）并存：
+ * - 与 `BlueprintPreviewContext`（visibilityOverrides / apiDataOverrides）并存：
  *   - `BlueprintPreviewContext` 提供运行时副作用产物（组件订阅读取）
  *   - `BlueprintEventContext` 提供事件触发入口（组件写入调用）
  * - 保留组件 `interaction` 字段的直接配置能力：组件优先使用自身 props 中的 interaction
  *   配置，未配置时回退到 Context 中的 onComponentEvent
  *
- * 与 V1 `onComponentClick` 的差异：
- * - V1 仅支持 click 事件（onComponentClick(componentId)）
- * - V2 支持任意事件（onComponentEvent(componentId, eventId, payload?)），
- *   eventId 与组件注册表中 ComponentEventDefinition.id 对齐（click / hover / dataLoaded / ...）
+ * `onComponentEvent(componentId, eventId, payload?)` supports every event declared by a component
+ * manifest, including click, hover, dataLoaded, and custom events.
  */
 
 import { createContext, useContext } from 'react';

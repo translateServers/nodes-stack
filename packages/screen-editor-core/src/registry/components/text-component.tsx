@@ -1,5 +1,5 @@
 import type { ComponentStyle } from '@nebula/shared';
-import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentElementModel } from '@nebula/screen-component-sdk';
 import { Type } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -71,7 +71,7 @@ export class TextCustomElement extends HTMLElement {
     return root;
   }
 
-  set model(model: ScreenComponentElementModelV1) {
+  set model(model: ScreenComponentElementModel) {
     const root = this.#ensureRoot();
     const style = model.style;
     const content = model.props['content'];

@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EventBlueprint } from '@nebula/shared';
-import { compileBlueprint, type Diagnostic } from '../compiler';
+import { compileBlueprint, type BlueprintDiagnostic } from '../compiler';
 import { createRafThrottler } from '../../lib/raf-throttle';
 
 interface UseBlueprintDiagnosticsOptions {
@@ -21,7 +21,7 @@ interface UseBlueprintDiagnosticsOptions {
 }
 
 interface UseBlueprintDiagnosticsResult {
-  diagnostics: Diagnostic[];
+  diagnostics: BlueprintDiagnostic[];
   errorCount: number;
   warningCount: number;
   infoCount: number;
@@ -31,7 +31,7 @@ export function useBlueprintDiagnostics(
   options: UseBlueprintDiagnosticsOptions,
 ): UseBlueprintDiagnosticsResult {
   const { blueprint, componentIds } = options;
-  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const [diagnostics, setDiagnostics] = useState<BlueprintDiagnostic[]>([]);
   const throttlerRef = useRef(createRafThrottler());
 
   const compile = useCallback(() => {

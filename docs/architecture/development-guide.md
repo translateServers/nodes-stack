@@ -58,11 +58,11 @@ pnpm test         # 单元测试
 
 ### 2.1 步骤总览
 
-1. 在组件包中声明 `ScreenComponentManifestV1` 和 Custom Element
-2. 用 `ScreenComponentPluginV1` 暴露 `manifest + define()`
+1. 在组件包中声明 `ScreenComponentManifest` 和 Custom Element
+2. 用 `ScreenComponentPlugin` 暴露 `manifest + define()`
 3. 宿主调用 `createScreenComponentRegistry({ components })`
 4. 在首次 load 前给 `<nebula-screen-editor>` 赋值 `componentRegistry`
-5. 使用 `ScreenHostAdapterV2` 保存 `schemaVersion: 2` 文档
+5. 使用 `ScreenHostAdapter` 保存 `schemaVersion: 2` 正式文档
 6. 编写 manifest、renderer、属性、事件、tarball consumer 测试
 
 ### 2.2 第 1 步：实现组件包
@@ -73,13 +73,17 @@ pnpm test         # 单元测试
 
 宿主从 `@nebula/screen-sdk/components` 导入 `createScreenComponentRegistry()`，将组件 plugin 显式传入，并在设置 `adapter/projectId` 前设置 `componentRegistry`。
 
-### 2.4 第 3 步：持久化 V2 文档
+### 2.4 第 3 步：持久化正式文档
 
-外部组件必须搭配 `ScreenHostAdapterV2`。文档只保存 `type` 与 JSON `props`，不保存 `tagName`、模块 URL、构造函数或脚本。
+外部组件使用 `ScreenHostAdapter`。文档只保存 `type` 与 JSON `props`，不保存 `tagName`、模块 URL、构造函数或脚本。组件 API 的 TypeScript 名称不带版本后缀；`apiVersion`、外部 `type` 和 `tagName` 的 `/v1`、`-v1` 是稳定 wire 值。
 
 ### 2.5 第 4 步：编写测试
 
-至少覆盖：manifest 校验、registry 构建、组件库拖入、renderer model、属性面板、事件 payload、V2 load/save/import/export/snapshot round-trip、tarball consumer。
+至少覆盖：manifest 校验、registry 构建、组件库拖入、renderer model、属性面板、事件 payload、load/save/import/export/snapshot round-trip、tarball consumer。
+
+### 2.6 历史文档迁移
+
+新代码只读写正式 `ScreenDocument`。历史持久化记录只可通过 `Legacy*` parser 和迁移函数读取，迁移成功后必须在下次保存前写回正式文档；不要在业务组件、Adapter 或 SDK 公共 API 中引入版本别名。
 
 ### 2.8 验证
 

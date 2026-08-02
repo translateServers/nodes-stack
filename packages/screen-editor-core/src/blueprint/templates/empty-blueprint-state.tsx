@@ -1,9 +1,9 @@
 /**
- * 空蓝图引导态（任务 9.3 / 任务 6.2 V2 适配）
+ * 空蓝图引导态。
  *
  * 当蓝图为空（无节点）时显示：
  * - 引导文案
- * - 模板画廊（TemplateGallery）：4 个一键 V2 模板（含延时执行）
+ * - 模板画廊（TemplateGallery）：4 个一键模板（含延时执行）
  * - "从空白开始"按钮：调用 onStartFromScratch（创建空蓝图状态供用户自由编排）
  *
  * 模板选择流程：
@@ -15,21 +15,19 @@
  * 设计理由：将"校验 → 入栈/不入栈"分支决策收口在此组件，
  * TemplateGallery 保持纯展示，调用方 Sheet 只需提供 onInsertTemplate/onError/onStartFromScratch。
  *
- * V2 适配：buildValidatedTemplate 返回 EventBlueprintV2，本组件类型同步升级为 V2，
- * 调用方 updateBlueprint 同时接受 V1/V2（内部 normalizeBlueprintToV2 归一化）。
  */
 
 import { useCallback } from 'react';
 import type { JSX } from 'react';
 import { Sparkles, SquarePen } from 'lucide-react';
-import type { EventBlueprintV2 } from '@nebula/shared';
+import type { EventBlueprint } from '@nebula/shared';
 import { TemplateGallery } from './template-gallery';
 import { buildValidatedTemplate } from './build-validated-template';
 import type { BlueprintTemplateId } from './template-definitions';
 
 export interface EmptyBlueprintStateProps {
-  /** 模板校验通过时调用，传入完整 V2 蓝图（调用方 updateBlueprint 入栈一条历史） */
-  onInsertTemplate: (blueprint: EventBlueprintV2) => void;
+  /** 模板校验通过时调用，传入完整蓝图（调用方 updateBlueprint 入栈一条历史） */
+  onInsertTemplate: (blueprint: EventBlueprint) => void;
   /** 模板校验失败时调用，传入错误信息（调用方提示用户，不入栈） */
   onError: (error: string) => void;
   /** "从空白开始"按钮点击（调用方创建空蓝图状态进入自由编排） */

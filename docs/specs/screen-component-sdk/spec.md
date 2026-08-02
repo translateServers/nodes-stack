@@ -1,13 +1,13 @@
 # 大屏组件 SDK 与组件注册表 Spec
 
-> 状态：生效中（Task 0.1 已冻结协议，按小步快跑方案实施）
+> 状态：已归档（2026-08-02）
 > 最近更新：2026-08-02
 > 定位：定义大屏组件跨框架开发、显式注册、设计期配置、运行时渲染、事件桥接与文档校验契约
 >
-> 实施实况（2026-08-02）：组件作者 package、实例 registry、component lab 真实拖入/预览、Nebula
-> Web 共享 registry、显式 registry + V2 Adapter 的 load/save/publish/reload、transfer/export、snapshot
-> 与静态 preview 均已有定向验证；多框架 tarball smoke、浏览器 E2E 与内置 renderer 收敛仍待继续。
-> 实际阶段状态以 [tasks.md](./tasks.md) 和 [checklist.md](./checklist.md) 为准。
+> 本文记录已完成的双轨 rollout 设计，不再作为实现依据。现行组件作者 API 见
+> [component-author-guide.md](./component-author-guide.md)，宿主与历史 document 迁移边界见
+> [migration-0.2.md](./migration-0.2.md) 和
+> [development-guide.md](../../architecture/development-guide.md)。
 
 ## 1. Background
 

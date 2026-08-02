@@ -89,7 +89,7 @@ function cssEscape(value: string): string {
 export function useBlueprintRuntimeDeps(
   components: readonly ScreenComponent[],
   onRefreshComplete?: RefreshCompleteHandler,
-  getComponentDataProp?: (componentId: string) => Record<string, unknown> | undefined,
+  getComponentDataProp?: (componentId: string) => unknown,
   environment: BlueprintRuntimeEnvironment = {},
 ): {
   deps: RuntimeDeps;
@@ -135,13 +135,16 @@ export function useBlueprintRuntimeDeps(
     return componentsRef.current.some((c) => c.id === componentId);
   }, []);
 
-  const getComponentValue = useCallback((componentId: string): unknown => {
-    const component = componentsRef.current.find((c) => c.id === componentId);
-    return component?.props?.value;
-  }, []);
+  const getComponentValue = useCallback(
+    (componentId: string): Record<string, unknown> | undefined => {
+      const component = componentsRef.current.find((c) => c.id === componentId);
+      return component?.props;
+    },
+    [],
+  );
 
   const getComponentData = useCallback(
-    (componentId: string): Record<string, unknown> | undefined => {
+    (componentId: string): unknown => {
       return getComponentDataProp?.(componentId);
     },
     [getComponentDataProp],
@@ -156,8 +159,11 @@ export function useBlueprintRuntimeDeps(
   }, []);
 
   const getVisibility = useCallback(
-    (componentId: string): boolean | undefined => {
-      return visibilityOverrides.get(componentId);
+    (componentId: string): boolean => {
+      const overridden = visibilityOverrides.get(componentId);
+      if (overridden !== undefined) return overridden;
+      return !componentsRef.current.find((component) => component.id === componentId)?.status
+        .hidden;
     },
     [visibilityOverrides],
   );

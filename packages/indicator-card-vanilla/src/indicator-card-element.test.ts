@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   defineScreenComponent,
   validateManifest,
-  type ScreenComponentElementModelV1,
+  type ScreenComponentElementModel,
 } from '@nebula/screen-component-sdk';
 import { expectManifestOk } from '@nebula/screen-component-sdk/testing';
 import { IndicatorCardElement } from './indicator-card-element.js';
@@ -37,8 +37,8 @@ import {
  * 默认填充 defaultProps 中的值，调用方可通过 overrides 修改任意字段。
  */
 function createModel(
-  overrides?: Partial<ScreenComponentElementModelV1>,
-): ScreenComponentElementModelV1 {
+  overrides?: Partial<ScreenComponentElementModel>,
+): ScreenComponentElementModel {
   return {
     apiVersion: 1,
     componentId: 'test-comp-1',
@@ -118,7 +118,7 @@ describe('indicatorCardManifest', () => {
 });
 
 describe('indicatorCardPlugin', () => {
-  it('是合法的 ScreenComponentPluginV1', () => {
+  it('是合法的 ScreenComponentPlugin', () => {
     expect(indicatorCardPlugin.manifest).toBe(indicatorCardManifest);
     expect(typeof indicatorCardPlugin.define).toBe('function');
   });

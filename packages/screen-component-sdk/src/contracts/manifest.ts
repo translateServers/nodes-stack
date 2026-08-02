@@ -1,5 +1,5 @@
 /**
- * Component Manifest V1（Spec §7.2）
+ * Component manifest (Spec §7.2).
  *
  * 可序列化组件描述，包含身份、默认值、props schema、属性面板和事件。
  * manifest 是组件注册表的权威数据源，驱动组件库、校验、属性面板和蓝图。
@@ -39,7 +39,7 @@ export const SCREEN_COMPONENT_CATEGORIES = [
 export type ScreenComponentCategory = (typeof SCREEN_COMPONENT_CATEGORIES)[number];
 
 /**
- * 组件 Manifest V1
+ * 组件 manifest。
  *
  * Identity rules (Spec §7.2):
  * - 外部组件 `type` 使用带命名空间和契约主版本的稳定标识，例如 `acme.kpi/v1`
@@ -52,7 +52,7 @@ export type ScreenComponentCategory = (typeof SCREEN_COMPONENT_CATEGORIES)[numbe
  * - `order` 如提供必须是有限整数；缺省为 0
  * - 文档只保存 `type`，不得保存 `tagName`、实现版本、构造函数或脚本 URL
  */
-export interface ScreenComponentManifestV1 {
+export interface ScreenComponentManifest {
   apiVersion: typeof SCREEN_COMPONENT_API_VERSION;
   type: string;
   implementationVersion: string;
@@ -95,7 +95,7 @@ export const EXTERNAL_TYPE_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+\/v([1-9]
  */
 export const TAG_NAME_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+-v([1-9][0-9]*)$/;
 
-/** propsSchema 允许的 JSON Schema 关键字（Spec §7.3 V1 受限子集） */
+/** propsSchema 允许的 JSON Schema 关键字（Spec §7.3 受限子集） */
 export const PROPS_SCHEMA_ALLOWED_TYPES = [
   'object',
   'array',

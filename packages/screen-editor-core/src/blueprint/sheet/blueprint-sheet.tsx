@@ -1,25 +1,18 @@
 /**
- * 事件蓝图 Sheet（任务 4.7）
+ * Event blueprint sheet using the component-node model.
+ * - 节点 kind：component / condition / delay / comment
+ * - 全局节点为 component 的子类型（componentId === 'global' + globalType）
+ * - 锚点语义化：evt:* 输出 / act:* 输入 / in / out / then / else
+ * - Compiler, connection validation, sandbox runtime, and clipboard share one model
  *
- * 容器形态：全屏弹层（full-overlay，带顶栏），与
- * docs/screen-designer-panels-architecture.md §7.4 一致。
+ * 数据流：
+ * - editor-store.project.blueprint -> ReactFlow nodes/edges
+ * - ReactFlow nodes/edges -> updateBlueprint
  *
- * 职责：
- * - 从 editor-store 读取/写回 `blueprint`
- * - 渲染 ReactFlow 画布，复用既有节点/边/面板/primitives
- * - 顶栏含标题、视口工具栏、关闭按钮
- * - 入口与 onOpenChange 契约不变（screen-editor.tsx 调用方无感）
- *
- * 数据流（单向）：
- * - blueprint → ReactFlow nodes/edges：blueprint 引用变化（undo/redo/load）时重建本地状态
- * - ReactFlow nodes/edges → blueprint：本地状态变化时通过 updateBlueprint 写回（含 ref 守卫避免循环）
- *
- * 历史语义（任务 5.2）：
- * - 节点增删、连线增删、参数修改等离散编辑经 updateBlueprint 入历史栈（单条历史）
- * - 节点拖拽经 begin/endBlueprintGesture 手势合并：拖拽中间态不自动写回，
- *   拖拽结束吸附后提交一次，一次拖拽只产生一条历史记录（undo 回到拖拽前）
- *
- * 注意：编辑器画布不执行蓝图（预览专用），本组件仅做可视化编排。
+ * History semantics:
+ * - 离散编辑经 updateBlueprint 入历史栈
+ * - 拖拽经 begin/endBlueprintGesture 合并为一条历史
+ * - 文本类编辑经 600ms debounce 合并为一条历史
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -27,7 +20,6 @@ import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -49,20 +41,24 @@ import {
   type OnNodeDrag,
   type OnNodesChange,
 } from '@xyflow/react';
-import { X } from 'lucide-react';
+import { Cable, Filter, MousePointerClick, Play, RotateCcw, Workflow, X } from 'lucide-react';
 import type {
-  EventBlueprint,
-  ScreenComponent,
-  BlueprintTriggerConfig,
-  BlueprintActionConfig,
+  BlueprintNode,
   CommentNodeConfig,
   ConditionNodeConfig,
+  EventBlueprint,
+  GlobalNodeConfig,
+  GlobalScrollToConfig,
+  ScreenComponent,
 } from '@nebula/shared';
-import { EVENT_BLUEPRINT_VERSION } from '@nebula/shared';
+import { GLOBAL_COMPONENT_ID } from '@nebula/shared';
 
 import { useScreenEditorStore } from '../../stores/editor-store';
-import { useOptionalScreenEditorNotifications } from '../../components/screen-editor-notifications';
-import { ActionNode, CommentNode, ConditionNode, TriggerNode } from '../nodes';
+import { ComponentNode } from '../nodes/component-node';
+import { GlobalNode } from '../nodes/global-node';
+import { DelayNode } from '../nodes/delay-node';
+import { CommentNode } from '../nodes/comment-node';
+import { ConditionNode } from '../nodes/condition-node';
 import { ExecEdge, EXEC_EDGE_MARKER_END } from '../edges';
 import { ViewportToolbar } from '../panels/viewport-toolbar';
 import { AlignDistributeToolbar } from '../panels/align-distribute-toolbar';
@@ -71,28 +67,22 @@ import {
   useBlueprintDrag,
   useBlueprintShortcuts,
   useBlueprintClipboard,
-  useBlueprintDiagnostics,
+  useAnchorSnap,
   BlueprintDiagnosticMapProvider,
   buildDiagnosticMap,
 } from '../hooks';
+import { SearchPanel } from '../panels/search-panel';
 import {
-  SearchPanel,
-  NODE_OPTIONS,
+  buildAllNodeOptions,
+  isConnectableTarget,
   type NodeOption,
   type PendingConnection,
-} from '../panels/search-panel';
-import { ProblemsPanel, ExecutionLogPanel } from '../panels';
-import { NodeConfigPanel, type NodeConfigPanelProps } from '../panels/node-config-panel';
-import { EmptyBlueprintState } from '../templates';
-import {
-  useBlueprintSandboxRuntime,
-  useBlueprintSandboxHighlight,
-  getNodeLocateComponentId,
-  type SandboxSimulationResult,
-} from '../runtime';
-import { filterBlueprintByComponent } from '../compiler';
+} from '../panels/node-options';
+import { ProblemsPanel } from '../panels/problems-panel';
+import { ExecutionLogPanel } from '../panels/execution-log-panel';
+import { NodeConfigPanel, type NodeConfigChange } from '../panels/node-config-panel';
 import { ToolbarButton } from '../../components/ui-primitives';
-import { Play, RotateCcw } from 'lucide-react';
+import { useOptionalScreenEditorEnvironment } from '../../components/screen-editor-environment';
 import {
   alignNodes,
   applyAlignResultToNodes,
@@ -102,19 +92,28 @@ import {
   type DistributeMode,
 } from '../lib/align-distribute';
 import {
-  INPUT_PINS,
   isConnectionValid,
+  type BlueprintNodeIndex,
+  type BlueprintNodeIndexEntry,
   type ConnectionCandidate,
-  type NodeIndex,
-  type PinId,
+  type ConnectionValidationResult,
 } from '../lib/pin-compatibility';
 import { BlueprintContextMenu, type BlueprintContextMenuMode } from './blueprint-context-menu';
+import { filterBlueprintByComponent } from '../compiler/filter-by-component';
+import type { BlueprintDiagnostic } from '../compiler/types';
+import {
+  getNodeLocateComponentId,
+  useBlueprintSandboxHighlight,
+  useBlueprintSandboxRuntime,
+  type SandboxSimulationResult,
+} from '../runtime';
 
 // ===== ReactFlow 类型映射 =====
 
 const nodeTypes: NodeTypes = {
-  trigger: TriggerNode,
-  action: ActionNode,
+  component: ComponentNode,
+  global: GlobalNode,
+  delay: DelayNode,
   comment: CommentNode,
   condition: ConditionNode,
 };
@@ -123,79 +122,51 @@ const edgeTypes: EdgeTypes = {
   exec: ExecEdge,
 };
 
+const ALWAYS_ACTIVE = (): boolean => true;
+
 // ===== 蓝图 ↔ ReactFlow 转换 =====
 
-/**
- * 根据 config 类型生成节点显示标签。
- *
- * 标签规则：
- * - trigger.componentClick：点击：<componentName>
- * - trigger.pageLoad：页面加载
- * - action.setVisibility：显示/隐藏：<componentName>
- * - action.navigate：跳转：<url>
- * - action.scrollToComponent：滚动至：<componentName>
- * - action.refreshDataSource：刷新数据：<componentName>
- * - comment：config.text
- */
-function buildComponentMap(components: ScreenComponent[]): Map<string, ScreenComponent> {
+function buildComponentMap(components: readonly ScreenComponent[]): Map<string, ScreenComponent> {
   const map = new Map<string, ScreenComponent>();
   for (const c of components) map.set(c.id, c);
   return map;
 }
 
-/** 内部：基于 Map 做 O(1) 查询，供批量转换使用 */
-function getNodeLabelWithMap(
-  kind: 'trigger' | 'condition' | 'action' | 'comment',
-  config: Record<string, unknown>,
-  componentMap: Map<string, ScreenComponent>,
-): string {
-  const findComponentName = (id: string | undefined): string => {
-    if (!id) return '未配置';
-    return componentMap.get(id)?.name ?? id;
-  };
-
-  if (kind === 'trigger') {
-    const triggerConfig = config as { type: string; componentId?: string };
-    if (triggerConfig.type === 'componentClick') {
-      return `点击：${findComponentName(triggerConfig.componentId)}`;
+/**
+ * Build a display label for a blueprint node.
+ *
+ * - 普通组件节点：组件实例名（找不到时显示 '未配置组件'）
+ * - 全局节点：子类型标签（'页面加载' / '导航跳转' / '请求接口' / '滚动定位'）
+ * - condition：'条件分支' + 运算符摘要
+ * - delay：'延时 {delayMs}ms'
+ * - comment：注释文本（空时显示 '注释'）
+ */
+function getNodeLabel(node: BlueprintNode, componentMap: Map<string, ScreenComponent>): string {
+  if (node.kind === 'component') {
+    // 全局节点
+    if (node.componentId === GLOBAL_COMPONENT_ID) {
+      switch (node.globalType) {
+        case 'pageLoad':
+          return '页面加载';
+        case 'navigate':
+          return '导航跳转';
+        case 'requestApi':
+          return '请求接口';
+        case 'scrollTo':
+          return '滚动定位';
+        case 'interval':
+          return '定时触发';
+        default:
+          return '全局节点';
+      }
     }
-    if (triggerConfig.type === 'pageLoad') {
-      return '页面加载';
-    }
-    return '触发器';
+    // 普通组件节点
+    if (node.componentId === '') return '未配置组件';
+    return componentMap.get(node.componentId)?.name ?? node.componentId;
   }
 
-  if (kind === 'action') {
-    const actionConfig = config as {
-      type: string;
-      targetComponentId?: string;
-      url?: string;
-      visible?: string;
-    };
-    switch (actionConfig.type) {
-      case 'setVisibility':
-        return `${actionConfig.visible === 'hide' ? '隐藏' : '显示'}：${findComponentName(actionConfig.targetComponentId)}`;
-      case 'navigate':
-        return `跳转：${actionConfig.url || '未设置'}`;
-      case 'scrollToComponent':
-        return `滚动至：${findComponentName(actionConfig.targetComponentId)}`;
-      case 'refreshDataSource':
-        return `刷新数据：${findComponentName(actionConfig.targetComponentId)}`;
-      default:
-        return '动作';
-    }
-  }
-
-  if (kind === 'comment') {
-    const commentConfig = config as { text: string };
-    return commentConfig.text || '注释';
-  }
-
-  if (kind === 'condition') {
-    const condConfig = config as { type: string; expression?: { operator?: string } };
-    if (condConfig.type !== 'condition' || !condConfig.expression) {
-      return '条件分支';
-    }
+  if (node.kind === 'condition') {
+    const op = node.config.expression?.operator ?? '';
     const opLabelMap: Record<string, string> = {
       eq: '等于',
       ne: '不等于',
@@ -207,136 +178,195 @@ function getNodeLabelWithMap(
       empty: '为空',
       notEmpty: '非空',
     };
-    const op = condConfig.expression.operator ?? '';
     return `条件：${opLabelMap[op] ?? op}`;
   }
 
-  return '节点';
-}
+  if (node.kind === 'delay') {
+    return `延时 ${node.config.delayMs}ms`;
+  }
 
-/** 公共：保持数组签名兼容现有调用方与单测，内部转 Map 后委托 */
-export function getNodeLabel(
-  kind: 'trigger' | 'condition' | 'action' | 'comment',
-  config: Record<string, unknown>,
-  components: ScreenComponent[],
-): string {
-  return getNodeLabelWithMap(kind, config, buildComponentMap(components));
+  // comment
+  return node.config.text || '注释';
 }
 
 /**
- * 检查节点是否 dangling（关联的 componentId 在项目中不存在）。
- * 基于 Map 做 O(1) 存在性查询；调用方批量转换时只需构建一次 Map。
+ * Check whether a blueprint node references a missing component.
+ *
+ * - 普通组件节点：componentId 不在项目中
+ * - 全局 scrollTo 节点：config.targetComponentId 不在项目中
+ * - 其他节点不 dangling
  */
-function isNodeDangling(
-  kind: 'trigger' | 'condition' | 'action' | 'comment',
-  config: Record<string, unknown>,
-  componentMap: Map<string, ScreenComponent>,
-): boolean {
-  if (kind === 'trigger') {
-    const triggerConfig = config as { type: string; componentId?: string };
-    if (triggerConfig.type === 'componentClick' && triggerConfig.componentId) {
-      return !componentMap.has(triggerConfig.componentId);
+function isNodeDangling(node: BlueprintNode, componentMap: Map<string, ScreenComponent>): boolean {
+  if (node.kind === 'component') {
+    if (node.componentId === GLOBAL_COMPONENT_ID) {
+      // 全局 scrollTo 节点检查目标组件
+      if (node.globalType === 'scrollTo' && node.config) {
+        const cfg = node.config as GlobalScrollToConfig;
+        return cfg.targetComponentId !== '' && !componentMap.has(cfg.targetComponentId);
+      }
+      return false;
     }
-    return false;
+    return node.componentId !== '' && !componentMap.has(node.componentId);
   }
-
-  if (kind === 'action') {
-    const actionConfig = config as { type: string; targetComponentId?: string };
-    if (actionConfig.targetComponentId) {
-      return !componentMap.has(actionConfig.targetComponentId);
-    }
-    return false;
-  }
-
-  if (kind === 'condition') {
-    // condition 节点 dangling：表达式 source.componentId 不存在
-    const condConfig = config as {
-      type: string;
-      expression?: { source?: { componentId?: string } };
-    };
-    if (condConfig.type !== 'condition' || !condConfig.expression?.source) return false;
-    const sourceComponentId = condConfig.expression.source.componentId;
+  if (node.kind === 'condition') {
+    const sourceComponentId = node.config.expression?.source?.componentId;
     if (!sourceComponentId) return false;
     return !componentMap.has(sourceComponentId);
   }
-
   return false;
 }
 
 /**
- * 将蓝图节点转换为 ReactFlow Node。
- * 批量调用方应传入预构建的 componentMap 以避免每节点重复线性扫描（O(N×M) → O(N+M)）。
+ * 推导组件节点的 componentType（用于派生事件/动作锚点）。
+ *
+ * 普通组件节点从 componentMap 读取 type；全局节点无 componentType。
+ */
+function getComponentType(
+  node: BlueprintNode,
+  componentMap: Map<string, ScreenComponent>,
+): string | undefined {
+  if (node.kind !== 'component') return undefined;
+  if (node.componentId === GLOBAL_COMPONENT_ID) return undefined;
+  return componentMap.get(node.componentId)?.type;
+}
+
+/**
+ * Convert a blueprint node to a React Flow node.
+ *
+ * RF type 映射：
+ * - component + globalType !== undefined -> 'global'
+ * - component -> 'component'
+ * - condition / delay / comment retain their kind
  */
 function blueprintNodeToRFNode(
-  blueprintNode: EventBlueprint['nodes'][number],
+  blueprintNode: BlueprintNode,
   componentMap: Map<string, ScreenComponent>,
 ): Node {
-  const config = blueprintNode.config as Record<string, unknown>;
-  const label = getNodeLabelWithMap(blueprintNode.kind, config, componentMap);
-  const dangling = isNodeDangling(blueprintNode.kind, config, componentMap);
+  const label = getNodeLabel(blueprintNode, componentMap);
+  const dangling = isNodeDangling(blueprintNode, componentMap);
+  const componentType = getComponentType(blueprintNode, componentMap);
 
-  const data: Record<string, unknown> = {
-    config: blueprintNode.config,
-    label,
-    dangling,
-  };
+  // RF type：全局节点用 'global'，普通 component 用 'component'
+  const rfType =
+    blueprintNode.kind === 'component' && blueprintNode.globalType !== undefined
+      ? 'global'
+      : blueprintNode.kind;
 
-  // trigger 和 action 节点额外字段（与 node-data-types 对齐）
-  if (blueprintNode.kind === 'trigger') {
-    const triggerConfig = blueprintNode.config as { componentId?: string };
-    if (triggerConfig.componentId) {
-      data.componentId = triggerConfig.componentId;
+  // data fields match the node renderer contracts.
+  const data: Record<string, unknown> = { label, dangling };
+
+  if (blueprintNode.kind === 'component') {
+    data.componentId = blueprintNode.componentId;
+    if (componentType !== undefined) {
+      data.componentType = componentType;
     }
-  } else if (blueprintNode.kind === 'action') {
-    const actionConfig = blueprintNode.config as { targetComponentId?: string };
-    if (actionConfig.targetComponentId) {
-      data.targetComponentId = actionConfig.targetComponentId;
+    if (blueprintNode.globalType !== undefined) {
+      data.globalType = blueprintNode.globalType;
     }
+    if (blueprintNode.config !== undefined) {
+      data.config = blueprintNode.config;
+    }
+  } else if (blueprintNode.kind === 'delay') {
+    data.config = blueprintNode.config;
+  } else {
+    // condition / comment
+    data.config = blueprintNode.config;
   }
 
   return {
     id: blueprintNode.id,
-    type: blueprintNode.kind,
+    type: rfType,
     position: { x: blueprintNode.position.x, y: blueprintNode.position.y },
     data,
   };
 }
 
 /**
- * 将 ReactFlow Node 转换回蓝图节点。
- * 使用类型断言将 data.config 还原为判别联合类型（由编译器/Schema 在持久化时校验）。
- * ReactFlow 的 Node.type/data 是宽类型，无法在编译期保证 kind 与 config 的判别联合一致性，
- * 此处整体断言为 BlueprintNode（非 any），运行时由 Zod Schema 在持久化时校验。
+ * Convert a React Flow node to a blueprint node.
+ *
+ * 使用判别联合 narrowing 保证 kind 与 config 一致性。
+ * 运行时由 Zod Schema 在持久化时校验。
  */
-function rfNodeToBlueprintNode(node: Node): EventBlueprint['nodes'][number] {
-  const data = node.data as { config: EventBlueprint['nodes'][number]['config'] };
+function rfNodeToBlueprintNode(node: Node): BlueprintNode {
+  const data = node.data as {
+    config?: unknown;
+    componentId?: string;
+    globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
+  };
+  const position = { x: node.position.x, y: node.position.y };
+  const rfType = node.type ?? 'component';
+
+  if (rfType === 'global') {
+    // 全局节点
+    const globalType = data.globalType ?? 'pageLoad';
+    if (globalType === 'pageLoad') {
+      return {
+        id: node.id,
+        kind: 'component',
+        position,
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'pageLoad',
+      };
+    }
+    return {
+      id: node.id,
+      kind: 'component',
+      position,
+      componentId: GLOBAL_COMPONENT_ID,
+      globalType,
+      config: data.config as GlobalNodeConfig,
+    };
+  }
+
+  if (rfType === 'component') {
+    return {
+      id: node.id,
+      kind: 'component',
+      position,
+      componentId: data.componentId ?? '',
+    };
+  }
+
+  if (rfType === 'delay') {
+    return {
+      id: node.id,
+      kind: 'delay',
+      position,
+      config: data.config as { delayMs: number },
+    };
+  }
+
+  if (rfType === 'condition') {
+    return {
+      id: node.id,
+      kind: 'condition',
+      position,
+      config: data.config as ConditionNodeConfig,
+    };
+  }
+
+  // comment
   return {
     id: node.id,
-    kind: node.type as 'trigger' | 'condition' | 'action' | 'comment',
-    position: { x: node.position.x, y: node.position.y },
-    config: data.config,
-  } as EventBlueprint['nodes'][number];
+    kind: 'comment',
+    position,
+    config: data.config as CommentNodeConfig,
+  };
 }
 
-/**
- * 将蓝图边转换为 ReactFlow Edge。
- */
-function blueprintEdgeToRFEdge(blueprintEdge: EventBlueprint['edges'][number]): Edge {
+function blueprintEdgeToRFEdge(edge: EventBlueprint['edges'][number]): Edge {
   return {
-    id: blueprintEdge.id,
+    id: edge.id,
     type: 'exec',
-    source: blueprintEdge.source,
-    sourceHandle: blueprintEdge.sourceHandle,
-    target: blueprintEdge.target,
-    targetHandle: blueprintEdge.targetHandle,
+    source: edge.source,
+    sourceHandle: edge.sourceHandle,
+    target: edge.target,
+    targetHandle: edge.targetHandle,
     markerEnd: EXEC_EDGE_MARKER_END,
     data: {},
   };
 }
 
-/**
- * 将 ReactFlow Edge 转换回蓝图边。
- */
 function rfEdgeToBlueprintEdge(edge: Edge): EventBlueprint['edges'][number] {
   return {
     id: edge.id,
@@ -347,17 +377,36 @@ function rfEdgeToBlueprintEdge(edge: Edge): EventBlueprint['edges'][number] {
   };
 }
 
-/** 基于当前 RF 状态构建引脚兼容判定输入（NodeIndex + 既有蓝图边） */
+/** Build connection-validation inputs from React Flow state. */
 function buildConnectionContext(
   rfNodes: Node[],
   rfEdges: Edge[],
-): { nodeIndex: NodeIndex; bpEdges: EventBlueprint['edges'] } {
-  const bpNodes = rfNodes.map(rfNodeToBlueprintNode);
-  const nodeIndex: NodeIndex = new Map(bpNodes.map((n) => [n.id, n]));
-  return { nodeIndex, bpEdges: rfEdges.map(rfEdgeToBlueprintEdge) };
+): { nodeIndex: BlueprintNodeIndex; existingEdges: EventBlueprint['edges'] } {
+  const mutableIndex = new Map<string, BlueprintNodeIndexEntry>();
+  for (const rfNode of rfNodes) {
+    const data = rfNode.data as {
+      componentId?: string;
+      globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
+    };
+    const rfType = rfNode.type ?? 'component';
+    const kind: BlueprintNodeIndexEntry['kind'] =
+      rfType === 'global' ? 'component' : (rfType as BlueprintNodeIndexEntry['kind']);
+    const entry: BlueprintNodeIndexEntry = {
+      id: rfNode.id,
+      kind,
+    };
+    if (kind === 'component') {
+      entry.componentId = data.componentId;
+      entry.globalType = data.globalType;
+    }
+    mutableIndex.set(rfNode.id, entry);
+  }
+  const nodeIndex: BlueprintNodeIndex = mutableIndex;
+  const existingEdges = rfEdges.map(rfEdgeToBlueprintEdge);
+  return { nodeIndex, existingEdges };
 }
 
-/** 将 RF Connection/Edge 归一化为引脚兼容判定候选 */
+/** Normalize a React Flow connection for connection validation. */
 function toConnectionCandidate(conn: {
   source: string;
   target: string;
@@ -365,50 +414,93 @@ function toConnectionCandidate(conn: {
   targetHandle?: string | null;
 }): ConnectionCandidate {
   return {
-    sourceNodeId: conn.source,
-    sourceHandle: (conn.sourceHandle ?? 'out') as PinId,
-    targetNodeId: conn.target,
-    targetHandle: (conn.targetHandle ?? 'in') as PinId,
+    source: conn.source,
+    sourceHandle: conn.sourceHandle ?? 'out',
+    target: conn.target,
+    targetHandle: conn.targetHandle ?? 'in',
   };
 }
 
+/** 生成唯一边 ID */
+function generateEdgeId(): string {
+  return `edge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 /**
- * 根据 NodeOption 的 kind/subtype 构造初始 config（空参数，由后续属性面板填充）。
- * 节点 ID 使用时间戳 + 随机数生成（M1 简化方案，M2 可换为短 ID）。
+ * Build an initial blueprint node from a search option.
+ *
+ * - 全局节点：componentId='global' + globalType + (config?)
+ * - 普通组件节点：componentId=''（由用户在属性面板选择）
+ * - condition / delay / comment：默认 config
  */
 function createNodeFromOption(
   option: NodeOption,
   position: { x: number; y: number },
-): EventBlueprint['nodes'][number] {
+): BlueprintNode {
   const id = `node-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  let config: EventBlueprint['nodes'][number]['config'];
 
-  if (option.kind === 'trigger') {
-    if (option.subtype === 'componentClick') {
-      config = { type: 'componentClick', componentId: '' };
+  if (option.kind === 'component') {
+    // 普通画布组件节点（group === 'canvas-component'）
+    if (option.group === 'canvas-component') {
+      if (!option.componentId) {
+        // 不应发生：canvas-component 选项必带 componentId
+        throw new Error(`Canvas component option missing componentId: ${option.id}`);
+      }
+      return {
+        id,
+        kind: 'component',
+        position,
+        componentId: option.componentId,
+        // 普通组件节点不应有 globalType / config（schema 强校验）
+      };
+    }
+
+    // 全局节点
+    const globalType = option.globalType;
+    if (globalType === undefined) {
+      // Component options outside the canvas group must identify a global node.
+      throw new Error(`Component option missing globalType: ${option.id}`);
+    }
+    if (globalType === 'pageLoad') {
+      return {
+        id,
+        kind: 'component',
+        position,
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'pageLoad',
+      };
+    }
+    // navigate / requestApi / scrollTo / interval 提供空 config 占位
+    let config: GlobalNodeConfig;
+    if (globalType === 'navigate') {
+      config = { globalType: 'navigate', url: '', target: '_blank' };
+    } else if (globalType === 'requestApi') {
+      config = {
+        globalType: 'requestApi',
+        method: 'GET',
+        url: '',
+        headers: {},
+        body: '',
+        secretHeaderKeys: [],
+        timeoutMs: 10_000,
+      };
+    } else if (globalType === 'interval') {
+      config = { globalType: 'interval', intervalMs: 1000 };
     } else {
-      config = { type: 'pageLoad' };
+      config = { globalType: 'scrollTo', targetComponentId: '' };
     }
-  } else if (option.kind === 'action') {
-    switch (option.subtype) {
-      case 'setVisibility':
-        config = { type: 'setVisibility', targetComponentId: '', visible: 'show' };
-        break;
-      case 'navigate':
-        config = { type: 'navigate', url: '', target: '_blank' };
-        break;
-      case 'scrollToComponent':
-        config = { type: 'scrollToComponent', targetComponentId: '' };
-        break;
-      case 'refreshDataSource':
-        config = { type: 'refreshDataSource', targetComponentId: '' };
-        break;
-      default:
-        throw new Error(`Unknown action subtype: ${option.subtype}`);
-    }
-  } else if (option.kind === 'condition') {
-    // condition 默认表达式：componentProp 空比较（待属性面板填充）
-    config = {
+    return {
+      id,
+      kind: 'component',
+      position,
+      componentId: GLOBAL_COMPONENT_ID,
+      globalType,
+      config,
+    };
+  }
+
+  if (option.kind === 'condition') {
+    const config: ConditionNodeConfig = {
       type: 'condition',
       expression: {
         source: { kind: 'componentProp', componentId: '', key: '' },
@@ -416,21 +508,15 @@ function createNodeFromOption(
         value: '',
       },
     };
-  } else {
-    config = { text: '' };
+    return { id, kind: 'condition', position, config };
   }
 
-  return {
-    id,
-    kind: option.kind,
-    position,
-    config,
-  } as EventBlueprint['nodes'][number];
-}
+  if (option.kind === 'delay') {
+    return { id, kind: 'delay', position, config: { delayMs: 500 } };
+  }
 
-/** 生成唯一边 ID（时间戳 + 随机数） */
-function generateEdgeId(): string {
-  return `edge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // comment
+  return { id, kind: 'comment', position, config: { text: '' } };
 }
 
 // ===== 主组件 =====
@@ -438,31 +524,18 @@ function generateEdgeId(): string {
 interface BlueprintSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** 蓝图->画布高亮联动：点击节点时调用，由 screen-editor 注入 flashComponent */
+  /** 蓝图->画布高亮联动：点击节点时调用 */
   onLocateComponent?: (componentId: string) => void;
-  /**
-   * 画布->蓝图过滤联动：当前选中组件 id（null 表示不过滤）。
-   *
-   * 优化（2026-07-26）：若调用方未显式传入（undefined），组件内部会通过
-   * useScreenEditorStore 订阅 selectedComponentIds 自动派生。
-   * 这样 ScreenEditor 不必为 BlueprintSheet 而订阅 selectedComponentIds，
-   * 避免选中变化时 ScreenEditor 重渲染导致整个外壳（左/右面板、画布、上下文菜单）
-   * 一起重渲染，从而消除控制框延迟。
-   *
-   * 调用方仍可显式传入优先级更高的值（如 QuickEventEditor 的 focusComponentId）。
-   */
+  /** 画布->蓝图过滤联动：当前选中组件 id（null 表示不过滤） */
   filterComponentId?: string | null;
-  /** 保存项目回调（缺口 1：Ctrl+S 接管） */
+  /** 保存项目回调 */
   onSave?: () => void;
-  /** 显示快捷键帮助（缺口 2：Ctrl+/ 接管） */
+  /** 显示快捷键帮助 */
   onShowHelp?: () => void;
 }
 
 /**
- * 事件蓝图全屏弹层编辑器。
- *
- * 容器形态：full-overlay（全屏弹层，带顶栏）。
- * 数据流：editor-store.blueprint → ReactFlow nodes/edges → editor-store.updateBlueprint
+ * Full-screen event blueprint editor.
  */
 export function BlueprintSheet({
   open,
@@ -472,10 +545,6 @@ export function BlueprintSheet({
   onSave,
   onShowHelp,
 }: BlueprintSheetProps): JSX.Element | null {
-  // 内部派生 filterComponentId（仅当调用方未显式传入时）。
-  // 在 Sheet 关闭时（open=false）提前 return null，订阅不会触发重渲染。
-  // 在 Sheet 打开后才订阅 selectedComponentIds，此时用户在 Sheet 内部交互，
-  // 选中变化由 Sheet 自身消化，不再回流到 ScreenEditor。
   const selectedComponentIds = useScreenEditorStore((s) => s.selectedComponentIds);
   const effectiveFilterComponentId =
     filterComponentId !== undefined
@@ -528,46 +597,33 @@ function BlueprintSheetInner({
   onSave,
   onShowHelp,
 }: BlueprintSheetInnerProps): JSX.Element {
-  const notifications = useOptionalScreenEditorNotifications();
+  const editorEnvironment = useOptionalScreenEditorEnvironment();
+  const capabilityProfile = editorEnvironment?.capabilityProfile ?? 'dynamic';
+  const isActive = editorEnvironment?.isActive ?? ALWAYS_ACTIVE;
   const project = useScreenEditorStore((s) => s.project);
   const updateBlueprint = useScreenEditorStore((s) => s.updateBlueprint);
   const beginBlueprintGesture = useScreenEditorStore((s) => s.beginBlueprintGesture);
   const endBlueprintGesture = useScreenEditorStore((s) => s.endBlueprintGesture);
 
-  // V1 蓝图窄化：本组件为 V1 编辑器，仅处理 version=1 的蓝图；
-  // V2 蓝图由 BlueprintSheetV2 处理。这里通过类型守卫将 BlueprintField 收敛为 EventBlueprint。
-  const projectBlueprint = project?.blueprint;
-  const blueprint =
-    projectBlueprint !== undefined && projectBlueprint.version === EVENT_BLUEPRINT_VERSION
-      ? projectBlueprint
-      : undefined;
+  const blueprint = project?.blueprint;
   const components = project?.components ?? [];
 
-  // 任务 9.2：画布选中组件 → 蓝图过滤联动
-  // 当 filterComponentId 为非空字符串时，Sheet 内 ReactFlow 切换到过滤视图
   const isFiltering =
     filterComponentId !== undefined && filterComponentId !== null && filterComponentId !== '';
 
-  // 任务 9.2：过滤后的蓝图节点/边 id 集合（仅 isFiltering 时计算）
-  const filteredIds = useMemo(() => {
+  // 任务 9.2：过滤后的节点 id 集合
+  const filteredNodeIds = useMemo(() => {
     if (!isFiltering || !blueprint || !filterComponentId) return null;
-    const filtered = filterBlueprintByComponent(blueprint, filterComponentId);
-    return {
-      nodeIds: new Set(filtered.nodes.map((n) => n.id)),
-      edgeIds: new Set(filtered.edges.map((e) => e.id)),
-    };
+    return filterBlueprintByComponent(blueprint, filterComponentId);
   }, [isFiltering, blueprint, filterComponentId]);
 
-  // 任务 8.1：沙盒运行时（独立于预览/画布真实状态）
   const sandbox = useBlueprintSandboxRuntime(blueprint, components);
-
-  // 任务 8.3：最近一次模拟结果（用于 ExecutionLogPanel 显示拒绝/未找到原因）
   const [lastSimResult, setLastSimResult] = useState<SandboxSimulationResult | null>(null);
 
-  // 任务 8.2：链路高亮状态机（基于沙盒 executionLogs 驱动）
+  // 任务 8.2：链路高亮
   const highlight = useBlueprintSandboxHighlight(sandbox.executionLogs, blueprint);
 
-  // ReactFlow 本地状态（从 blueprint 派生）
+  // ReactFlow 本地状态
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [searchPanelState, setSearchPanelState] = useState<SearchPanelState>({
@@ -575,33 +631,20 @@ function BlueprintSheetInner({
     mode: 'create',
     position: { x: 0, y: 0 },
   });
-  // 空态引导关闭标记：用户点击"从空白开始"后置 true，避免空蓝图仍被空态遮罩死锁
   const [emptyDismissed, setEmptyDismissed] = useState(false);
-  // 右键菜单模式：由 ReactFlow 的 node/edge/pane 右键处理器驱动
   const [ctxMenuMode, setCtxMenuMode] = useState<BlueprintContextMenuMode>('pane');
-  // 空白处右键时的屏幕坐标（供"添加节点..."在右键位置呼出搜索面板）
   const paneMenuPosRef = useRef({ x: 0, y: 0 });
 
-  // ref 守卫：标记下一次 blueprint→nodes/edges 同步是内部触发，nodes/edges→blueprint 应跳过
   const skipNextBlueprintSync = useRef(false);
-  // 标记是否已初始化（避免首次渲染时用空 nodes/edges 覆盖已有 blueprint）
   const initialized = useRef(false);
-  // 拖拽手势进行中标记：期间 nodes/edges→blueprint 的自动写回被抑制，
-  // 拖拽结束时由 handleNodeDragStop 统一提交一次（任务 5.2：中间态不入栈）
   const dragActive = useRef(false);
-  // 连线进行中标记：Esc 分层第二层检查（任务 5.4）
   const isConnectingRef = useRef(false);
-  // 最新 nodes/edges 的 ref 快照，供拖拽结束时同步读取（setNodes 异步，不能依赖闭包中的 state）
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge[]>([]);
+  // Canvas container for anchor-snap mousemove handling.
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-  /**
-   * P0 性能优化：ref 镜像高频变化的非 primitive state。
-   *
-   * 原 useEffect[nodes, edges] 同步 ref 会在每次 nodes/edges 变化时额外触发一次
-   * effect 执行；React 官方推荐在 render 期直接赋值 ref（无需 effect）。
-   * 以下 ref 用于 callback 内读取最新值，使 callback 依赖最小化、避免重建。
-   */
+  // ref 镜像高频变化的非 primitive state
   const projectRef = useRef(project);
   const componentsRef = useRef(components);
   const searchPanelStateRef = useRef(searchPanelState);
@@ -609,7 +652,6 @@ function BlueprintSheetInner({
   const selectedAlignNodesRef = useRef<AlignNode[]>([]);
   const selectedNodeRef = useRef<Node | null>(null);
 
-  // render 期直接同步 ref（React 官方模式，避免 useEffect 额外渲染周期）
   nodesRef.current = nodes;
   edgesRef.current = edges;
   projectRef.current = project;
@@ -617,7 +659,7 @@ function BlueprintSheetInner({
   searchPanelStateRef.current = searchPanelState;
   sandboxRef.current = sandbox;
 
-  // blueprint → ReactFlow 同步（外部变化：undo/redo/load）
+  // blueprint -> ReactFlow 同步（外部变化：undo/redo/load）
   useEffect(() => {
     skipNextBlueprintSync.current = true;
     if (!blueprint) {
@@ -626,15 +668,11 @@ function BlueprintSheetInner({
       initialized.current = true;
       return;
     }
-    // 预构建 component 查询 Map，批量转换避免每节点重复线性扫描（O(N×M) → O(N+M)）
     const componentMap = buildComponentMap(components);
-    // 合并 ephemeral 字段：blueprint 重建节点会丢失 selected / measured，
-    // 导致配置面板每次编辑后选中态闪烁、对齐面板丢失已测量尺寸。
-    // 按 id 从当前 RF 状态中继承这些纯 UI 态字段（不参与 blueprint 持久化）。
     const prevNodeById = new Map(nodesRef.current.map((n) => [n.id, n]));
     const prevEdgeById = new Map(edgesRef.current.map((e) => [e.id, e]));
     setNodes(
-      blueprint.nodes.map((n: EventBlueprint['nodes'][number]) => {
+      blueprint.nodes.map((n) => {
         const rfNode = blueprintNodeToRFNode(n, componentMap);
         const prev = prevNodeById.get(rfNode.id);
         if (prev) {
@@ -645,7 +683,7 @@ function BlueprintSheetInner({
       }),
     );
     setEdges(
-      blueprint.edges.map((e: EventBlueprint['edges'][number]) => {
+      blueprint.edges.map((e) => {
         const rfEdge = blueprintEdgeToRFEdge(e);
         const prev = prevEdgeById.get(rfEdge.id);
         if (prev?.selected) rfEdge.selected = true;
@@ -653,29 +691,25 @@ function BlueprintSheetInner({
       }),
     );
     initialized.current = true;
-    // 仅在 blueprint 引用变化时同步；components 变化由 dangling 在渲染时重算
   }, [blueprint]);
 
-  // ReactFlow nodes/edges → blueprint 同步（本地状态变化时写回）
+  // ReactFlow nodes/edges -> blueprint 同步
   useEffect(() => {
     if (!initialized.current) return;
     if (skipNextBlueprintSync.current) {
       skipNextBlueprintSync.current = false;
       return;
     }
-    // 拖拽手势进行中不自动写回：中间态由 handleNodeDragStop 统一提交（任务 5.2）
     if (dragActive.current) return;
     if (!projectRef.current) return;
     const newBlueprint: EventBlueprint = {
-      version: 1,
+      version: 2,
       nodes: nodes.map(rfNodeToBlueprintNode),
       edges: edges.map(rfEdgeToBlueprintEdge),
     };
     updateBlueprint(newBlueprint);
-    // nodes/edges 变化时同步；updateBlueprint 内部有深比较守卫避免循环
   }, [nodes, edges, updateBlueprint]);
 
-  // ReactFlow 变更处理：仅更新本地状态（→ 由 useEffect 同步到 blueprint）
   const onNodesChange: OnNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
   }, []);
@@ -684,12 +718,7 @@ function BlueprintSheetInner({
     setEdges((eds) => applyEdgeChanges(changes, eds));
   }, []);
 
-  /**
-   * 引脚兼容判定（拖拽连线实时校验 + onConnect 兜底共用）。
-   *
-   * 规则见 lib/pin-compatibility.ts：comment 不参与执行流、不允许自环/重复边、
-   * 源必须是输出引脚、目标必须是输入引脚。
-   */
+  // Connection validation
   const checkConnection = useCallback(
     (conn: {
       source: string;
@@ -697,8 +726,16 @@ function BlueprintSheetInner({
       sourceHandle?: string | null;
       targetHandle?: string | null;
     }): boolean => {
-      const { nodeIndex, bpEdges } = buildConnectionContext(nodesRef.current, edgesRef.current);
-      return isConnectionValid(toConnectionCandidate(conn), nodeIndex, bpEdges).valid;
+      const { nodeIndex, existingEdges } = buildConnectionContext(
+        nodesRef.current,
+        edgesRef.current,
+      );
+      const result: ConnectionValidationResult = isConnectionValid(
+        toConnectionCandidate(conn),
+        nodeIndex,
+        existingEdges,
+      );
+      return result.valid;
     },
     [],
   );
@@ -706,7 +743,6 @@ function BlueprintSheetInner({
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      // isValidConnection 已在拖拽期拦截非法连线，此处兜底（程序化 addEdge 等路径）
       if (!checkConnection(connection)) return;
       const newEdge: Edge = {
         id: generateEdgeId(),
@@ -723,17 +759,10 @@ function BlueprintSheetInner({
     [checkConnection],
   );
 
-  // 任务 5.4：追踪连线拖拽状态，供 Esc 分层判断
   const handleConnectStart = useCallback(() => {
     isConnectingRef.current = true;
   }, []);
 
-  /**
-   * 连线松手：
-   * - 落在空白处（toNode=null）且从输出引脚拖出 → 呼出搜索面板（connect 模式），
-   *   选中节点类型后在松手位置插入新节点并自动完成连线
-   * - 其他情况仅复位连线中标记
-   */
   const handleConnectEnd: OnConnectEnd = useCallback((event, connectionState) => {
     isConnectingRef.current = false;
     if (connectionState.toNode) return;
@@ -752,13 +781,60 @@ function BlueprintSheetInner({
       position: { x: clientX, y: clientY },
       pendingConnection: {
         sourceNodeId: fromNode.id,
-        sourceHandle: (fromHandle.id ?? 'out') as PendingConnection['sourceHandle'],
+        sourceHandle: fromHandle.id ?? 'out',
       },
     });
   }, []);
 
-  // 拖拽吸附：仅更新本地 nodes（拖拽结束由 handleNodeDragStop 统一提交 blueprint）
-  // onNodesChange 回调同步更新 nodesRef，保证拖拽结束时能读到吸附后的最终位置
+  // Anchor snapping bypasses the search panel when a compatible target is found.
+  const handleSnapConnect = useCallback(
+    (conn: ConnectionCandidate) => {
+      if (!checkConnection(conn)) return;
+      const newEdge: Edge = {
+        id: generateEdgeId(),
+        type: 'exec',
+        source: conn.source,
+        sourceHandle: conn.sourceHandle,
+        target: conn.target,
+        targetHandle: conn.targetHandle,
+        markerEnd: EXEC_EDGE_MARKER_END,
+        data: {},
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
+    [checkConnection],
+  );
+
+  const anchorSnap = useAnchorSnap({
+    getNodes: () => nodesRef.current,
+    getEdges: () => edgesRef.current,
+    onSnapConnect: handleSnapConnect,
+    getRoot: () => containerRef.current,
+  });
+
+  // 包装后的连线事件处理器：先经磁吸 hook，再回退到原有行为
+  const wrappedConnectStart = useMemo(
+    () => anchorSnap.wrapConnectStart(handleConnectStart),
+    [anchorSnap, handleConnectStart],
+  );
+  const wrappedConnectEnd = useMemo(
+    () => anchorSnap.wrapConnectEnd(handleConnectEnd),
+    [anchorSnap, handleConnectEnd],
+  );
+
+  // 容器级别 mousemove：连线拖拽时更新磁吸命中
+  // 使用 capture 阶段监听，避免被 ReactFlow 内部 mousemove 拦截
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const handler = anchorSnap.handleMouseMove;
+    container.addEventListener('mousemove', handler, { passive: true });
+    return () => {
+      container.removeEventListener('mousemove', handler);
+    };
+  }, [anchorSnap]);
+
+  // 拖拽吸附
   const { onNodeDragStop: snapNodeDragStop } = useBlueprintDrag({
     nodes,
     onNodesChange: (nextNodes) => {
@@ -767,49 +843,38 @@ function BlueprintSheetInner({
     },
   });
 
-  // 拖拽开始：开启蓝图编辑手势（任务 5.2），期间 updateBlueprint 合并为一次提交
   const handleNodeDragStart: OnNodeDrag = useCallback(() => {
     dragActive.current = true;
     beginBlueprintGesture();
   }, [beginBlueprintGesture]);
 
-  // 拖拽结束：吸附后提交最终位置一次，并结束手势补一条历史（undo 回到拖拽前）
   const handleNodeDragStop: OnNodeDrag = useCallback(
     (event, node, draggedNodes) => {
-      // 应用网格/对齐吸附（内部经 onNodesChange 更新 nodesRef 与 setNodes）
       snapNodeDragStop(event, node, draggedNodes);
       const finalNodes = nodesRef.current;
       if (projectRef.current) {
         const finalBlueprint: EventBlueprint = {
-          version: 1,
+          version: 2,
           nodes: finalNodes.map(rfNodeToBlueprintNode),
           edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
         };
-        // 手势进行中 →  transient 更新（不入历史栈）
         updateBlueprint(finalBlueprint);
       }
-      // 结束手势：有净变化则补一条历史（快照为拖拽前），无变化则不产生空历史
       endBlueprintGesture();
       dragActive.current = false;
     },
     [snapNodeDragStop, updateBlueprint, endBlueprintGesture],
   );
 
-  // 视口控制
   const viewport = useBlueprintViewport();
-
-  // ReactFlow 实例（屏幕坐标 → 流程坐标转换、视口定位共用）
   const reactFlowInstance = useReactFlow();
 
-  // 首次挂载时恢复上次缓存的视口（避免每次打开都回到 {0,0,1}）
   useEffect(() => {
     viewport.restoreViewport();
   }, [viewport.restoreViewport]);
 
-  // 双击空白呼出搜索面板（创建模式）
   const handleDoubleClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    // 排除节点、边、控件、小地图、attribution 的双击
     if (
       target.closest('.react-flow__node') ||
       target.closest('.react-flow__edge') ||
@@ -830,40 +895,53 @@ function BlueprintSheetInner({
   const handleInsertNode = useCallback(
     (option: NodeOption) => {
       const state = searchPanelStateRef.current;
-      // 面板位置是屏幕坐标（clientX/Y），必须转换为流程坐标，
-      // 否则缩放/平移后新节点会偏离点击位置
       const position = reactFlowInstance.screenToFlowPosition({
         x: state.position.x,
         y: state.position.y,
       });
       const newNode = createNodeFromOption(option, position);
-      const rfNode = blueprintNodeToRFNode(newNode, buildComponentMap(componentsRef.current));
+      const componentMap = buildComponentMap(componentsRef.current);
+      const rfNode = blueprintNodeToRFNode(newNode, componentMap);
 
-      // 插入后单选新节点（配置面板立即就绪，符合"插入即配置"直觉）
       setNodes((nds) => [
         ...nds.map((n) => ({ ...n, selected: false })),
         { ...rfNode, selected: true },
       ]);
 
-      // connect 模式：校验引脚兼容后自动连线（无效则仅插入节点不连线）
+      // connect 模式：校验引脚兼容后自动连线
       if (state.mode === 'connect' && state.pendingConnection) {
         const candidate: ConnectionCandidate = {
-          sourceNodeId: state.pendingConnection.sourceNodeId,
+          source: state.pendingConnection.sourceNodeId,
           sourceHandle: state.pendingConnection.sourceHandle,
-          targetNodeId: rfNode.id,
-          targetHandle: 'in',
+          target: rfNode.id,
+          // 普通组件节点 / 全局非 pageLoad 节点用首个 act:*；其他用 'in'
+          targetHandle: deriveDefaultTargetHandle(newNode),
         };
-        const { nodeIndex, bpEdges } = buildConnectionContext(nodesRef.current, edgesRef.current);
-        // NodeIndex 是 ReadonlyMap：构造时合并新节点，而非事后 set
-        const nextIndex: NodeIndex = new Map([...nodeIndex, [newNode.id, newNode]]);
-        if (isConnectionValid(candidate, nextIndex, bpEdges).valid) {
+        const { nodeIndex, existingEdges } = buildConnectionContext(
+          nodesRef.current,
+          edgesRef.current,
+        );
+        // NodeIndex 合并新节点
+        const nextIndex: BlueprintNodeIndex = new Map([
+          ...nodeIndex,
+          [
+            newNode.id,
+            {
+              id: newNode.id,
+              kind: newNode.kind,
+              componentId: newNode.kind === 'component' ? newNode.componentId : undefined,
+              globalType: newNode.kind === 'component' ? newNode.globalType : undefined,
+            },
+          ],
+        ]);
+        if (isConnectionValid(candidate, nextIndex, existingEdges).valid) {
           const newEdge: Edge = {
             id: generateEdgeId(),
             type: 'exec',
-            source: state.pendingConnection.sourceNodeId,
-            sourceHandle: state.pendingConnection.sourceHandle,
-            target: rfNode.id,
-            targetHandle: 'in',
+            source: candidate.source,
+            sourceHandle: candidate.sourceHandle,
+            target: candidate.target,
+            targetHandle: candidate.targetHandle,
             markerEnd: EXEC_EDGE_MARKER_END,
             data: {},
           };
@@ -876,15 +954,13 @@ function BlueprintSheetInner({
     [reactFlowInstance],
   );
 
-  // 全选：Ctrl+A 与右键菜单"全选"共用
   const handleSelectAll = useCallback(() => {
     setNodes((nds) => nds.map((n) => ({ ...n, selected: true })));
     setEdges((eds) => eds.map((ed) => ({ ...ed, selected: true })));
   }, []);
 
-  // 任务 5.4：快捷键分层 -- Ctrl+Z/Shift+Z 走全局历史，Esc 分层
-  // 缺口 1/2：Ctrl+S 保存、Ctrl+=/-/0 视口缩放、Ctrl+/ 帮助
   useBlueprintShortcuts({
+    isActive,
     onClose: () => onOpenChange(false),
     searchPanelVisible: searchPanelState.visible,
     onCloseSearchPanel: () => setSearchPanelState((s) => ({ ...s, visible: false })),
@@ -901,38 +977,45 @@ function BlueprintSheetInner({
     onSelectAll: handleSelectAll,
   });
 
-  // 任务 5.5：跨项目剪贴板 —— Ctrl+C/X/V/D（返回值供右键菜单复用）
-  const blueprintClipboard = useBlueprintClipboard({ nodes, edges, setNodes, setEdges });
-
-  // 任务 6.1：实时诊断订阅
-  // P0 优化：useMemo 避免每次渲染创建新 Set 导致 useBlueprintDiagnostics 内部 useCallback 重建
-  const componentIds = useMemo(() => new Set(components.map((c) => c.id)), [components]);
-  const { diagnostics, errorCount, warningCount, infoCount } = useBlueprintDiagnostics({
-    blueprint,
-    componentIds,
+  const blueprintClipboard = useBlueprintClipboard({
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+    isActive,
   });
-  const diagnosticMap = buildDiagnosticMap(diagnostics);
 
-  // 任务 6.2：问题面板点击定位节点
+  const diagnostics: readonly BlueprintDiagnostic[] = sandbox.compileDiagnostics;
+  const errorCount = useMemo(
+    () => diagnostics.filter((d) => d.level === 'error').length,
+    [diagnostics],
+  );
+  const warningCount = useMemo(
+    () => diagnostics.filter((d) => d.level === 'warning').length,
+    [diagnostics],
+  );
+  const infoCount = useMemo(
+    () => diagnostics.filter((d) => d.level === 'info').length,
+    [diagnostics],
+  );
+  const diagnosticMap = useMemo(
+    () => buildDiagnosticMap(sandbox.compileDiagnostics),
+    [sandbox.compileDiagnostics],
+  );
+
+  // 节点定位（问题面板点击）
   const locateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const handleLocateNode = useCallback(
     (nodeId: string) => {
       const targetNode = nodesRef.current.find((n) => n.id === nodeId);
       if (!targetNode) return;
-
-      // 居中到目标节点
       void reactFlowInstance.setCenter(targetNode.position.x, targetNode.position.y, {
         zoom: 1,
         duration: 300,
       });
-
-      // 添加闪烁标记
       setNodes((nds) =>
         nds.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, locating: true } } : n)),
       );
-
-      // 1s 后移除闪烁标记
       if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
       locateTimerRef.current = setTimeout(() => {
         setNodes((nds) =>
@@ -943,16 +1026,13 @@ function BlueprintSheetInner({
     [reactFlowInstance, setNodes],
   );
 
-  // 清理定位计时器
   useEffect(() => {
     return () => {
       if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
     };
   }, []);
 
-  // 任务 9.4：多选对齐与分布
-  // 选中节点（ReactFlow Node 的 selected 字段）转换为 AlignNode 输入
-  // P0 优化：useMemo 避免每次渲染重算；同步 ref 供 handleAlign/handleDistribute 读取
+  // 多选对齐与分布
   const selectedAlignNodes = useMemo<AlignNode[]>(
     () =>
       nodes
@@ -966,22 +1046,18 @@ function BlueprintSheetInner({
     [nodes],
   );
   selectedAlignNodesRef.current = selectedAlignNodes;
-
   const selectedCount = selectedAlignNodes.length;
 
-  // 对齐：调用纯函数计算新位置，应用到 nodes 并写回 blueprint（一次提交一条历史）
-  // P0 优化：通过 ref 读取最新值，callback 依赖仅 updateBlueprint（稳定），避免每次 nodes 变化重建
   const handleAlign = useCallback(
     (mode: AlignMode) => {
       const result = alignNodes(selectedAlignNodesRef.current, mode);
       if (!result.hasChange) return;
-      // functional 模式：同步更新 ref 供 blueprint 写回，setNodes 触发重渲染
       const nextNodes = applyAlignResultToNodes(nodesRef.current, result.items);
       nodesRef.current = nextNodes;
       setNodes(nextNodes);
       if (projectRef.current) {
         const nextBlueprint: EventBlueprint = {
-          version: 1,
+          version: 2,
           nodes: nextNodes.map(rfNodeToBlueprintNode),
           edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
         };
@@ -991,7 +1067,6 @@ function BlueprintSheetInner({
     [updateBlueprint],
   );
 
-  // 分布：等距分布逻辑，与 handleAlign 同模式
   const handleDistribute = useCallback(
     (mode: DistributeMode) => {
       const result = distributeNodes(selectedAlignNodesRef.current, mode);
@@ -1001,7 +1076,7 @@ function BlueprintSheetInner({
       setNodes(nextNodes);
       if (projectRef.current) {
         const nextBlueprint: EventBlueprint = {
-          version: 1,
+          version: 2,
           nodes: nextNodes.map(rfNodeToBlueprintNode),
           edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
         };
@@ -1011,22 +1086,13 @@ function BlueprintSheetInner({
     [updateBlueprint],
   );
 
-  // 任务 4.8：选中单个节点时展示节点参数配置面板
-  // 从 nodes 中找出 selected 为 true 的节点（ReactFlow 通过 onNodesChange 更新 selected 字段）
-  // 多选时不展示配置面板（恰好一个节点选中时才展示）
-  // P0 优化：useMemo 避免每次渲染重算；同步 ref 供 handleConfigChange/handleSimulateTrigger 读取
+  // 选中节点
   const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes]);
   const selectedNode = selectedNodes.length === 1 ? selectedNodes[0] : null;
   selectedNodeRef.current = selectedNode;
   const showConfigPanel = selectedNode !== null;
 
-  // 配置变更回调：更新该节点的 data.config，由既有 useEffect[nodes,edges] 同步到 updateBlueprint
-  //
-  // 历史合并（与拖拽手势同语义）：
-  // 文本类输入（URL/注释/表达式值）每个键击都会触发 onChange，若每次 withHistory
-  // 会产生数十条历史。改为：首次变更开启蓝图手势（期间 updateBlueprint 为 transient
-  // 不入栈），停止输入 600ms 或切换选中节点/卸载时 endBlueprintGesture 补一条历史，
-  // undo 一次回到本次编辑会话之前。
+  // 配置变更：编辑手势合并
   const configGestureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const configGestureActiveRef = useRef(false);
 
@@ -1041,7 +1107,6 @@ function BlueprintSheetInner({
     }
   }, [endBlueprintGesture]);
 
-  // 切换选中节点时立即结算当前编辑手势（避免跨节点合并历史）
   const selectedNodeId = selectedNode?.id ?? null;
   const prevSelectedNodeIdRef = useRef(selectedNodeId);
   useEffect(() => {
@@ -1051,7 +1116,6 @@ function BlueprintSheetInner({
     }
   }, [selectedNodeId, endConfigGesture]);
 
-  // 卸载兜底：Sheet 关闭时结算未完成的编辑手势
   useEffect(() => {
     return () => {
       if (configGestureTimerRef.current) clearTimeout(configGestureTimerRef.current);
@@ -1062,50 +1126,80 @@ function BlueprintSheetInner({
     };
   }, [endBlueprintGesture]);
 
+  /**
+   * 配置变更回调：根据节点 kind 写回对应字段。
+   *
+   * Node configuration shape:
+   * - component（普通）：仅 componentId 可编辑
+   * - component（全局 navigate/requestApi/scrollTo）：写回 config
+   * - component（全局 pageLoad）：无可编辑字段
+   * - delay：写回 config.delayMs
+   * - condition：写回 config（ConditionNodeConfig）
+   * - comment：写回 config（CommentNodeConfig）
+   */
   const handleConfigChange = useCallback(
-    (
-      next:
-        | BlueprintTriggerConfig
-        | BlueprintActionConfig
-        | CommentNodeConfig
-        | ConditionNodeConfig,
-    ) => {
+    (next: NodeConfigChange) => {
       const selected = selectedNodeRef.current;
       if (!selected) return;
+
       setNodes((nds) =>
-        nds.map((n) => (n.id === selected.id ? { ...n, data: { ...n.data, config: next } } : n)),
+        nds.map((n) => {
+          if (n.id !== selected.id) return n;
+          const newData: Record<string, unknown> = { ...n.data };
+          if (next.kind === 'component-id') {
+            newData.componentId = next.componentId;
+          } else if (next.kind === 'global-config') {
+            newData.config = next.config;
+          } else if (next.kind === 'delay-config') {
+            newData.config = next.config;
+          } else if (next.kind === 'condition-config') {
+            newData.config = next.config;
+          } else if (next.kind === 'comment-config') {
+            newData.config = next.config;
+          }
+          return { ...n, data: newData };
+        }),
       );
-      // 开启编辑手势（幂等：手势进行中重复 begin 为 no-op）
+
       if (!configGestureActiveRef.current) {
         configGestureActiveRef.current = true;
         beginBlueprintGesture();
       }
-      // 手势期间 updateBlueprint 为 transient：只更新数据与脏标记，不入历史栈
       if (projectRef.current) {
-        const nextNodes = nodesRef.current.map((n) =>
-          n.id === selected.id ? { ...n, data: { ...n.data, config: next } } : n,
-        );
+        const nextNodes = nodesRef.current.map((n) => {
+          if (n.id !== selected.id) return n;
+          const newData: Record<string, unknown> = { ...n.data };
+          if (next.kind === 'component-id') {
+            newData.componentId = next.componentId;
+          } else if (next.kind === 'global-config') {
+            newData.config = next.config;
+          } else if (next.kind === 'delay-config') {
+            newData.config = next.config;
+          } else if (next.kind === 'condition-config') {
+            newData.config = next.config;
+          } else if (next.kind === 'comment-config') {
+            newData.config = next.config;
+          }
+          return { ...n, data: newData };
+        });
         nodesRef.current = nextNodes;
         const nextBlueprint: EventBlueprint = {
-          version: 1,
+          version: 2,
           nodes: nextNodes.map(rfNodeToBlueprintNode),
           edges: edgesRef.current.map(rfEdgeToBlueprintEdge),
         };
         updateBlueprint(nextBlueprint);
       }
-      // 停止输入 600ms 后结算手势，补一条历史
       if (configGestureTimerRef.current) clearTimeout(configGestureTimerRef.current);
       configGestureTimerRef.current = setTimeout(endConfigGesture, 600);
     },
     [updateBlueprint, beginBlueprintGesture, endConfigGesture],
   );
 
-  // 空蓝图空态
   const isEmpty = nodes.length === 0;
 
   // ===== 右键菜单 =====
 
-  // 删除当前选中的节点与边（节点删除时级联删除关联边）
   const handleDeleteSelected = useCallback(() => {
     const selectedNodeIds = new Set(nodesRef.current.filter((n) => n.selected).map((n) => n.id));
     const hasSelectedEdges = edgesRef.current.some((e) => e.selected);
@@ -1120,7 +1214,6 @@ function BlueprintSheetInner({
     );
   }, []);
 
-  // 节点右键：未选中则单选该节点（与主画布右键行为一致），切换菜单模式
   const handleNodeContextMenu: NodeMouseHandler<Node> = useCallback((_event, node) => {
     if (!node.selected) {
       setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === node.id })));
@@ -1129,7 +1222,6 @@ function BlueprintSheetInner({
     setCtxMenuMode('node');
   }, []);
 
-  // 边右键：未选中则单选该边，切换菜单模式
   const handleEdgeContextMenu: EdgeMouseHandler<Edge> = useCallback((_event, edge) => {
     if (!edge.selected) {
       setEdges((eds) => eds.map((ed) => ({ ...ed, selected: ed.id === edge.id })));
@@ -1138,13 +1230,11 @@ function BlueprintSheetInner({
     setCtxMenuMode('edge');
   }, []);
 
-  // 空白处右键：记录坐标（供"添加节点..."），切换菜单模式
   const handlePaneContextMenu = useCallback((event: MouseEvent | ReactMouseEvent) => {
     paneMenuPosRef.current = { x: event.clientX, y: event.clientY };
     setCtxMenuMode('pane');
   }, []);
 
-  // 右键菜单"添加节点..."：在右键位置呼出搜索面板（create 模式）
   const handleAddNodeFromMenu = useCallback(() => {
     setSearchPanelState({
       visible: true,
@@ -1153,37 +1243,73 @@ function BlueprintSheetInner({
     });
   }, []);
 
-  // 缩放到选区：无选中节点时退化为 fitView（由 fitViewToNodes 内部处理）
   const handleFitViewToSelection = useCallback(() => {
     const ids = nodesRef.current.filter((n) => n.selected).map((n) => n.id);
     void viewport.fitViewToNodes(ids);
   }, [viewport]);
 
-  // 搜索面板选项：connect 模式过滤为仅含输入引脚的节点（action/condition），
-  // trigger/comment 无输入引脚，选中也无法完成连线
-  const searchPanelOptions = useMemo(
-    () =>
-      searchPanelState.mode === 'connect'
-        ? NODE_OPTIONS.filter((o) => INPUT_PINS[o.kind].length > 0)
-        : NODE_OPTIONS,
-    [searchPanelState.mode],
-  );
+  // Locate the canvas component associated with the selected node.
+  const handleLocateComponentFromMenu = useCallback(() => {
+    if (!onLocateComponent) return;
+    const node = selectedNodeRef.current;
+    if (!node) return;
+    const bpNode = rfNodeToBlueprintNode(node);
+    const componentId = getNodeLocateComponentId(bpNode);
+    if (componentId) {
+      onLocateComponent(componentId);
+    }
+  }, [onLocateComponent]);
+
+  // The configuration panel is visible for a selected node.
+  // 配置面板在 selectedNode !== null 时已自动显示，这里通过 ref 守卫避免重复渲染
+  // 当前实现仅作为菜单项触发器，未来可扩展为聚焦首个表单字段
+  const handleConfigureGlobalFromMenu = useCallback(() => {
+    // 配置面板已通过 showConfigPanel 自动显示，无需额外操作
+    // 保留 hook 入口便于后续扩展（如聚焦 URL 输入框）
+  }, []);
+
+  // Node-specific context menu data is meaningful only for a single selection.
+  const ctxMenuSelectedNodeKind = useMemo<
+    'component' | 'global' | 'condition' | 'delay' | 'comment' | null
+  >(() => {
+    if (selectedNode?.type === 'component') return 'component';
+    if (selectedNode?.type === 'global') return 'global';
+    if (selectedNode?.type === 'condition') return 'condition';
+    if (selectedNode?.type === 'delay') return 'delay';
+    if (selectedNode?.type === 'comment') return 'comment';
+    return null;
+  }, [selectedNode]);
+
+  const ctxMenuSelectedNodeHasComponentId = useMemo<boolean>(() => {
+    if (selectedNode?.type !== 'component') return false;
+    const data = selectedNode.data as { componentId?: string };
+    // 普通组件节点（非 global）且 componentId 非空才允许「定位到画布组件」
+    return Boolean(data.componentId) && data.componentId !== GLOBAL_COMPONENT_ID;
+  }, [selectedNode]);
+
+  // Merge canvas and static options; connect mode keeps eligible targets only.
+  const searchPanelOptions = useMemo(() => {
+    const allOptions = buildAllNodeOptions(componentsRef.current, capabilityProfile);
+    return searchPanelState.mode === 'connect'
+      ? allOptions.filter(isConnectableTarget)
+      : allOptions;
+  }, [capabilityProfile, searchPanelState.mode, components]);
 
   // 任务 8.2 + 9.2：链路高亮 + 过滤视图叠加
-  // 先过滤（9.2），再叠加高亮 className（8.2）
   const displayNodes = useMemo(() => {
-    const filteredNodes = filteredIds ? nodes.filter((n) => filteredIds.nodeIds.has(n.id)) : nodes;
+    const filteredNodes = filteredNodeIds ? nodes.filter((n) => filteredNodeIds.has(n.id)) : nodes;
     if (highlight.highlightedNodeIds.size === 0) return filteredNodes;
     return filteredNodes.map((n) =>
       highlight.highlightedNodeIds.has(n.id)
         ? { ...n, className: `${n.className ?? ''} blueprint-node-highlighted`.trim() }
         : n,
     );
-  }, [nodes, filteredIds, highlight.highlightedNodeIds]);
+  }, [nodes, filteredNodeIds, highlight.highlightedNodeIds]);
 
-  // 任务 8.2 + 9.2：边流动高亮 + 过滤视图叠加
   const displayEdges = useMemo(() => {
-    const filteredEdges = filteredIds ? edges.filter((e) => filteredIds.edgeIds.has(e.id)) : edges;
+    const filteredEdges = filteredNodeIds
+      ? edges.filter((e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target))
+      : edges;
     if (highlight.highlightedEdgeIds.size === 0) return filteredEdges;
     return filteredEdges.map((e) =>
       highlight.highlightedEdgeIds.has(e.id)
@@ -1194,28 +1320,34 @@ function BlueprintSheetInner({
           }
         : e,
     );
-  }, [edges, filteredIds, highlight.highlightedEdgeIds]);
+  }, [edges, filteredNodeIds, highlight.highlightedEdgeIds]);
 
-  // 任务 8.1：模拟触发回调 — 对选中 trigger 节点执行沙盒模拟
-  // P0 优化：通过 ref 读取 selectedNode/sandbox，callback 依赖为空，避免每次选择变化重建
+  // 任务 8.1：模拟触发 - 对选中组件节点 + 其首个事件锚点执行沙盒模拟
   const handleSimulateTrigger = useCallback(async () => {
     const selected = selectedNodeRef.current;
-    if (!selected || selected.type !== 'trigger') return;
-    const result = await sandboxRef.current.simulateTrigger(selected.id);
+    if (!selected) return;
+    // 仅 component / global 节点可触发模拟
+    if (selected.type !== 'component' && selected.type !== 'global') return;
+
+    // 推导首个事件 id
+    const eventId = deriveFirstEventId(selected);
+    if (!eventId) return;
+
+    const result = await sandboxRef.current.simulateEvent(selected.id, eventId);
     setLastSimResult(result);
   }, []);
 
-  // 任务 8.1：重置沙盒
   const handleResetSandbox = useCallback(() => {
     sandboxRef.current.resetSandbox();
     setLastSimResult(null);
   }, []);
 
-  // 任务 9.1：节点点击 → 提取关联 componentId → 通知 screen-editor 闪烁
+  // 任务 9.1：节点点击 -> 提取关联 componentId -> 通知 screen-editor 闪烁
   const handleNodeClick = useCallback<NodeMouseHandler<Node>>(
     (_event, node) => {
       if (!onLocateComponent) return;
-      const componentId = getNodeLocateComponentId(node);
+      const bpNode = rfNodeToBlueprintNode(node);
+      const componentId = getNodeLocateComponentId(bpNode);
       if (componentId) {
         onLocateComponent(componentId);
       }
@@ -1223,37 +1355,42 @@ function BlueprintSheetInner({
     [onLocateComponent],
   );
 
-  // 是否可触发模拟：选中单个 trigger 节点
-  const canSimulate = selectedNode?.type === 'trigger';
+  // 是否可触发模拟：选中单个 component / global 节点
+  const canSimulate = selectedNode?.type === 'component' || selectedNode?.type === 'global';
+
+  const executionLogsForPanel = sandbox.executionLogs;
 
   return (
     <BlueprintDiagnosticMapProvider value={diagnosticMap}>
       {/* 顶栏 */}
       <header
-        className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-4"
+        className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-background px-4"
         data-testid="blueprint-sheet-header"
       >
-        <span className="text-sm font-medium text-foreground">事件蓝图</span>
-        {/* 任务 9.2：过滤模式提示标签 */}
+        <div className="flex items-center gap-2">
+          <span className="flex size-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-400">
+            <Workflow className="size-3.5" />
+          </span>
+          <span className="text-sm font-semibold text-foreground">事件蓝图</span>
+        </div>
         {isFiltering && (
           <span
-            className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700"
+            className="flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 ring-1 ring-inset ring-blue-500/25 dark:text-blue-300"
             data-testid="blueprint-filter-badge"
           >
+            <Filter className="size-3" />
             过滤模式
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
-          {/* 任务 8.1：模拟触发按钮（仅选中 trigger 节点时启用） */}
           <ToolbarButton
-            tooltip={canSimulate ? '模拟触发选中触发器' : '请选中一个触发器节点'}
+            tooltip={canSimulate ? '模拟触发选中节点' : '请选中一个组件或全局节点'}
             onClick={() => void handleSimulateTrigger()}
             disabled={!canSimulate || sandbox.isSimulating}
             data-testid="blueprint-simulate-trigger"
           >
             <Play className="size-4" />
           </ToolbarButton>
-          {/* 任务 8.1：重置沙盒状态 */}
           <ToolbarButton
             tooltip="重置沙盒"
             onClick={handleResetSandbox}
@@ -1262,6 +1399,7 @@ function BlueprintSheetInner({
           >
             <RotateCcw className="size-4" />
           </ToolbarButton>
+          <div className="mx-1.5 h-5 w-px bg-border" />
           <ViewportToolbar
             zoom={viewport.zoom}
             spacePressed={viewport.spacePressed}
@@ -1271,6 +1409,7 @@ function BlueprintSheetInner({
             onFitViewToSelection={handleFitViewToSelection}
             onReset={() => void viewport.resetViewport()}
           />
+          <div className="mx-1.5 h-5 w-px bg-border" />
           <ToolbarButton
             tooltip="关闭"
             onClick={() => onOpenChange(false)}
@@ -1283,33 +1422,64 @@ function BlueprintSheetInner({
 
       {/* 画布区域 */}
       <div
+        ref={containerRef}
         className="relative flex-1"
         data-testid="blueprint-canvas"
         onDoubleClick={handleDoubleClick}
       >
         {isEmpty && !searchPanelState.visible && !emptyDismissed && (
-          <div className="absolute inset-0 z-10 flex flex-col bg-background">
-            <EmptyBlueprintState
-              onInsertTemplate={(templateBlueprint) => {
-                if (!project) return;
-                updateBlueprint(templateBlueprint);
-              }}
-              onError={(error) => {
-                notifications?.notify('error', `模板插入失败：${error}`);
-              }}
-              onStartFromScratch={() => {
-                if (!project) return;
-                // 创建空蓝图状态（无节点无边）进入自由编排
-                updateBlueprint({ version: 1, nodes: [], edges: [] });
-                // 关闭空态遮罩：否则 blueprint 为空时 isEmpty 恒真，遮罩永不消失形成死局
-                setEmptyDismissed(true);
-              }}
-            />
+          // pointer-events-none：让双击 / 右键直接穿透到画布，仅 CTA 按钮可点
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
+            <div className="flex w-[min(92vw,460px)] flex-col items-center gap-5 rounded-2xl border border-border bg-card/95 px-10 py-8 text-center shadow-xl">
+              <span className="flex size-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-400">
+                <Workflow className="size-7" />
+              </span>
+              <div>
+                <p className="text-base font-semibold text-foreground">蓝图为空</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  通过事件编排，让组件之间产生联动
+                </p>
+              </div>
+              <div className="grid w-full grid-cols-2 gap-2 text-left">
+                <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <MousePointerClick className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                    双击空白处
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    呼出节点搜索面板，快速插入节点
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/60 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <Cable className="size-3.5 text-sky-600 dark:text-sky-400" />
+                    拖出锚点连线
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    松手到空白处，连线并创建目标节点
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="pointer-events-auto rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                onClick={() => {
+                  if (!project) return;
+                  updateBlueprint({ version: 2, nodes: [], edges: [] });
+                  setEmptyDismissed(true);
+                }}
+                data-testid="blueprint-start-from-scratch"
+              >
+                从空白开始
+              </button>
+            </div>
           </div>
         )}
         <BlueprintContextMenu
           mode={ctxMenuMode}
           selectedNodeCount={selectedCount}
+          selectedNodeKind={ctxMenuSelectedNodeKind}
+          selectedNodeHasComponentId={ctxMenuSelectedNodeHasComponentId}
           onCopy={() => void blueprintClipboard.copy()}
           onCut={() => void blueprintClipboard.cut()}
           onPaste={() => void blueprintClipboard.paste()}
@@ -1323,6 +1493,8 @@ function BlueprintSheetInner({
           onZoomOut={() => void viewport.zoomOut()}
           onFitView={() => void viewport.fitView()}
           onFitViewToSelection={handleFitViewToSelection}
+          onLocateComponent={onLocateComponent ? handleLocateComponentFromMenu : undefined}
+          onConfigureGlobal={handleConfigureGlobalFromMenu}
         >
           <ReactFlow
             nodes={displayNodes}
@@ -1332,8 +1504,8 @@ function BlueprintSheetInner({
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onConnectStart={handleConnectStart}
-            onConnectEnd={handleConnectEnd}
+            onConnectStart={wrappedConnectStart}
+            onConnectEnd={wrappedConnectEnd}
             onNodeDragStart={handleNodeDragStart}
             onNodeDragStop={handleNodeDragStop}
             onNodeClick={handleNodeClick}
@@ -1342,7 +1514,6 @@ function BlueprintSheetInner({
             onEdgeContextMenu={handleEdgeContextMenu}
             onPaneContextMenu={handlePaneContextMenu}
             selectionMode={SelectionMode.Partial}
-            // ReactFlow 默认仅 Backspace 删除；补齐 Delete 键（Windows 用户习惯）
             deleteKeyCode={['Backspace', 'Delete']}
             {...viewport.config}
             onMoveEnd={viewport.onMoveEnd}
@@ -1350,13 +1521,22 @@ function BlueprintSheetInner({
             className="bg-background"
             data-testid="blueprint-reactflow"
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-            <Controls showInteractive={false} />
-            <MiniMap pannable zoomable className="!bg-background" data-testid="blueprint-minimap" />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={20}
+              size={1.5}
+              className="opacity-70"
+            />
+            <MiniMap
+              pannable
+              zoomable
+              className="!rounded-lg !border !border-border !bg-background !shadow-lg"
+              data-testid="blueprint-minimap"
+            />
           </ReactFlow>
         </BlueprintContextMenu>
 
-        {/* 搜索面板 */}
+        {/* Search panel */}
         {searchPanelState.visible && (
           <div
             className="pointer-events-auto absolute z-10"
@@ -1373,7 +1553,7 @@ function BlueprintSheetInner({
           </div>
         )}
 
-        {/* 任务 9.4：多选对齐与分布工具条（左下角悬浮，selectedCount >= 2 时显示） */}
+        {/* 多选对齐与分布工具条 */}
         {selectedCount >= 2 && (
           <div className="pointer-events-auto absolute bottom-4 left-4 z-10">
             <AlignDistributeToolbar
@@ -1384,12 +1564,11 @@ function BlueprintSheetInner({
           </div>
         )}
 
-        {/* 任务 4.8：节点参数配置面板（右侧悬浮，选中单个节点时显示） */}
+        {/* 节点参数配置面板 */}
         {showConfigPanel && selectedNode && (
-          <div className="pointer-events-auto absolute right-4 top-4 z-10 w-64 max-h-[70%] overflow-y-auto rounded border border-border bg-background shadow-md">
+          <div className="pointer-events-auto absolute right-4 top-4 z-10 max-h-[70%] w-72 overflow-y-auto rounded-xl border border-border bg-popover/95 shadow-xl backdrop-blur">
             <NodeConfigPanel
-              kind={selectedNode.type as 'trigger' | 'condition' | 'action' | 'comment'}
-              config={(selectedNode.data as { config: NodeConfigPanelProps['config'] }).config}
+              node={selectedNode}
               components={components}
               onChange={handleConfigChange}
             />
@@ -1397,7 +1576,7 @@ function BlueprintSheetInner({
         )}
       </div>
 
-      {/* 问题面板（任务 6.2） */}
+      {/* 问题面板 */}
       <ProblemsPanel
         diagnostics={diagnostics}
         errorCount={errorCount}
@@ -1406,10 +1585,10 @@ function BlueprintSheetInner({
         onLocateNode={handleLocateNode}
       />
 
-      {/* 任务 8.3：执行日志面板（沙盒模拟触发后展示） */}
+      {/* 执行日志面板 */}
       {(sandbox.executionLogs.length > 0 || sandbox.isSimulating || lastSimResult) && (
         <ExecutionLogPanel
-          executionLogs={sandbox.executionLogs}
+          executionLogs={executionLogsForPanel}
           isSimulating={sandbox.isSimulating}
           refusalReason={lastSimResult?.refused ? lastSimResult.refusalReason : undefined}
           triggerNotFound={lastSimResult?.triggerNotFound ?? false}
@@ -1419,4 +1598,50 @@ function BlueprintSheetInner({
       )}
     </BlueprintDiagnosticMapProvider>
   );
+}
+
+// ===== 辅助函数 =====
+
+/**
+ * 推导新节点的默认 target handle。
+ *
+ * - 普通组件节点：'act:show'（若不存在则由引脚兼容判定拒绝）
+ * - 全局 navigate/requestApi/scrollTo：对应 'act:navigate' / 'act:requestApi' / 'act:scrollTo'
+ * - 全局 pageLoad：无 target handle（不应作为连线目标）
+ * - condition / delay：'in'
+ * - comment：无 target handle
+ */
+function deriveDefaultTargetHandle(node: BlueprintNode): string {
+  if (node.kind === 'component') {
+    if (node.globalType === 'navigate') return 'act:navigate';
+    if (node.globalType === 'requestApi') return 'act:requestApi';
+    if (node.globalType === 'scrollTo') return 'act:scrollTo';
+    // pageLoad / interval 全局节点只有输出锚点，不作为连线目标
+    // 普通组件节点：用首个 action（'act:show' 是常见默认）
+    return 'act:show';
+  }
+  if (node.kind === 'condition' || node.kind === 'delay') return 'in';
+  return 'in';
+}
+
+/**
+ * 推导 RF 节点的首个事件 id（用于模拟触发）。
+ *
+ * - 全局 pageLoad 节点：'pageLoad'
+ * - 普通组件节点：从 componentType 派生首个事件 id（默认 'click'）
+ * - 其他：undefined
+ */
+function deriveFirstEventId(node: Node): string | undefined {
+  if (node.type === 'global') {
+    const data = node.data as { globalType?: string };
+    if (data.globalType === 'pageLoad') return 'pageLoad';
+    if (data.globalType === 'interval') return 'interval';
+    return undefined;
+  }
+  if (node.type === 'component') {
+    // 普通组件节点：默认用 'click' 事件
+    // 实际事件 id 列表由组件注册表派生，这里取最常见默认值
+    return 'click';
+  }
+  return undefined;
 }

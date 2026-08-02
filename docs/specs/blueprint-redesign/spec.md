@@ -1,7 +1,11 @@
 # 事件蓝图重新设计 Spec
 
-> 状态：生效中
-> 最近更新：2026-07-26
+> 状态：已归档（2026-08-02）
+> 最近更新：2026-08-02
+>
+> 本文保留重设计期间的历史术语和迁移方案。现行蓝图契约与运行时以
+> [blueprint-runtime-architecture.md](../../architecture/blueprint-runtime-architecture.md)
+> 和 shared schema 为准。
 
 ## Why
 

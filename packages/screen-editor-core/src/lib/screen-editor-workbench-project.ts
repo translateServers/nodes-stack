@@ -1,4 +1,4 @@
-import { parseScreenDocument } from '../contracts/document.js';
+import { ScreenDocumentWireSchema } from '../contracts/document.js';
 import type { ScreenProject } from '@nebula/shared';
 import type { ScreenEditorCapabilityProfile } from '../components/screen-editor-environment';
 
@@ -25,9 +25,9 @@ export function createScreenEditorWorkbenchProject(
     envelope.document;
 
   if (capabilityProfile === 'static') {
-    const parsed = parseScreenDocument({
+    const parsed = ScreenDocumentWireSchema.safeParse({
       ...envelope.document,
-      schemaVersion: envelope.document.schemaVersion ?? 1,
+      schemaVersion: envelope.document.schemaVersion ?? 2,
     });
     if (!parsed.success) return { success: false };
     document = parsed.data;

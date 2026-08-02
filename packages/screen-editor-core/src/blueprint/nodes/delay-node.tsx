@@ -1,9 +1,9 @@
 /**
- * V2 延时节点
+ * Delay blueprint node.
  *
  * 配色：amber（琥珀色）
  *
- * 引脚约定（与 V1 一致）：
+ * 引脚约定：
  * - 输入 `in`，输出 `out`（单输出）
  *
  * 显示规则：
@@ -19,7 +19,7 @@ import type { Node, NodeProps } from '@xyflow/react';
 import { Clock } from 'lucide-react';
 import { BaseNodeShell } from './base-node';
 import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
-import type { DelayNodeData } from './v2-node-data-types';
+import type { DelayNodeData } from './node-data-types';
 
 /** React Flow 延时节点类型实例 */
 export type DelayNode = Node<DelayNodeData, 'delay'>;

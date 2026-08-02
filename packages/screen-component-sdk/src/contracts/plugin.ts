@@ -7,9 +7,9 @@
  * 因此 define() 不得自行调用 customElements.define()。
  */
 
-import type { ScreenComponentManifestV1 } from './manifest.js';
+import type { ScreenComponentManifest } from './manifest.js';
 
-export interface ScreenComponentPluginV1 {
-  readonly manifest: ScreenComponentManifestV1;
+export interface ScreenComponentPlugin {
+  readonly manifest: ScreenComponentManifest;
   define(): CustomElementConstructor | Promise<CustomElementConstructor>;
 }

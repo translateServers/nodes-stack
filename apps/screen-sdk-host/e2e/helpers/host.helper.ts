@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import type { ScreenProjectDraft, ScreenProjectTransferV1 } from '@nebula/screen-sdk';
+import type { ScreenProjectDraft, ScreenProjectTransfer } from '@nebula/screen-sdk';
 
 export interface HostOperationLogEntry {
   operation: string;
@@ -8,7 +8,7 @@ export interface HostOperationLogEntry {
 }
 
 interface BrowserHostApi {
-  createTransfer(editorIndex?: number): ScreenProjectTransferV1;
+  createTransfer(editorIndex?: number): ScreenProjectTransfer;
   forceConflict(
     operation: 'import' | 'publish' | 'save' | 'snapshot-restore',
     editorIndex?: number,
@@ -69,10 +69,7 @@ export async function forceConflict(
   );
 }
 
-export async function createTransfer(
-  page: Page,
-  editorIndex = 0,
-): Promise<ScreenProjectTransferV1> {
+export async function createTransfer(page: Page, editorIndex = 0): Promise<ScreenProjectTransfer> {
   return page.evaluate((index) => window.__screenSdkHost.createTransfer(index), editorIndex);
 }
 

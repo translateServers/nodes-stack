@@ -2,10 +2,11 @@ import { z } from 'zod';
 import { DateTimeStringSchema } from './datetime.schema.js';
 import {
   EventBlueprintSchema,
-  EventBlueprintV2Schema,
   type EventBlueprint,
-  type EventBlueprintV2,
+  LegacyEventBlueprintSchema,
+  type LegacyEventBlueprint,
 } from './blueprint.schema.js';
+import { migrateLegacyBlueprint, type BlueprintMigrationWarning } from './blueprint-migration.js';
 import { FieldMappingSchema } from './field-mapping.schema.js';
 import { RefreshStrategySchema } from './dataset.schema.js';
 import { GlobalVariableSchema } from './global-variable.schema.js';
@@ -273,14 +274,14 @@ export type ComponentDefaultSize = z.infer<typeof ComponentDefaultSizeSchema>;
 export const ComponentBadgeSchema = z.enum(['new', 'beta']);
 export type ComponentBadge = z.infer<typeof ComponentBadgeSchema>;
 
-/** 组件事件定义（蓝图 V2 锚点派生源） */
+/** 组件事件定义（蓝图锚点派生源）。 */
 export const ComponentEventDefinitionSchema = z.object({
   id: z.string().min(1).describe('事件标识（如 click, hover, dataLoaded）'),
   name: z.string().min(1).describe('事件显示名（如 点击, 悬停, 数据加载完成）'),
 });
 export type ComponentEventDefinition = z.infer<typeof ComponentEventDefinitionSchema>;
 
-/** 组件动作定义（蓝图 V2 锚点派生源） */
+/** 组件动作定义（蓝图锚点派生源）。 */
 export const ComponentActionDefinitionSchema = z.object({
   id: z.string().min(1).describe('动作标识（如 show, hide, toggleVisibility, refreshData）'),
   name: z.string().min(1).describe('动作显示名（如 显示, 隐藏, 切换显隐, 刷新数据）'),
@@ -313,33 +314,73 @@ export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 // ===== 顶层项目 =====
 
 /**
- * 蓝图字段联合类型：V1（trigger/action 节点模型）或 V2（组件即节点模型）。
+ * 蓝图输入联合类型：归档 trigger/action 图或正式组件节点图。
  *
- * - 持久化层同时接受 V1 与 V2：旧项目加载时自动迁移为 V2（见 editor-store.loadProject）
- * - 加载后编辑器内存中始终为 V2，保存时按 V2 持久化
- * - V1 schema 保留仅为兼容历史快照与服务器旧数据
+ * - 历史数据只在读取和导入边界接受，随后必须迁移为正式图。
+ * - 编辑器内存、服务端响应和保存路径只输出正式图。
  *
  * 使用 discriminatedUnion 以 `version` 作为判别字段，便于 TypeScript 类型收窄与 ESLint 类型感知规则解析。
  * 显式声明 BlueprintField 类型，避免 z.infer 在 ESLint 类型感知规则下退化为 any。
  */
-export const BlueprintFieldSchema = z.discriminatedUnion('version', [
+export const BlueprintInputSchema = z.discriminatedUnion('version', [
+  LegacyEventBlueprintSchema,
   EventBlueprintSchema,
-  EventBlueprintV2Schema,
 ]);
-export type BlueprintField = EventBlueprint | EventBlueprintV2;
+export type BlueprintInput = LegacyEventBlueprint | EventBlueprint;
 
 export const ScreenDocumentSchema = z.object({
   canvas: CanvasConfigSchema.describe('画布配置'),
   components: z.array(ScreenComponentSchema).describe('组件实例列表'),
-  blueprint: BlueprintFieldSchema.optional().describe(
-    '交互层：项目级事件蓝图（V1 trigger/action 模型 或 V2 组件即节点模型）；编辑器加载时自动迁移为 V2',
-  ),
+  blueprint: EventBlueprintSchema.optional().describe('交互层：项目级事件蓝图'),
   globalVariables: z
     .array(GlobalVariableSchema)
     .default([])
     .describe('项目级全局变量，可在数据源参数与蓝图模板插值中通过 {{globalVars.xxx}} 引用'),
 });
 export type ScreenDocument = z.infer<typeof ScreenDocumentSchema>;
+
+/**
+ * Historical persisted document shape. It is only accepted by storage migration readers;
+ * all live API and editor paths use ScreenDocumentSchema.
+ */
+export const LegacyScreenDocumentSchema = z.object({
+  canvas: CanvasConfigSchema,
+  components: z.array(ScreenComponentSchema),
+  blueprint: LegacyEventBlueprintSchema.optional(),
+  globalVariables: z.array(GlobalVariableSchema).default([]),
+});
+export type LegacyScreenDocument = z.infer<typeof LegacyScreenDocumentSchema>;
+
+export interface LegacyScreenDocumentMigrationResult {
+  readonly document: ScreenDocument;
+  readonly warnings: readonly BlueprintMigrationWarning[];
+}
+
+export function migrateLegacyScreenDocument(
+  legacyDocument: LegacyScreenDocument,
+): LegacyScreenDocumentMigrationResult {
+  if (legacyDocument.blueprint === undefined) {
+    return {
+      document: ScreenDocumentSchema.parse({
+        canvas: legacyDocument.canvas,
+        components: legacyDocument.components,
+        globalVariables: legacyDocument.globalVariables,
+      }),
+      warnings: [],
+    };
+  }
+
+  const migration = migrateLegacyBlueprint(legacyDocument.blueprint);
+  return {
+    document: ScreenDocumentSchema.parse({
+      canvas: legacyDocument.canvas,
+      components: legacyDocument.components,
+      blueprint: migration.blueprint,
+      globalVariables: legacyDocument.globalVariables,
+    }),
+    warnings: migration.warnings,
+  };
+}
 
 export const ScreenProjectSchema = ScreenDocumentSchema.extend({
   id: z.string().describe('项目唯一标识'),
@@ -366,8 +407,8 @@ export const UpdateScreenProjectSchema = z.object({
   description: z.string().optional().describe('项目描述'),
   canvas: CanvasConfigSchema.optional().describe('画布配置'),
   components: z.array(ScreenComponentSchema).optional().describe('组件实例列表'),
-  blueprint: BlueprintFieldSchema.optional().describe(
-    '事件蓝图（V1 或 V2；可选，缺省表示不修改，不会为未编辑蓝图的项目凭空写入）',
+  blueprint: BlueprintInputSchema.optional().describe(
+    '事件蓝图（归档输入会在服务端迁移；缺省表示不修改）',
   ),
   globalVariables: z
     .array(GlobalVariableSchema)

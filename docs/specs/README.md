@@ -11,11 +11,11 @@ specs 是本文档体系中**最重要的开发依据**。每个 spec 必须包�
 | 功能 | 索引 | 状态 | 说明 |
 | --- | --- | --- | --- |
 | 大屏编辑器 | [screen-editor/](./screen-editor/README.md) | 生效中（2026-07-30） | 已实现功能的现状描述：画布/组件/工具/属性面板/图层/数据层/历史栈/快捷键/蓝图/预览/保存发布 |
-| 大屏设计器 Web Component SDK | [screen-web-component-sdk/](./screen-web-component-sdk/spec.md) | 实施中（2026-08-01） | 阶段 8 本地质量门已完成：全仓测试、Web/Host E2E、Chrome/Edge 冒烟与 tarball 消费验证通过；私有 registry 发布延期 |
-| 大屏组件 SDK 与组件注册表 | [screen-component-sdk/](./screen-component-sdk/spec.md) | 实施中（2026-08-02） | Manifest + Web Component + 实例注册表已完成作者 SDK、registry、Web 共享接入、V2 transfer/preview/snapshot 与 0.2 迁移指南；内置 renderer 收敛和浏览器 E2E 待继续 |
-| 大屏 SDK 动态数据能力 | [screen-sdk-dynamic-data/](./screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 后续版本的 API/dataset、动态全局变量与蓝图数据动作独立规格；不改变 V1 static 契约 |
+| 大屏设计器 Web Component SDK | [screen-web-component-sdk/](./screen-web-component-sdk/spec.md) | 已归档（2026-08-02） | 早期 SDK rollout 方案；现行 SDK 宿主接入以 architecture 开发指南为准 |
+| 大屏组件 SDK 与组件注册表 | [screen-component-sdk/](./screen-component-sdk/component-author-guide.md) | 生效中（2026-08-02） | 正式 Manifest + Web Component + 实例注册表、Web 共享接入、transfer/preview/snapshot 与迁移指南；旧 rollout spec 已归档 |
+| 大屏 SDK 动态数据能力 | [screen-sdk-dynamic-data/](./screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 后续版本的 API/dataset、动态全局变量与蓝图数据动作独立规格；不改变 static 能力边界 |
 | 数据集管理 | [dataset-management/](./dataset-management/README.md) | 实施中（2026-07-28） | 独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter。第一阶段 MVP 已完成，验收进度见 checklist.md |
-| 事件蓝图重新设计 | [blueprint-redesign/](./blueprint-redesign/spec.md) | 生效中（2026-07-26） | V2 蓝图：组件即节点、锚点即事件、三阶层节点模型、V1→V2 自动迁移（已落地） |
+| 事件蓝图重新设计 | [blueprint-redesign/](./blueprint-redesign/spec.md) | 已归档（2026-08-02） | 历史重设计方案；现行组件节点蓝图、锚点与迁移边界以 architecture 与 shared schema 为准 |
 | 事件蓝图事件触发链路修复 | [blueprint-event-trigger-fix/](./blueprint-event-trigger-fix/spec.md) | 生效中（2026-07-29） | 修复 dataLoaded/dataError/interval 事件触发并明确编辑器画布总闸门（代码已合并，手动验证待确认） |
 | 组件库重设计 | [component-library-redesign/](./component-library-redesign/spec.md) | 生效中（2026-07-27） | 统一注册接口 registerComponent、Map 索引、收藏机制、分类折叠（已全部完成） |
 | 统一右侧属性面板分类 | [unified-property-panel-categories/](./unified-property-panel-categories/spec.md) | 生效中（2026-07-28） | 属性/数据/交互/事件四大类统一分类、组件滤镜、全局变量（P0/P1 已全部完成，仅剩 P2 质量门验证项，详见 checklist） |

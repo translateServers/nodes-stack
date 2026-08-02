@@ -3,11 +3,10 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { forwardRef, useImperativeHandle, type ReactNode } from 'react';
 import type {
   ComponentStyle,
-  EventBlueprintV2,
+  EventBlueprint,
   ScreenComponent,
   ScreenProject,
 } from '@nebula/shared';
-import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import { ScreenCanvas, buildFilterString } from './screen-canvas';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { pickImageFile } from '../lib/image-file-adapter';
@@ -357,8 +356,8 @@ describe('画布交互模式与蓝图运行时', () => {
       position: { ...componentA.position, x: 400 },
       zIndex: 1,
     };
-    const blueprint: EventBlueprintV2 = {
-      version: EVENT_BLUEPRINT_VERSION_V2,
+    const blueprint: EventBlueprint = {
+      version: 2,
       nodes: [
         {
           id: 'component-a',

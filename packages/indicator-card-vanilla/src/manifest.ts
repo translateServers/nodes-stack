@@ -14,7 +14,7 @@
 
 import {
   SCREEN_COMPONENT_API_VERSION,
-  type ScreenComponentManifestV1,
+  type ScreenComponentManifest,
 } from '@nebula/screen-component-sdk';
 
 export const INDICATOR_CARD_TYPE = 'example.indicator-card/v1';
@@ -26,7 +26,7 @@ export const INDICATOR_CARD_IMPLEMENTATION_VERSION = '1.0.0';
  *
  * 在模块加载时构造为 frozen 对象，避免运行时被外部修改。
  */
-export const indicatorCardManifest: ScreenComponentManifestV1 = {
+export const indicatorCardManifest: ScreenComponentManifest = {
   apiVersion: SCREEN_COMPONENT_API_VERSION,
   type: INDICATOR_CARD_TYPE,
   implementationVersion: INDICATOR_CARD_IMPLEMENTATION_VERSION,

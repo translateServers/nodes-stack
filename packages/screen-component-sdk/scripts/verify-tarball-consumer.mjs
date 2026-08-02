@@ -72,18 +72,18 @@ try {
   SCREEN_COMPONENT_API_VERSION,
   defineScreenComponent,
   validateManifest,
-  type ScreenComponentElementModelV1,
-  type ScreenComponentManifestV1,
+  type ScreenComponentElementModel,
+  type ScreenComponentManifest,
 } from '@nebula/screen-component-sdk';
 import { createMinimalManifest, expectManifestOk } from '@nebula/screen-component-sdk/testing';
 
 class ConsumerMetricCard extends HTMLElement {
-  set model(value: ScreenComponentElementModelV1) {
+  set model(value: ScreenComponentElementModel) {
     this.textContent = String(value.props['title'] ?? 'Metric');
   }
 }
 
-const manifest: ScreenComponentManifestV1 = {
+const manifest: ScreenComponentManifest = {
   apiVersion: SCREEN_COMPONENT_API_VERSION,
   type: 'consumer.metric-card/v1',
   implementationVersion: '1.0.0',

@@ -55,7 +55,13 @@ interface WorkerFixtures {
 
 export const test = base.extend<AuthFixtures, WorkerFixtures>({
   workerAuthTokens: [
-    async (_fixtures, use, workerInfo) => {
+    async (
+      // Playwright requires an object destructuring pattern even when this worker fixture has no deps.
+      // eslint-disable-next-line no-empty-pattern
+      {},
+      use,
+      workerInfo,
+    ) => {
       const tokens: WorkerAuthTokens = {
         admin: await registerWorkerUser('admin', workerInfo.parallelIndex),
         viewer: await registerWorkerUser('viewer', workerInfo.parallelIndex),

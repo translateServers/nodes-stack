@@ -14,10 +14,10 @@ import { z } from 'zod';
  *   因此 componentId 等字段允许空字符串，保证未完成的图可以保存（非破坏原则）
  */
 
-// ===== 触发器配置 =====
+// ===== 归档触发器配置 =====
 
-/** 触发器类型（M1：componentClick / pageLoad；M3 扩展 componentHover / dataLoaded / dataError / interval） */
-export const BlueprintTriggerTypeSchema = z.enum([
+/** 旧 trigger/action 图的触发器类型，仅用于读取和迁移历史蓝图。 */
+export const LegacyBlueprintTriggerTypeSchema = z.enum([
   'componentClick',
   'pageLoad',
   'componentHover',
@@ -25,42 +25,46 @@ export const BlueprintTriggerTypeSchema = z.enum([
   'dataError',
   'interval',
 ]);
-export type BlueprintTriggerType = z.infer<typeof BlueprintTriggerTypeSchema>;
+export type LegacyBlueprintTriggerType = z.infer<typeof LegacyBlueprintTriggerTypeSchema>;
 
-export const TriggerComponentClickConfigSchema = z.object({
+export const LegacyTriggerComponentClickConfigSchema = z.object({
   type: z.literal('componentClick'),
   componentId: z.string().describe('触发组件 ID（空字符串视为未配置，由编译器诊断）'),
 });
-export type TriggerComponentClickConfig = z.infer<typeof TriggerComponentClickConfigSchema>;
+export type LegacyTriggerComponentClickConfig = z.infer<
+  typeof LegacyTriggerComponentClickConfigSchema
+>;
 
-export const TriggerPageLoadConfigSchema = z.object({
+export const LegacyTriggerPageLoadConfigSchema = z.object({
   type: z.literal('pageLoad'),
 });
-export type TriggerPageLoadConfig = z.infer<typeof TriggerPageLoadConfigSchema>;
+export type LegacyTriggerPageLoadConfig = z.infer<typeof LegacyTriggerPageLoadConfigSchema>;
 
 /** 组件悬停触发（任务 10.3） */
-export const TriggerComponentHoverConfigSchema = z.object({
+export const LegacyTriggerComponentHoverConfigSchema = z.object({
   type: z.literal('componentHover'),
   componentId: z.string().describe('悬停触发的组件 ID'),
 });
-export type TriggerComponentHoverConfig = z.infer<typeof TriggerComponentHoverConfigSchema>;
+export type LegacyTriggerComponentHoverConfig = z.infer<
+  typeof LegacyTriggerComponentHoverConfigSchema
+>;
 
 /** 数据加载完成触发（任务 10.3） */
-export const TriggerDataLoadedConfigSchema = z.object({
+export const LegacyTriggerDataLoadedConfigSchema = z.object({
   type: z.literal('dataLoaded'),
   componentId: z.string().describe('数据源组件 ID（数据成功加载后触发）'),
 });
-export type TriggerDataLoadedConfig = z.infer<typeof TriggerDataLoadedConfigSchema>;
+export type LegacyTriggerDataLoadedConfig = z.infer<typeof LegacyTriggerDataLoadedConfigSchema>;
 
 /** 数据加载错误触发（任务 10.3） */
-export const TriggerDataErrorConfigSchema = z.object({
+export const LegacyTriggerDataErrorConfigSchema = z.object({
   type: z.literal('dataError'),
   componentId: z.string().describe('数据源组件 ID（数据加载失败后触发）'),
 });
-export type TriggerDataErrorConfig = z.infer<typeof TriggerDataErrorConfigSchema>;
+export type LegacyTriggerDataErrorConfig = z.infer<typeof LegacyTriggerDataErrorConfigSchema>;
 
 /** 定时器触发（任务 10.3） */
-export const TriggerIntervalConfigSchema = z
+export const LegacyTriggerIntervalConfigSchema = z
   .object({
     type: z.literal('interval'),
     /** 触发间隔（毫秒），必须 > 0；运行时由执行器安排 setInterval */
@@ -82,30 +86,30 @@ export const TriggerIntervalConfigSchema = z
       });
     }
   });
-export type TriggerIntervalConfig = z.infer<typeof TriggerIntervalConfigSchema>;
+export type LegacyTriggerIntervalConfig = z.infer<typeof LegacyTriggerIntervalConfigSchema>;
 
-export const BlueprintTriggerConfigSchema = z.discriminatedUnion('type', [
-  TriggerComponentClickConfigSchema,
-  TriggerPageLoadConfigSchema,
-  TriggerComponentHoverConfigSchema,
-  TriggerDataLoadedConfigSchema,
-  TriggerDataErrorConfigSchema,
-  TriggerIntervalConfigSchema,
+export const LegacyBlueprintTriggerConfigSchema = z.discriminatedUnion('type', [
+  LegacyTriggerComponentClickConfigSchema,
+  LegacyTriggerPageLoadConfigSchema,
+  LegacyTriggerComponentHoverConfigSchema,
+  LegacyTriggerDataLoadedConfigSchema,
+  LegacyTriggerDataErrorConfigSchema,
+  LegacyTriggerIntervalConfigSchema,
 ]);
-export type BlueprintTriggerConfig = z.infer<typeof BlueprintTriggerConfigSchema>;
+export type LegacyBlueprintTriggerConfig = z.infer<typeof LegacyBlueprintTriggerConfigSchema>;
 
 // ===== 动作配置 =====
 
-/** 显隐动作目标状态 */
-export const VisibilityActionModeSchema = z.enum(['show', 'hide', 'toggle']);
-export type VisibilityActionMode = z.infer<typeof VisibilityActionModeSchema>;
+/** 旧 trigger/action 图的显隐动作状态。 */
+export const LegacyVisibilityActionModeSchema = z.enum(['show', 'hide', 'toggle']);
+export type LegacyVisibilityActionMode = z.infer<typeof LegacyVisibilityActionModeSchema>;
 
-export const ActionSetVisibilityConfigSchema = z.object({
+export const LegacyActionSetVisibilityConfigSchema = z.object({
   type: z.literal('setVisibility'),
   targetComponentId: z.string().describe('目标组件 ID（空字符串视为未配置，由编译器诊断）'),
-  visible: VisibilityActionModeSchema.describe('显示 / 隐藏 / 切换'),
+  visible: LegacyVisibilityActionModeSchema.describe('显示 / 隐藏 / 切换'),
 });
-export type ActionSetVisibilityConfig = z.infer<typeof ActionSetVisibilityConfigSchema>;
+export type LegacyActionSetVisibilityConfig = z.infer<typeof LegacyActionSetVisibilityConfigSchema>;
 
 /** navigate URL 协议白名单：仅允许 http/https */
 export const NAVIGATE_URL_PROTOCOL_PATTERN = /^https?:\/\//i;
@@ -114,7 +118,7 @@ export function isAllowedNavigateUrl(url: string): boolean {
   return NAVIGATE_URL_PROTOCOL_PATTERN.test(url);
 }
 
-export const ActionNavigateConfigSchema = z
+export const LegacyActionNavigateConfigSchema = z
   .object({
     type: z.literal('navigate'),
     url: z.string().describe('目标 URL（空字符串视为未配置，由编译器诊断）'),
@@ -130,19 +134,23 @@ export const ActionNavigateConfigSchema = z
       });
     }
   });
-export type ActionNavigateConfig = z.infer<typeof ActionNavigateConfigSchema>;
+export type LegacyActionNavigateConfig = z.infer<typeof LegacyActionNavigateConfigSchema>;
 
-export const ActionScrollToComponentConfigSchema = z.object({
+export const LegacyActionScrollToComponentConfigSchema = z.object({
   type: z.literal('scrollToComponent'),
   targetComponentId: z.string().describe('目标组件 ID（空字符串视为未配置，由编译器诊断）'),
 });
-export type ActionScrollToComponentConfig = z.infer<typeof ActionScrollToComponentConfigSchema>;
+export type LegacyActionScrollToComponentConfig = z.infer<
+  typeof LegacyActionScrollToComponentConfigSchema
+>;
 
-export const ActionRefreshDataSourceConfigSchema = z.object({
+export const LegacyActionRefreshDataSourceConfigSchema = z.object({
   type: z.literal('refreshDataSource'),
   targetComponentId: z.string().describe('目标组件 ID（空字符串视为未配置，由编译器诊断）'),
 });
-export type ActionRefreshDataSourceConfig = z.infer<typeof ActionRefreshDataSourceConfigSchema>;
+export type LegacyActionRefreshDataSourceConfig = z.infer<
+  typeof LegacyActionRefreshDataSourceConfigSchema
+>;
 
 /** HTTP 方法白名单（任务 10.4） */
 export const REQUEST_API_METHOD_SCHEMA_ENUM = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
@@ -157,7 +165,7 @@ export type RequestApiMethod = (typeof REQUEST_API_METHOD_SCHEMA_ENUM)[number];
  * - headers / body 由调用方模板插值后传入（任务 10.5）
  * - secretHeaderKeys 标记需要脱敏的 header 键名（日志与诊断中脱敏展示）
  */
-export const ActionRequestApiConfigSchema = z
+export const LegacyActionRequestApiConfigSchema = z
   .object({
     type: z.literal('requestApi'),
     method: z.enum(REQUEST_API_METHOD_SCHEMA_ENUM).describe('HTTP 方法'),
@@ -179,16 +187,16 @@ export const ActionRequestApiConfigSchema = z
     }
     // GET / DELETE 不应携带 body（schema 不强制拒绝，但产出 warning 诊断由编译器处理）
   });
-export type ActionRequestApiConfig = z.infer<typeof ActionRequestApiConfigSchema>;
+export type LegacyActionRequestApiConfig = z.infer<typeof LegacyActionRequestApiConfigSchema>;
 
-export const BlueprintActionConfigSchema = z.discriminatedUnion('type', [
-  ActionSetVisibilityConfigSchema,
-  ActionNavigateConfigSchema,
-  ActionScrollToComponentConfigSchema,
-  ActionRefreshDataSourceConfigSchema,
-  ActionRequestApiConfigSchema,
+export const LegacyBlueprintActionConfigSchema = z.discriminatedUnion('type', [
+  LegacyActionSetVisibilityConfigSchema,
+  LegacyActionNavigateConfigSchema,
+  LegacyActionScrollToComponentConfigSchema,
+  LegacyActionRefreshDataSourceConfigSchema,
+  LegacyActionRequestApiConfigSchema,
 ]);
-export type BlueprintActionConfig = z.infer<typeof BlueprintActionConfigSchema>;
+export type LegacyBlueprintActionConfig = z.infer<typeof LegacyBlueprintActionConfigSchema>;
 
 // ===== 条件节点配置（M3 交付，契约先行预留） =====
 
@@ -245,8 +253,8 @@ export type CommentNodeConfig = z.infer<typeof CommentNodeConfigSchema>;
 
 // ===== 节点与边 =====
 
-export const BlueprintNodeKindSchema = z.enum(['trigger', 'condition', 'action', 'comment']);
-export type BlueprintNodeKind = z.infer<typeof BlueprintNodeKindSchema>;
+export const LegacyBlueprintNodeKindSchema = z.enum(['trigger', 'condition', 'action', 'comment']);
+export type LegacyBlueprintNodeKind = z.infer<typeof LegacyBlueprintNodeKindSchema>;
 
 export const BlueprintNodePositionSchema = z.object({
   x: z.number().describe('节点 X 坐标'),
@@ -259,38 +267,38 @@ const BlueprintNodeBaseSchema = z.object({
   position: BlueprintNodePositionSchema,
 });
 
-export const BlueprintTriggerNodeSchema = BlueprintNodeBaseSchema.extend({
+export const LegacyBlueprintTriggerNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('trigger'),
-  config: BlueprintTriggerConfigSchema,
+  config: LegacyBlueprintTriggerConfigSchema,
 });
-export type BlueprintTriggerNode = z.infer<typeof BlueprintTriggerNodeSchema>;
+export type LegacyBlueprintTriggerNode = z.infer<typeof LegacyBlueprintTriggerNodeSchema>;
 
-export const BlueprintConditionNodeSchema = BlueprintNodeBaseSchema.extend({
+export const LegacyBlueprintConditionNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('condition'),
   config: ConditionNodeConfigSchema,
 });
-export type BlueprintConditionNode = z.infer<typeof BlueprintConditionNodeSchema>;
+export type LegacyBlueprintConditionNode = z.infer<typeof LegacyBlueprintConditionNodeSchema>;
 
-export const BlueprintActionNodeSchema = BlueprintNodeBaseSchema.extend({
+export const LegacyBlueprintActionNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('action'),
-  config: BlueprintActionConfigSchema,
+  config: LegacyBlueprintActionConfigSchema,
 });
-export type BlueprintActionNode = z.infer<typeof BlueprintActionNodeSchema>;
+export type LegacyBlueprintActionNode = z.infer<typeof LegacyBlueprintActionNodeSchema>;
 
-export const BlueprintCommentNodeSchema = BlueprintNodeBaseSchema.extend({
+export const LegacyBlueprintCommentNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('comment'),
   config: CommentNodeConfigSchema,
 });
-export type BlueprintCommentNode = z.infer<typeof BlueprintCommentNodeSchema>;
+export type LegacyBlueprintCommentNode = z.infer<typeof LegacyBlueprintCommentNodeSchema>;
 
 /** 节点判别联合：未知 kind 或未知动作/触发器类型被拒绝并给出可读错误 */
-export const BlueprintNodeSchema = z.discriminatedUnion('kind', [
-  BlueprintTriggerNodeSchema,
-  BlueprintConditionNodeSchema,
-  BlueprintActionNodeSchema,
-  BlueprintCommentNodeSchema,
+export const LegacyBlueprintNodeSchema = z.discriminatedUnion('kind', [
+  LegacyBlueprintTriggerNodeSchema,
+  LegacyBlueprintConditionNodeSchema,
+  LegacyBlueprintActionNodeSchema,
+  LegacyBlueprintCommentNodeSchema,
 ]);
-export type BlueprintNode = z.infer<typeof BlueprintNodeSchema>;
+export type LegacyBlueprintNode = z.infer<typeof LegacyBlueprintNodeSchema>;
 
 /**
  * 执行流引脚约定：
@@ -299,63 +307,63 @@ export type BlueprintNode = z.infer<typeof BlueprintNodeSchema>;
  * - condition：输入 `in`，输出 `then` / `else`（M3）
  * - comment：无引脚（不参与执行流）
  */
-export const BlueprintEdgeSchema = z.object({
+export const LegacyBlueprintEdgeSchema = z.object({
   id: z.string().min(1).describe('边唯一标识'),
   source: z.string().min(1).describe('源节点 ID'),
   sourceHandle: z.string().min(1).describe('源引脚标识'),
   target: z.string().min(1).describe('目标节点 ID'),
   targetHandle: z.string().min(1).describe('目标引脚标识'),
 });
-export type BlueprintEdge = z.infer<typeof BlueprintEdgeSchema>;
+export type LegacyBlueprintEdge = z.infer<typeof LegacyBlueprintEdgeSchema>;
 
 // ===== 蓝图顶层结构 =====
 
-export const EVENT_BLUEPRINT_VERSION = 1;
+export const LEGACY_EVENT_BLUEPRINT_VERSION = 1 as const;
 
-export const EventBlueprintSchema = z.object({
-  version: z.literal(EVENT_BLUEPRINT_VERSION).describe('蓝图结构版本，未来演进经版本迁移'),
-  nodes: z.array(BlueprintNodeSchema).describe('节点列表'),
-  edges: z.array(BlueprintEdgeSchema).describe('执行流边列表'),
+export const LegacyEventBlueprintSchema = z.object({
+  version: z.literal(LEGACY_EVENT_BLUEPRINT_VERSION).describe('归档蓝图结构版本'),
+  nodes: z.array(LegacyBlueprintNodeSchema).describe('节点列表'),
+  edges: z.array(LegacyBlueprintEdgeSchema).describe('执行流边列表'),
 });
-export type EventBlueprint = z.infer<typeof EventBlueprintSchema>;
+export type LegacyEventBlueprint = z.infer<typeof LegacyEventBlueprintSchema>;
 
 // ===== 跨项目剪贴板载荷（任务 5.5） =====
 
 export const BLUEPRINT_CLIPBOARD_KIND = 'nebula-blueprint-clipboard';
 
-export const BlueprintClipboardSchema = z.object({
+export const LegacyBlueprintClipboardSchema = z.object({
   kind: z.literal(BLUEPRINT_CLIPBOARD_KIND),
-  nodes: z.array(BlueprintNodeSchema),
-  edges: z.array(BlueprintEdgeSchema),
+  nodes: z.array(LegacyBlueprintNodeSchema),
+  edges: z.array(LegacyBlueprintEdgeSchema),
 });
-export type BlueprintClipboard = z.infer<typeof BlueprintClipboardSchema>;
+export type LegacyBlueprintClipboard = z.infer<typeof LegacyBlueprintClipboardSchema>;
 
-// ===== V2 事件蓝图（组件即节点模型） =====
+// ===== 正式事件蓝图（组件即节点模型） =====
 
 /**
- * V2 事件蓝图 Schema（组件即节点模型）
+ * 正式事件蓝图 Schema（组件即节点模型）
  *
- * V2 采用"组件即节点"模型：
+ * 正式模型采用"组件即节点"：
  * - 组件节点（component）同时承担触发与动作角色，事件输出与动作输入均挂在组件节点上
  * - 全局节点是组件节点的子类型（componentId === 'global'），承载页面级触发与全局动作
  * - 条件节点、延时节点、注释节点保留独立 kind
  * - 边的 sourceHandle / targetHandle 改为语义化格式（evt:* / act:* / out / then / else / in）
  *
- * V1 schema 保留供迁移使用，不修改任何 V1 导出。
+ * 旧 trigger/action schema 仅保留供迁移使用。
  */
 
-/** V2 蓝图结构版本号 */
-export const EVENT_BLUEPRINT_VERSION_V2 = 2;
+/** 正式蓝图结构版本号。 */
+export const EVENT_BLUEPRINT_VERSION = 2 as const;
 
 /** 全局节点 componentId 固定值 */
 export const GLOBAL_COMPONENT_ID = 'global';
 
-// ===== V2 全局节点配置 =====
+// ===== 正式全局节点配置 =====
 
 /**
  * 全局 navigate 节点配置
  *
- * 复用 V1 ActionNavigateConfigSchema 字段结构与 URL 协议白名单校验
+ * 复用归档 navigate 配置的字段结构与 URL 协议白名单校验
  * （不含 type 字段，改用 globalType 判别）。
  */
 export const GlobalNavigateConfigSchema = z
@@ -378,7 +386,7 @@ export type GlobalNavigateConfig = z.infer<typeof GlobalNavigateConfigSchema>;
 /**
  * 全局 requestApi 节点配置
  *
- * 复用 V1 ActionRequestApiConfigSchema 字段定义与校验逻辑
+ * 复用归档 requestApi 配置的字段定义与校验逻辑
  * （不含 type 字段，改用 globalType 判别）。
  * 保留 URL 协议白名单校验、HTTP 方法白名单、超时范围与脱敏键名。
  */
@@ -406,7 +414,7 @@ export type GlobalRequestApiConfig = z.infer<typeof GlobalRequestApiConfigSchema
 /**
  * 全局 scrollTo 节点配置
  *
- * 复用 V1 ActionScrollToComponentConfigSchema 字段结构
+ * 复用归档 scrollToComponent 配置的字段结构
  * （不含 type 字段，改用 globalType 判别）。
  */
 export const GlobalScrollToConfigSchema = z.object({
@@ -418,7 +426,7 @@ export type GlobalScrollToConfig = z.infer<typeof GlobalScrollToConfigSchema>;
 /**
  * 全局 interval 节点配置（定时器触发）
  *
- * 复用 V1 TriggerIntervalConfigSchema 的 intervalMs 范围校验逻辑
+ * 复用归档 interval 配置的 intervalMs 范围校验逻辑
  * （不含 type 字段，改用 globalType 判别）。
  */
 export const GlobalIntervalConfigSchema = z
@@ -459,10 +467,10 @@ export const GlobalNodeConfigSchema = z.discriminatedUnion('globalType', [
 ]);
 export type GlobalNodeConfig = z.infer<typeof GlobalNodeConfigSchema>;
 
-// ===== V2 节点 Schema =====
+// ===== 正式节点 Schema =====
 
 /**
- * 组件节点（V2 核心节点类型）
+ * 组件节点（正式核心节点类型）
  *
  * - 普通组件节点：componentId 为组件 ID，无 globalType，无 config
  *   （事件与动作锚点从组件注册表派生）
@@ -556,41 +564,41 @@ export const DelayNodeSchema = BlueprintNodeBaseSchema.extend({
 export type DelayNode = z.infer<typeof DelayNodeSchema>;
 
 /**
- * 条件节点（V2）
+ * 条件节点
  *
- * 复用 V1 ConditionNodeConfigSchema（含 type: 'condition' + expression）。
- * 保留 V1 设计：输入 'in'，输出 'then' / 'else'。
+ * 复用 ConditionNodeConfigSchema（含 type: 'condition' + expression）。
+ * 输入 'in'，输出 'then' / 'else'。
  */
-export const ConditionNodeV2Schema = BlueprintNodeBaseSchema.extend({
+export const ConditionNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('condition'),
   config: ConditionNodeConfigSchema,
 });
-export type ConditionNodeV2 = z.infer<typeof ConditionNodeV2Schema>;
+export type ConditionNode = z.infer<typeof ConditionNodeSchema>;
 
 /**
- * 注释节点（V2）
+ * 注释节点
  *
- * 复用 V1 CommentNodeConfigSchema。注释节点不参与执行流。
+ * 复用 CommentNodeConfigSchema。注释节点不参与执行流。
  */
-export const CommentNodeV2Schema = BlueprintNodeBaseSchema.extend({
+export const CommentNodeSchema = BlueprintNodeBaseSchema.extend({
   kind: z.literal('comment'),
   config: CommentNodeConfigSchema,
 });
-export type CommentNodeV2 = z.infer<typeof CommentNodeV2Schema>;
+export type CommentNode = z.infer<typeof CommentNodeSchema>;
 
-/** V2 节点判别联合（按 kind 判别） */
-export const BlueprintNodeV2Schema = z.discriminatedUnion('kind', [
+/** 正式节点判别联合（按 kind 判别）。 */
+export const BlueprintNodeSchema = z.discriminatedUnion('kind', [
   ComponentNodeSchema,
-  ConditionNodeV2Schema,
+  ConditionNodeSchema,
   DelayNodeSchema,
-  CommentNodeV2Schema,
+  CommentNodeSchema,
 ]);
-export type BlueprintNodeV2 = z.infer<typeof BlueprintNodeV2Schema>;
+export type BlueprintNode = z.infer<typeof BlueprintNodeSchema>;
 
-// ===== V2 边 Schema =====
+// ===== 正式边 Schema =====
 
 /**
- * V2 执行流边
+ * 正式执行流边
  *
  * sourceHandle / targetHandle 改为语义化格式：
  * - 组件事件输出：'evt:{eventId}'（如 'evt:click'）
@@ -600,39 +608,39 @@ export type BlueprintNodeV2 = z.infer<typeof BlueprintNodeV2Schema>;
  *
  * Schema 仅校验结构；引脚与节点 kind 的匹配由编译器诊断。
  */
-export const BlueprintEdgeV2Schema = z.object({
+export const BlueprintEdgeSchema = z.object({
   id: z.string().min(1).describe('边唯一标识'),
   source: z.string().min(1).describe('源节点 ID'),
   sourceHandle: z.string().min(1).describe('源引脚标识（evt:* / out / then / else）'),
   target: z.string().min(1).describe('目标节点 ID'),
   targetHandle: z.string().min(1).describe('目标引脚标识（act:* / in）'),
 });
-export type BlueprintEdgeV2 = z.infer<typeof BlueprintEdgeV2Schema>;
+export type BlueprintEdge = z.infer<typeof BlueprintEdgeSchema>;
 
-// ===== V2 蓝图顶层结构 =====
+// ===== 正式蓝图顶层结构 =====
 
 /**
- * V2 事件蓝图顶层结构
+ * 正式事件蓝图顶层结构
  *
  * 采用"组件即节点"模型，version 固定为 2。
  */
-export const EventBlueprintV2Schema = z.object({
-  version: z.literal(EVENT_BLUEPRINT_VERSION_V2).describe('蓝图结构版本 V2'),
-  nodes: z.array(BlueprintNodeV2Schema).describe('节点列表'),
-  edges: z.array(BlueprintEdgeV2Schema).describe('执行流边列表'),
+export const EventBlueprintSchema = z.object({
+  version: z.literal(EVENT_BLUEPRINT_VERSION).describe('蓝图结构版本'),
+  nodes: z.array(BlueprintNodeSchema).describe('节点列表'),
+  edges: z.array(BlueprintEdgeSchema).describe('执行流边列表'),
 });
-export type EventBlueprintV2 = z.infer<typeof EventBlueprintV2Schema>;
+export type EventBlueprint = z.infer<typeof EventBlueprintSchema>;
 
-// ===== V2 跨项目剪贴板载荷 =====
+// ===== 正式跨项目剪贴板载荷 =====
 
 /**
- * V2 跨项目剪贴板载荷
+ * 正式跨项目剪贴板载荷
  *
- * 复用 V1 BLUEPRINT_CLIPBOARD_KIND 标识，节点与边采用 V2 schema。
+ * 复用稳定的 BLUEPRINT_CLIPBOARD_KIND 标识，节点与边采用正式 schema。
  */
-export const BlueprintClipboardV2Schema = z.object({
+export const BlueprintClipboardSchema = z.object({
   kind: z.literal(BLUEPRINT_CLIPBOARD_KIND),
-  nodes: z.array(BlueprintNodeV2Schema),
-  edges: z.array(BlueprintEdgeV2Schema),
+  nodes: z.array(BlueprintNodeSchema),
+  edges: z.array(BlueprintEdgeSchema),
 });
-export type BlueprintClipboardV2 = z.infer<typeof BlueprintClipboardV2Schema>;
+export type BlueprintClipboard = z.infer<typeof BlueprintClipboardSchema>;

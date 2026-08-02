@@ -1,7 +1,7 @@
 /**
  * Registry 错误类型与类型守卫（Spec §8.2 ScreenComponentRegistryError）
  *
- * 本模块从 `registry-factory.ts` 抽离，避免 `contracts/adapter.ts` 在 V2 error
+ * 本模块从 `registry-factory.ts` 抽离，避免 `contracts/adapter.ts` 在错误类型
  * pipeline 中 import registry-factory 时引入循环依赖：
  *
  *   adapter.ts → registry-factory.ts → builtin-manifests.ts → text-component.tsx
@@ -13,13 +13,13 @@
  * 保持向后兼容。
  */
 
-import type { ScreenSdkDiagnosticV2 } from '../contracts/diagnostics.js';
+import type { ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
 
 /**
  * Registry 工厂错误码（Spec §8.2 ScreenComponentRegistryErrorCode）。
  *
  * Phase 2 使用 screen-component-sdk 的 ScreenComponentValidationCode 子集，
- * Phase 5 接入 V2 diagnostic 时升级为 spec §8.2 完整 code 联合。
+ * 诊断类型遵循 spec §8.2 的完整 code 联合。
  */
 export type ScreenComponentRegistryErrorCode =
   | 'INVALID_COMPONENT_MANIFEST'
@@ -32,13 +32,13 @@ export type ScreenComponentRegistryErrorCode =
  * Registry 工厂错误（Spec §8.2 ScreenComponentRegistryError）。
  *
  * - `code`：稳定错误码，宿主可据此处理失败
- * - `diagnostics`：已映射为稳定 V2 code/path/severity/message 的安全诊断
+ * - `diagnostics`：已映射为稳定 code/path/severity/message 的安全诊断
  *
  * diagnostics 不包含 manifest 原始对象、构造器源码或完整 props（Spec §8.2 安全约束）。
  */
 export interface ScreenComponentRegistryError extends Error {
   readonly code: ScreenComponentRegistryErrorCode;
-  readonly diagnostics: readonly ScreenSdkDiagnosticV2[];
+  readonly diagnostics: readonly ScreenSdkDiagnostic[];
 }
 
 /**
@@ -52,12 +52,12 @@ export class ScreenComponentRegistryErrorImpl
   implements ScreenComponentRegistryError
 {
   readonly code: ScreenComponentRegistryErrorCode;
-  readonly diagnostics: readonly ScreenSdkDiagnosticV2[];
+  readonly diagnostics: readonly ScreenSdkDiagnostic[];
 
   constructor(
     code: ScreenComponentRegistryErrorCode,
     message: string,
-    diagnostics: readonly ScreenSdkDiagnosticV2[] = [],
+    diagnostics: readonly ScreenSdkDiagnostic[] = [],
   ) {
     super(message);
     this.name = 'ScreenComponentRegistryError';

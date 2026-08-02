@@ -1,50 +1,44 @@
 /**
- * V1 → V2 蓝图迁移（事件蓝图 Spec 迁移任务）
+ * 历史 trigger/action 蓝图迁移。
  *
- * V1 蓝图节点：trigger / action / condition / comment
- * V2 蓝图节点：component（含全局子类型）/ condition / delay / comment
- *
- * 迁移核心：
- * - V1 trigger/action 节点淘汰，触发器变为组件节点的输出锚点（evt:*）
- * - 动作变为组件节点的输入锚点（act:*）
- * - pageLoad / navigate / requestApi 提升为全局节点单例
- * - 同一组件的多个 trigger/action 合并为一个组件节点
- *
- * 非破坏原则：无法精确推导的边保留原 handle 并产出 warning，由编译器诊断处理。
+ * 旧图仅在读取持久化数据、导入文件和快照时出现。运行时与保存路径只使用正式的
+ * "组件即节点"模型。迁移保留动作链的顺序：旧 action 的后继会展开到最近的可执行
+ * source，而不是写入不存在的 action 输出锚点。
  */
 
 import {
-  EVENT_BLUEPRINT_VERSION_V2,
+  EVENT_BLUEPRINT_VERSION,
   GLOBAL_COMPONENT_ID,
-  type BlueprintActionConfig,
-  type BlueprintEdgeV2,
+  type BlueprintEdge,
+  type BlueprintNode,
   type BlueprintNodePosition,
-  type BlueprintNodeV2,
-  type BlueprintTriggerType,
   type ComponentNode,
   type EventBlueprint,
-  type EventBlueprintV2,
   type GlobalIntervalConfig,
   type GlobalNavigateConfig,
   type GlobalRequestApiConfig,
+  type LegacyBlueprintActionConfig,
+  type LegacyBlueprintEdge,
+  type LegacyBlueprintNode,
+  type LegacyBlueprintTriggerType,
+  type LegacyEventBlueprint,
 } from './blueprint.schema.js';
 
-export interface MigrationWarning {
-  /** V1 边 ID 或节点 ID */
+export interface BlueprintMigrationWarning {
+  /** 触发问题的历史边或节点 ID。 */
   sourceId: string;
-  /** 警告消息 */
+  /** 面向维护者的迁移失败说明。 */
   message: string;
 }
 
-export interface MigrationResult {
-  /** 迁移后的 V2 蓝图 */
-  blueprint: EventBlueprintV2;
-  /** 迁移警告（无法推导的边、空配置等） */
-  warnings: MigrationWarning[];
+export interface LegacyBlueprintMigrationResult {
+  /** 已转换为正式结构的蓝图。 */
+  blueprint: EventBlueprint;
+  /** 无法无损转换时的警告；调用方必须拒绝保存或报告该记录。 */
+  warnings: BlueprintMigrationWarning[];
 }
 
-/** V1 trigger type → V2 eventId 映射 */
-const TRIGGER_EVENT_ID_MAP: Record<BlueprintTriggerType, string> = {
+const TRIGGER_EVENT_ID_MAP: Record<LegacyBlueprintTriggerType, string> = {
   componentClick: 'click',
   componentHover: 'hover',
   dataLoaded: 'dataLoaded',
@@ -53,12 +47,7 @@ const TRIGGER_EVENT_ID_MAP: Record<BlueprintTriggerType, string> = {
   interval: 'interval',
 };
 
-/**
- * 根据 V1 action 配置推导 V2 actionId（用于边 targetHandle 推导）
- *
- * setVisibility 按 visible 字段细分为 show / hide / toggleVisibility
- */
-function getActionId(config: BlueprintActionConfig): string {
+function getActionId(config: LegacyBlueprintActionConfig): string {
   switch (config.type) {
     case 'setVisibility':
       if (config.visible === 'show') return 'show';
@@ -75,318 +64,321 @@ function getActionId(config: BlueprintActionConfig): string {
   }
 }
 
-/**
- * V2 节点 ID 生成器
- *
- * 格式：`v2-{kind}-{identifier}`，重复时加序号（-2, -3, ...）
- */
-class V2IdGenerator {
-  private usedIds = new Set<string>();
+class BlueprintIdGenerator {
+  private readonly usedIds = new Set<string>();
 
   generate(kind: string, identifier: string): string {
-    const base = `v2-${kind}-${identifier}`;
+    const base = `blueprint-${kind}-${identifier}`;
     if (!this.usedIds.has(base)) {
       this.usedIds.add(base);
       return base;
     }
-    let seq = 2;
-    while (this.usedIds.has(`${base}-${seq}`)) {
-      seq += 1;
+
+    let sequence = 2;
+    while (this.usedIds.has(`${base}-${sequence}`)) {
+      sequence += 1;
     }
-    const id = `${base}-${seq}`;
+    const id = `${base}-${sequence}`;
     this.usedIds.add(id);
     return id;
   }
 }
 
-/** 组件节点分组（按 componentId 合并 trigger/action） */
-interface ComponentGroup {
-  componentId: string;
-  position: BlueprintNodePosition;
-  v2NodeId: string;
+interface CanonicalSource {
+  source: string;
+  sourceHandle: string;
+}
+
+interface MigrationContext {
+  readonly nodeById: ReadonlyMap<string, LegacyBlueprintNode>;
+  readonly nodeIdMap: ReadonlyMap<string, string>;
+  readonly outgoingEdges: ReadonlyMap<string, readonly LegacyBlueprintEdge[]>;
+  readonly warnings: BlueprintMigrationWarning[];
+  readonly edges: BlueprintEdge[];
+  readonly usedEdgeIds: Set<string>;
+}
+
+function buildOutgoingEdges(
+  edges: readonly LegacyBlueprintEdge[],
+): ReadonlyMap<string, readonly LegacyBlueprintEdge[]> {
+  const result = new Map<string, LegacyBlueprintEdge[]>();
+  for (const edge of edges) {
+    const outgoing = result.get(edge.source) ?? [];
+    outgoing.push(edge);
+    result.set(edge.source, outgoing);
+  }
+  return result;
+}
+
+function addWarning(context: MigrationContext, sourceId: string, message: string): void {
+  context.warnings.push({ sourceId, message });
+}
+
+function nextEdgeId(edgeId: string, usedEdgeIds: Set<string>): string {
+  if (!usedEdgeIds.has(edgeId)) {
+    usedEdgeIds.add(edgeId);
+    return edgeId;
+  }
+
+  let sequence = 2;
+  while (usedEdgeIds.has(`${edgeId}-${sequence}`)) {
+    sequence += 1;
+  }
+  const nextId = `${edgeId}-${sequence}`;
+  usedEdgeIds.add(nextId);
+  return nextId;
+}
+
+function createNode(node: LegacyBlueprintNode, id: string): BlueprintNode {
+  if (node.kind === 'trigger') {
+    if (node.config.type === 'pageLoad') {
+      return {
+        id,
+        kind: 'component',
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'pageLoad',
+        position: node.position,
+      };
+    }
+    if (node.config.type === 'interval') {
+      const config: GlobalIntervalConfig = {
+        globalType: 'interval',
+        intervalMs: node.config.intervalMs,
+      };
+      return {
+        id,
+        kind: 'component',
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'interval',
+        config,
+        position: node.position,
+      };
+    }
+    return {
+      id,
+      kind: 'component',
+      componentId: node.config.componentId,
+      position: node.position,
+    };
+  }
+
+  if (node.kind === 'action') {
+    if (node.config.type === 'navigate') {
+      const config: GlobalNavigateConfig = {
+        globalType: 'navigate',
+        url: node.config.url,
+        target: node.config.target,
+      };
+      return {
+        id,
+        kind: 'component',
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'navigate',
+        config,
+        position: node.position,
+      };
+    }
+    if (node.config.type === 'requestApi') {
+      const config: GlobalRequestApiConfig = {
+        globalType: 'requestApi',
+        method: node.config.method,
+        url: node.config.url,
+        headers: node.config.headers,
+        body: node.config.body,
+        secretHeaderKeys: node.config.secretHeaderKeys,
+        timeoutMs: node.config.timeoutMs,
+      };
+      return {
+        id,
+        kind: 'component',
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'requestApi',
+        config,
+        position: node.position,
+      };
+    }
+    return {
+      id,
+      kind: 'component',
+      componentId: node.config.targetComponentId,
+      position: node.position,
+    };
+  }
+
+  if (node.kind === 'condition') {
+    return {
+      id,
+      kind: 'condition',
+      position: node.position,
+      config: node.config,
+    };
+  }
+
+  return {
+    id,
+    kind: 'comment',
+    position: node.position,
+    config: node.config,
+  };
+}
+
+function sourceForTrigger(
+  node: Extract<LegacyBlueprintNode, { kind: 'trigger' }>,
+  nodeIdMap: ReadonlyMap<string, string>,
+): CanonicalSource | undefined {
+  const source = nodeIdMap.get(node.id);
+  if (source === undefined) return undefined;
+  return {
+    source,
+    sourceHandle: `evt:${TRIGGER_EVENT_ID_MAP[node.config.type]}`,
+  };
+}
+
+function appendEdge(
+  context: MigrationContext,
+  edge: LegacyBlueprintEdge,
+  source: CanonicalSource,
+  target: LegacyBlueprintNode,
+): void {
+  const canonicalTarget = context.nodeIdMap.get(target.id);
+  if (canonicalTarget === undefined) {
+    addWarning(context, edge.id, `边 ${edge.id} 的目标节点未在映射表中找到`);
+    return;
+  }
+
+  if (target.kind === 'action') {
+    context.edges.push({
+      id: nextEdgeId(edge.id, context.usedEdgeIds),
+      source: source.source,
+      sourceHandle: source.sourceHandle,
+      target: canonicalTarget,
+      targetHandle: `act:${getActionId(target.config)}`,
+    });
+    return;
+  }
+
+  if (target.kind === 'condition') {
+    context.edges.push({
+      id: nextEdgeId(edge.id, context.usedEdgeIds),
+      source: source.source,
+      sourceHandle: source.sourceHandle,
+      target: canonicalTarget,
+      targetHandle: 'in',
+    });
+    return;
+  }
+
+  addWarning(context, edge.id, `边 ${edge.id} 指向无法作为正式执行目标的 ${target.kind} 节点`);
+}
+
+function migrateEdgeTarget(
+  context: MigrationContext,
+  edge: LegacyBlueprintEdge,
+  source: CanonicalSource,
+  path: ReadonlySet<string>,
+): void {
+  const target = context.nodeById.get(edge.target);
+  if (target === undefined) {
+    addWarning(context, edge.id, `边引用了不存在的目标节点：${edge.target}`);
+    return;
+  }
+
+  if (path.has(target.id)) {
+    addWarning(context, edge.id, `历史蓝图存在执行流环，无法无损迁移：${target.id}`);
+    return;
+  }
+
+  appendEdge(context, edge, source, target);
+  if (target.kind === 'action') {
+    const nextPath = new Set(path);
+    nextPath.add(target.id);
+    for (const successor of context.outgoingEdges.get(target.id) ?? []) {
+      migrateEdgeTarget(context, successor, source, nextPath);
+    }
+    return;
+  }
+
+  if (target.kind === 'condition') {
+    const conditionSource = context.nodeIdMap.get(target.id);
+    if (conditionSource === undefined) {
+      addWarning(context, edge.id, `条件节点 ${target.id} 未在映射表中找到`);
+      return;
+    }
+    const nextPath = new Set(path);
+    nextPath.add(target.id);
+    for (const successor of context.outgoingEdges.get(target.id) ?? []) {
+      if (successor.sourceHandle !== 'then' && successor.sourceHandle !== 'else') {
+        addWarning(context, successor.id, `条件节点 ${target.id} 使用了不支持的输出锚点`);
+        continue;
+      }
+      migrateEdgeTarget(
+        context,
+        successor,
+        { source: conditionSource, sourceHandle: successor.sourceHandle },
+        nextPath,
+      );
+    }
+  }
 }
 
 /**
- * 将 V1 事件蓝图迁移为 V2 蓝图
+ * 将历史 trigger/action 图迁移为正式蓝图。
  *
- * 迁移步骤：
- * 1. 遍历 V1 节点，按组件 ID 分组创建 V2 组件节点（合并同组件的 trigger/action）
- * 2. 创建全局节点（pageLoad / navigate / requestApi 单例）
- * 3. 保留 condition / comment 节点
- * 4. 建立 V1 nodeId → V2 nodeId 映射表
- * 5. 遍历 V1 边，用映射表重写 source/target，推导 handle
- * 6. 无法推导的边保留但加入 warnings
+ * 调用方必须在 `warnings` 非空时拒绝持久化该结果。这样历史的非法边和环不会被静默
+ * 变成不同语义的正式图。
  */
-export function migrateBlueprintV1ToV2(v1: EventBlueprint): MigrationResult {
-  const warnings: MigrationWarning[] = [];
-  const idGen = new V2IdGenerator();
-
-  const v2Nodes: BlueprintNodeV2[] = [];
+export function migrateLegacyBlueprint(
+  legacyBlueprint: LegacyEventBlueprint,
+): LegacyBlueprintMigrationResult {
+  const idGenerator = new BlueprintIdGenerator();
   const nodeIdMap = new Map<string, string>();
-  const componentGroups = new Map<string, ComponentGroup>();
+  const nodeById = new Map(legacyBlueprint.nodes.map((node) => [node.id, node]));
+  const nodes: BlueprintNode[] = [];
 
-  // 全局节点单例状态
-  let pageLoadV2Id: string | undefined;
-  let pageLoadPosition: BlueprintNodePosition | undefined;
-  let navigateV2Id: string | undefined;
-  let navigatePosition: BlueprintNodePosition | undefined;
-  let navigateConfig: GlobalNavigateConfig | undefined;
-  let requestApiV2Id: string | undefined;
-  let requestApiPosition: BlueprintNodePosition | undefined;
-  let requestApiConfig: GlobalRequestApiConfig | undefined;
-  let intervalV2Id: string | undefined;
-  let intervalPosition: BlueprintNodePosition | undefined;
-  let intervalConfig: GlobalIntervalConfig | undefined;
-
-  // ===== 第一阶段：遍历 V1 节点，建立映射 + 创建 condition/comment 节点 =====
-  for (const node of v1.nodes) {
-    if (node.kind === 'trigger') {
-      const config = node.config;
-      if (config.type === 'pageLoad') {
-        // 全局 pageLoad 节点：多个 pageLoad trigger 合并为一个
-        if (pageLoadV2Id === undefined) {
-          pageLoadV2Id = idGen.generate('component', 'pageLoad');
-          pageLoadPosition = node.position;
-        }
-        nodeIdMap.set(node.id, pageLoadV2Id);
-      } else if (config.type === 'interval') {
-        // interval trigger：迁移为全局 interval 节点（单例）
-        if (intervalV2Id === undefined) {
-          intervalV2Id = idGen.generate('component', 'interval');
-          intervalPosition = node.position;
-          intervalConfig = {
-            globalType: 'interval',
-            intervalMs: config.intervalMs,
-          };
-        }
-        nodeIdMap.set(node.id, intervalV2Id);
-      } else {
-        // 组件 trigger：componentClick / componentHover / dataLoaded / dataError
-        const componentId = config.componentId;
-        let group = componentGroups.get(componentId);
-        if (group === undefined) {
-          const v2Id = idGen.generate('component', componentId);
-          group = { componentId, position: node.position, v2NodeId: v2Id };
-          componentGroups.set(componentId, group);
-        }
-        nodeIdMap.set(node.id, group.v2NodeId);
-      }
-    } else if (node.kind === 'action') {
-      const config = node.config;
-      if (config.type === 'navigate') {
-        // 全局 navigate 节点：同类型合并为单例
-        if (navigateV2Id === undefined) {
-          navigateV2Id = idGen.generate('component', 'navigate');
-          navigatePosition = node.position;
-          navigateConfig = {
-            globalType: 'navigate',
-            url: config.url,
-            target: config.target,
-          };
-        }
-        nodeIdMap.set(node.id, navigateV2Id);
-      } else if (config.type === 'requestApi') {
-        // 全局 requestApi 节点：同类型合并为单例
-        if (requestApiV2Id === undefined) {
-          requestApiV2Id = idGen.generate('component', 'requestApi');
-          requestApiPosition = node.position;
-          requestApiConfig = {
-            globalType: 'requestApi',
-            method: config.method,
-            url: config.url,
-            headers: config.headers,
-            body: config.body,
-            secretHeaderKeys: config.secretHeaderKeys,
-            timeoutMs: config.timeoutMs,
-          };
-        }
-        nodeIdMap.set(node.id, requestApiV2Id);
-      } else {
-        // 组件 action：setVisibility / scrollToComponent / refreshDataSource
-        const componentId = config.targetComponentId;
-        let group = componentGroups.get(componentId);
-        if (group === undefined) {
-          const v2Id = idGen.generate('component', componentId);
-          group = { componentId, position: node.position, v2NodeId: v2Id };
-          componentGroups.set(componentId, group);
-        }
-        nodeIdMap.set(node.id, group.v2NodeId);
-      }
-    } else if (node.kind === 'condition') {
-      // condition 节点：结构不变，position 不变
-      const v2Id = idGen.generate('condition', node.id);
-      nodeIdMap.set(node.id, v2Id);
-      v2Nodes.push({
-        id: v2Id,
-        kind: 'condition',
-        position: node.position,
-        config: node.config,
-      });
-    } else if (node.kind === 'comment') {
-      // comment 节点：结构不变，position 不变
-      const v2Id = idGen.generate('comment', node.id);
-      nodeIdMap.set(node.id, v2Id);
-      v2Nodes.push({
-        id: v2Id,
-        kind: 'comment',
-        position: node.position,
-        config: node.config,
-      });
-    }
+  for (const node of legacyBlueprint.nodes) {
+    const id = idGenerator.generate(node.kind, node.id);
+    nodeIdMap.set(node.id, id);
+    nodes.push(createNode(node, id));
   }
 
-  // ===== 第二阶段：创建组件节点（合并后的） =====
-  for (const group of componentGroups.values()) {
-    const componentNode: ComponentNode = {
-      id: group.v2NodeId,
-      kind: 'component',
-      componentId: group.componentId,
-      position: group.position,
-    };
-    v2Nodes.push(componentNode);
-  }
+  const warnings: BlueprintMigrationWarning[] = [];
+  const context: MigrationContext = {
+    nodeById,
+    nodeIdMap,
+    outgoingEdges: buildOutgoingEdges(legacyBlueprint.edges),
+    warnings,
+    edges: [],
+    usedEdgeIds: new Set(),
+  };
 
-  // ===== 第三阶段：创建全局节点 =====
-  if (pageLoadV2Id !== undefined && pageLoadPosition !== undefined) {
-    v2Nodes.push({
-      id: pageLoadV2Id,
-      kind: 'component',
-      componentId: GLOBAL_COMPONENT_ID,
-      globalType: 'pageLoad',
-      position: pageLoadPosition,
-    });
-  }
-  if (
-    navigateV2Id !== undefined &&
-    navigatePosition !== undefined &&
-    navigateConfig !== undefined
-  ) {
-    v2Nodes.push({
-      id: navigateV2Id,
-      kind: 'component',
-      componentId: GLOBAL_COMPONENT_ID,
-      globalType: 'navigate',
-      config: navigateConfig,
-      position: navigatePosition,
-    });
-  }
-  if (
-    requestApiV2Id !== undefined &&
-    requestApiPosition !== undefined &&
-    requestApiConfig !== undefined
-  ) {
-    v2Nodes.push({
-      id: requestApiV2Id,
-      kind: 'component',
-      componentId: GLOBAL_COMPONENT_ID,
-      globalType: 'requestApi',
-      config: requestApiConfig,
-      position: requestApiPosition,
-    });
-  }
-  if (
-    intervalV2Id !== undefined &&
-    intervalPosition !== undefined &&
-    intervalConfig !== undefined
-  ) {
-    v2Nodes.push({
-      id: intervalV2Id,
-      kind: 'component',
-      componentId: GLOBAL_COMPONENT_ID,
-      globalType: 'interval',
-      config: intervalConfig,
-      position: intervalPosition,
-    });
-  }
-
-  // ===== 第四阶段：迁移边（重写 source/target，推导 handle） =====
-  const v2Edges: BlueprintEdgeV2[] = [];
-  for (const edge of v1.edges) {
-    const sourceV1 = v1.nodes.find((n) => n.id === edge.source);
-    const targetV1 = v1.nodes.find((n) => n.id === edge.target);
-
-    if (sourceV1 === undefined || targetV1 === undefined) {
-      warnings.push({
-        sourceId: edge.id,
-        message: `边引用了不存在的节点（source=${edge.source}, target=${edge.target}）`,
-      });
+  for (const node of legacyBlueprint.nodes) {
+    if (node.kind !== 'trigger') continue;
+    const source = sourceForTrigger(node, nodeIdMap);
+    if (source === undefined) {
+      addWarning(context, node.id, `触发器节点 ${node.id} 未在映射表中找到`);
       continue;
     }
+    for (const edge of context.outgoingEdges.get(node.id) ?? []) {
+      migrateEdgeTarget(context, edge, source, new Set([node.id]));
+    }
+  }
 
-    const newSource = nodeIdMap.get(edge.source);
-    const newTarget = nodeIdMap.get(edge.target);
-
-    if (newSource === undefined || newTarget === undefined) {
-      warnings.push({
-        sourceId: edge.id,
-        message: `边 ${edge.id} 的源节点或目标节点未在映射表中找到`,
-      });
+  for (const edge of legacyBlueprint.edges) {
+    const source = nodeById.get(edge.source);
+    if (source === undefined) {
+      addWarning(context, edge.id, `边引用了不存在的源节点：${edge.source}`);
       continue;
     }
-
-    // 推导 sourceHandle
-    let newSourceHandle: string;
-    if (sourceV1.kind === 'trigger') {
-      const eventId = TRIGGER_EVENT_ID_MAP[sourceV1.config.type];
-      newSourceHandle = `evt:${eventId}`;
-    } else if (sourceV1.kind === 'action') {
-      // action 节点有 out 引脚，但 V2 组件节点不自动有 out 锚点
-      // 保留为 'out' 并标记 warning
-      newSourceHandle = 'out';
-      warnings.push({
-        sourceId: edge.id,
-        message: `边的源节点是 action 节点，V2 组件节点无 out 锚点，保留为 'out'`,
-      });
-    } else if (sourceV1.kind === 'condition') {
-      // condition 节点的 sourceHandle 可能是 'then' 或 'else'，保留不变
-      newSourceHandle = edge.sourceHandle;
-    } else {
-      // comment 节点：不应有输出
-      newSourceHandle = edge.sourceHandle;
-      warnings.push({
-        sourceId: edge.id,
-        message: `边的源节点是 comment 节点，不应有输出`,
-      });
+    if (source.kind === 'comment') {
+      addWarning(context, edge.id, `注释节点 ${source.id} 不参与执行流，无法迁移其输出边`);
     }
-
-    // 推导 targetHandle
-    let newTargetHandle: string;
-    if (targetV1.kind === 'action') {
-      const actionId = getActionId(targetV1.config);
-      newTargetHandle = `act:${actionId}`;
-    } else if (targetV1.kind === 'condition') {
-      // condition 节点输入 'in'，保留不变
-      newTargetHandle = 'in';
-    } else if (targetV1.kind === 'trigger') {
-      // trigger 无输入锚点，保留为 'in' 并标记 warning
-      newTargetHandle = 'in';
-      warnings.push({
-        sourceId: edge.id,
-        message: `边的目标节点是 trigger 节点，trigger 无输入锚点，保留为 'in'`,
-      });
-    } else {
-      // comment 节点：不应有输入
-      newTargetHandle = edge.targetHandle;
-      warnings.push({
-        sourceId: edge.id,
-        message: `边的目标节点是 comment 节点，不应有输入`,
-      });
-    }
-
-    v2Edges.push({
-      id: edge.id,
-      source: newSource,
-      sourceHandle: newSourceHandle,
-      target: newTarget,
-      targetHandle: newTargetHandle,
-    });
   }
 
   return {
     blueprint: {
-      version: EVENT_BLUEPRINT_VERSION_V2,
-      nodes: v2Nodes,
-      edges: v2Edges,
+      version: EVENT_BLUEPRINT_VERSION,
+      nodes,
+      edges: context.edges,
     },
     warnings,
   };

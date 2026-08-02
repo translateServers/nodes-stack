@@ -2,11 +2,11 @@
  * 蓝图右键菜单（上下文菜单）
  *
  * 基于 Radix ContextMenu 实现三场景菜单：
- * - node：右键命中节点时显示（剪贴板/对齐/分布/删除 + V2 节点专属项）
+ * - node：右键命中节点时显示（剪贴板/对齐/分布/删除 + 节点专属项）
  * - edge：右键命中边时显示（删除连线）
  * - pane：右键画布空白处时显示（添加节点/粘贴/全选/视图缩放）
  *
- * V2 适配（任务 5.5）：
+ * 节点专属操作：
  * - node 模式下，若选中节点为组件节点且关联了画布组件，新增「定位到画布组件」
  * - node 模式下，若选中节点为全局节点（globalType），新增「配置」打开配置面板
  *
@@ -59,7 +59,7 @@ import type { AlignMode, DistributeMode } from '../lib/align-distribute';
 /** 菜单模式：node=命中节点；edge=命中边；pane=空白处 */
 export type BlueprintContextMenuMode = 'node' | 'edge' | 'pane';
 
-/** 选中节点的 V2 类型（用于 node 模式下条件渲染专属菜单项） */
+/** 选中节点类型（用于 node 模式下条件渲染专属菜单项） */
 export type SelectedNodeKind = 'component' | 'global' | 'condition' | 'delay' | 'comment';
 
 /** 全局节点的子类型（仅当选中节点 kind === 'global' 时有效） */
@@ -96,15 +96,15 @@ interface BlueprintContextMenuProps {
   onFitView: () => void;
   /** 缩放到选区 */
   onFitViewToSelection: () => void;
-  /** V2 任务 5.5：选中节点的 kind（仅 node 模式有效，单选时由调用方推导） */
+  /** 选中节点的 kind（仅 node 模式有效，单选时由调用方推导） */
   selectedNodeKind?: SelectedNodeKind | null;
-  /** V2 任务 5.5：选中全局节点的 globalType（仅当 selectedNodeKind === 'global' 时有效） */
+  /** 选中全局节点的 globalType（仅当 selectedNodeKind === 'global' 时有效） */
   selectedNodeGlobalType?: SelectedNodeGlobalType | null;
-  /** V2 任务 5.5：选中组件节点是否关联了画布组件（决定「定位到画布组件」是否可用） */
+  /** 选中组件节点是否关联了画布组件（决定「定位到画布组件」是否可用） */
   selectedNodeHasComponentId?: boolean;
-  /** V2 任务 5.5：「定位到画布组件」回调（仅组件节点关联组件时显示） */
+  /** 「定位到画布组件」回调（仅组件节点关联组件时显示） */
   onLocateComponent?: () => void;
-  /** V2 任务 5.5：「配置」回调（仅全局节点显示，触发配置面板聚焦） */
+  /** 「配置」回调（仅全局节点显示，触发配置面板聚焦） */
   onConfigureGlobal?: () => void;
   children: ReactNode;
 }
@@ -166,7 +166,7 @@ function NodeMenuItems({
   // 与 AlignDistributeToolbar 对齐：对齐需 >=2，分布需 >=3
   const canAlign = selectedNodeCount >= 2;
   const canDistribute = selectedNodeCount >= 3;
-  // V2 任务 5.5：节点专属项仅在单选时显示（多选时节点类型混杂，专属操作语义不清）
+  // 节点专属项仅在单选时显示（多选时节点类型混杂，专属操作语义不清）
   const isSingleSelection = selectedNodeCount === 1;
   // 「定位到画布组件」：仅组件节点（非 global）且关联了画布组件时显示
   const canLocateComponent =
@@ -180,7 +180,7 @@ function NodeMenuItems({
 
   return (
     <>
-      {/* V2 任务 5.5：节点专属操作（顶部突出位置） */}
+      {/* 节点专属操作（顶部突出位置） */}
       {canLocateComponent && (
         <>
           <ContextMenuGroup>

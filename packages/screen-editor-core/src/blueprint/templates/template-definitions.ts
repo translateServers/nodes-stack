@@ -1,11 +1,11 @@
 /**
- * 蓝图模板元数据（任务 9.3 / 任务 6.1 V2 重写）
+ * 蓝图模板元数据。
  *
  * 定义空蓝图可用的一键模板元信息。
  * 实际蓝图构造由 `create-template-blueprint.ts` 完成；Schema 校验由
  * `build-validated-template.ts` 完成。
  *
- * 四个 V2 模板（与 spec.md §模板 对齐）：
+ * 四个内置模板：
  * - click-navigate：组件 A 的 evt:click → 全局 navigate 节点的 act:navigate
  * - click-toggle-visibility：组件 A 的 evt:click → 组件 B 的 act:toggleVisibility
  * - page-load-refresh：全局 pageLoad 节点的 evt:pageLoad → 组件 B 的 act:refreshData

@@ -13,7 +13,13 @@
  */
 
 import type { Browser, BrowserContext, Page } from '@playwright/test';
-import type { EventBlueprint, ScreenComponent } from '@nebula/shared';
+import {
+  GLOBAL_COMPONENT_ID,
+  type BlueprintEdge,
+  type BlueprintNode,
+  type EventBlueprint,
+  type ScreenComponent,
+} from '@nebula/shared';
 
 import {
   createScreenProject,
@@ -23,7 +29,7 @@ import {
   type CreateScreenProjectParams,
 } from './screen-api.helper';
 
-/** 触发器配置（componentClick / pageLoad）判别联合 */
+/** 触发器配置（componentClick / pageLoad）判别联合。 */
 export type TriggerConfig = { type: 'componentClick'; componentId: string } | { type: 'pageLoad' };
 
 /** 动作配置判别联合（覆盖 M1 四类动作） */
@@ -33,7 +39,7 @@ export type ActionConfig =
   | { type: 'scrollToComponent'; targetComponentId: string }
   | { type: 'refreshDataSource'; targetComponentId: string };
 
-/** 触发-动作对：单条规则（trigger → action，含 out→in 单边） */
+/** 触发-动作对。 */
 export interface TriggerActionPair {
   triggerId: string;
   triggerConfig: TriggerConfig;
@@ -42,42 +48,26 @@ export interface TriggerActionPair {
 }
 
 /**
- * 构造一条"trigger → action"规则的完整蓝图。
- *
- * - 节点 ID 由调用方提供（便于 E2E 中引用），动作位置默认排布在 trigger 右侧 300px
- * - 边 out → in（执行流单引脚约定）
+ * 构造一条正式的触发-动作规则。
  */
 export function buildBlueprint(pair: TriggerActionPair): EventBlueprint {
   const { triggerId, triggerConfig, actionId, actionConfig } = pair;
   return {
-    version: 1,
-    nodes: [
-      {
-        id: triggerId,
-        kind: 'trigger',
-        position: { x: 100, y: 200 },
-        config: triggerConfig,
-      },
-      {
-        id: actionId,
-        kind: 'action',
-        position: { x: 400, y: 200 },
-        config: actionConfig as EventBlueprint['nodes'][number]['config'],
-      },
-    ],
+    version: 2,
+    nodes: [buildTriggerNode(triggerId, triggerConfig), buildActionNode(actionId, actionConfig)],
     edges: [
       {
         id: `edge-${triggerId}-${actionId}`,
         source: triggerId,
-        sourceHandle: 'out',
+        sourceHandle: triggerHandle(triggerConfig),
         target: actionId,
-        targetHandle: 'in',
+        targetHandle: actionHandle(actionConfig),
       },
     ],
   };
 }
 
-/** 构造"trigger → action1 → action2"三段链式蓝图（用于 7.3 深度截断） */
+/** 构造一个触发器依次执行两个动作的正式蓝图。 */
 export function buildChainBlueprint(
   triggerId: string,
   triggerConfig: TriggerConfig,
@@ -87,85 +77,137 @@ export function buildChainBlueprint(
   action2Config: ActionConfig,
 ): EventBlueprint {
   return {
-    version: 1,
+    version: 2,
     nodes: [
-      { id: triggerId, kind: 'trigger', position: { x: 100, y: 200 }, config: triggerConfig },
-      {
-        id: action1Id,
-        kind: 'action',
-        position: { x: 400, y: 200 },
-        config: action1Config as EventBlueprint['nodes'][number]['config'],
-      },
-      {
-        id: action2Id,
-        kind: 'action',
-        position: { x: 700, y: 200 },
-        config: action2Config as EventBlueprint['nodes'][number]['config'],
-      },
+      buildTriggerNode(triggerId, triggerConfig),
+      buildActionNode(action1Id, action1Config),
+      buildActionNode(action2Id, action2Config, { x: 700, y: 200 }),
     ],
     edges: [
       {
         id: `edge-${triggerId}-${action1Id}`,
         source: triggerId,
-        sourceHandle: 'out',
+        sourceHandle: triggerHandle(triggerConfig),
         target: action1Id,
-        targetHandle: 'in',
+        targetHandle: actionHandle(action1Config),
       },
       {
-        id: `edge-${action1Id}-${action2Id}`,
-        source: action1Id,
-        sourceHandle: 'out',
+        id: `edge-${triggerId}-${action2Id}`,
+        source: triggerId,
+        sourceHandle: triggerHandle(triggerConfig),
         target: action2Id,
-        targetHandle: 'in',
+        targetHandle: actionHandle(action2Config),
       },
     ],
   };
 }
 
 /**
- * 构造任意深度链式蓝图：trigger → a1 → a2 → ... → aN（用于 7.3 深度截断 E2E）。
- *
- * - 节点位置按 300px 间距水平排布
- * - 边连接：trigger.out → a1.in, a1.out → a2.in, ..., a(N-1).out → aN.in
- * - 编译器 DFS 展开后，第 i 个 action 的 depth = i（trigger depth=0，直连 action depth=0）
- *   即 a1.depth=0, a2.depth=1, ..., a11.depth=10（被 MAX_TRIGGER_DEPTH=10 截断）
+ * 构造超出编译器深度限制的正式 delay 链，最后的 hide 动作必须被截断。
  */
 export function buildDeepChainBlueprint(
   triggerId: string,
-  triggerConfig: TriggerConfig,
-  actions: Array<{ id: string; config: ActionConfig }>,
+  triggerComponentId: string,
+  targetComponentId: string,
+  delayCount: number,
 ): EventBlueprint {
-  const nodes: EventBlueprint['nodes'] = [
-    { id: triggerId, kind: 'trigger', position: { x: 100, y: 200 }, config: triggerConfig },
-    ...actions.map((a, i) => ({
-      id: a.id,
-      kind: 'action' as const,
-      position: { x: 400 + i * 300, y: 200 },
-      config: a.config as EventBlueprint['nodes'][number]['config'],
+  const nodes: BlueprintNode[] = [
+    buildTriggerNode(triggerId, { type: 'componentClick', componentId: triggerComponentId }),
+    ...Array.from({ length: delayCount }, (_, index) => ({
+      id: `delay-${index + 1}`,
+      kind: 'delay' as const,
+      position: { x: 400 + index * 40, y: 200 },
+      config: { delayMs: 0 },
     })),
+    buildActionNode('deep-final-action', {
+      type: 'setVisibility',
+      targetComponentId,
+      visible: 'hide',
+    }),
   ];
-
-  const edges: EventBlueprint['edges'] = [];
-  // trigger → a1
-  edges.push({
-    id: `edge-${triggerId}-${actions[0].id}`,
-    source: triggerId,
-    sourceHandle: 'out',
-    target: actions[0].id,
-    targetHandle: 'in',
-  });
-  // a_i → a_(i+1)
-  for (let i = 0; i < actions.length - 1; i++) {
+  const edges: BlueprintEdge[] = [
+    {
+      id: `edge-${triggerId}-delay-1`,
+      source: triggerId,
+      sourceHandle: 'evt:click',
+      target: 'delay-1',
+      targetHandle: 'in',
+    },
+  ];
+  for (let index = 1; index < delayCount; index += 1) {
     edges.push({
-      id: `edge-${actions[i].id}-${actions[i + 1].id}`,
-      source: actions[i].id,
+      id: `edge-delay-${index}-${index + 1}`,
+      source: `delay-${index}`,
       sourceHandle: 'out',
-      target: actions[i + 1].id,
+      target: `delay-${index + 1}`,
       targetHandle: 'in',
     });
   }
+  edges.push({
+    id: 'edge-delay-final-action',
+    source: `delay-${delayCount}`,
+    sourceHandle: 'out',
+    target: 'deep-final-action',
+    targetHandle: 'act:hide',
+  });
+  return { version: 2, nodes, edges };
+}
 
-  return { version: 1, nodes, edges };
+function buildTriggerNode(id: string, config: TriggerConfig): BlueprintNode {
+  if (config.type === 'pageLoad') {
+    return {
+      id,
+      kind: 'component',
+      componentId: GLOBAL_COMPONENT_ID,
+      globalType: 'pageLoad',
+      position: { x: 100, y: 200 },
+    };
+  }
+  return {
+    id,
+    kind: 'component',
+    componentId: config.componentId,
+    position: { x: 100, y: 200 },
+  };
+}
+
+function buildActionNode(
+  id: string,
+  config: ActionConfig,
+  position = { x: 400, y: 200 },
+): BlueprintNode {
+  switch (config.type) {
+    case 'setVisibility':
+    case 'scrollToComponent':
+    case 'refreshDataSource':
+      return { id, kind: 'component', componentId: config.targetComponentId, position };
+    case 'navigate':
+      return {
+        id,
+        kind: 'component',
+        componentId: GLOBAL_COMPONENT_ID,
+        globalType: 'navigate',
+        config: { globalType: 'navigate', url: config.url, target: config.target ?? '_blank' },
+        position,
+      };
+  }
+}
+
+function triggerHandle(config: TriggerConfig): string {
+  return config.type === 'pageLoad' ? 'evt:pageLoad' : 'evt:click';
+}
+
+function actionHandle(config: ActionConfig): string {
+  switch (config.type) {
+    case 'setVisibility':
+      return config.visible === 'toggle' ? 'act:toggleVisibility' : `act:${config.visible}`;
+    case 'navigate':
+      return 'act:navigate';
+    case 'scrollToComponent':
+      return 'act:scrollTo';
+    case 'refreshDataSource':
+      return 'act:refreshData';
+  }
 }
 
 /**

@@ -7,14 +7,14 @@
  */
 
 import { EVENT_ID_PATTERN } from '../contracts/event.js';
-import type { ScreenComponentManifestV1 } from '../contracts/manifest.js';
+import type { ScreenComponentManifest } from '../contracts/manifest.js';
 import {
   createValidationDiagnostic,
   type ScreenComponentValidationDiagnostic,
 } from '../contracts/diagnostic.js';
 
 export function validateEvents(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   diagnostics: ScreenComponentValidationDiagnostic[],
 ): boolean {
   const { events } = manifest;

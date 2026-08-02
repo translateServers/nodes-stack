@@ -2,7 +2,7 @@
  * propsSchema 校验（Spec §7.3）
  *
  * propsSchema 使用 JSON Schema 2020-12 的受限 object 子集。
- * V1 支持：type、properties、required、additionalProperties、enum、const、
+ * 支持：type、properties、required、additionalProperties、enum、const、
  * minimum、maximum、multipleOf、minLength、maxLength、pattern、items、
  * minItems、maxItems、title、description。
  *
@@ -15,7 +15,7 @@ import {
   PROPS_SCHEMA_ALLOWED_KEYWORDS,
   PROPS_SCHEMA_FORBIDDEN_KEYWORDS,
   PROPS_SCHEMA_ALLOWED_TYPES,
-  type ScreenComponentManifestV1,
+  type ScreenComponentManifest,
 } from '../contracts/manifest.js';
 import {
   createValidationDiagnostic,
@@ -73,7 +73,7 @@ function validateSchemaNode(
         createValidationDiagnostic(
           'INVALID_PROPS_SCHEMA',
           [...path, key],
-          `propsSchema 不支持关键字 "${key}"（仅允许 V1 受限子集）`,
+          `propsSchema 不支持关键字 "${key}"（仅允许受限子集）`,
         ),
       );
       valid = false;
@@ -266,7 +266,7 @@ function validateSchemaNode(
 /**
  * 简化的 JSON Schema 值校验。
  *
- * 只实现 V1 受限子集的校验逻辑，用于验证 defaultProps 是否符合 propsSchema。
+ * 实现受限子集的校验逻辑，用于验证 defaultProps 是否符合 propsSchema。
  * 不实现完整的 JSON Schema 规范。
  */
 export function validateValueAgainstSchema(
@@ -575,7 +575,7 @@ export function validateValueAgainstSchema(
  * 校验 manifest 的 propsSchema 和 defaultProps（Spec §7.3）。
  */
 export function validatePropsSchema(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   diagnostics: ScreenComponentValidationDiagnostic[],
 ): boolean {
   let valid = true;

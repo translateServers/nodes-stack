@@ -8,7 +8,7 @@
  * 4. 渲染 CustomElementRenderer 验证 preview 模式（直接传入 mode="preview"）
  *
  * 这是验证用 host，不是生产编辑器：design/preview/event harness 保持最小化，
- * 另有一个真实 V2 editor section 验证组件库拖入画布和 registry-aware store 路径。
+ * 另有一个真实 editor section 验证组件库拖入画布和 registry-aware store 路径。
  */
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -17,10 +17,10 @@ import {
   BlueprintEventProvider,
   ComponentRenderer,
   ScreenEditorStoreProvider,
-  ScreenHostAdapterWorkbenchV2,
+  ScreenHostAdapterWorkbench,
   createScreenEditorStore,
-  type ScreenHostAdapterV2,
-  type ScreenProjectEnvelopeInputV2,
+  type ScreenHostAdapter,
+  type ScreenProjectEnvelopeInput,
 } from '@nebula/screen-editor-core';
 import {
   CustomElementRenderer,
@@ -53,10 +53,10 @@ interface LabState {
   error: Error | null;
 }
 
-function createLabEnvelope(projectId: string): ScreenProjectEnvelopeInputV2 {
+function createLabEnvelope(projectId: string): ScreenProjectEnvelopeInput {
   return {
     id: projectId,
-    name: 'Component Lab V2',
+    name: 'Component Lab',
     description: null,
     status: 'draft',
     revision: 'lab-revision-1',
@@ -74,8 +74,7 @@ function createLabEnvelope(projectId: string): ScreenProjectEnvelopeInputV2 {
   };
 }
 
-const LAB_V2_ADAPTER: ScreenHostAdapterV2 = {
-  documentVersion: 2,
+const labAdapter: ScreenHostAdapter = {
   loadProject: ({ projectId }) => Promise.resolve(createLabEnvelope(projectId)),
   saveProject: ({ projectId, draft }) =>
     Promise.resolve({
@@ -199,10 +198,10 @@ export function ComponentLabHost({
           <h2>真实编辑器画布（组件库拖入）</h2>
           <div style={{ height: 720, minHeight: 640 }}>
             <ScreenEditorStoreProvider store={editorStore}>
-              <ScreenHostAdapterWorkbenchV2
-                adapter={LAB_V2_ADAPTER}
+              <ScreenHostAdapterWorkbench
+                adapter={labAdapter}
                 componentRegistry={state.registry}
-                projectId="component-lab-v2"
+                projectId="component-lab"
                 setTheme={() => undefined}
                 theme="light"
               />

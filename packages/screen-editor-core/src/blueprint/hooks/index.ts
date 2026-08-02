@@ -40,11 +40,6 @@ export type {
   UseBlueprintClipboardOptions,
   UseBlueprintClipboardResult,
 } from './use-blueprint-clipboard';
-export { useBlueprintClipboardV2 } from './use-blueprint-clipboard-v2';
-export type {
-  UseBlueprintClipboardV2Options,
-  UseBlueprintClipboardV2Result,
-} from './use-blueprint-clipboard-v2';
 export { useBlueprintDiagnostics } from './use-blueprint-diagnostics';
 export type {
   UseBlueprintDiagnosticsOptions,
@@ -54,7 +49,6 @@ export {
   BlueprintDiagnosticMapProvider,
   useBlueprintDiagnosticMap,
   buildDiagnosticMap,
-  buildV2DiagnosticMap,
 } from './blueprint-diagnostic-context';
 export type { BaseDiagnostic, DiagnosticMap } from './blueprint-diagnostic-context';
 export {

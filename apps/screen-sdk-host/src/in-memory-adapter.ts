@@ -1,5 +1,6 @@
 import {
   ScreenAdapterErrorCode,
+  ScreenDocumentWireSchema,
   type ExportProjectInput,
   type ImportProjectInput,
   type LoadProjectInput,
@@ -10,7 +11,7 @@ import {
   type ScreenHostAdapter,
   type ScreenProjectDraft,
   type ScreenProjectEnvelopeInput,
-  type ScreenProjectTransferV1,
+  type ScreenProjectTransfer,
   type ScreenSnapshotAdapter,
   type ScreenSnapshotSummary,
   type SnapshotClearInput,
@@ -120,15 +121,16 @@ export class InMemoryScreenHostAdapter implements ScreenHostAdapter {
     return cloneEnvelope(this.#requireProject(projectId));
   }
 
-  createTransfer(projectId: string): ScreenProjectTransferV1 {
+  createTransfer(projectId: string): ScreenProjectTransfer {
     const project = this.#requireProject(projectId);
+    const document = ScreenDocumentWireSchema.parse(project.document);
     return {
       format: 'nebula-screen',
-      formatVersion: 1,
+      formatVersion: 2,
       name: project.name,
       description: project.description,
-      document: structuredClone(project.document),
-    } as ScreenProjectTransferV1;
+      document,
+    };
   }
 
   forceConflict(operation: InMemoryMutationOperation, projectId: string): void {
@@ -195,7 +197,7 @@ export class InMemoryScreenHostAdapter implements ScreenHostAdapter {
     const transfer = this.createTransfer(input.projectId);
     return {
       fileName: createSafeFileName(project.name),
-      blob: new Blob([JSON.stringify(transfer, null, 2)], { type: 'application/json' }),
+      transfer,
     };
   }
 

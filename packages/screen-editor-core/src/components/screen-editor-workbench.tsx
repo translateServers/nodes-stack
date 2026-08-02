@@ -1,17 +1,12 @@
-import { EVENT_BLUEPRINT_VERSION_V2 } from '@nebula/shared';
 import {
-  downloadScreenExportFile,
-  dispatchScreenEditorRequestEvent,
-  parseScreenDocument,
-  parseScreenDocumentV2,
-  SCREEN_DOCUMENT_VERSION,
   ScreenSdkPortalRootProvider,
   Spinner,
-  toScreenPublicError,
   TooltipProvider,
-  type ScreenProjectDraft,
-  type ScreenProjectDraftV2,
 } from '@nebula/screen-editor-core/internal';
+import { toScreenPublicError } from '../contracts/adapter.js';
+import { parseScreenDocument, type ScreenProjectDraft } from '../contracts/document.js';
+import { dispatchScreenEditorRequestEvent } from '../events.js';
+import { downloadScreenExportFile } from '../host/browser-export.js';
 import {
   lazy,
   forwardRef,
@@ -28,7 +23,6 @@ import {
 import type { ScreenSnapshotHostAdapter } from '../adapters/screen-editor-host-adapter';
 import type { ScreenEditorRuntimeProfile } from '../runtime-profile.js';
 import { compileBlueprint } from '../blueprint/compiler';
-import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
 import type { BaseDiagnostic } from '../blueprint/hooks';
 import { useCanvasFlash } from '../hooks/use-canvas-flash';
 import { useEditorSession } from '../hooks/use-editor-session';
@@ -46,7 +40,7 @@ import type {
   ScreenHostControllerPortState,
 } from '../host/screen-host-controller-port';
 import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry';
-import { RegistryProvider } from '../registry/registry-context';
+import { RegistryProvider, useRegistry } from '../registry/registry-context';
 import {
   useScreenEditorDebugHandle,
   useScreenEditorStore,
@@ -81,9 +75,9 @@ import { ShortcutsHelpDialog } from './shortcuts-help-dialog';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
 import { TextEditorOverlay } from './text-editor-overlay';
 
-const LazyBlueprintSheetV2 = lazy(() =>
-  import('../blueprint/sheet/blueprint-sheet-v2').then((module) => ({
-    default: module.BlueprintSheetV2,
+const LazyBlueprintSheet = lazy(() =>
+  import('../blueprint/sheet/blueprint-sheet').then((module) => ({
+    default: module.BlueprintSheet,
   })),
 );
 
@@ -110,7 +104,6 @@ export interface ScreenEditorWorkbenchOperationController {
   isSaving?: boolean;
   navigate: (url: string, target: '_blank' | '_self') => void;
   preview: () => void;
-  previewMode?: 'v1' | 'v2';
   projectId: string;
   publish?: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
   reload?: () => Promise<boolean>;
@@ -202,7 +195,6 @@ export const ScreenEditorWorkbench = forwardRef<
           <ScreenEditorNotificationProvider>
             <div ref={eventTargetRef} className="h-full min-h-0 w-full">
               <ScreenEditorWorkbenchContent
-                componentRegistry={componentRegistry}
                 eventTarget={eventTargetRef}
                 imperativeRef={ref}
                 operations={operations}
@@ -217,7 +209,6 @@ export const ScreenEditorWorkbench = forwardRef<
 });
 
 interface ScreenEditorWorkbenchContentProps {
-  componentRegistry?: ScreenComponentInstanceRegistry;
   eventTarget: RefObject<HTMLDivElement | null>;
   imperativeRef: Ref<ScreenEditorWorkbenchHandle>;
   operations: ScreenEditorWorkbenchOperationController;
@@ -225,12 +216,12 @@ interface ScreenEditorWorkbenchContentProps {
 }
 
 function ScreenEditorWorkbenchContent({
-  componentRegistry,
   eventTarget,
   imperativeRef,
   operations,
   project,
 }: ScreenEditorWorkbenchContentProps) {
+  const registry = useRegistry();
   const store = useScreenEditorStoreApi();
   const debugHandle = useScreenEditorDebugHandle();
   const { notify } = useScreenEditorNotifications();
@@ -443,10 +434,7 @@ function ScreenEditorWorkbenchContent({
     const blueprint = currentProject.blueprint;
     if (blueprint !== undefined) {
       const componentIds = new Set(currentProject.components.map((component) => component.id));
-      const diagnostics =
-        blueprint.version === EVENT_BLUEPRINT_VERSION_V2
-          ? compileBlueprintV2(blueprint, { componentIds }).diagnostics
-          : compileBlueprint(blueprint, { componentIds }).diagnostics;
+      const diagnostics = compileBlueprint(blueprint, { componentIds }).diagnostics;
       const errors = diagnostics.filter((diagnostic) => diagnostic.level === 'error');
       if (errors.length > 0) {
         setPublishDiagnostics(errors);
@@ -485,52 +473,16 @@ function ScreenEditorWorkbenchContent({
     }
     const currentProject = store.getState().project;
     if (currentProject === null) return;
-    if (operations.previewMode === 'v2') {
-      if (componentRegistry === undefined) {
-        notify('error', 'V2 预览需要组件注册表');
-        return;
-      }
-      const documentResult = parseScreenDocumentV2(
-        {
-          schemaVersion: 2,
-          canvas: currentProject.canvas,
-          components: currentProject.components,
-          ...(currentProject.blueprint === undefined
-            ? {}
-            : { blueprint: currentProject.blueprint }),
-          globalVariables: currentProject.globalVariables ?? [],
-        },
-        componentRegistry,
-      );
-      if (!documentResult.success) {
-        notify('error', '项目包含当前 SDK 不支持的功能');
-        return;
-      }
-      const draft: ScreenProjectDraftV2 = {
-        name: currentProject.name,
-        description: currentProject.description,
-        document: documentResult.data,
-      };
-      eventTarget.current?.dispatchEvent(
-        new CustomEvent('nebula-preview-request', {
-          bubbles: true,
-          composed: true,
-          detail: {
-            projectId: operations.projectId,
-            revision: currentProject.updatedAt,
-            draft,
-          },
-        }),
-      );
-      return;
-    }
-    const documentResult = parseScreenDocument({
-      schemaVersion: SCREEN_DOCUMENT_VERSION,
-      canvas: currentProject.canvas,
-      components: currentProject.components,
-      blueprint: currentProject.blueprint,
-      globalVariables: currentProject.globalVariables,
-    });
+    const documentResult = parseScreenDocument(
+      {
+        schemaVersion: 2,
+        canvas: currentProject.canvas,
+        components: currentProject.components,
+        ...(currentProject.blueprint === undefined ? {} : { blueprint: currentProject.blueprint }),
+        globalVariables: currentProject.globalVariables ?? [],
+      },
+      registry,
+    );
     if (!documentResult.success) {
       notify('error', '项目包含当前 SDK 不支持的功能');
       return;
@@ -548,7 +500,7 @@ function ScreenEditorWorkbenchContent({
         draft,
       });
     }
-  }, [capabilityProfile, componentRegistry, eventTarget, notify, operations, store]);
+  }, [capabilityProfile, eventTarget, notify, operations, registry, store]);
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
   const textEditing = editorSession.textEditing;
@@ -798,7 +750,7 @@ function ScreenEditorWorkbenchContent({
             </div>
           }
         >
-          <LazyBlueprintSheetV2
+          <LazyBlueprintSheet
             open
             onOpenChange={(next) => {
               setShowEventBlueprint(next);

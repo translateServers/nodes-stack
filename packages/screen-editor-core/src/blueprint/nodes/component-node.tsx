@@ -1,9 +1,9 @@
 /**
- * V2 组件节点
+ * Component blueprint node.
  *
- * 配色：emerald（绿色）—— V2 主色，体现"组件即节点"理念
+ * 配色：emerald（绿色），体现"组件即节点"理念
  *
- * 引脚约定（V2 动态锚点）：
+ * 动态锚点约定：
  * - source 锚点（左侧）：每个事件一个 Handle，id=`evt:{eventId}`
  * - target 锚点（右侧）：每个动作一个 Handle，id=`act:{actionId}`
  * - 锚点列表从组件注册表派生（getComponentEvents / getComponentActions）
@@ -23,7 +23,7 @@ import type { Node, NodeProps } from '@xyflow/react';
 import { Component } from 'lucide-react';
 import { BaseNodeShell, type AnchorDescriptor } from './base-node';
 import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
-import type { ComponentNodeData } from './v2-node-data-types';
+import type { ComponentNodeData } from './node-data-types';
 // Spec §13.2 Phase 1, Task 1.5：从实例注册表派生 events/actions，
 // registry 为 null（测试或无 Provider）时回退到模块级 getComponentEvents/getComponentActions。
 import {
@@ -42,7 +42,7 @@ export type ComponentNode = Node<ComponentNodeData, 'component'>;
  * - componentType 缺省时回退到空锚点列表
  * - registry 非空时从实例注册表派生，registry 为 null 时回退到模块级 legacy 函数
  * - staticOnly=true 时仅保留 click/hover 事件与 show/hide/toggleVisibility 动作
- *   （V1 静态预览模式裁剪，与改造前 deriveAnchors 行为一致）
+ *   （静态预览模式裁剪）
  */
 function deriveAnchors(
   componentType: string | undefined,

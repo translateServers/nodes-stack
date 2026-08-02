@@ -1,5 +1,5 @@
 /**
- * 模板蓝图校验与构建（任务 9.3 / 任务 6.1 V2 重写）
+ * 模板蓝图校验与构建。
  *
  * 单一入口：构造模板蓝图 + 经共享 Schema 校验。
  *
@@ -8,18 +8,18 @@
  * - failure：不调用 updateBlueprint → 不入栈
  *
  * 设计理由：将"构造 + 校验"组合为原子操作，避免调用方分别调用 createTemplateBlueprint
- * 与 EventBlueprintV2Schema.safeParse 后还要处理中间状态。Result 类型让"校验失败不入栈"
+ * 与 schema 校验后还要处理中间状态。Result 类型让"校验失败不入栈"
  * 在类型层面就清晰可表达。
  */
 
-import { EventBlueprintV2Schema, type EventBlueprintV2 } from '@nebula/shared';
+import { EventBlueprintSchema, type EventBlueprint } from '@nebula/shared';
 import { createTemplateBlueprint } from './create-template-blueprint';
 import type { BlueprintTemplateId } from './template-definitions';
 
 /** 模板构建成功结果 */
 export interface TemplateBuildSuccess {
   readonly success: true;
-  readonly blueprint: EventBlueprintV2;
+  readonly blueprint: EventBlueprint;
 }
 
 /** 模板构建失败结果 */
@@ -46,7 +46,7 @@ export type TemplateBuildResult = TemplateBuildSuccess | TemplateBuildFailure;
  */
 export function buildValidatedTemplate(templateId: BlueprintTemplateId): TemplateBuildResult {
   // 1. 构造模板蓝图（可能抛出未知 templateId 异常）
-  let blueprint: EventBlueprintV2;
+  let blueprint: EventBlueprint;
   try {
     blueprint = createTemplateBlueprint(templateId);
   } catch (e) {
@@ -56,8 +56,8 @@ export function buildValidatedTemplate(templateId: BlueprintTemplateId): Templat
     };
   }
 
-  // 2. Schema 校验（V2 共享契约，与后端持久化一致）
-  const result = EventBlueprintV2Schema.safeParse(blueprint);
+  // 2. Schema 校验（与后端持久化一致）
+  const result = EventBlueprintSchema.safeParse(blueprint);
   if (!result.success) {
     // 将 ZodError 的 issues 拼接为人类可读字符串
     const issues = result.error.issues
@@ -69,7 +69,7 @@ export function buildValidatedTemplate(templateId: BlueprintTemplateId): Templat
     };
   }
 
-  // 3. 校验通过：返回类型收窄后的蓝图（result.data 已是 EventBlueprintV2）
+  // 3. 校验通过：返回类型收窄后的蓝图
   return {
     success: true,
     blueprint: result.data,

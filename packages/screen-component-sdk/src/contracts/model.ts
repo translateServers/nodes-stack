@@ -7,7 +7,7 @@
 
 import type { ScreenComponentProps, ScreenComponentJsonValue } from './json.js';
 
-export interface ScreenComponentElementModelV1 {
+export interface ScreenComponentElementModel {
   readonly apiVersion: 1;
   readonly componentId: string;
   readonly mode: 'design' | 'preview';
@@ -24,5 +24,5 @@ export interface ScreenComponentElementModelV1 {
  * 组件实现此接口以接收渲染数据。
  */
 export interface ScreenComponentElement extends HTMLElement {
-  model: ScreenComponentElementModelV1;
+  model: ScreenComponentElementModel;
 }

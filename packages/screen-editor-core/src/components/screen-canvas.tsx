@@ -218,7 +218,7 @@ interface CanvasComponentWrapperProps {
    */
   onComponentClick?: (componentId: string) => void;
   /**
-   * V2 任务 7.2：组件事件回调（仅 interactionMode='interactive' 时传入）。
+   * 组件事件回调（仅 interactionMode='interactive' 时传入）。
    * - undefined：不派发蓝图事件（设计模式）
    * - 函数：在 onMouseEnter 时派发 hover 事件（其他事件由组件内部通过
    *   useComponentEvent 自行触发，如 dataLoaded/dataError）
@@ -278,7 +278,7 @@ const CanvasComponentWrapper = memo(function CanvasComponentWrapper({
       onMouseEnter={
         onComponentEvent
           ? () => {
-              // V2 任务 7.2：派发 hover 事件（V2 蓝图匹配 evt:hover 锚点）
+              // 派发 hover 事件（蓝图匹配 evt:hover 锚点）
               onComponentEvent(component.id, 'hover');
             }
           : undefined

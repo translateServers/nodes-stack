@@ -22,7 +22,7 @@ import type {
   ComponentStyle,
 } from '@nebula/shared';
 import type {
-  ScreenComponentManifestV1,
+  ScreenComponentManifest,
   ScreenComponentValidationCode,
 } from '@nebula/screen-component-sdk';
 import type { LucideIcon } from 'lucide-react';
@@ -95,7 +95,7 @@ export interface ScreenComponentRegistrationLegacy {
  */
 interface ScreenComponentRegistrationBase extends ScreenComponentRegistrationLegacy {
   /** 组件 manifest（Spec §7.2，注册表的权威数据源） */
-  readonly manifest: Readonly<ScreenComponentManifestV1>;
+  readonly manifest: Readonly<ScreenComponentManifest>;
 }
 
 /**
@@ -224,8 +224,8 @@ class InstanceRegistryImpl implements ScreenComponentInstanceRegistry {
 }
 
 function cloneAndFreezeManifest(
-  manifest: ScreenComponentManifestV1,
-): Readonly<ScreenComponentManifestV1> {
+  manifest: ScreenComponentManifest,
+): Readonly<ScreenComponentManifest> {
   const clone = structuredClone(manifest);
   const seen = new WeakSet<object>();
 

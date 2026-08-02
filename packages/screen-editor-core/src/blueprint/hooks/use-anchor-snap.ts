@@ -1,17 +1,17 @@
 /**
- * V2 任务 5.3：锚点磁吸 Hook
+ * Anchor-snap hook.
  *
  * 在连线拖拽过程中，检测鼠标 20px 范围内最近的兼容目标锚点：
  * - `onConnectStart` 记录源节点 ID + 源 handle
  * - `onMouseMove`（容器级别）查询 DOM 中所有 `.react-flow__handle`，
- *   按 V2 引脚兼容性规则过滤，找到 20px 内最近的目标锚点
+ *   Filter by connection compatibility and find the closest target within 20px
  * - 命中时给目标 handle DOM 添加 `blueprint-anchor-snap-target` 高亮类
  * - `onConnectEnd` 时若有命中目标，绕过搜索面板直接建立连线
  *
  * 设计要点：
  * - 纯函数式状态机：snapState 驱动 UI 高亮，副作用集中在 DOM class 切换
  * - DOM 查询走 `document.querySelectorAll`，避免对 React Flow 内部状态依赖
- * - 兼容性判定复用 `isConnectionValidV2`，与 isValidConnection 行为一致
+ * - Connection validation shares `isConnectionValid` with the editor
  * - 高亮 class 由 CSS 定义（ring-2 ring-blue-400），不在 hook 内联样式
  * - 卸载时自动清理高亮 class，防止残留
  */
@@ -19,13 +19,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Edge, Node, OnConnectEnd, OnConnectStart } from '@xyflow/react';
 import {
-  isConnectionValidV2,
+  isConnectionValid,
   isInputHandle,
-  type V2ConnectionCandidate,
-  type V2Edge,
-  type V2NodeIndex,
-  type V2NodeIndexEntry,
-} from '../lib/pin-compatibility-v2';
+  type BlueprintGraphEdge,
+  type BlueprintNodeIndex,
+  type BlueprintNodeIndexEntry,
+  type ConnectionCandidate,
+} from '../lib/pin-compatibility';
 
 /** 磁吸阈值（像素） */
 export const SNAP_THRESHOLD_PX = 20;
@@ -55,7 +55,7 @@ export interface UseAnchorSnapOptions {
    * 磁吸命中时建立连线的回调。
    * 调用方在此处执行 setEdges(addEdge(...))，与 onConnect 路径一致。
    */
-  onSnapConnect: (conn: V2ConnectionCandidate) => void;
+  onSnapConnect: (conn: ConnectionCandidate) => void;
   /**
    * DOM 查询根节点：限定磁吸 handle 查询范围，避免多实例互相干扰。
    * 返回 null 时回退到 document（保留向后兼容行为）。
@@ -78,32 +78,29 @@ export interface UseAnchorSnapResult {
 }
 
 /**
- * 从 RF nodes/edges 构建 V2 节点索引 + 已有边（用于兼容性判定）。
- *
- * 复用 blueprint-sheet-v2.tsx 的 buildV2ConnectionContext 逻辑（保持单一数据源），
- * 但在本 hook 内独立实现以避免循环依赖。
+ * Build a node index and current edges from React Flow state.
  */
 function buildSnapContext(
   rfNodes: Node[],
   rfEdges: Edge[],
-): { nodeIndex: V2NodeIndex; existingEdges: V2Edge[] } {
-  const mutableIndex = new Map<string, V2NodeIndexEntry>();
+): { nodeIndex: BlueprintNodeIndex; existingEdges: BlueprintGraphEdge[] } {
+  const mutableIndex = new Map<string, BlueprintNodeIndexEntry>();
   for (const rfNode of rfNodes) {
     const data = rfNode.data as {
       componentId?: string;
       globalType?: 'pageLoad' | 'navigate' | 'requestApi' | 'scrollTo' | 'interval';
     };
     const rfType = rfNode.type ?? 'component';
-    const kind: V2NodeIndexEntry['kind'] =
-      rfType === 'global' ? 'component' : (rfType as V2NodeIndexEntry['kind']);
-    const entry: V2NodeIndexEntry = { id: rfNode.id, kind };
+    const kind: BlueprintNodeIndexEntry['kind'] =
+      rfType === 'global' ? 'component' : (rfType as BlueprintNodeIndexEntry['kind']);
+    const entry: BlueprintNodeIndexEntry = { id: rfNode.id, kind };
     if (kind === 'component') {
       entry.componentId = data.componentId;
       entry.globalType = data.globalType;
     }
     mutableIndex.set(rfNode.id, entry);
   }
-  const existingEdges: V2Edge[] = rfEdges.map((e) => ({
+  const existingEdges: BlueprintGraphEdge[] = rfEdges.map((e) => ({
     id: e.id,
     source: e.source,
     sourceHandle: e.sourceHandle ?? 'out',
@@ -121,7 +118,7 @@ function buildSnapContext(
  * - 跳过无 data-nodeid / data-handleid 的元素
  * - 跳过 handleId 不是输入锚点的元素（act:* / in）
  * - 跳过源节点自身（避免逻辑节点自环；组件节点自环虽合法但磁吸不感知，由用户手动连线）
- * - 用 isConnectionValidV2 做完整兼容性校验（含重复边检测）
+ * - Use isConnectionValid for complete validation, including duplicate edges
  * - 计算鼠标到 handle 中心点的欧氏距离，返回 20px 内最近者
  *
  * root 默认为 document，多实例场景应传入实例容器 ref 以限定查询范围。
@@ -130,8 +127,8 @@ function findNearestCompatibleHandle(
   event: MouseEvent,
   sourceNodeId: string,
   sourceHandle: string,
-  nodeIndex: V2NodeIndex,
-  existingEdges: readonly V2Edge[],
+  nodeIndex: BlueprintNodeIndex,
+  existingEdges: readonly BlueprintGraphEdge[],
   root: ParentNode = document,
 ): { nodeId: string; handleId: string } | null {
   const handles = root.querySelectorAll<HTMLElement>('.react-flow__handle');
@@ -144,13 +141,13 @@ function findNearestCompatibleHandle(
     if (nodeId === sourceNodeId) continue;
     if (!isInputHandle(handleId)) continue;
 
-    const candidate: V2ConnectionCandidate = {
+    const candidate: ConnectionCandidate = {
       source: sourceNodeId,
       sourceHandle,
       target: nodeId,
       targetHandle: handleId,
     };
-    if (!isConnectionValidV2(candidate, nodeIndex, existingEdges).valid) continue;
+    if (!isConnectionValid(candidate, nodeIndex, existingEdges).valid) continue;
 
     const rect = handle.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;

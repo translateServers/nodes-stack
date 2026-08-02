@@ -5,7 +5,7 @@
  * 输出稳定 diagnostics，不定义 Custom Element。
  */
 
-import type { ScreenComponentManifestV1 } from '../contracts/manifest.js';
+import type { ScreenComponentManifest } from '../contracts/manifest.js';
 import {
   type ScreenComponentValidationResult,
   type ScreenComponentValidationDiagnostic,
@@ -25,7 +25,7 @@ import { validateEvents } from './events.js';
  * 任一字段非法时返回 ok=false 和对应 diagnostics。
  */
 export function validateManifest(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
 ): ScreenComponentValidationResult {
   const diagnostics: ScreenComponentValidationDiagnostic[] = [];
 

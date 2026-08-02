@@ -108,7 +108,7 @@ function createFixtureProject(
     status: 'draft',
     revision: `seed:${id}`,
     document: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       canvas: {
         width: 1320,
         height: 680,

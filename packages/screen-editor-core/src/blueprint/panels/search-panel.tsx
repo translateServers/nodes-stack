@@ -1,285 +1,217 @@
-/**
- * 搜索节点面板（任务 4.4）
- *
- * 在两种场景下呼出：
- * 1. 双击空白处：插入独立节点（onInsert 只传节点类型）
- * 2. 连线松手落空白：插入节点 + 自动完成连线（onInsert 传节点类型 + pendingConnection）
- *
- * 交互：
- * - 模糊搜索：按节点类型名/描述过滤
- * - 键盘：ArrowDown/ArrowUp 选择、Enter 插入、Esc 关闭
- * - 鼠标：点击列表项插入
- *
- * 列表项不区分场景，由调用方根据 pendingConnection 是否存在决定后续动作。
- */
-
 import type {
-  KeyboardEvent as ReactKeyboardEvent,
   JSX,
+  KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Crosshair,
-  Eye,
-  FileText,
-  GitBranch,
-  MessageSquare,
-  MousePointerClick,
-  Navigation,
-  RefreshCw,
-} from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { CornerDownLeft, FileQuestion, Search, X } from 'lucide-react';
 
-/** 可插入的节点类型选项 */
-export interface NodeOption {
-  /** 唯一标识（用于去重与键控） */
-  id: string;
-  /** 节点 kind（与 schema 对齐） */
-  kind: 'trigger' | 'action' | 'comment' | 'condition';
-  /** 节点类型子标识（trigger.type / action.type） */
-  subtype: string;
-  /** 显示名称 */
-  label: string;
-  /** 描述（用于模糊匹配与提示） */
-  description: string;
-  /** 图标 */
-  icon: JSX.Element;
+import {
+  NODE_OPTIONS,
+  isConnectableTarget,
+  type NodeOption,
+  type NodeOptionGroup,
+  type PendingConnection,
+  type SearchPanelMode,
+} from './node-options.js';
+
+export interface SearchPanelProps {
+  readonly position: { readonly x: number; readonly y: number };
+  readonly mode: SearchPanelMode;
+  readonly pendingConnection?: PendingConnection;
+  readonly options?: readonly NodeOption[];
+  readonly onInsert: (option: NodeOption) => void;
+  readonly onClose: () => void;
 }
 
-/** 全部可插入节点选项（M1 + 10.2） */
-export const NODE_OPTIONS: readonly NodeOption[] = [
+interface GroupMeta {
+  readonly group: NodeOptionGroup;
+  readonly label: string;
+  readonly accentClass: string;
+  readonly dotClass: string;
+}
+
+const groupMeta: readonly GroupMeta[] = [
   {
-    id: 'trigger.componentClick',
-    kind: 'trigger',
-    subtype: 'componentClick',
-    label: '组件点击触发',
-    description: '当用户点击指定组件时触发执行',
-    icon: <MousePointerClick className="size-4" />,
+    group: 'canvas-component',
+    label: '画布组件',
+    accentClass: 'text-primary',
+    dotClass: 'bg-primary',
   },
   {
-    id: 'trigger.pageLoad',
-    kind: 'trigger',
-    subtype: 'pageLoad',
-    label: '页面加载触发',
-    description: '当页面加载完成时触发执行',
-    icon: <FileText className="size-4" />,
+    group: 'global',
+    label: '全局节点',
+    accentClass: 'text-amber-600 dark:text-amber-400',
+    dotClass: 'bg-amber-500',
   },
   {
-    id: 'action.setVisibility',
-    kind: 'action',
-    subtype: 'setVisibility',
-    label: '设置可见性',
-    description: '显示/隐藏/切换目标组件的可见状态',
-    icon: <Eye className="size-4" />,
-  },
-  {
-    id: 'action.navigate',
-    kind: 'action',
-    subtype: 'navigate',
-    label: '导航跳转',
-    description: '跳转到指定 URL（仅 http/https）',
-    icon: <Navigation className="size-4" />,
-  },
-  {
-    id: 'action.scrollToComponent',
-    kind: 'action',
-    subtype: 'scrollToComponent',
-    label: '滚动定位',
-    description: '滚动到指定组件位置',
-    icon: <Crosshair className="size-4" />,
-  },
-  {
-    id: 'action.refreshDataSource',
-    kind: 'action',
-    subtype: 'refreshDataSource',
-    label: '刷新数据源',
-    description: '重新拉取并更新目标组件的数据',
-    icon: <RefreshCw className="size-4" />,
-  },
-  {
-    id: 'condition',
-    kind: 'condition',
-    subtype: 'condition',
-    label: '条件分支',
-    description: '根据条件表达式选择 then / else 分支执行',
-    icon: <GitBranch className="size-4" />,
-  },
-  {
-    id: 'comment',
-    kind: 'comment',
-    subtype: 'comment',
-    label: '注释',
-    description: '注释节点，不参与执行流',
-    icon: <MessageSquare className="size-4" />,
+    group: 'logic',
+    label: '逻辑节点',
+    accentClass: 'text-sky-600 dark:text-sky-400',
+    dotClass: 'bg-sky-500',
   },
 ];
 
-/** 待完成连线的源信息（连线松手场景） */
-export interface PendingConnection {
-  sourceNodeId: string;
-  sourceHandle: 'out' | 'then' | 'else';
-}
+const modeLabels: Record<SearchPanelMode, string> = {
+  create: '创建节点',
+  connect: '连接到新节点',
+};
 
-/** 面板呼出场景 */
-export type SearchPanelMode = 'create' | 'connect';
-
-interface SearchPanelProps {
-  /** 面板位置（屏幕坐标） */
-  position: { x: number; y: number };
-  /** 呼出场景：create=双击空白创建独立节点；connect=连线松手后自动完成连线 */
-  mode: SearchPanelMode;
-  /** 连线松手场景下的待完成连线（mode=connect 时有值） */
-  pendingConnection?: PendingConnection;
-  /**
-   * 可选的节点选项列表（默认 NODE_OPTIONS）。
-   * connect 模式下调用方可过滤为仅含输入引脚的节点（action/condition），
-   * 避免用户选中无法连线的目标类型。
-   */
-  options?: readonly NodeOption[];
-  /** 选择节点回调 */
-  onInsert: (option: NodeOption) => void;
-  /** 关闭回调（Esc 或点击外部） */
-  onClose: () => void;
-}
-
-/**
- * 模糊搜索过滤函数。
- *
- * 匹配规则：query 拆分为多个 token，每个 token 必须在 label 或 description 中命中（忽略大小写）。
- */
 export function filterOptions(options: readonly NodeOption[], query: string): NodeOption[] {
   const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) {
-    return [...options];
-  }
-  return options.filter((option) => {
-    const haystack = `${option.label} ${option.description}`.toLowerCase();
-    return tokens.every((token) => haystack.includes(token));
-  });
+  return tokens.length === 0
+    ? [...options]
+    : options.filter((option) => {
+        const haystack = `${option.label} ${option.description}`.toLowerCase();
+        return tokens.every((token) => haystack.includes(token));
+      });
 }
 
-/** 搜索节点面板组件 */
 export function SearchPanel({
   position,
   mode,
   pendingConnection,
-  options = NODE_OPTIONS,
+  options,
   onInsert,
   onClose,
 }: SearchPanelProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const fieldId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const activeItemRef = useRef<HTMLLIElement>(null);
+  const effectiveOptions = useMemo(() => {
+    const source = options ?? NODE_OPTIONS;
+    return mode === 'connect' ? source.filter(isConnectableTarget) : source;
+  }, [mode, options]);
+  const filtered = useMemo(() => filterOptions(effectiveOptions, query), [effectiveOptions, query]);
+  const groups = useMemo(
+    () =>
+      groupMeta.flatMap((meta) => {
+        const items = filtered.flatMap((option, index) =>
+          option.group === meta.group ? [{ option, index }] : [],
+        );
+        return items.length === 0 ? [] : [{ ...meta, items }];
+      }),
+    [filtered],
+  );
 
-  // mount 时自动聚焦输入框
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => setActiveIndex(0), [query]);
+  useEffect(() => activeItemRef.current?.scrollIntoView({ block: 'nearest' }), [activeIndex]);
 
-  // query 变化时重置 activeIndex
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [query]);
-
-  const filtered = useMemo(() => filterOptions(options, query), [options, query]);
-
-  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
-    switch (event.key) {
-      case 'ArrowDown': {
-        event.preventDefault();
-        setActiveIndex((prev) => (prev + 1) % Math.max(filtered.length, 1));
-        break;
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      const option = filtered[activeIndex];
+      if (option !== undefined) {
+        onInsert(option);
       }
-      case 'ArrowUp': {
-        event.preventDefault();
-        setActiveIndex((prev) => (prev - 1 < 0 ? Math.max(filtered.length - 1, 0) : prev - 1));
-        break;
-      }
-      case 'Enter': {
-        event.preventDefault();
-        const option = filtered[activeIndex];
-        if (option) {
-          onInsert(option);
-        }
-        break;
-      }
-      case 'Escape': {
-        event.preventDefault();
-        onClose();
-        break;
-      }
-      default:
-        break;
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((index) => (index + 1) % Math.max(filtered.length, 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((index) => (index <= 0 ? Math.max(filtered.length - 1, 0) : index - 1));
     }
-  }
-
-  function handleOptionClick(option: NodeOption): void {
-    onInsert(option);
-  }
-
-  // 阻止面板内的指针事件冒泡（避免触发画布的空白点击关闭）
-  function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
+  };
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void =>
     event.stopPropagation();
-  }
-
-  const scenarioLabel =
-    mode === 'connect' ? (pendingConnection ? `从源节点连接到新节点` : '创建新节点') : '创建新节点';
 
   return (
     <div
-      className="fixed z-50 w-72 rounded-md border border-border bg-popover p-2 shadow-lg"
+      className="fixed z-50 flex w-80 flex-col overflow-hidden rounded-lg border border-border bg-popover shadow-md"
       style={{ left: position.x, top: position.y }}
-      data-testid="search-panel"
-      data-mode={mode}
+      data-testid="blueprint-search-panel"
       onKeyDown={handleKeyDown}
       onPointerDown={handlePointerDown}
     >
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{scenarioLabel}</span>
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+        <span className="text-xs font-medium text-muted-foreground">{modeLabels[mode]}</span>
         <button
           type="button"
-          className="text-xs text-muted-foreground hover:text-foreground"
+          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="关闭面板"
           onClick={onClose}
-          aria-label="关闭"
-          data-testid="search-panel-close"
+          data-testid="blueprint-search-panel-close"
         >
-          ×
+          <X className="size-4" />
         </button>
       </div>
-      <input
-        ref={inputRef}
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="搜索节点类型..."
-        className="mb-2 w-full rounded border border-border bg-background px-2 py-1 text-sm outline-none focus:border-blue-500"
-        data-testid="search-panel-input"
-      />
-      <ul ref={listRef} className="max-h-60 overflow-y-auto" data-testid="search-panel-list">
+      <div className="relative px-3 py-2">
+        <Search className="pointer-events-none absolute left-5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          id={fieldId}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="搜索节点"
+          aria-label="搜索节点"
+          data-testid="blueprint-search-panel-input"
+          className="w-full rounded-md border border-input bg-background py-1.5 pl-9 pr-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </div>
+      {mode === 'connect' && pendingConnection !== undefined && query === '' ? (
+        <p className="mx-3 mb-2 rounded-md bg-amber-500/5 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+          选择目标节点后将自动完成连线
+        </p>
+      ) : null}
+      <ul
+        className="max-h-80 overflow-y-auto px-1.5 pb-1.5"
+        role="listbox"
+        data-testid="blueprint-search-panel-list"
+      >
         {filtered.length === 0 ? (
-          <li className="px-2 py-3 text-center text-xs text-muted-foreground">无匹配项</li>
+          <li className="flex flex-col items-center gap-2 px-2 py-6 text-center text-sm text-muted-foreground">
+            <FileQuestion className="size-6" />
+            无匹配节点
+          </li>
         ) : (
-          filtered.map((option, index) => (
-            <li
-              key={option.id}
-              className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm ${
-                index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
-              }`}
-              onClick={() => handleOptionClick(option)}
-              data-testid="search-panel-item"
-              data-option-id={option.id}
-              data-active={index === activeIndex}
-            >
-              <span className="text-muted-foreground">{option.icon}</span>
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate font-medium">{option.label}</span>
-                <span className="truncate text-xs text-muted-foreground">{option.description}</span>
+          groups.map((group) => (
+            <li key={group.group} className="mb-1.5 last:mb-0">
+              <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                <span className={`size-1.5 rounded-full ${group.dotClass}`} />
+                <span className={group.accentClass}>{group.label}</span>
               </div>
+              <ul>
+                {group.items.map(({ option, index }) => {
+                  const active = index === activeIndex;
+                  return (
+                    <li
+                      key={option.id}
+                      ref={active ? activeItemRef : undefined}
+                      role="option"
+                      aria-selected={active}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-md border-l-2 px-2 py-1.5 text-sm ${
+                        active
+                          ? 'border-l-primary bg-accent'
+                          : 'border-l-transparent hover:bg-accent/50'
+                      }`}
+                      onClick={() => onInsert(option)}
+                      data-testid="blueprint-search-panel-item"
+                      data-option-id={option.id}
+                    >
+                      <span className={group.accentClass}>{option.icon}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{option.label}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             </li>
           ))
         )}
       </ul>
+      <div className="flex items-center justify-end gap-1.5 border-t border-border/60 px-3 py-1.5 text-[10px] text-muted-foreground">
+        <CornerDownLeft className="size-3" /> Enter 插入
+      </div>
     </div>
   );
 }

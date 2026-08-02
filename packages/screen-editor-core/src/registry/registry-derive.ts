@@ -171,10 +171,9 @@ export function getIconFromRegistry(
  * - registry 非空但 type 未注册：返回 `[...DEFAULT_EVENTS]`（click + hover）
  * - registry 为 null：回退到模块级 `getComponentEvents(type)`
  *
- * V1 行为约束：调用方 `component-node.tsx` 在 `staticOnly=true` 路径固定使用
- * click/hover 白名单（Phase 7 之前 built-in 不变）。V2 路径（staticOnly=false）
- * 直接消费此函数返回的全部事件，host 组件的 manifest 自定义事件（如 valueClick）
- * 通过 V2 编译为 `evt:valueClick` 锚点（Spec §9.2.1）。
+ * staticOnly=true 时调用方固定使用 click/hover 白名单。其余路径直接消费此函数
+ * 返回的全部事件，host 组件的 manifest 自定义事件（如 valueClick）编译为
+ * `evt:valueClick` 锚点（Spec §9.2.1）。
  *
  * 返回 mutable 数组（非 readonly）以保持与 legacy `getComponentEvents` 签名一致。
  */

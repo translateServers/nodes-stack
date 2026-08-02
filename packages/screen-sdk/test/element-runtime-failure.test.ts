@@ -58,7 +58,7 @@ describe('NebulaScreenEditorElement runtime loading failure', () => {
     expect(errorEvent.detail.operation).toBe('load');
     expect(errorEvent.detail.error).toEqual({
       code: 'UNKNOWN',
-      message: '操作失败，请稍后重试。',
+      message: 'The operation failed. Try again later.',
       recoverable: true,
     });
 

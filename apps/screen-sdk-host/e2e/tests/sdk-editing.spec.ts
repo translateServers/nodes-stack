@@ -27,8 +27,8 @@ async function insertBlueprintNode(
   optionId: string,
   position: { x: number; y: number },
 ): Promise<void> {
-  await sheet.getByTestId('blueprint-v2-canvas').dblclick({ position });
-  const searchPanel = sheet.getByTestId('v2-search-panel');
+  await sheet.getByTestId('blueprint-canvas').dblclick({ position });
+  const searchPanel = sheet.getByTestId('blueprint-search-panel');
   await expect(searchPanel).toBeVisible();
   await searchPanel.locator(`[data-option-id="${optionId}"]`).click();
 }
@@ -63,7 +63,7 @@ test.describe('SDK editing workflows', () => {
     }
   });
 
-  test('@release edits V2 condition, delay, and comment nodes with static actions', async ({
+  test('@release edits condition, delay, and comment nodes with static actions', async ({
     page,
   }) => {
     await page.goto('/?scenario=single');
@@ -71,9 +71,9 @@ test.describe('SDK editing workflows', () => {
 
     await editor.getByRole('button', { name: '工具' }).click();
     await editor.getByRole('menuitem', { name: /^事件蓝图/ }).click();
-    const sheet = editor.getByRole('dialog', { name: '事件蓝图 V2' });
+    const sheet = editor.getByRole('dialog', { name: '事件蓝图' });
     await expect(sheet).toBeVisible();
-    await sheet.getByTestId('blueprint-v2-start-from-scratch').click();
+    await sheet.getByTestId('blueprint-start-from-scratch').click();
 
     await insertBlueprintNode(sheet, 'condition', { x: 220, y: 180 });
     await sheet.getByTestId('condition-component-id').selectOption('project-a-button');
@@ -84,25 +84,25 @@ test.describe('SDK editing workflows', () => {
     ).toHaveCount(1);
 
     await insertBlueprintNode(sheet, 'delay', { x: 500, y: 250 });
-    await sheet.getByTestId('v2-config-delay-ms').fill('750');
+    await sheet.getByTestId('config-delay-ms').fill('750');
     await expect(
       sheet.locator('[data-testid="blueprint-node"][data-node-kind="delay"]'),
     ).toContainText('750ms');
 
     await insertBlueprintNode(sheet, 'comment', { x: 760, y: 180 });
-    await sheet.getByTestId('v2-config-comment-text').fill('发布前人工确认');
+    await sheet.getByTestId('config-comment-text').fill('发布前人工确认');
     await expect(
       sheet.locator('[data-testid="blueprint-node"][data-node-kind="comment"]'),
     ).toContainText('发布前人工确认');
 
-    await sheet.getByTestId('blueprint-v2-canvas').dblclick({ position: { x: 620, y: 420 } });
-    const searchPanel = sheet.getByTestId('v2-search-panel');
+    await sheet.getByTestId('blueprint-canvas').dblclick({ position: { x: 620, y: 420 } });
+    const searchPanel = sheet.getByTestId('blueprint-search-panel');
     await searchPanel.getByLabel('搜索节点').fill('请求接口');
     await expect(searchPanel.getByText('无匹配节点')).toBeVisible();
-    await expect(searchPanel.getByTestId('v2-search-panel-item')).toHaveCount(0);
+    await expect(searchPanel.getByTestId('blueprint-search-panel-item')).toHaveCount(0);
     await searchPanel.getByLabel('搜索节点').fill('导航跳转');
     await expect(searchPanel.locator('[data-option-id="global.navigate"]')).toBeVisible();
-    await searchPanel.getByTestId('v2-search-panel-close').click();
+    await searchPanel.getByTestId('blueprint-search-panel-close').click();
 
     await insertBlueprintNode(sheet, 'component.project-a-bar-chart', { x: 300, y: 500 });
     const chartNode = sheet

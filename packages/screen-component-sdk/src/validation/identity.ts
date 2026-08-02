@@ -12,7 +12,7 @@ import {
   TAG_NAME_PATTERN,
   SCREEN_COMPONENT_CATEGORIES,
   SCREEN_COMPONENT_ICON_TOKENS,
-  type ScreenComponentManifestV1,
+  type ScreenComponentManifest,
 } from '../contracts/manifest.js';
 import {
   createValidationDiagnostic,
@@ -65,7 +65,7 @@ export function extractTagNameMajorVersion(tagName: string): number | null {
  * - order（如提供）是有限整数
  */
 export function validateManifestIdentity(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   diagnostics: ScreenComponentValidationDiagnostic[],
 ): boolean {
   let valid = true;

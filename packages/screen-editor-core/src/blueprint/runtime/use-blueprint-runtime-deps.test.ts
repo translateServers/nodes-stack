@@ -331,9 +331,12 @@ describe('useBlueprintRuntimeDeps - 可见性覆盖表（任务 3.3 配套）', 
     expect(result.current.visibilityOverrides.get('comp-1')).toBe(false);
   });
 
-  it('getVisibility 未覆盖时返回 undefined（调用方回退到组件 status.hidden）', () => {
-    const { result } = renderHook(() => useBlueprintRuntimeDeps([]));
-    expect(result.current.deps.getVisibility('comp-1')).toBeUndefined();
+  it('getVisibility 未覆盖时使用组件初始可见性', () => {
+    const visible = makeStaticComponent('visible');
+    const hidden = { ...makeStaticComponent('hidden'), status: { locked: false, hidden: true } };
+    const { result } = renderHook(() => useBlueprintRuntimeDeps([visible, hidden]));
+    expect(result.current.deps.getVisibility('visible')).toBe(true);
+    expect(result.current.deps.getVisibility('hidden')).toBe(false);
   });
 
   it('resetVisibility 清空覆盖表（页面卸载/重新加载时调用）', () => {

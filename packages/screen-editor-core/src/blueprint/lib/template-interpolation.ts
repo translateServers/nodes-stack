@@ -14,7 +14,7 @@
  * - 任意 JS 语法（算术、三元、函数调用、分号）视为非法路径 → 降级为空字符串
  */
 
-import type { ApiDataSourceConfig, BlueprintActionConfig } from '@nebula/shared';
+import type { ApiDataSourceConfig, GlobalNodeConfig } from '@nebula/shared';
 
 /** 模板插值上下文：包含触发组件、触发事件与全局变量的数据来源 */
 export interface TemplateContext {
@@ -75,10 +75,10 @@ export function interpolateTemplate(template: string, context: TemplateContext):
  * @returns 新的配置对象，不修改原配置（纯函数）
  */
 export function interpolateActionConfig(
-  config: BlueprintActionConfig,
+  config: GlobalNodeConfig,
   context: TemplateContext,
-): BlueprintActionConfig {
-  switch (config.type) {
+): GlobalNodeConfig {
+  switch (config.globalType) {
     case 'requestApi':
       return {
         ...config,
@@ -91,16 +91,9 @@ export function interpolateActionConfig(
         ...config,
         url: interpolateTemplate(config.url, context),
       };
-    case 'setVisibility':
-    case 'scrollToComponent':
-    case 'refreshDataSource':
+    case 'scrollTo':
+    case 'interval':
       return config;
-    default: {
-      // 穷尽性检查：未知动作类型原样返回
-      const _exhaustive: never = config;
-      void _exhaustive;
-      return config;
-    }
   }
 }
 
@@ -133,12 +126,16 @@ function resolvePath(path: string, context: TemplateContext): unknown {
   }
   let current: unknown = context;
   for (const seg of segments) {
-    if (current == null || typeof current !== 'object') {
+    if (!isRecord(current)) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[seg];
+    current = current[seg];
   }
   return current;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** 将任意值转换为插值文本（字段缺失/非法路径降级为空字符串） */

@@ -2,7 +2,7 @@ import '@nebula/screen-sdk/auto-register';
 import type {
   NebulaScreenEditorElement,
   NebulaScreenEditorEventMap,
-  ScreenProjectTransferV1,
+  ScreenProjectTransfer,
 } from '@nebula/screen-sdk';
 import { createFixtureProjects } from './fixtures';
 import {
@@ -28,7 +28,7 @@ const EVENT_NAMES = [
 ] as const satisfies readonly (keyof NebulaScreenEditorEventMap)[];
 
 interface ScreenSdkHostTestApi {
-  createTransfer(editorIndex?: number): ScreenProjectTransferV1;
+  createTransfer(editorIndex?: number): ScreenProjectTransfer;
   forceConflict(operation: InMemoryMutationOperation, editorIndex?: number): void;
   getEditor(editorIndex?: number): NebulaScreenEditorElement;
   getOperationLog(): InMemoryOperationLogEntry[];

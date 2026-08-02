@@ -9,11 +9,11 @@ import {
   validateManifest,
   defineScreenComponent,
   SCREEN_COMPONENT_API_VERSION,
-  type ScreenComponentManifestV1,
+  type ScreenComponentManifest,
 } from '../index.js';
 import { createMinimalManifest, expectManifestOk, expectManifestInvalid } from '../testing.js';
 
-function withOverrides(overrides: Partial<ScreenComponentManifestV1>): ScreenComponentManifestV1 {
+function withOverrides(overrides: Partial<ScreenComponentManifest>): ScreenComponentManifest {
   return { ...createMinimalManifest(), ...overrides };
 }
 

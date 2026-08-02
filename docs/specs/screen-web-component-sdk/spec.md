@@ -1,8 +1,12 @@
 # 大屏设计器 Web Component SDK Spec
 
-> 状态：实施中（阶段 8 本地质量门已完成；私有 registry 发布延期）
-> 最近更新：2026-08-01
+> 状态：已归档（2026-08-02）
+> 最近更新：2026-08-02
 > 定位：定义大屏设计器以前端 Web Component SDK 交付时的产品边界、宿主适配器、文档协议、元素 API、隔离机制与验收标准
+>
+> 本文记录早期 SDK rollout 方案，其中的版本别名已移除。现行宿主接入以
+> [development-guide.md](../../architecture/development-guide.md) 与
+> [component-author-guide.md](../screen-component-sdk/component-author-guide.md) 为准。
 
 > 阶段 6 复核结论（2026-07-31）：静态 production runtime 已按 ADR-0001 方案 A 落地——新增私有 `@nebula/screen-editor-core`，`packages/screen-sdk` 只组装 static runtime，`apps/web` 基于同一 core 组装 dynamic profile，Vite virtual runtime bridge 已删除；生产构建以源码 AST 检查 + dist module graph 门禁双重拒绝动态能力回流，并完成 tarball 消费验证。阶段 6 定义为“实现完成”，Vanilla 宿主 E2E 与发布冒烟留待阶段 7-8。
 >

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import {
   deriveScreenHostCapabilities,
   normalizeScreenAdapterError,
@@ -8,7 +9,7 @@ import {
   ScreenSnapshotSummarySchema,
   toScreenPublicError,
   type ScreenAdapterError,
-  type ScreenAdapterErrorCode as ScreenAdapterErrorCodeType,
+  type ScreenAdapterErrorCode as ScreenAdapterErrorCodeValue,
   type ScreenExportFile,
   type ScreenHostAdapter,
   type ScreenHostCapabilities,
@@ -17,23 +18,30 @@ import {
   type ScreenSnapshotSummary,
 } from '../contracts/adapter.js';
 import {
+  canPublishWithMigration,
   cloneScreenProjectDraft,
   cloneScreenProjectTransfer,
-  parseScreenDocument,
+  migrateLegacyScreenProjectEnvelopeInput,
   parseScreenProjectEnvelopeInput,
+  parseScreenProjectExport,
+  parseScreenProjectTransfer,
   SCREEN_TRANSFER_MAX_BYTES,
-  ScreenProjectTransferV1Schema,
   type ScreenProjectDraft,
   type ScreenProjectEnvelope,
-  type ScreenProjectTransferV1,
+  type ScreenProjectTransfer,
 } from '../contracts/document.js';
-import { ScreenSdkDiagnosticCode, type ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
+import { createDiagnostic, type ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
 import { dispatchScreenEditorEvent, type ScreenChangeReason } from '../events.js';
+import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry.js';
 import {
   ScreenOperationCoordinator,
   type ScreenMutationOperation,
   type ScreenOperationContext,
 } from './operation-coordinator.js';
+import type {
+  ScreenHostControllerPort,
+  ScreenHostControllerPortState,
+} from './screen-host-controller-port.js';
 
 export interface ScreenHostSessionSnapshot {
   readonly dirty: boolean;
@@ -44,23 +52,23 @@ export interface ScreenHostSessionSnapshot {
 
 export type ScreenSessionApplyCommand =
   | {
-      envelope: ScreenProjectEnvelope;
-      source: 'load' | 'reload' | 'import' | 'snapshot-restore';
+      readonly envelope: ScreenProjectEnvelope;
+      readonly source: 'load' | 'reload' | 'import' | 'snapshot-restore';
     }
   | {
-      envelope: ScreenProjectEnvelope;
-      source: 'save' | 'publish';
-      submittedDraft: ScreenProjectDraft;
+      readonly envelope: ScreenProjectEnvelope;
+      readonly source: 'save' | 'publish';
+      readonly submittedDraft: ScreenProjectDraft;
     };
 
 export interface ScreenHostSessionPort {
-  applyEnvelope(command: ScreenSessionApplyCommand): void;
-  clear(): void;
-  getSnapshot(): ScreenHostSessionSnapshot | null;
+  readonly applyEnvelope: (command: ScreenSessionApplyCommand) => void;
+  readonly clear: () => void;
+  readonly getSnapshot: () => ScreenHostSessionSnapshot | null;
 }
 
 export interface PreparedScreenImport {
-  readonly kind: 'v1';
+  readonly kind: 'screen-project';
   readonly file: File;
   readonly generation: number;
   readonly preview: {
@@ -70,32 +78,17 @@ export interface PreparedScreenImport {
     readonly name: string;
   };
   readonly projectId: string;
-  readonly transfer: ScreenProjectTransferV1;
+  readonly transfer: ScreenProjectTransfer;
 }
 
-export type ScreenHostControllerPhase =
-  | 'waiting'
-  | 'loading'
-  | 'awaiting-render'
-  | 'ready'
-  | 'error'
-  | 'unsupported'
-  | 'disposed';
-
-export interface ScreenHostControllerState {
-  readonly capabilities?: ScreenHostCapabilities;
+export interface ScreenHostControllerState extends ScreenHostControllerPortState {
   readonly error?: ScreenPublicError;
-  readonly generation: number;
-  readonly loadMode?: 'initial' | 'reload' | 'retry';
-  readonly pendingMutations: readonly ScreenMutationOperation[];
-  readonly phase: ScreenHostControllerPhase;
-  readonly projectId?: string;
-  readonly retainedProject: boolean;
 }
 
 export interface CreateScreenHostControllerOptions {
-  eventTarget?: EventTarget;
-  session: ScreenHostSessionPort;
+  readonly eventTarget?: EventTarget;
+  readonly registry: ScreenComponentInstanceRegistry;
+  readonly session: ScreenHostSessionPort;
 }
 
 interface ScreenHostBinding {
@@ -103,22 +96,40 @@ interface ScreenHostBinding {
   readonly projectId: string;
 }
 
+interface ParsedEnvelope {
+  readonly envelope: ScreenProjectEnvelope;
+  readonly migrationPending: boolean;
+}
+
+interface ReadyWaiter {
+  readonly reject: (error: ScreenAdapterError) => void;
+  readonly resolve: () => void;
+}
+
+const jsonMimePattern = /^application\/json(?:\s*;\s*charset=[^;]+)?$/i;
+const snapshotMutations: ReadonlySet<ScreenMutationOperation> = new Set([
+  'snapshot-create',
+  'snapshot-restore',
+  'snapshot-remove',
+  'snapshot-clear',
+]);
+
 class ScreenHostWorkflowError extends Error implements ScreenAdapterError {
-  readonly code: ScreenAdapterErrorCodeType;
+  readonly code: ScreenAdapterErrorCodeValue;
   readonly diagnostics?: readonly ScreenSdkDiagnostic[];
   readonly recoverable?: boolean;
   readonly serverRevision?: string;
 
   constructor(
-    code: ScreenAdapterErrorCodeType,
+    code: ScreenAdapterErrorCodeValue,
     options: {
-      diagnostics?: readonly ScreenSdkDiagnostic[];
-      recoverable?: boolean;
-      serverRevision?: string;
+      readonly diagnostics?: readonly ScreenSdkDiagnostic[];
+      readonly recoverable?: boolean;
+      readonly serverRevision?: string;
     } = {},
   ) {
     super(code);
-    this.name = 'ScreenAdapterError';
+    this.name = 'ScreenHostWorkflowError';
     this.code = code;
     this.diagnostics = options.diagnostics;
     this.recoverable = options.recoverable;
@@ -126,73 +137,96 @@ class ScreenHostWorkflowError extends Error implements ScreenAdapterError {
   }
 }
 
-interface ReadyWaiter {
-  reject(error: ScreenAdapterError): void;
-  resolve(): void;
-}
-
-const JSON_MIME_PATTERN = /^application\/json(?:\s*;\s*charset=[^;]+)?$/i;
-const SNAPSHOT_MUTATIONS: ReadonlySet<ScreenMutationOperation> = new Set([
-  'snapshot-create',
-  'snapshot-restore',
-  'snapshot-remove',
-  'snapshot-clear',
-]);
-
 function createWorkflowError(
-  code: ScreenAdapterErrorCodeType,
+  code: ScreenAdapterErrorCodeValue,
   options?: ConstructorParameters<typeof ScreenHostWorkflowError>[1],
-): ScreenAdapterError {
+): ScreenHostWorkflowError {
   return new ScreenHostWorkflowError(code, options);
 }
 
-function createValidationDiagnostics(error: z.ZodError): ScreenSdkDiagnostic[] {
-  return error.issues.map((issue) => ({
-    code: ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
-    path: issue.path.map((segment) => (typeof segment === 'symbol' ? '<field>' : segment)),
-    severity: 'error',
-    message: 'Adapter 返回值字段校验失败。',
-  }));
-}
-
-function parseAdapterResponse<Result>(schema: z.ZodType<Result>, input: unknown): Result {
-  const result = schema.safeParse(input);
-  if (result.success) return result.data;
-  throw createWorkflowError(ScreenAdapterErrorCode.VALIDATION, {
-    diagnostics: createValidationDiagnostics(result.error),
-  });
-}
-
-function parseEnvelope(input: unknown, projectId: string): ScreenProjectEnvelope {
-  const result = parseScreenProjectEnvelopeInput(input, projectId);
-  if (!result.success) {
-    throw createWorkflowError(result.code, { diagnostics: result.diagnostics });
-  }
-  return structuredClone(result.data);
-}
-
-function parseTransfer(input: unknown): ScreenProjectTransferV1 {
-  const transfer = parseAdapterResponse(ScreenProjectTransferV1Schema, input);
-  const document = parseScreenDocument(transfer.document);
-  if (!document.success) {
-    throw createWorkflowError(document.code, { diagnostics: document.diagnostics });
-  }
-  return cloneScreenProjectTransfer({ ...transfer, document: document.data });
-}
-
-function createAbortError(): ScreenAdapterError {
+function createAbortError(): ScreenHostWorkflowError {
   return createWorkflowError(ScreenAdapterErrorCode.ABORTED, { recoverable: true });
 }
 
-export class ScreenHostController {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getDocumentSchemaVersion(value: unknown): number | undefined {
+  if (!isRecord(value) || !isRecord(value.document)) {
+    return undefined;
+  }
+  return typeof value.document.schemaVersion === 'number'
+    ? value.document.schemaVersion
+    : undefined;
+}
+
+function createValidationDiagnostics(error: z.ZodError): ScreenSdkDiagnostic[] {
+  return error.issues.map((issue) =>
+    createDiagnostic(
+      'INVALID_DOCUMENT',
+      issue.path.map((segment) => (typeof segment === 'symbol' ? '<field>' : segment)),
+      'Adapter response field validation failed.',
+    ),
+  );
+}
+
+function parseAdapterResponse<Result>(schema: z.ZodType<Result>, input: unknown): Result {
+  const parsed = schema.safeParse(input);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  throw createWorkflowError(ScreenAdapterErrorCode.VALIDATION, {
+    diagnostics: createValidationDiagnostics(parsed.error),
+  });
+}
+
+function parseTransfer(
+  input: unknown,
+  registry: ScreenComponentInstanceRegistry,
+): ScreenProjectTransfer {
+  const parsed = parseScreenProjectTransfer(input, registry);
+  if (!parsed.success) {
+    throw createWorkflowError(parsed.code, { diagnostics: parsed.diagnostics });
+  }
+  return cloneScreenProjectTransfer(parsed.data);
+}
+
+function parseEnvelope(
+  input: unknown,
+  registry: ScreenComponentInstanceRegistry,
+  projectId: string,
+): ParsedEnvelope {
+  const migrated =
+    getDocumentSchemaVersion(input) === 1
+      ? migrateLegacyScreenProjectEnvelopeInput(input, registry)
+      : undefined;
+  if (migrated !== undefined && !migrated.success) {
+    throw createWorkflowError(migrated.code, { diagnostics: migrated.diagnostics });
+  }
+
+  const parsed = parseScreenProjectEnvelopeInput(migrated?.envelope ?? input, registry, projectId);
+  if (!parsed.success) {
+    throw createWorkflowError(parsed.code, { diagnostics: parsed.diagnostics });
+  }
+
+  return {
+    envelope: structuredClone(parsed.data),
+    migrationPending: migrated?.migrationPending ?? false,
+  };
+}
+
+export class ScreenHostController implements ScreenHostControllerPort {
   private readonly coordinator = new ScreenOperationCoordinator();
   private readonly listeners = new Set<() => void>();
   private readonly readyWaiters = new Set<ReadyWaiter>();
+  private readonly registry: ScreenComponentInstanceRegistry;
   private readonly session: ScreenHostSessionPort;
   private binding: ScreenHostBinding | null = null;
   private currentEnvelope: ScreenProjectEnvelope | null = null;
   private eventTarget?: EventTarget;
   private lastDirty: boolean | undefined;
+  private migrationPending = false;
   private readonlyMode = false;
   private savePromise: Promise<ScreenProjectEnvelope> | null = null;
   private state: ScreenHostControllerState = {
@@ -203,8 +237,9 @@ export class ScreenHostController {
   };
 
   constructor(options: CreateScreenHostControllerOptions) {
-    this.session = options.session;
     this.eventTarget = options.eventTarget;
+    this.registry = options.registry;
+    this.session = options.session;
   }
 
   getState(): ScreenHostControllerState {
@@ -225,38 +260,45 @@ export class ScreenHostController {
     this.eventTarget = eventTarget;
   }
 
-  setReadonly(readonly: boolean): void {
-    this.readonlyMode = readonly;
+  setReadonly(isReadonly: boolean): void {
+    this.readonlyMode = isReadonly;
   }
 
   whenReady(): Promise<void> {
-    if (this.state.phase === 'ready') return Promise.resolve();
+    if (this.state.phase === 'ready') {
+      return Promise.resolve();
+    }
     if (this.state.phase === 'error' || this.state.phase === 'unsupported') {
+      const error = this.state.error;
       return Promise.reject(
-        this.state.error === undefined
+        error === undefined
           ? createWorkflowError(ScreenAdapterErrorCode.UNKNOWN)
-          : createWorkflowError(this.state.error.code, {
-              diagnostics: this.state.error.diagnostics,
-              recoverable: this.state.error.recoverable,
-              serverRevision: this.state.error.serverRevision,
+          : createWorkflowError(error.code, {
+              diagnostics: error.diagnostics,
+              recoverable: error.recoverable,
+              serverRevision: error.serverRevision,
             }),
       );
     }
-    if (this.state.phase === 'disposed') return Promise.reject(createAbortError());
-    return new Promise<void>((resolve, reject) => {
-      this.readyWaiters.add({ resolve, reject });
-    });
+    if (this.state.phase === 'disposed') {
+      return Promise.reject(createAbortError());
+    }
+    return new Promise((resolve, reject) => this.readyWaiters.add({ resolve, reject }));
   }
 
   markRendered(): void {
-    if (this.state.phase !== 'awaiting-render' || this.currentEnvelope === null) return;
+    if (this.state.phase !== 'awaiting-render' || this.currentEnvelope === null) {
+      return;
+    }
     this.setState({
-      phase: 'ready',
-      loadMode: undefined,
-      retainedProject: false,
       error: undefined,
+      loadMode: undefined,
+      phase: 'ready',
+      retainedProject: false,
     });
-    for (const waiter of this.readyWaiters) waiter.resolve();
+    for (const waiter of this.readyWaiters) {
+      waiter.resolve();
+    }
     this.readyWaiters.clear();
     this.dispatch('nebula-ready', {
       projectId: this.currentEnvelope.id,
@@ -265,13 +307,11 @@ export class ScreenHostController {
   }
 
   retry(): Promise<void> {
-    const retained = this.state.retainedProject;
-    return this.performLoad('retry', retained);
+    return this.performLoad('retry', this.state.retainedProject);
   }
 
-  reload(options: { discardChanges?: boolean } = {}): Promise<void> {
-    const snapshot = this.session.getSnapshot();
-    if (snapshot?.dirty === true && options.discardChanges !== true) {
+  reload(options: { readonly discardChanges?: boolean } = {}): Promise<void> {
+    if (this.session.getSnapshot()?.dirty === true && options.discardChanges !== true) {
       return this.rejectOperation(
         'reload',
         createWorkflowError(ScreenAdapterErrorCode.DIRTY_STATE, { recoverable: true }),
@@ -281,17 +321,16 @@ export class ScreenHostController {
   }
 
   save(): Promise<ScreenProjectEnvelope> {
-    if (this.savePromise !== null) return this.savePromise;
+    if (this.savePromise !== null) {
+      return this.savePromise;
+    }
     const promise = this.performSave();
     this.savePromise = promise;
-    void promise.then(
-      () => {
-        if (this.savePromise === promise) this.savePromise = null;
-      },
-      () => {
-        if (this.savePromise === promise) this.savePromise = null;
-      },
-    );
+    void promise.finally(() => {
+      if (this.savePromise === promise) {
+        this.savePromise = null;
+      }
+    });
     return promise;
   }
 
@@ -299,6 +338,9 @@ export class ScreenHostController {
     try {
       this.assertWritable();
       const binding = this.requireBinding();
+      if (!canPublishWithMigration({ migrationPending: this.migrationPending })) {
+        throw createWorkflowError(ScreenAdapterErrorCode.DIRTY_STATE);
+      }
       if (binding.adapter.publishProject === undefined) {
         throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
       }
@@ -308,28 +350,31 @@ export class ScreenHostController {
     } catch (error) {
       return this.rejectOperation('publish', error);
     }
+
     return this.runObservedMutation('publish', async (context, binding) => {
-      this.assertWritable();
-      const adapter = binding.adapter.publishProject;
-      if (adapter === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      const publishProject = binding.adapter.publishProject;
+      if (publishProject === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
       const snapshot = this.requireSession(binding.projectId);
-      if (snapshot.dirty) throw createWorkflowError(ScreenAdapterErrorCode.DIRTY_STATE);
-      const response = await adapter.call(binding.adapter, {
+      const response = await publishProject.call(binding.adapter, {
         projectId: binding.projectId,
         revision: snapshot.revision,
         signal: context.signal,
       });
       context.assertCurrent();
-      const envelope = parseEnvelope(response, binding.projectId);
-      this.session.applyEnvelope({
+      const parsed = parseEnvelope(response, this.registry, binding.projectId);
+      this.applyEnvelope({
         source: 'publish',
-        envelope,
+        envelope: parsed.envelope,
         submittedDraft: cloneScreenProjectDraft(snapshot.draft),
       });
-      this.currentEnvelope = structuredClone(envelope);
-      this.emitDirtyIfChanged();
-      this.dispatch('nebula-publish-success', { projectId: binding.projectId, envelope });
-      return structuredClone(envelope);
+      this.migrationPending = false;
+      this.dispatch('nebula-publish-success', {
+        projectId: binding.projectId,
+        envelope: parsed.envelope,
+      });
+      return structuredClone(parsed.envelope);
     });
   }
 
@@ -341,7 +386,7 @@ export class ScreenHostController {
         createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE),
       );
     }
-    if (!file.name.toLowerCase().endsWith('.json') && !JSON_MIME_PATTERN.test(file.type)) {
+    if (!file.name.toLowerCase().endsWith('.json') && !jsonMimePattern.test(file.type)) {
       return this.rejectOperation('import', createWorkflowError(ScreenAdapterErrorCode.VALIDATION));
     }
     if (file.size > SCREEN_TRANSFER_MAX_BYTES) {
@@ -349,10 +394,9 @@ export class ScreenHostController {
     }
 
     try {
-      const text = await file.text();
-      const transfer = parseTransfer(JSON.parse(text) as unknown);
+      const transfer = parseTransfer(JSON.parse(await file.text()) as unknown, this.registry);
       return {
-        kind: 'v1',
+        kind: 'screen-project',
         file,
         generation: this.coordinator.generation,
         preview: {
@@ -365,57 +409,67 @@ export class ScreenHostController {
         transfer,
       };
     } catch (error) {
-      const validationError =
+      return this.rejectOperation(
+        'import',
         error instanceof SyntaxError
           ? createWorkflowError(ScreenAdapterErrorCode.VALIDATION)
-          : error;
-      return this.rejectOperation('import', validationError);
+          : error,
+      );
     }
   }
 
   importProject(prepared: PreparedScreenImport): Promise<ScreenProjectEnvelope> {
     return this.runObservedMutation('import', async (context, binding) => {
       this.assertWritable();
-      const adapter = binding.adapter.importProject;
-      if (adapter === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      const importProject = binding.adapter.importProject;
+      if (importProject === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
       if (prepared.generation !== context.generation || prepared.projectId !== binding.projectId) {
         throw createWorkflowError(ScreenAdapterErrorCode.VALIDATION);
       }
       const snapshot = this.requireSession(binding.projectId);
-      const transfer = parseTransfer(prepared.transfer);
-      const response = await adapter.call(binding.adapter, {
+      const response = await importProject.call(binding.adapter, {
         projectId: binding.projectId,
         revision: snapshot.revision,
         file: prepared.file,
-        transfer: cloneScreenProjectTransfer(transfer),
+        transfer: parseTransfer(prepared.transfer, this.registry),
         signal: context.signal,
       });
       context.assertCurrent();
-      const envelope = parseEnvelope(response, binding.projectId);
-      this.session.applyEnvelope({ source: 'import', envelope });
-      this.currentEnvelope = structuredClone(envelope);
-      this.emitDirtyIfChanged();
+      const parsed = parseEnvelope(response, this.registry, binding.projectId);
+      this.applyEnvelope({ source: 'import', envelope: parsed.envelope });
+      this.migrationPending = false;
       this.dispatch('nebula-operation-success', {
         projectId: binding.projectId,
         operation: 'import',
-        envelope,
+        envelope: parsed.envelope,
       });
-      return structuredClone(envelope);
+      return structuredClone(parsed.envelope);
     });
   }
 
   exportProject(): Promise<ScreenExportFile> {
     return this.runObservedRead('export', async (context, binding) => {
-      const adapter = binding.adapter.exportProject;
-      if (adapter === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      const exportProject = binding.adapter.exportProject;
+      if (exportProject === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
       const snapshot = this.requireSession(binding.projectId);
-      const response = await adapter.call(binding.adapter, {
+      const response = await exportProject.call(binding.adapter, {
         projectId: binding.projectId,
         revision: snapshot.revision,
         signal: context.signal,
       });
       context.assertCurrent();
-      const file = parseAdapterResponse(ScreenExportFileSchema, response);
+      const exportResult = parseScreenProjectExport(response, this.registry);
+      if (!exportResult.success) {
+        throw createWorkflowError(exportResult.code, { diagnostics: exportResult.diagnostics });
+      }
+      const file = parseAdapterResponse(ScreenExportFileSchema, {
+        fileName: exportResult.data.fileName,
+        blob: new Blob([JSON.stringify(exportResult.data.transfer)], { type: 'application/json' }),
+      });
       this.dispatch('nebula-operation-success', {
         projectId: binding.projectId,
         operation: 'export',
@@ -430,7 +484,9 @@ export class ScreenHostController {
       'snapshot-list',
       async (context, binding) => {
         const snapshots = binding.adapter.snapshots;
-        if (snapshots === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+        if (snapshots === undefined) {
+          throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+        }
         const response = await snapshots.list({
           projectId: binding.projectId,
           signal: context.signal,
@@ -447,31 +503,31 @@ export class ScreenHostController {
   }
 
   cancelSnapshotMutations(): void {
-    this.coordinator.cancelMutations(SNAPSHOT_MUTATIONS);
+    this.coordinator.cancelMutations(snapshotMutations);
   }
 
   createSnapshot(): Promise<ScreenSnapshotSummary> {
-    const initialSnapshot = this.session.getSnapshot();
     return this.runObservedMutation('snapshot-create', async (context, binding) => {
       this.assertWritable();
       const snapshots = binding.adapter.snapshots;
-      if (snapshots === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
-      const current = this.requireSession(binding.projectId);
-      const draft = cloneScreenProjectDraft(initialSnapshot?.draft ?? current.draft);
+      if (snapshots === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
+      const snapshot = this.requireSession(binding.projectId);
       const response = await snapshots.create({
         projectId: binding.projectId,
-        revision: current.revision,
-        draft,
+        revision: snapshot.revision,
+        draft: cloneScreenProjectDraft(snapshot.draft),
         signal: context.signal,
       });
       context.assertCurrent();
-      const snapshot = structuredClone(parseAdapterResponse(ScreenSnapshotSummarySchema, response));
+      const created = structuredClone(parseAdapterResponse(ScreenSnapshotSummarySchema, response));
       this.dispatch('nebula-operation-success', {
         projectId: binding.projectId,
         operation: 'snapshot-create',
-        snapshot,
+        snapshot: created,
       });
-      return snapshot;
+      return created;
     });
   }
 
@@ -479,25 +535,26 @@ export class ScreenHostController {
     return this.runObservedMutation('snapshot-restore', async (context, binding) => {
       this.assertWritable();
       const snapshots = binding.adapter.snapshots;
-      if (snapshots === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
-      const current = this.requireSession(binding.projectId);
+      if (snapshots === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
+      const snapshot = this.requireSession(binding.projectId);
       const response = await snapshots.restore({
         projectId: binding.projectId,
         snapshotId,
-        revision: current.revision,
+        revision: snapshot.revision,
         signal: context.signal,
       });
       context.assertCurrent();
-      const envelope = parseEnvelope(response, binding.projectId);
-      this.session.applyEnvelope({ source: 'snapshot-restore', envelope });
-      this.currentEnvelope = structuredClone(envelope);
-      this.emitDirtyIfChanged();
+      const parsed = parseEnvelope(response, this.registry, binding.projectId);
+      this.applyEnvelope({ source: 'snapshot-restore', envelope: parsed.envelope });
+      this.migrationPending = false;
       this.dispatch('nebula-operation-success', {
         projectId: binding.projectId,
         operation: 'snapshot-restore',
-        envelope,
+        envelope: parsed.envelope,
       });
-      return structuredClone(envelope);
+      return structuredClone(parsed.envelope);
     });
   }
 
@@ -505,7 +562,9 @@ export class ScreenHostController {
     return this.runObservedMutation('snapshot-remove', async (context, binding) => {
       this.assertWritable();
       const snapshots = binding.adapter.snapshots;
-      if (snapshots === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      if (snapshots === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
       const response = await snapshots.remove({
         projectId: binding.projectId,
         snapshotId,
@@ -525,7 +584,9 @@ export class ScreenHostController {
     return this.runObservedMutation('snapshot-clear', async (context, binding) => {
       this.assertWritable();
       const snapshots = binding.adapter.snapshots;
-      if (snapshots === undefined) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      if (snapshots === undefined) {
+        throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+      }
       const response = await snapshots.clear({
         projectId: binding.projectId,
         signal: context.signal,
@@ -541,7 +602,9 @@ export class ScreenHostController {
 
   notifyChange(reason: ScreenChangeReason): void {
     const snapshot = this.session.getSnapshot();
-    if (snapshot === null) return;
+    if (snapshot === null) {
+      return;
+    }
     this.dispatch('nebula-change', {
       projectId: snapshot.projectId,
       draft: cloneScreenProjectDraft(snapshot.draft),
@@ -552,15 +615,18 @@ export class ScreenHostController {
 
   notifySelection(componentIds: readonly string[]): void {
     const snapshot = this.session.getSnapshot();
-    if (snapshot === null) return;
-    this.dispatch('nebula-selection-change', {
-      projectId: snapshot.projectId,
-      componentIds: [...componentIds],
-    });
+    if (snapshot !== null) {
+      this.dispatch('nebula-selection-change', {
+        projectId: snapshot.projectId,
+        componentIds: [...componentIds],
+      });
+    }
   }
 
   dispose(): void {
-    if (this.state.phase === 'disposed') return;
+    if (this.state.phase === 'disposed') {
+      return;
+    }
     this.coordinator.dispose();
     this.rejectReadyWaiters(createAbortError());
     this.listeners.clear();
@@ -578,16 +644,11 @@ export class ScreenHostController {
     projectId: string | undefined,
     adapter: ScreenHostAdapter | undefined,
   ): void {
-    if (this.state.phase === 'disposed') return;
+    if (this.state.phase === 'disposed') {
+      return;
+    }
     if (projectId === undefined || projectId.trim() === '' || adapter === undefined) {
-      if (this.binding !== null) {
-        this.coordinator.advanceGeneration();
-        this.savePromise = null;
-        this.rejectReadyWaiters(createAbortError());
-        this.binding = null;
-        this.currentEnvelope = null;
-        this.session.clear();
-      }
+      this.clearBinding();
       this.setState({
         capabilities: undefined,
         error: undefined,
@@ -600,18 +661,15 @@ export class ScreenHostController {
       });
       return;
     }
-    if (this.binding?.projectId === projectId && this.binding.adapter === adapter) return;
+    if (this.binding?.projectId === projectId && this.binding.adapter === adapter) {
+      return;
+    }
 
     let capabilities: ScreenHostCapabilities;
     try {
       capabilities = deriveScreenHostCapabilities(adapter);
     } catch (error) {
-      this.coordinator.advanceGeneration();
-      this.savePromise = null;
-      this.rejectReadyWaiters(createAbortError());
-      this.binding = null;
-      this.currentEnvelope = null;
-      this.session.clear();
+      this.clearBinding();
       const normalized = normalizeScreenAdapterError(error);
       this.setState({
         capabilities: undefined,
@@ -626,13 +684,29 @@ export class ScreenHostController {
       return;
     }
 
-    if (this.binding !== null) this.rejectReadyWaiters(createAbortError());
+    if (this.binding !== null) {
+      this.rejectReadyWaiters(createAbortError());
+    }
     this.binding = { projectId, adapter };
     this.currentEnvelope = null;
     this.lastDirty = undefined;
+    this.migrationPending = false;
     this.session.clear();
     this.setState({ capabilities, projectId });
     void this.performLoad('initial', false).catch(() => undefined);
+  }
+
+  private clearBinding(): void {
+    if (this.binding === null) {
+      return;
+    }
+    this.coordinator.advanceGeneration();
+    this.savePromise = null;
+    this.rejectReadyWaiters(createAbortError());
+    this.binding = null;
+    this.currentEnvelope = null;
+    this.migrationPending = false;
+    this.session.clear();
   }
 
   private performLoad(
@@ -670,28 +744,25 @@ export class ScreenHostController {
             signal: context.signal,
           });
           context.assertCurrent();
-          const envelope = parseEnvelope(response, binding.projectId);
-          this.session.applyEnvelope({
+          const parsed = parseEnvelope(response, this.registry, binding.projectId);
+          this.applyEnvelope({
             source: mode === 'reload' ? 'reload' : 'load',
-            envelope,
+            envelope: parsed.envelope,
           });
-          this.currentEnvelope = structuredClone(envelope);
+          this.migrationPending = parsed.migrationPending;
           this.lastDirty = false;
-          this.setState({
-            error: undefined,
-            phase: 'awaiting-render',
-            retainedProject: false,
-          });
+          this.setState({ error: undefined, phase: 'awaiting-render', retainedProject: false });
         },
         { latestOnly: true },
       )
       .catch((error: unknown) => {
         const normalized = normalizeScreenAdapterError(error);
-        if (normalized.code === ScreenAdapterErrorCode.ABORTED) throw normalized;
-        const publicError = toScreenPublicError(normalized);
+        if (normalized.code === ScreenAdapterErrorCode.ABORTED) {
+          throw normalized;
+        }
         this.rejectReadyWaiters(normalized);
         this.setState({
-          error: publicError,
+          error: toScreenPublicError(normalized),
           phase:
             normalized.code === ScreenAdapterErrorCode.UNSUPPORTED_DOCUMENT_FEATURE
               ? 'unsupported'
@@ -715,13 +786,21 @@ export class ScreenHostController {
         signal: context.signal,
       });
       context.assertCurrent();
-      const envelope = parseEnvelope(response, binding.projectId);
-      this.session.applyEnvelope({ source: 'save', envelope, submittedDraft });
-      this.currentEnvelope = structuredClone(envelope);
-      this.emitDirtyIfChanged();
-      this.dispatch('nebula-save-success', { projectId: binding.projectId, envelope });
-      return structuredClone(envelope);
+      const parsed = parseEnvelope(response, this.registry, binding.projectId);
+      this.applyEnvelope({ source: 'save', envelope: parsed.envelope, submittedDraft });
+      this.migrationPending = false;
+      this.dispatch('nebula-save-success', {
+        projectId: binding.projectId,
+        envelope: parsed.envelope,
+      });
+      return structuredClone(parsed.envelope);
     });
+  }
+
+  private applyEnvelope(command: ScreenSessionApplyCommand): void {
+    this.session.applyEnvelope(command);
+    this.currentEnvelope = structuredClone(command.envelope);
+    this.emitDirtyIfChanged();
   }
 
   private runObservedMutation<Result>(
@@ -750,13 +829,7 @@ export class ScreenHostController {
         }
         throw normalized;
       })
-      .finally(() => {
-        const index = this.state.pendingMutations.indexOf(operation);
-        if (index < 0) return;
-        const pendingMutations = [...this.state.pendingMutations];
-        pendingMutations.splice(index, 1);
-        this.setState({ pendingMutations });
-      });
+      .finally(() => this.clearPendingMutation(operation));
   }
 
   private runObservedRead<Result>(
@@ -781,6 +854,16 @@ export class ScreenHostController {
       });
   }
 
+  private clearPendingMutation(operation: ScreenMutationOperation): void {
+    const index = this.state.pendingMutations.indexOf(operation);
+    if (index < 0) {
+      return;
+    }
+    const pendingMutations = [...this.state.pendingMutations];
+    pendingMutations.splice(index, 1);
+    this.setState({ pendingMutations });
+  }
+
   private rejectOperation<Result>(operation: ScreenOperation, error: unknown): Promise<Result> {
     const normalized = normalizeScreenAdapterError(error);
     if (normalized.code !== ScreenAdapterErrorCode.ABORTED) {
@@ -790,8 +873,12 @@ export class ScreenHostController {
   }
 
   private requireBinding(): ScreenHostBinding {
-    if (this.state.phase === 'disposed') throw createAbortError();
-    if (this.binding === null) throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+    if (this.state.phase === 'disposed') {
+      throw createAbortError();
+    }
+    if (this.binding === null) {
+      throw createWorkflowError(ScreenAdapterErrorCode.UNAVAILABLE);
+    }
     return this.binding;
   }
 
@@ -804,21 +891,24 @@ export class ScreenHostController {
   }
 
   private assertNotDisposed(): void {
-    if (this.state.phase === 'disposed') throw createAbortError();
+    if (this.state.phase === 'disposed') {
+      throw createAbortError();
+    }
   }
 
   private assertWritable(): void {
-    if (this.readonlyMode) throw createWorkflowError(ScreenAdapterErrorCode.FORBIDDEN);
+    if (this.readonlyMode) {
+      throw createWorkflowError(ScreenAdapterErrorCode.FORBIDDEN);
+    }
   }
 
   private emitDirtyIfChanged(): void {
     const snapshot = this.session.getSnapshot();
-    if (snapshot === null || snapshot.dirty === this.lastDirty) return;
+    if (snapshot === null || snapshot.dirty === this.lastDirty) {
+      return;
+    }
     this.lastDirty = snapshot.dirty;
-    this.dispatch('nebula-dirty-change', {
-      projectId: snapshot.projectId,
-      dirty: snapshot.dirty,
-    });
+    this.dispatch('nebula-dirty-change', { projectId: snapshot.projectId, dirty: snapshot.dirty });
   }
 
   private dispatch<EventName extends Parameters<typeof dispatchScreenEditorEvent>[1]>(
@@ -839,12 +929,16 @@ export class ScreenHostController {
   }
 
   private rejectReadyWaiters(error: ScreenAdapterError): void {
-    for (const waiter of this.readyWaiters) waiter.reject(error);
+    for (const waiter of this.readyWaiters) {
+      waiter.reject(error);
+    }
     this.readyWaiters.clear();
   }
 
   private setState(updates: Partial<ScreenHostControllerState>): void {
     this.state = { ...this.state, ...updates };
-    for (const listener of this.listeners) listener();
+    for (const listener of this.listeners) {
+      listener();
+    }
   }
 }

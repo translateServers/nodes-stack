@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PublishConfirmDialog } from './publish-confirm-dialog';
-import type { Diagnostic } from '../blueprint/compiler';
+import type { BlueprintDiagnostic } from '../blueprint/compiler';
 
 describe('PublishConfirmDialog（任务 5.3）', () => {
-  const makeDiag = (overrides: Partial<Diagnostic> = {}): Diagnostic => ({
+  const makeDiag = (overrides: Partial<BlueprintDiagnostic> = {}): BlueprintDiagnostic => ({
     level: 'error',
     code: 'cycle',
     message: '默认错误消息',
@@ -40,7 +40,7 @@ describe('PublishConfirmDialog（任务 5.3）', () => {
   it('渲染所有诊断消息', () => {
     const diags = [
       makeDiag({ message: '循环引用：A → B → A' }),
-      makeDiag({ code: 'empty-param', message: '动作缺少必填参数 navigate.url' }),
+      makeDiag({ code: 'empty-config', message: '动作缺少必填参数 navigate.url' }),
     ];
     render(
       <PublishConfirmDialog open diagnostics={diags} onConfirm={vi.fn()} onCancel={vi.fn()} />,

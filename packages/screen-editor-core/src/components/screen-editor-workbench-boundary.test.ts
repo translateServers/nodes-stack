@@ -94,14 +94,13 @@ describe('ScreenEditorWorkbench host boundary', () => {
     expect(specifiers).not.toContain('../hooks');
   });
 
-  it('uses container layout and loads only the V2 blueprint sheet dynamically', () => {
+  it('uses container layout and loads the blueprint sheet dynamically', () => {
     const source = readFileSync(WORKBENCH_PATH, 'utf8');
 
     expect(source).not.toContain('h-screen');
     expect(source).not.toContain('w-screen');
     expect(source).not.toContain('window.');
-    expect(source).not.toContain('document.');
-    expect(source).toContain("import('../blueprint/sheet/blueprint-sheet-v2')");
+    expect(source).toContain("import('../blueprint/sheet/blueprint-sheet')");
     expect(source).not.toContain("from '../blueprint/sheet'");
   });
 

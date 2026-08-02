@@ -17,7 +17,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { ComponentActionDefinition, ComponentEventDefinition } from '@nebula/shared';
-import type { ScreenComponentManifestV1 } from '@nebula/screen-component-sdk';
+import type { ScreenComponentManifest } from '@nebula/screen-component-sdk';
 import { Box, Type } from 'lucide-react';
 import { DEFAULT_BUILTIN_REGISTRY } from './registry-context';
 import { buildInstanceRegistry, type ScreenComponentRegistration } from './instance-registry';
@@ -41,7 +41,7 @@ import { getRenderer } from './registry';
 const SCREEN_COMPONENT_API_VERSION = 'nebula.screen-component/v1' as const;
 
 /** 构造最小合法 manifest */
-function makeManifest(overrides: Partial<ScreenComponentManifestV1>): ScreenComponentManifestV1 {
+function makeManifest(overrides: Partial<ScreenComponentManifest>): ScreenComponentManifest {
   return {
     apiVersion: SCREEN_COMPONENT_API_VERSION,
     type: 'text',
@@ -62,7 +62,7 @@ function makeManifest(overrides: Partial<ScreenComponentManifestV1>): ScreenComp
 
 /** 构造最小 built-in registration（无 legacy 字段） */
 function makeBuiltIn(
-  manifest: ScreenComponentManifestV1,
+  manifest: ScreenComponentManifest,
   legacy?: Omit<ScreenComponentRegistration, 'source' | 'manifest'>,
 ): ScreenComponentRegistration {
   return {

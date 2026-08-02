@@ -2,18 +2,17 @@
  * `@nebula/screen-sdk/components` — 显式 opt-in 入口（Spec §14.1, Task 6.3）
  *
  * 0.2 SDK 通过此入口显式启用外部组件持久化。默认 `@nebula/screen-sdk` 主入口
- * 不导入此模块，V1 Adapter 路径保持不变（Spec §3.2 Compatibility Before Replacement）。
+ * 不导入此模块时，SDK 使用内置组件注册表。
  *
  * 导出内容：
  * - `createScreenComponentRegistry()`：registry 工厂，返回公共 `ScreenComponentRegistry`
- * - V2 Adapter / Document / Transfer / Snapshot / Error / Diagnostic 公共类型
- * - V1/V2 闭合联合类型与 V2 事件 map（来自 `v2-contracts.ts`）
+ * - 正式 Adapter / Document / Transfer / Snapshot / Error / Diagnostic 公共类型
+ * - 正式事件 map（来自 `contracts.ts`）
  * - 组件插件协议类型（re-export from `@nebula/screen-component-sdk`）
  * - Registry 错误类型与守卫
  *
  * 安全边界（Spec §3.3 + §12.3）：
- * - 默认 V1 Adapter + 默认 registry 不自动升级文档
- * - 外部 registry 必须搭配 `ScreenHostAdapterV2`，否则 SDK 在 load 前拒绝
+ * - 注册表在加载前冻结，避免运行时替换组件定义
  * - 不导出内部 `ScreenComponentInstanceRegistry`（含 legacy 兼容字段）
  *
  * Zod / JSON Schema 请从 `@nebula/screen-sdk/contracts` 导入。
@@ -33,10 +32,7 @@ import {
   type ScreenComponentRegistration as InternalScreenComponentRegistration,
 } from '@nebula/screen-editor-core/experimental';
 
-import type {
-  ScreenComponentRegistration,
-  ScreenComponentRegistry,
-} from '../element/v2-contracts.js';
+import type { ScreenComponentRegistration, ScreenComponentRegistry } from '../element/contracts.js';
 
 function toPublicRegistration(
   registration: InternalScreenComponentRegistration,
@@ -112,49 +108,41 @@ export type {
   ScreenComponentRegistration,
   ScreenComponentRegistrationBase,
   ScreenComponentRegistry,
-} from '../element/v2-contracts.js';
-
-// ===== V1/V2 闭合联合类型与 V2 事件 map（Spec §14.1） =====
+} from '../element/contracts.js';
 
 export type {
-  NebulaScreenEditorEventMapV2,
-  ScreenEditorAdapterV2,
-  ScreenOperationSuccessDetailV2,
+  ScreenEditorAdapter,
+  ScreenSdkEventMap,
   ScreenSdkProjectDraft,
   ScreenSdkProjectEnvelope,
-} from '../element/v2-contracts.js';
-
-// ===== V2 Adapter / Document / Error / Diagnostic 类型 =====
+} from '../element/contracts.js';
 
 export type {
-  ScreenAdapterErrorV2,
-  ScreenHostAdapterV2,
-  ScreenPublicErrorV2,
-  ScreenSnapshotAdapterV2,
-  ScreenDocumentV2,
-  ScreenDocumentV2Input,
-  ScreenProjectDraftV2,
-  ScreenProjectEnvelopeInputV2,
-  ScreenProjectEnvelopeV2,
-  ScreenProjectExportV2,
-  ScreenProjectTransferV2,
-  ScreenSdkDiagnosticV2,
+  ScreenAdapterError,
+  ScreenDocument,
+  ScreenDocumentInput,
+  ScreenHostAdapter,
+  ScreenProjectDraft,
+  ScreenProjectEnvelope,
+  ScreenProjectEnvelopeInput,
+  ScreenProjectExport,
+  ScreenProjectTransfer,
+  ScreenPublicError,
+  ScreenSdkDiagnostic,
   ScreenSdkDocument,
-  ScreenSdkV2ComponentWire,
 } from '@nebula/screen-editor-core';
 
-// V2 版本常量（供宿主做版本判断）
 export {
-  SCREEN_DOCUMENT_V2_VERSION,
-  SCREEN_TRANSFER_FORMAT_VERSION_V2,
+  SCREEN_DOCUMENT_VERSION,
+  SCREEN_TRANSFER_FORMAT_VERSION,
 } from '@nebula/screen-editor-core';
 
 // ===== 组件插件协议（re-export from @nebula/screen-component-sdk） =====
 
-export type { ScreenComponentPluginV1 } from '@nebula/screen-component-sdk';
+export type { ScreenComponentPlugin } from '@nebula/screen-component-sdk';
 
 export type {
-  ScreenComponentManifestV1,
+  ScreenComponentManifest,
   ScreenComponentValidationDiagnostic,
   ScreenComponentValidationResult,
 } from '@nebula/screen-component-sdk';

@@ -1,88 +1,94 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { isSensitiveHeaderKey } from '@nebula/shared';
-import { PrismaService } from '@/prisma/prisma.service';
+import {
+  isSensitiveHeaderKey,
+  LegacyScreenDocumentSchema,
+  migrateLegacyBlueprint,
+  migrateLegacyScreenDocument,
+  type BlueprintInput,
+  type EventBlueprint,
+  ScreenDocumentSchema,
+  type ScreenDocument,
+} from '@nebula/shared';
+
 import { BizCode } from '@/common/enums/biz-code.enum';
 import { BusinessException } from '@/common/exceptions/business.exception';
 import { DatasetReferenceService } from '@/modules/dataset/dataset-reference.service';
-import type {
-  CreateScreenProjectDto,
-  UpdateScreenProjectDto,
-  PublishScreenProjectDto,
-  ScreenProjectResponse,
+import {
+  ScreenProjectResponseSchema,
+  type CreateScreenProjectDto,
+  type PublishScreenProjectDto,
+  type ScreenProjectResponse,
+  type UpdateScreenProjectDto,
 } from '@/modules/screen/dto/screen.dto';
-import { ScreenProjectResponseSchema } from '@/modules/screen/dto/screen.dto';
+import { PrismaService } from '@/prisma/prisma.service';
 
-/**
- * 持久化实体类型：与 Prisma ScreenProject 模型对应。
- * blueprint 字段为可选字符串（JSON 文本），未编辑蓝图的旧项目为 null。
- */
 interface ScreenProjectEntity {
-  id: string;
-  name: string;
-  description: string | null;
-  canvas: string;
-  components: string;
-  blueprint: string | null;
-  status: string;
-  thumbnail: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  readonly id: string;
+  readonly name: string;
+  readonly description: string | null;
+  /** Historical columns, used only when document is absent. */
+  readonly canvas: string;
+  readonly components: string;
+  readonly blueprint: string | null;
+  readonly document: string | null;
+  readonly status: string;
+  readonly thumbnail: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 }
+
+const defaultCanvas = {
+  width: 1920,
+  height: 1080,
+  backgroundColor: '#000000',
+  scaleMode: 'fit' as const,
+};
 
 @Injectable()
 export class ScreenService {
   private readonly logger = new Logger(ScreenService.name);
 
   constructor(
-    private prisma: PrismaService,
-    private datasetReferenceService: DatasetReferenceService,
+    private readonly prisma: PrismaService,
+    private readonly datasetReferenceService: DatasetReferenceService,
   ) {}
 
   async createProject(dto: CreateScreenProjectDto): Promise<ScreenProjectResponse> {
-    const existing = await this.prisma.screenProject.findUnique({
-      where: { name: dto.name },
-    });
-    if (existing) {
+    const existing = await this.prisma.screenProject.findUnique({ where: { name: dto.name } });
+    if (existing !== null) {
       throw new BusinessException(BizCode.SCREEN_NAME_EXISTS);
     }
 
-    const defaultCanvas = {
-      width: 1920,
-      height: 1080,
-      backgroundColor: '#000000',
-      scaleMode: 'fit',
-    };
-
-    // 截断到秒精度，与 DateTimeStringSchema 的 "YYYY-MM-DD HH:mm:ss" 格式一致，
-    // 避免毫秒精度丢失导致后续乐观锁比较（updateMany where updatedAt）失败。
+    const document = ScreenDocumentSchema.parse({
+      canvas: dto.canvas ?? defaultCanvas,
+      components: [],
+      globalVariables: [],
+    });
     const now = this.truncateToSeconds(new Date());
     const created = await this.prisma.screenProject.create({
       data: {
         name: dto.name,
         description: dto.description ?? null,
-        canvas: JSON.stringify(dto.canvas ?? defaultCanvas),
+        // Retained only to satisfy the historical nullable schema during rollout.
+        canvas: '{}',
         components: '[]',
+        document: JSON.stringify(document),
         status: 'draft',
         createdAt: now,
         updatedAt: now,
       },
     });
-
     return this.toProjectResponse(created);
   }
 
   async findAllProjects(): Promise<ScreenProjectResponse[]> {
-    const projects = await this.prisma.screenProject.findMany({
-      orderBy: { updatedAt: 'desc' },
-    });
-    return projects.map((p) => this.toProjectResponse(p));
+    const projects = await this.prisma.screenProject.findMany({ orderBy: { updatedAt: 'desc' } });
+    return Promise.all(projects.map((project) => this.toProjectResponse(project)));
   }
 
   async findProjectById(id: string): Promise<ScreenProjectResponse> {
-    const project = await this.prisma.screenProject.findUnique({
-      where: { id },
-    });
-    if (!project) {
+    const project = await this.prisma.screenProject.findUnique({ where: { id } });
+    if (project === null) {
       throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
     }
     return this.toProjectResponse(project);
@@ -92,33 +98,10 @@ export class ScreenService {
     const project = await this.prisma.screenProject.findFirst({
       where: { id, status: 'published' },
     });
-    if (!project) {
+    if (project === null) {
       throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
     }
-    const response = this.toProjectResponse(project);
-    return this.sanitizeSensitiveHeaders(response);
-  }
-
-  /** 公开预览脱敏：移除组件 API 数据源配置中敏感请求头的明文值（任务 9.1） */
-  private sanitizeSensitiveHeaders(response: ScreenProjectResponse): ScreenProjectResponse {
-    const sanitizedComponents = response.components.map((component) => {
-      const headers = component.dataSource?.apiConfig?.headers;
-      if (headers === undefined) return component;
-      const hasSensitive = Object.keys(headers).some((key) => isSensitiveHeaderKey(key));
-      if (!hasSensitive) return component;
-      const sanitizedHeaders: Record<string, string> = {};
-      for (const [key, value] of Object.entries(headers)) {
-        sanitizedHeaders[key] = isSensitiveHeaderKey(key) ? '[REDACTED]' : value;
-      }
-      return {
-        ...component,
-        dataSource: {
-          ...component.dataSource!,
-          apiConfig: { ...component.dataSource!.apiConfig!, headers: sanitizedHeaders },
-        },
-      };
-    });
-    return { ...response, components: sanitizedComponents };
+    return this.sanitizeSensitiveHeaders(await this.toProjectResponse(project));
   }
 
   async updateProject(id: string, dto: UpdateScreenProjectDto): Promise<ScreenProjectResponse> {
@@ -126,77 +109,60 @@ export class ScreenService {
       const duplicate = await this.prisma.screenProject.findFirst({
         where: { name: dto.name, NOT: { id } },
       });
-      if (duplicate) {
+      if (duplicate !== null) {
         throw new BusinessException(BizCode.SCREEN_NAME_EXISTS);
       }
     }
 
-    // 单次条件写入：仅当数据库 updatedAt 与请求 expectedUpdatedAt 一致时才更新，
-    // 避免先读后无条件 update 的竞态窗口；保存内容后状态统一回到 draft，
-    // 已发布项目保存后退出公开可见。
-    // updatedAt 显式截断到秒精度，覆盖 @updatedAt 的毫秒精度，
-    // 确保后续乐观锁基线与 DateTimeStringSchema 格式一致。
+    const current = await this.prisma.screenProject.findUnique({ where: { id } });
+    if (current === null) {
+      throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+    }
+    const currentDocument = await this.readDocument(current);
+    const blueprint =
+      dto.blueprint === undefined ? undefined : this.migrateIncomingBlueprint(dto.blueprint);
+    const document = ScreenDocumentSchema.parse({
+      ...currentDocument,
+      ...(dto.canvas === undefined ? {} : { canvas: dto.canvas }),
+      ...(dto.components === undefined ? {} : { components: dto.components }),
+      ...(blueprint === undefined ? {} : { blueprint }),
+      ...(dto.globalVariables === undefined ? {} : { globalVariables: dto.globalVariables }),
+    });
+
     const result = await this.prisma.screenProject.updateMany({
       where: { id, updatedAt: new Date(dto.expectedUpdatedAt) },
       data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.description !== undefined ? { description: dto.description ?? null } : {}),
-        ...(dto.canvas !== undefined ? { canvas: JSON.stringify(dto.canvas) } : {}),
-        ...(dto.components !== undefined ? { components: JSON.stringify(dto.components) } : {}),
-        ...(dto.blueprint !== undefined ? { blueprint: JSON.stringify(dto.blueprint) } : {}),
-        ...(dto.thumbnail !== undefined ? { thumbnail: dto.thumbnail ?? null } : {}),
+        ...(dto.name === undefined ? {} : { name: dto.name }),
+        ...(dto.description === undefined ? {} : { description: dto.description ?? null }),
+        ...(dto.thumbnail === undefined ? {} : { thumbnail: dto.thumbnail ?? null }),
+        document: JSON.stringify(document),
         status: 'draft',
         updatedAt: this.truncateToSeconds(new Date()),
       },
     });
-
     if (result.count === 0) {
-      // 任务 6.2：条件写入未命中可能是项目不存在或基线过期，
-      // 通过只读 id 字段区分两类错误；此处"先读"不影响原子写入语义，
-      // 冲突分支不会执行任何覆盖写入。
-      const existing = await this.prisma.screenProject.findUnique({
-        where: { id },
-        select: { id: true },
-      });
-      if (!existing) {
-        throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
-      }
-      throw new BusinessException(BizCode.SCREEN_SAVE_CONFLICT);
+      await this.throwUpdateFailure(id);
     }
 
+    await this.datasetReferenceService.rebuildReferences(id, document.components);
     const updated = await this.prisma.screenProject.findUnique({ where: { id } });
-    if (!updated) {
+    if (updated === null) {
       throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
     }
     return this.toProjectResponse(updated);
   }
 
   async publishProject(id: string, dto: PublishScreenProjectDto): Promise<ScreenProjectResponse> {
-    // 单次条件写入：仅当数据库 updatedAt 与请求 expectedUpdatedAt 一致时才发布，
-    // 发布只改状态，不接收可编辑内容；避免先读后无条件 update 的竞态窗口。
-    // updatedAt 显式截断到秒精度，覆盖 @updatedAt 的毫秒精度，
-    // 确保后续乐观锁基线与 DateTimeStringSchema 格式一致。
     const result = await this.prisma.screenProject.updateMany({
       where: { id, updatedAt: new Date(dto.expectedUpdatedAt) },
       data: { status: 'published', updatedAt: this.truncateToSeconds(new Date()) },
     });
-
     if (result.count === 0) {
-      // 任务 6.3：条件写入未命中可能是项目不存在或基线过期，
-      // 通过只读 id 字段区分两类错误；此处"先读"不影响原子写入语义，
-      // 冲突分支不会执行任何覆盖写入，过期基线不改变状态。
-      const existing = await this.prisma.screenProject.findUnique({
-        where: { id },
-        select: { id: true },
-      });
-      if (!existing) {
-        throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
-      }
-      throw new BusinessException(BizCode.SCREEN_SAVE_CONFLICT);
+      await this.throwUpdateFailure(id);
     }
 
     const updated = await this.prisma.screenProject.findUnique({ where: { id } });
-    if (!updated) {
+    if (updated === null) {
       throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
     }
     return this.toProjectResponse(updated);
@@ -204,25 +170,44 @@ export class ScreenService {
 
   async removeProject(id: string): Promise<void> {
     await this.findProjectById(id);
-    await this.prisma.screenProject.delete({
-      where: { id },
-    });
+    await this.prisma.screenProject.delete({ where: { id } });
   }
 
-  private toProjectResponse(entity: ScreenProjectEntity): ScreenProjectResponse {
-    // JSON.parse 返回 any,先收窄为 unknown 交给 ScreenProjectResponseSchema 运行时验证
-    const canvas: unknown = JSON.parse(entity.canvas);
-    const components: unknown = JSON.parse(entity.components);
-    // blueprint 为可选字段：未编辑蓝图的旧项目存储为 null，
-    // 解析为 undefined 保持与 ScreenProjectSchema 的 optional 语义一致（不凭空写入）
-    const blueprint: unknown = entity.blueprint === null ? undefined : JSON.parse(entity.blueprint);
+  private async throwUpdateFailure(id: string): Promise<never> {
+    const existing = await this.prisma.screenProject.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (existing === null) {
+      throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+    }
+    throw new BusinessException(BizCode.SCREEN_SAVE_CONFLICT);
+  }
+
+  private sanitizeSensitiveHeaders(response: ScreenProjectResponse): ScreenProjectResponse {
+    const components = response.components.map((component) => {
+      const headers = component.dataSource?.apiConfig?.headers;
+      if (headers === undefined || !Object.keys(headers).some(isSensitiveHeaderKey)) {
+        return component;
+      }
+      const sanitized = structuredClone(component);
+      const mutableHeaders = sanitized.dataSource?.apiConfig?.headers;
+      if (mutableHeaders === undefined) return sanitized;
+      for (const [key, value] of Object.entries(mutableHeaders)) {
+        mutableHeaders[key] = isSensitiveHeaderKey(key) ? '[REDACTED]' : value;
+      }
+      return sanitized;
+    });
+    return { ...response, components };
+  }
+
+  private async toProjectResponse(entity: ScreenProjectEntity): Promise<ScreenProjectResponse> {
+    const document = await this.readDocument(entity);
     return ScreenProjectResponseSchema.parse({
       id: entity.id,
       name: entity.name,
       description: entity.description,
-      canvas,
-      components,
-      ...(blueprint !== undefined ? { blueprint } : {}),
+      ...document,
       status: entity.status,
       thumbnail: entity.thumbnail,
       createdAt: entity.createdAt,
@@ -230,14 +215,83 @@ export class ScreenService {
     });
   }
 
-  /**
-   * 将 Date 截断到秒精度（毫秒置 0）。
-   *
-   * DateTimeStringSchema 使用 "YYYY-MM-DD HH:mm:ss" 格式，不包含毫秒。
-   * Prisma @updatedAt 默认存储毫秒精度，导致 round-trip 后客户端回传的
-   * expectedUpdatedAt（.000 毫秒）与数据库值（非零毫秒）不匹配，触发 409。
-   * 截断后数据库存储的 updatedAt 始终为 .000 毫秒，与格式化字符串一致。
-   */
+  private async readDocument(entity: ScreenProjectEntity): Promise<ScreenDocument> {
+    if (entity.document !== null) {
+      return this.parseDocument(entity.document, entity.id);
+    }
+
+    const rawDocument: unknown = {
+      canvas: this.parseJson(entity.canvas, entity.id),
+      components: this.parseJson(entity.components, entity.id),
+      ...(entity.blueprint === null
+        ? {}
+        : { blueprint: this.parseJson(entity.blueprint, entity.id) }),
+    };
+    const formal = ScreenDocumentSchema.safeParse(rawDocument);
+    const document = formal.success
+      ? formal.data
+      : this.migrateLegacyDocument(rawDocument, entity.id);
+
+    await this.prisma.screenProject.update({
+      where: { id: entity.id },
+      data: { document: JSON.stringify(document) },
+    });
+    return document;
+  }
+
+  private parseDocument(serialized: string, projectId: string): ScreenDocument {
+    try {
+      return ScreenDocumentSchema.parse(this.parseJson(serialized, projectId));
+    } catch (error) {
+      this.logger.error(`Project ${projectId} has an invalid persisted document`, error);
+      throw new BusinessException(BizCode.VALIDATION_ERROR);
+    }
+  }
+
+  private migrateLegacyDocument(rawDocument: unknown, projectId: string): ScreenDocument {
+    try {
+      const legacy = LegacyScreenDocumentSchema.parse(rawDocument);
+      const migration = migrateLegacyScreenDocument(legacy);
+      if (migration.warnings.length > 0) {
+        this.logger.error(
+          `Project ${projectId} legacy document migration failed`,
+          migration.warnings,
+        );
+        throw new BusinessException(BizCode.VALIDATION_ERROR);
+      }
+      return migration.document;
+    } catch (error) {
+      if (error instanceof BusinessException) {
+        throw error;
+      }
+      this.logger.error(`Project ${projectId} has an invalid legacy document`, error);
+      throw new BusinessException(BizCode.VALIDATION_ERROR);
+    }
+  }
+
+  private migrateIncomingBlueprint(blueprint: BlueprintInput): EventBlueprint {
+    if (blueprint.version === 2) {
+      return blueprint;
+    }
+
+    const migration = migrateLegacyBlueprint(blueprint);
+    if (migration.warnings.length === 0) {
+      return migration.blueprint;
+    }
+
+    this.logger.error('Screen blueprint migration failed', migration.warnings);
+    throw new BusinessException(BizCode.VALIDATION_ERROR);
+  }
+
+  private parseJson(serialized: string, projectId: string): unknown {
+    try {
+      return JSON.parse(serialized) as unknown;
+    } catch (error) {
+      this.logger.error(`Project ${projectId} contains invalid JSON`, error);
+      throw new BusinessException(BizCode.VALIDATION_ERROR);
+    }
+  }
+
   private truncateToSeconds(date: Date): Date {
     const result = new Date(date);
     result.setMilliseconds(0);

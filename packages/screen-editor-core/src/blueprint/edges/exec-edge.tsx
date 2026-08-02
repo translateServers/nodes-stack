@@ -12,7 +12,7 @@
  * - 不在边渲染层做兼容判定（由 React Flow isValidConnection 回调处理）
  * - 边选中态由 React Flow 通过 selected prop 注入
  * - 删除通过 useReactFlow().deleteElements 触发，走标准 onEdgesChange 链路，
- *   V1 / V2 sheet 均无需额外接线
+ *   不需要额外接线
  */
 
 import type { JSX, MouseEvent } from 'react';

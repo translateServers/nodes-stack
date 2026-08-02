@@ -27,7 +27,7 @@ import type { ScreenComponentValidationDiagnostic } from '../contracts/diagnosti
 /**
  * Manifest 入参的最小子集（仅需要 events 字段）。
  *
- * 解耦完整 `ScreenComponentManifestV1`，使 editor-core 在 renderer 闭包内
+ * 解耦完整 `ScreenComponentManifest`，使 editor-core 在 renderer 闭包内
  * 构造轻量 manifest-like 对象即可调用校验，无需持有完整 manifest 引用。
  */
 export interface ComponentEventBridgeManifestLike {

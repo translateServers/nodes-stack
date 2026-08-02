@@ -9,13 +9,12 @@
  * 声明。
  *
  * 安全边界（Spec §12.2 + §14.2）：
- * - 外部组件不得携带 dataSource / logic / interaction（V2 parser 返回
+ * - 外部组件不得携带 dataSource / logic / interaction（正式 parser 返回
  *   `UNSUPPORTED_COMPONENT_CAPABILITY`，Spec §12.2）
  * - 组件注册表与数据 runtime 是正交能力：dynamic runtime 继续由
  *   `DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE` 管理，不能用组件插件绕过
  *   static / dynamic 数据边界
- * - 不绕过既有 SDK production route switch gates：registry 可用不等于 V2 路由
- *   自动切换，V2 持久化仍需显式 `ScreenHostAdapterV2`（Spec §14.4）
+ * - 注册表可用不改变文档协议或持久化边界
  *
  * Requirement 2（Explicit trusted registration）：
  * - 只有显式传入 `NEBULA_HOST_COMPONENT_PLUGINS` 的 plugin 才会被注册
@@ -26,14 +25,14 @@
  * - 当前 apps/web 所有入口共享同一 registry 实例（单例缓存）
  *
  * Requirement 8（Registry-aware document validation）：
- * - V2 parser 使用此 registry 校验组件 type 和 props
+ * - 文档 parser 使用此 registry 校验组件 type 和 props
  * - 缺少定义时不覆盖当前项目，返回稳定 diagnostics
  */
 
 import {
   createScreenComponentRegistry,
   isScreenComponentRegistryError,
-  type ScreenComponentPluginV1,
+  type ScreenComponentPlugin,
   type ScreenComponentRegistry,
   type ScreenComponentRegistryError,
 } from '@nebula/screen-sdk/components';
@@ -43,10 +42,9 @@ import {
  *
  * 新增外部组件时在此数组添加 plugin。当前为空——apps/web 仅使用内置 6 组件。
  *
- * 注意：添加外部组件后，V1 文档无法持久化外部组件实例；需同时接入
- * `ScreenHostAdapterV2` 才能保存 V2 文档（Spec §12.3）。
+ * 注意：添加外部组件后，宿主适配器必须在保存前使用同一注册表完成文档校验。
  */
-const NEBULA_HOST_COMPONENT_PLUGINS: readonly ScreenComponentPluginV1[] = [];
+const NEBULA_HOST_COMPONENT_PLUGINS: readonly ScreenComponentPlugin[] = [];
 
 /**
  * 单例 registry promise 缓存。

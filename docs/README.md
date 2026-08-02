@@ -40,10 +40,10 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [system-overview.md](./architecture/system-overview.md) | 生效中（2026-07-24） | 系统总览。新人入职第一篇必读 |
-| [screen-editor-architecture.md](./architecture/screen-editor-architecture.md) | 生效中（2026-07-29） | 大屏设计器架构 |
+| [system-overview.md](./architecture/system-overview.md) | 生效中（2026-08-02） | 系统总览。新人入职第一篇必读 |
+| [screen-editor-architecture.md](./architecture/screen-editor-architecture.md) | 生效中（2026-08-02） | 大屏设计器架构 |
 | [blueprint-runtime-architecture.md](./architecture/blueprint-runtime-architecture.md) | 生效中（2026-07-29） | 蓝图运行时架构 |
-| [development-guide.md](./architecture/development-guide.md) | 生效中（2026-07-24） | 开发指南（新增组件/模块/API/页面/工具/蓝图节点） |
+| [development-guide.md](./architecture/development-guide.md) | 生效中（2026-08-02） | 开发指南（新增组件/模块/API/页面/工具/蓝图节点） |
 
 ### 规范文档
 
@@ -57,11 +57,11 @@
 | 功能 | 状态 | 说明 |
 | --- | --- | --- |
 | [screen-editor/](./specs/screen-editor/README.md) | 生效中（2026-07-30） | 大屏编辑器功能规格（现状基线） |
-| [screen-web-component-sdk/](./specs/screen-web-component-sdk/spec.md) | 实施中（2026-08-01） | 大屏设计器 Web Component SDK（阶段 8 本地质量门已完成：全仓测试、Web/Host E2E、Chrome/Edge 冒烟与 tarball 消费验证通过；私有 registry 发布延期） |
-| [screen-component-sdk/](./specs/screen-component-sdk/spec.md) | 实施中（2026-08-02） | 大屏组件 SDK 与组件注册表（外部组件 registry、真实拖入、V2 持久化/transfer/snapshot/preview 与 0.2 迁移指南已验证；内置 renderer 收敛与浏览器 E2E 待继续） |
-| [screen-sdk-dynamic-data/](./specs/screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 大屏 SDK 后续动态数据能力独立规格，不改变 V1 static 契约 |
+| [screen-web-component-sdk/](./specs/screen-web-component-sdk/spec.md) | 已归档（2026-08-02） | 早期 Web Component SDK rollout 方案；现行宿主接入以 architecture 开发指南为准 |
+| [screen-component-sdk/](./specs/screen-component-sdk/component-author-guide.md) | 生效中（2026-08-02） | 大屏组件 SDK 与组件注册表（外部组件 registry、真实拖入、正式 document 持久化/transfer/snapshot/preview 与迁移指南已验证） |
+| [screen-sdk-dynamic-data/](./specs/screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 大屏 SDK 后续动态数据能力独立规格，不改变 static 能力边界 |
 | [dataset-management/](./specs/dataset-management/README.md) | 实施中（2026-07-28） | 数据集管理设计规格（独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter）。第一阶段 MVP 已完成 |
-| [blueprint-redesign/](./specs/blueprint-redesign/spec.md) | 生效中（2026-07-26） | 事件蓝图 V2 重新设计（组件即节点、锚点即事件、V1→V2 自动迁移，已落地） |
+| [blueprint-redesign/](./specs/blueprint-redesign/spec.md) | 已归档（2026-08-02） | 历史重设计方案；现行组件节点蓝图以 architecture 与 shared schema 为准 |
 
 > 完整功能规格清单见 [specs/README.md](./specs/README.md)。
 
