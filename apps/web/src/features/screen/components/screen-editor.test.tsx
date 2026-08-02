@@ -2,6 +2,13 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { BizCode, BusinessError, type ScreenComponent, type ScreenProject } from '@nebula/shared';
+import {
+  compileBlueprintV2,
+  createScreenEditorStore,
+  useScreenEditorEnvironment,
+  type Diagnostic,
+  type ScreenPreviewRequestDetail,
+} from '@nebula/screen-editor-core';
 
 /**
  * ScreenEditor 集成测试：保存冲突对话框接入（任务 9.3）
@@ -20,62 +27,75 @@ vi.mock('@tanstack/react-router', () => ({
   useNavigate: vi.fn(() => vi.fn()),
 }));
 
-vi.mock('sonner', () => ({
-  toast: {
-    error: vi.fn(),
-    warning: vi.fn(),
-    success: vi.fn(),
-  },
-}));
-
 vi.mock('../hooks', () => ({
   useScreenProject: vi.fn(),
   useUpdateScreenProject: vi.fn(),
   usePublishScreenProject: vi.fn(),
 }));
 
-vi.mock('./screen-canvas', () => ({
-  ScreenCanvas: () => <div data-testid="screen-canvas" />,
+// Task 6.4: mock 共享 registry hook，使编辑器在测试中同步就绪
+vi.mock('../runtime/use-screen-component-registry', () => ({
+  useScreenComponentRegistry: () => ({
+    registry: { get: () => undefined, has: () => false, list: () => [], size: 0 },
+    error: null,
+    isLoading: false,
+  }),
 }));
 
-vi.mock('../components/component-library', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/screen-canvas', () => ({
+  ScreenCanvas: () => {
+    const { requestNavigate } = useScreenEditorEnvironment();
+    return (
+      <div data-testid="screen-canvas">
+        <button
+          type="button"
+          onClick={() => requestNavigate('https://example.com/dashboard', '_blank')}
+        >
+          请求导航
+        </button>
+      </div>
+    );
+  },
+}));
+
+vi.mock('../../../../../../packages/screen-editor-core/src/components/component-library', () => ({
   ComponentLibrary: () => <div data-testid="component-library" />,
   useCanvasDrop: () => ({ handleDrop: vi.fn(), handleDragOver: vi.fn() }),
 }));
 
-vi.mock('../components/property-panel', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/property-panel', () => ({
   PropertyPanel: () => <div data-testid="property-panel" />,
 }));
 
-vi.mock('../components/layer-panel', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/layer-panel', () => ({
   LayerPanel: () => <div data-testid="layer-panel" />,
 }));
 
-vi.mock('../components/canvas-context-menu', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-context-menu', () => ({
   CanvasContextMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
-vi.mock('../components/canvas-rulers', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-rulers', () => ({
   CanvasRulers: () => null,
 }));
 
-vi.mock('./canvas-guides', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-guides', () => ({
   CanvasGuides: () => null,
 }));
 
-vi.mock('./canvas-status-bar', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/canvas-status-bar', () => ({
   CanvasStatusBar: () => null,
 }));
 
-vi.mock('./tool-selector', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/tool-selector', () => ({
   ToolSelector: () => null,
 }));
 
-vi.mock('../hooks/use-keyboard-shortcuts', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/hooks/use-keyboard-shortcuts', () => ({
   useKeyboardShortcuts: vi.fn(),
 }));
 
-vi.mock('../hooks/use-tool-state-machine', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/hooks/use-tool-state-machine', () => ({
   useToolStateMachine: vi.fn(() => ({
     activeTool: 'select' as const,
     currentTool: 'select' as const,
@@ -86,50 +106,55 @@ vi.mock('../hooks/use-tool-state-machine', () => ({
   })),
 }));
 
-vi.mock('./shortcuts-help-dialog', () => ({
-  ShortcutsHelpDialog: () => null,
-}));
+vi.mock(
+  '../../../../../../packages/screen-editor-core/src/components/shortcuts-help-dialog',
+  () => ({
+    ShortcutsHelpDialog: () => null,
+  }),
+);
 
-vi.mock('./project-menubar', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/project-menubar', () => ({
   ProjectMenubar: () => null,
 }));
 
-vi.mock('./canvas-settings-dialog', () => ({
-  CanvasSettingsDialog: () => null,
-}));
+vi.mock(
+  '../../../../../../packages/screen-editor-core/src/components/canvas-settings-dialog',
+  () => ({
+    CanvasSettingsDialog: () => null,
+  }),
+);
 
-vi.mock('./import-dialog', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/import-dialog', () => ({
   ImportDialog: () => null,
 }));
 
-vi.mock('./snapshot-manager-dialog', () => ({
-  SnapshotManagerDialog: () => null,
-}));
+vi.mock(
+  '../../../../../../packages/screen-editor-core/src/components/snapshot-manager-dialog',
+  () => ({
+    SnapshotManagerDialog: () => null,
+  }),
+);
 
-vi.mock('../blueprint/sheet', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/blueprint/sheet', () => ({
   BlueprintSheet: () => null,
   BlueprintSheetV2: () => null,
 }));
 
-vi.mock('../blueprint/compiler', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/blueprint/compiler', () => ({
   compileBlueprint: vi.fn(() => ({ rules: [], diagnostics: [] })),
 }));
 
-vi.mock('../blueprint/compiler/v2-compile', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/blueprint/compiler/v2-compile', () => ({
   compileBlueprintV2: vi.fn(() => ({ rules: [], diagnostics: [] })),
 }));
 
-vi.mock('./code-editor-sheet', () => ({
+vi.mock('../../../../../../packages/screen-editor-core/src/components/code-editor-sheet', () => ({
   CodeEditorSheet: () => null,
 }));
 
 import { useParams } from '@tanstack/react-router';
 import { useScreenProject, useUpdateScreenProject, usePublishScreenProject } from '../hooks';
 import { ScreenEditor as ScreenEditorContent } from './screen-editor';
-import { createScreenEditorStore } from '../stores/editor-store';
-import { type Diagnostic } from '../blueprint/compiler';
-import { compileBlueprintV2 } from '../blueprint/compiler/v2-compile';
-import { toast } from 'sonner';
 
 const mockUseParams = useParams as unknown as ReturnType<typeof vi.fn>;
 const mockUseScreenProject = useScreenProject as unknown as ReturnType<typeof vi.fn>;
@@ -138,8 +163,18 @@ const mockUsePublishScreenProject = usePublishScreenProject as unknown as Return
 const mockCompileBlueprintV2 = compileBlueprintV2 as unknown as ReturnType<typeof vi.fn>;
 const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 
-function ScreenEditor() {
-  return <ScreenEditorContent store={useScreenEditorStore} debug={false} />;
+interface ScreenEditorTestHostProps {
+  capabilityProfile?: 'dynamic' | 'static';
+}
+
+function ScreenEditor({ capabilityProfile = 'dynamic' }: ScreenEditorTestHostProps = {}) {
+  return (
+    <ScreenEditorContent
+      store={useScreenEditorStore}
+      debug={false}
+      capabilityProfile={capabilityProfile}
+    />
+  );
 }
 
 const BASELINE_UPDATED_AT = '2025-06-01 10:30:45';
@@ -213,6 +248,8 @@ describe('ScreenEditor 保存冲突对话框接入（任务 9.3）', () => {
   it('保存冲突时打开对话框', () => {
     render(<ScreenEditor />);
 
+    expect(screen.queryByRole('button', { name: '返回列表' })).not.toBeInTheDocument();
+
     // 初始状态：对话框未显示
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
@@ -235,6 +272,59 @@ describe('ScreenEditor 保存冲突对话框接入（任务 9.3）', () => {
     expect(
       screen.getByText('项目已在其他窗口或会话中被修改。重新加载将放弃当前未保存内容。'),
     ).toBeInTheDocument();
+  });
+
+  it('预览派发包含当前草稿的 composed request event', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const listener = vi.fn<(event: Event) => void>();
+    const { container } = render(<ScreenEditor capabilityProfile="static" />);
+    container.addEventListener('nebula-preview-request', listener);
+
+    fireEvent.click(screen.getByRole('button', { name: '预览' }));
+
+    expect(listener).toHaveBeenCalledOnce();
+    const event = listener.mock.calls[0]?.[0] as CustomEvent<ScreenPreviewRequestDetail>;
+    expect(event.bubbles).toBe(true);
+    expect(event.composed).toBe(true);
+    expect(event.detail).toMatchObject({
+      projectId: 'screen-1',
+      revision: BASELINE_UPDATED_AT,
+      draft: {
+        name: '测试大屏',
+        document: { schemaVersion: 1 },
+      },
+    });
+    expect(openSpy).toHaveBeenCalledWith(
+      '/screen-editor-preview/screen-1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
+  });
+
+  it('画布导航请求派发 composed request event', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const listener = vi.fn<(event: Event) => void>();
+    const { container } = render(<ScreenEditor capabilityProfile="static" />);
+    container.addEventListener('nebula-navigate-request', listener);
+
+    fireEvent.click(screen.getByRole('button', { name: '请求导航' }));
+
+    expect(listener).toHaveBeenCalledOnce();
+    const event = listener.mock.calls[0]?.[0] as CustomEvent;
+    expect(event.bubbles).toBe(true);
+    expect(event.composed).toBe(true);
+    expect(event.detail).toEqual({
+      projectId: 'screen-1',
+      target: '_blank',
+      url: 'https://example.com/dashboard',
+    });
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://example.com/dashboard',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
   });
 
   it('冲突时本地组件数据未被响应错误覆盖', () => {
@@ -744,9 +834,6 @@ describe('ScreenEditor 重新加载失败处理（任务 9.7）', () => {
 
     // 重置 Store 到初始基线
     useScreenEditorStore.getState().loadProject(project);
-
-    // 重置 toast.error 调用记录，避免用例间互相干扰
-    vi.mocked(toast.error).mockClear();
   });
 
   /** 触发保存冲突并打开对话框 */
@@ -791,7 +878,7 @@ describe('ScreenEditor 重新加载失败处理（任务 9.7）', () => {
     // 4. isDirty 仍为 true（本地修改未丢失）
     expect(useScreenEditorStore.getState().isDirty).toBe(true);
     // 5. 显示错误提示
-    expect(toast.error).toHaveBeenCalledWith('重新加载失败，请重试');
+    expect(screen.getByRole('alert')).toHaveTextContent('重新加载失败，请重试');
   });
 
   it('重新加载失败后 Store 未被清空或部分替换', async () => {
@@ -834,7 +921,7 @@ describe('ScreenEditor 重新加载失败处理（任务 9.7）', () => {
     expect(state.history.future).toHaveLength(baselineHistoryFutureLength);
     expect(state.isDirty).toBe(true);
     // 显示错误提示
-    expect(toast.error).toHaveBeenCalledWith('重新加载失败，请重试');
+    expect(screen.getByRole('alert')).toHaveTextContent('重新加载失败，请重试');
   });
 
   it('重新加载失败后对话框保持打开', async () => {
@@ -896,7 +983,7 @@ describe('ScreenEditor 重新加载失败处理（任务 9.7）', () => {
     expect(useScreenEditorStore.getState().project?.components[0]?.id).toBe('comp-local');
     expect(useScreenEditorStore.getState().isDirty).toBe(true);
     expect(mockRefetch).toHaveBeenCalledTimes(1);
-    expect(toast.error).toHaveBeenCalledWith('重新加载失败，请重试');
+    expect(screen.getByRole('alert')).toHaveTextContent('重新加载失败，请重试');
 
     // 第二次点击"重新加载" - 成功
     await act(async () => {

@@ -65,9 +65,10 @@ pnpm biome:fix        # Biome 安全自动修复（格式化用这个）
 ## Biome 工具链
 
 - 根命令 `pnpm biome:check` 用于执行 Biome 检查，`pnpm biome:fix` 用于执行 Biome 安全自动修复
+- 执行质量门检查时，Biome 阶段必须先运行 `pnpm biome:fix` 自动修复，再运行 `pnpm biome:check` 确认无剩余问题
 - pre-commit 使用 `simple-git-hooks` + `lint-staged`，仅对暂存且受支持的文件运行 Biome 检查
 - Biome 检查通过仅代表格式、基础 lint 和 import 组织符合配置，不能替代 `pnpm typecheck` 与 `pnpm lint`
-- 修改 Biome 配置后，应按任务要求运行 `pnpm biome:check`；涉及 TypeScript/ESLint 兼容性时继续运行 `pnpm typecheck` 和 `pnpm lint`
+- 修改 Biome 配置后，应按任务要求依次运行 `pnpm biome:fix` 和 `pnpm biome:check`；涉及 TypeScript/ESLint 兼容性时继续运行 `pnpm typecheck` 和 `pnpm lint`
 
 ## 前端注意事项
 

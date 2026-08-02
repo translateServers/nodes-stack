@@ -37,7 +37,17 @@ const mocks = vi.hoisted(() => {
 
   return {
     createdInstances,
-    axiosMock: { create: vi.fn(createInstance) },
+    axiosMock: {
+      create: vi.fn(createInstance),
+      isCancel: vi.fn((error: unknown) =>
+        Boolean(
+          typeof error === 'object' &&
+            error !== null &&
+            '__CANCEL__' in error &&
+            error.__CANCEL__ === true,
+        ),
+      ),
+    },
     useAuthStoreMock: {
       getState: vi.fn(() => ({
         accessToken: null as string | null,
@@ -217,6 +227,17 @@ describe('api/core/http', () => {
 
       await expect(responseError(error)).rejects.toThrow(BusinessError);
       expect(mocks.emitApiErrorMock).toHaveBeenCalled();
+    });
+
+    it('取消请求时抛 AbortError 且不触发全局错误提示', async () => {
+      const error = {
+        __CANCEL__: true,
+        message: 'canceled',
+        config: {},
+      } as unknown as AxiosError;
+
+      await expect(responseError(error)).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mocks.emitApiErrorMock).not.toHaveBeenCalled();
     });
 
     it('401 + _retry=true → 不刷新，直接 throwApiError', async () => {

@@ -5,59 +5,39 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "development": "./src/index.ts",
+      "types": "./src/index.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
     },
     "./types": {
-      "import": {
-        "types": "./dist/types/api.types.d.mts",
-        "default": "./dist/types/api.types.mjs"
-      },
-      "require": {
-        "types": "./dist/types/api.types.d.cts",
-        "default": "./dist/types/api.types.cjs"
-      }
+      "development": "./src/types/api.types.ts",
+      "types": "./src/types/api.types.ts",
+      "import": "./dist/types/api.types.mjs",
+      "require": "./dist/types/api.types.cjs"
     },
     "./schemas": {
-      "import": {
-        "types": "./dist/schemas/index.d.mts",
-        "default": "./dist/schemas/index.mjs"
-      },
-      "require": {
-        "types": "./dist/schemas/index.d.cts",
-        "default": "./dist/schemas/index.cjs"
-      }
+      "development": "./src/schemas/index.ts",
+      "types": "./src/schemas/index.ts",
+      "import": "./dist/schemas/index.mjs",
+      "require": "./dist/schemas/index.cjs"
     },
     "./errors": {
-      "import": {
-        "types": "./dist/errors/index.d.mts",
-        "default": "./dist/errors/index.mjs"
-      },
-      "require": {
-        "types": "./dist/errors/index.d.cts",
-        "default": "./dist/errors/index.cjs"
-      }
+      "development": "./src/errors/index.ts",
+      "types": "./src/errors/index.ts",
+      "import": "./dist/errors/index.mjs",
+      "require": "./dist/errors/index.cjs"
     },
     "./utils": {
-      "import": {
-        "types": "./dist/utils/index.d.mts",
-        "default": "./dist/utils/index.mjs"
-      },
-      "require": {
-        "types": "./dist/utils/index.d.cts",
-        "default": "./dist/utils/index.cjs"
-      }
+      "development": "./src/utils/index.ts",
+      "types": "./src/utils/index.ts",
+      "import": "./dist/utils/index.mjs",
+      "require": "./dist/utils/index.cjs"
     }
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
+  "types": "./src/index.ts",
   "files": [
     "dist"
   ],

@@ -10,9 +10,18 @@ export function AppLayout() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const closeMobileSidebar = useUiStore((s) => s.closeMobileSidebar);
   const layout = useLayoutConfig();
+  // 全屏工作台（如大屏编辑器）：无侧边栏/Header/Footer，需要固定视口高度
+  // 以便子组件可通过 h-full 撑满，而非仅按内容高度撑开
+  const isFullscreen = !layout.sidebar && !layout.header && !layout.footer;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div
+      className={
+        isFullscreen
+          ? 'h-screen bg-background text-foreground'
+          : 'min-h-screen bg-background text-foreground'
+      }
+    >
       {layout.sidebar && mobileOpen && (
         <button
           type="button"
@@ -26,14 +35,21 @@ export function AppLayout() {
 
       <div
         className={cn(
-          'flex min-h-screen flex-col transition-[padding-left] duration-300 ease-in-out',
+          'flex flex-col transition-[padding-left] duration-300 ease-in-out',
+          isFullscreen ? 'h-screen overflow-hidden' : 'min-h-screen',
           // 仅在显示侧边栏时根据折叠状态留出空间
           layout.sidebar && (collapsed ? 'lg:pl-16' : 'lg:pl-64'),
         )}
       >
         {layout.header && <AppHeader />}
 
-        <main className={cn('flex-1', layout.mainPadding ? 'p-4 lg:p-6' : '')}>
+        <main
+          className={cn(
+            'min-h-0 flex-1',
+            layout.mainPadding ? 'p-4 lg:p-6' : '',
+            isFullscreen ? 'flex flex-col' : '',
+          )}
+        >
           <Outlet />
         </main>
 

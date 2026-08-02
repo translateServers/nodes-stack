@@ -182,10 +182,9 @@ test.describe('事件蓝图动作 E2E - refreshDataSource（任务 7.2）', () =
       expect(res.ok()).toBeTruthy();
       await page.waitForLoadState('networkidle');
 
-      // 等待柱状图渲染初始数据（断言 2 根柱条，且文本包含 "一月"）
-      const chartSvg = page.locator('svg[viewBox="0 0 400 300"]');
-      await expect(chartSvg).toBeVisible({ timeout: 5000 });
-      await expect(chartSvg.locator('text', { hasText: '一月' })).toBeVisible({ timeout: 5000 });
+      // 等待 ECharts 渲染初始两项数据
+      const chart = page.locator('.nebula-bar-chart');
+      await expect(chart).toHaveAccessibleName(/共 2 项数据/, { timeout: 5000 });
       const initialCount = mock.requestCount();
       expect(initialCount).toBeGreaterThanOrEqual(1);
 
@@ -208,15 +207,8 @@ test.describe('事件蓝图动作 E2E - refreshDataSource（任务 7.2）', () =
         .poll(() => mock?.requestCount() ?? 0, { timeout: 5000 })
         .toBe(refreshMockBaseline + 1);
 
-      // 断言：柱状图刷新为新数据（柱条数从 2 变为 3，文本包含 "四月"）
-      await expect
-        .poll(async () => await chartSvg.locator('rect').count(), {
-          timeout: 5000,
-        })
-        .toBe(3);
-      await expect(chartSvg.locator('text', { hasText: '四月' })).toBeVisible();
-      // 旧数据应消失（断言"一月"文本不再渲染于图表内）
-      await expect(chartSvg.locator('text', { hasText: '一月' })).toHaveCount(0);
+      // 断言：柱状图刷新为三项新数据
+      await expect(chart).toHaveAccessibleName(/共 3 项数据/, { timeout: 5000 });
     } finally {
       await mock?.dispose().catch(() => {});
       await context.close().catch(() => {});

@@ -92,10 +92,9 @@ export function useServerSideQuery<TData>(
   const sorting = state.sorting;
   const columnFilters = state.columnFilters;
 
-  // 从 columnFilters 中提取全局搜索关键词
-  const searchValue = searchColumnIds?.[0]
-    ? (table.getColumn(searchColumnIds[0])?.getFilterValue() as string | undefined)
-    : undefined;
+  const rawGlobalFilter: unknown = state.globalFilter;
+  const searchValue =
+    searchColumnIds?.length && typeof rawGlobalFilter === 'string' ? rawGlobalFilter : undefined;
 
   useEffect(() => {
     if (!enabled || !config?.onQueryChange) return;

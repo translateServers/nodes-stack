@@ -1,0 +1,36 @@
+{
+  "name": "@nebula-example/component-lab-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Component Lab Host：验证外部组件注册、组件库投影与 design/preview 渲染闭环（Spec §13.2 Phase 2, Task 2.3）",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nebula-example/indicator-card-vanilla": "workspace:*",
+    "@nebula/screen-component-sdk": "workspace:*",
+    "@nebula/screen-editor-core": "workspace:*",
+    "@nebula/shared": "workspace:*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@nebula/eslint-config": "workspace:*",
+    "@nebula/typescript-config": "workspace:*",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6",
+    "eslint": "^9.18.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.9"
+  }
+}

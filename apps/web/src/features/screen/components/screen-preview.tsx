@@ -1,6 +1,7 @@
 import { useParams } from '@tanstack/react-router';
 import { Loader2 } from 'lucide-react';
 import { useScreenPreview } from '../hooks';
+import { useScreenComponentRegistry } from '../runtime/use-screen-component-registry';
 import { PreviewCanvas } from './screen-preview-canvas';
 
 /**
@@ -12,13 +13,34 @@ import { PreviewCanvas } from './screen-preview-canvas';
  * 与编辑器内预览（EditorPreviewScreen）的区别：
  * - 本页读取已发布版本，对外公开访问
  * - 编辑器内预览读取草稿，需登录鉴权
- * 两者共享 PreviewCanvas 渲染层，仅数据来源不同。
+ * 两者共享 PreviewCanvas 渲染层与同一 registry factory（Task 6.4, Spec §14.2）。
  *
  * 不存在态文案："大屏项目不存在或未发布" — 因为 preview 端点仅在已发布时返回数据。
  */
 export function ScreenPreview() {
   const { id } = useParams({ from: '/screen-preview/$id' });
   const { data: project, isLoading } = useScreenPreview(id);
+  const {
+    registry,
+    error: registryError,
+    isLoading: registryLoading,
+  } = useScreenComponentRegistry();
+
+  if (registryLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-black">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    );
+  }
+
+  if (registryError !== null || registry === null) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-black text-white">
+        组件注册表加载失败
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -36,5 +58,5 @@ export function ScreenPreview() {
     );
   }
 
-  return <PreviewCanvas project={project} />;
+  return <PreviewCanvas project={project} registry={registry} />;
 }

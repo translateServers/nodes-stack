@@ -125,7 +125,11 @@ export const LogicConfigSchema = z.object({
   sortDirection: SortDirectionSchema.optional().describe('排序方向'),
   limit: z.number().int().positive().optional().describe('条数限制（正整数）'),
 });
-export type LogicConfig = z.infer<typeof LogicConfigSchema>;
+export interface LogicConfig {
+  sortField?: 'dimension' | 'value';
+  sortDirection?: 'asc' | 'desc';
+  limit?: number;
+}
 
 // ===== 组件数据源绑定 → 数据集引用 =====
 

@@ -198,24 +198,24 @@ test.describe('事件蓝图 dangling E2E（任务 7.3）', () => {
       await adminPage.getByRole('button', { name: '工具' }).click();
       await adminPage.getByRole('menuitem', { name: /^事件蓝图/ }).click();
 
-      const sheet = adminPage.getByRole('dialog', { name: '事件蓝图' });
+      const sheet = adminPage.getByRole('dialog', { name: '事件蓝图 V2' });
       await expect(sheet).toBeVisible({ timeout: 5000 });
-      await expect(sheet.getByTestId('blueprint-canvas')).toBeVisible();
+      await expect(sheet.getByTestId('blueprint-v2-canvas')).toBeVisible();
 
       // 等待问题面板渲染（编译器 rAF 节流后产出 dangling 诊断）
       const problemsPanel = sheet.getByTestId('blueprint-problems-panel');
       await expect(problemsPanel).toBeVisible({ timeout: 5000 });
 
-      // 断言问题面板含 warning 级条目，message 含 dangling 关键词与目标组件 ID
-      const warningItems = problemsPanel.locator(
-        '[data-testid="problem-item"][data-severity="warning"]',
+      // V2 将不存在的目标组件视为发布阻断错误
+      const errorItems = problemsPanel.locator(
+        '[data-testid="problem-item"][data-severity="error"]',
       );
-      await expect(warningItems).toHaveCount(1, { timeout: 5000 });
-      await expect(warningItems).toContainText(/dangling/i);
-      await expect(warningItems).toContainText(DANGLING_TARGET_ID);
+      await expect(errorItems).toHaveCount(1, { timeout: 5000 });
+      await expect(errorItems).toContainText(/dangling/i);
+      await expect(errorItems).toContainText(DANGLING_TARGET_ID);
 
       // 关闭 Sheet
-      await sheet.getByTestId('blueprint-sheet-close').click();
+      await sheet.getByTestId('blueprint-v2-sheet-close').click();
       await expect(sheet).not.toBeVisible({ timeout: 3000 });
     } finally {
       await deleteScreenProject(projectId).catch(() => {});

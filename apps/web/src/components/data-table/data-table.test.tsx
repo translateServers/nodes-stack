@@ -151,6 +151,28 @@ describe('DataTable', () => {
       );
     });
 
+    it('should match any configured search column', async () => {
+      const user = userEvent.setup();
+      render(
+        <DataTable
+          data={mockData}
+          columns={columns}
+          searchColumnIds={['name', 'email']}
+          searchPlaceholder="搜索姓名或邮箱"
+        />,
+      );
+
+      await user.type(screen.getByPlaceholderText('搜索姓名或邮箱'), 'bob@test.com');
+
+      await waitFor(
+        () => {
+          expect(screen.getByText('Bob')).toBeInTheDocument();
+          expect(screen.queryByText('Alice')).not.toBeInTheDocument();
+        },
+        { timeout: 500 },
+      );
+    });
+
     it('should show empty state when search has no results', async () => {
       const user = userEvent.setup();
       render(

@@ -17,7 +17,7 @@ vi.mock('./api', () => ({
 
 import * as api from './api';
 import { useUpdateScreenProject, usePublishScreenProject } from './hooks';
-import { createScreenEditorStore } from './stores/editor-store';
+import { createScreenEditorStore } from '@nebula/screen-editor-core';
 
 const useScreenEditorStore = createScreenEditorStore({ persistPreferences: false });
 

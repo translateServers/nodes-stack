@@ -16,15 +16,40 @@ vi.mock('../hooks', () => ({
   useScreenPreview: vi.fn(),
 }));
 
-vi.mock('../registry/renderer', () => ({
-  ComponentRenderer: ({ component }: { component: { id: string; name: string } }): JSX.Element => (
-    <div data-testid={`renderer-${component.id}`}>{component.name}</div>
-  ),
+// Task 6.4: mock 共享 registry hook，使预览组件在测试中同步就绪
+vi.mock('../runtime/use-screen-component-registry', () => ({
+  useScreenComponentRegistry: () => ({
+    registry: { get: () => undefined, has: () => false, list: () => [], size: 0 },
+    error: null,
+    isLoading: false,
+  }),
 }));
+
+vi.mock('@nebula/screen-editor-core', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@nebula/screen-editor-core')>();
+  return {
+    ...original,
+    PreviewComponentRenderer: ({
+      component,
+    }: {
+      component: { id: string; name: string };
+    }): JSX.Element => {
+      const runtimeProfile = original.useOptionalScreenEditorRuntimeProfile();
+      return (
+        <div
+          data-testid={`renderer-${component.id}`}
+          data-runtime-profile={runtimeProfile?.capabilityProfile}
+        >
+          {component.name}
+        </div>
+      );
+    },
+  };
+});
 
 import { useParams } from '@tanstack/react-router';
 import { useScreenPreview } from '../hooks';
-import { resolveComponentContainerStyle } from '../registry/component-container-style';
+import { resolveComponentContainerStyle } from '@nebula/screen-editor-core';
 import { ScreenPreview } from './screen-preview';
 import type { CanvasConfig, EventBlueprint, ScreenComponent, ScreenProject } from '@nebula/shared';
 
@@ -170,6 +195,14 @@ describe('ScreenPreview', () => {
   });
 
   describe('预览氛围与交错入场', () => {
+    it('为预览渲染链路注入 dynamic runtime profile', () => {
+      setProject(makeProject([makeComponent()]));
+
+      render(<ScreenPreview />);
+
+      expect(screen.getByTestId('renderer-comp-a').dataset['runtimeProfile']).toBe('dynamic');
+    });
+
     it('渲染预览氛围背景与画布舞台', () => {
       setProject(makeProject([makeComponent()]));
 

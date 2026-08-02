@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev",
+    "dev:sdk-host": "turbo run dev --filter=@nebula/screen-sdk-host",
     "dev:web": "turbo run dev --filter=@nebula/web",
     "dev:server": "turbo run dev --filter=@nebula/nestjs-server",
     "build": "turbo run build",

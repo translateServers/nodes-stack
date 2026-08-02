@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ApiDataSourceConfig } from '@nebula/shared';
-import { interpolateApiDataSourceConfig } from '../blueprint/lib/template-interpolation';
+import { interpolateApiDataSourceConfig } from '@nebula/screen-editor-core';
 
 /** 单次请求超时时间（毫秒） */
 export const API_REQUEST_TIMEOUT_MS = 10_000;

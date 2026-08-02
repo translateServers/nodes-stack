@@ -19,6 +19,12 @@ interface DataTableToolbarProps<TData> {
   rightContent?: React.ReactNode;
 }
 
+function readStringGlobalFilter(value: unknown): string {
+  if (typeof value !== 'object' || value === null || !('globalFilter' in value)) return '';
+  const globalFilter = value.globalFilter;
+  return typeof globalFilter === 'string' ? globalFilter : '';
+}
+
 export function DataTableToolbar<TData>({
   table,
   searchPlaceholder = '搜索...',
@@ -34,9 +40,7 @@ export function DataTableToolbar<TData>({
   const hasSelection = selectedCount > 0;
 
   const primarySearchColumn = searchColumnIds?.[0];
-  const filterValue = primarySearchColumn
-    ? ((table.getColumn(primarySearchColumn)?.getFilterValue() as string | undefined) ?? '')
-    : '';
+  const filterValue: string = primarySearchColumn ? readStringGlobalFilter(table.getState()) : '';
 
   // 本地状态存储输入值，与防抖值解耦
   const [localSearchValue, setLocalSearchValue] = useState(filterValue);
@@ -44,10 +48,8 @@ export function DataTableToolbar<TData>({
 
   // 监听防抖后的值变化，更新表格过滤
   useEffect(() => {
-    searchColumnIds?.forEach((columnId) => {
-      table.getColumn(columnId)?.setFilterValue(debouncedSearchValue);
-    });
-  }, [debouncedSearchValue, searchColumnIds, table]);
+    if (primarySearchColumn) table.setGlobalFilter(debouncedSearchValue);
+  }, [debouncedSearchValue, primarySearchColumn, table]);
 
   // 当外部过滤值变化时（如重置），同步本地状态
   useEffect(() => {
@@ -61,9 +63,7 @@ export function DataTableToolbar<TData>({
   const handleClearSearch = () => {
     setLocalSearchValue('');
     // 立即清除过滤，不等待防抖
-    searchColumnIds?.forEach((columnId) => {
-      table.getColumn(columnId)?.setFilterValue('');
-    });
+    table.setGlobalFilter('');
   };
 
   // 活跃的高级筛选条件（排除搜索列的文本筛选）

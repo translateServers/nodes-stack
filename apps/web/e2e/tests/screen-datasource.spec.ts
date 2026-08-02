@@ -64,15 +64,10 @@ test.describe('静态数据源全链路 E2E（任务 10.1）', () => {
     await adminPage.goto(`/screen/${project.id}`);
     await adminPage.waitForLoadState('networkidle');
 
-    // 画布中应渲染静态数据（SVG rect 柱条）
-    const chartSvg = adminPage.locator('svg[viewBox="0 0 400 300"]');
-    await expect(chartSvg).toBeVisible({ timeout: 5000 });
-    const svgRects = chartSvg.locator('rect');
-    expect(await svgRects.count()).toBe(2);
-
-    // 画布中应包含数据标签
-    await expect(chartSvg.locator('text', { hasText: '北京' })).toBeVisible();
-    await expect(chartSvg.locator('text', { hasText: '500' })).toBeVisible();
+    // 画布中应由 ECharts 渲染两项静态数据
+    await expect(adminPage.getByRole('img', { name: /共 2 项数据/ })).toBeVisible({
+      timeout: 5000,
+    });
 
     // 公开预览渲染一致
     const anonCtx = await browser.newContext();
@@ -81,10 +76,9 @@ test.describe('静态数据源全链路 E2E（任务 10.1）', () => {
       await previewPage.goto(`/screen-preview/${project.id}`);
       await previewPage.waitForLoadState('networkidle');
 
-      const previewSvg = previewPage.locator('svg[viewBox="0 0 400 300"]');
-      await expect(previewSvg).toBeVisible({ timeout: 5000 });
-      expect(await previewSvg.locator('rect').count()).toBe(2);
-      await expect(previewSvg.locator('text', { hasText: '上海' })).toBeVisible();
+      await expect(previewPage.getByRole('img', { name: /共 2 项数据/ })).toBeVisible({
+        timeout: 5000,
+      });
     } finally {
       await anonCtx.close();
     }
@@ -125,9 +119,9 @@ test.describe('API 数据源全链路 E2E（任务 10.2）', () => {
 
     // 画布渲染 API 数据
     const sampleData = createSampleChartPayload();
-    const chartSvg = adminPage.locator('svg[viewBox="0 0 400 300"]');
-    await expect(chartSvg).toBeVisible({ timeout: 5000 });
-    await expect(chartSvg.locator('text', { hasText: sampleData[0].name })).toBeVisible();
+    await expect(
+      adminPage.getByRole('img', { name: new RegExp(`共 ${sampleData.length} 项数据`) }),
+    ).toBeVisible({ timeout: 5000 });
     expect(mock.requestCount()).toBeGreaterThanOrEqual(1);
 
     await mock.dispose();
@@ -158,8 +152,8 @@ test.describe('API 数据源全链路 E2E（任务 10.2）', () => {
 
     // 错误态展示
     await expect(adminPage.getByText(/503/)).toBeVisible({ timeout: 5000 });
-    // 图表 SVG 不渲染（错误态替代）
-    expect(await adminPage.locator('svg[viewBox="0 0 400 300"]').count()).toBe(0);
+    // ECharts 不渲染（错误态替代）
+    expect(await adminPage.locator('.nebula-bar-chart').count()).toBe(0);
 
     await mock.dispose();
   });
@@ -189,8 +183,8 @@ test.describe('API 数据源全链路 E2E（任务 10.2）', () => {
 
     // 空态展示
     await expect(adminPage.getByText('暂无数据')).toBeVisible({ timeout: 5000 });
-    // 图表 SVG 不渲染（空态替代）
-    expect(await adminPage.locator('svg[viewBox="0 0 400 300"]').count()).toBe(0);
+    // ECharts 不渲染（空态替代）
+    expect(await adminPage.locator('.nebula-bar-chart').count()).toBe(0);
 
     await mock.dispose();
   });
@@ -228,7 +222,7 @@ test.describe('定时刷新 E2E（任务 10.3）', () => {
     await adminPage.waitForLoadState('networkidle');
 
     // 首次请求
-    await expect(adminPage.locator('svg[viewBox="0 0 400 300"]')).toBeVisible({ timeout: 5000 });
+    await expect(adminPage.locator('.nebula-bar-chart')).toBeVisible({ timeout: 5000 });
     const initialCount = mock.requestCount();
     expect(initialCount).toBeGreaterThanOrEqual(1);
 
@@ -277,12 +271,12 @@ test.describe('四层独立修改 E2E（任务 10.4）', () => {
     await adminPage.goto(`/screen/${project.id}`);
     await adminPage.waitForLoadState('networkidle');
 
-    // 选中 bar-chart（点击画布中的 SVG）
-    await adminPage.locator('svg').first().click();
+    // 选中 bar-chart
+    await adminPage.locator(`[data-component-id="${barChart.id}"]`).click();
     await adminPage.waitForTimeout(500);
 
     // 修改视觉层：标题
-    const titleInput = adminPage.getByLabel('标题');
+    const titleInput = adminPage.getByLabel('标题', { exact: true });
     if (await titleInput.isVisible()) {
       await titleInput.fill('新标题');
       await titleInput.blur();
@@ -318,7 +312,7 @@ test.describe('四层独立修改 E2E（任务 10.4）', () => {
     await adminPage.waitForLoadState('networkidle');
 
     // 选中 bar-chart
-    await adminPage.locator('svg[viewBox="0 0 400 300"]').click();
+    await adminPage.locator(`[data-component-id="${barChart.id}"]`).click();
     await adminPage.waitForTimeout(500);
 
     // 修改数据层：编辑静态数据
@@ -330,7 +324,7 @@ test.describe('四层独立修改 E2E（任务 10.4）', () => {
     }
 
     // 验证视觉层配置不变：标题仍为原始值
-    const titleInput = adminPage.getByLabel('标题');
+    const titleInput = adminPage.getByLabel('标题', { exact: true });
     if (await titleInput.isVisible()) {
       const titleValue = await titleInput.inputValue();
       expect(titleValue).toBe('原始标题');
@@ -357,11 +351,11 @@ test.describe('四层独立修改 E2E（任务 10.4）', () => {
     await adminPage.waitForLoadState('networkidle');
 
     // 选中 bar-chart
-    await adminPage.locator('svg[viewBox="0 0 400 300"]').click();
+    await adminPage.locator(`[data-component-id="${barChart.id}"]`).click();
     await adminPage.waitForTimeout(500);
 
     // 修改视觉层：标题
-    const titleInput = adminPage.getByLabel('标题');
+    const titleInput = adminPage.getByLabel('标题', { exact: true });
     if (await titleInput.isVisible()) {
       await titleInput.fill('改后标题');
       await titleInput.blur();

@@ -1,0 +1,41 @@
+{
+  "name": "@nebula/screen-component-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "大屏组件作者 SDK：无框架依赖的组件包协议、manifest 校验与测试辅助",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./testing": {
+      "development": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify:tarball": "node ./scripts/verify-tarball-consumer.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@nebula/eslint-config": "workspace:*",
+    "@nebula/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.18.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

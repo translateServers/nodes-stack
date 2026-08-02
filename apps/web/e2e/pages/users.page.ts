@@ -89,8 +89,7 @@ export class UsersPage extends BasePage {
 
   async searchFor(text: string): Promise<void> {
     await this.searchInput.fill(text);
-    // 等待表格更新（TanStack Table 客户端过滤是同步的）
-    await expect(this.table.locator('tbody tr').first()).toBeVisible();
+    await expect.poll(() => this.getRowCount()).toBe(1);
   }
 
   async clearSearch(): Promise<void> {

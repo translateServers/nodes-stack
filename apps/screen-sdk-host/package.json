@@ -1,0 +1,28 @@
+{
+  "name": "@nebula/screen-sdk-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "dev": "vite --host 127.0.0.1",
+    "e2e": "playwright test --config=e2e/playwright.config.ts --project=chromium",
+    "e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed",
+    "e2e:release": "playwright test --config=e2e/playwright.config.ts --project=chrome --project=edge --grep @release",
+    "e2e:install": "playwright install chromium",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e/tsconfig.json"
+  },
+  "dependencies": {
+    "@nebula/screen-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@nebula/eslint-config": "workspace:*",
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.18.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.0"
+  }
+}
