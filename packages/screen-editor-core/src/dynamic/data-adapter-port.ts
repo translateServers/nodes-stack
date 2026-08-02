@@ -28,6 +28,8 @@ export interface ScreenDataExecutionContext {
 
 /** 组件数据执行请求 */
 export interface ScreenDataExecuteRequest {
+  /** 服务端会话上下文 ID（已通过 openContext 建立） */
+  readonly contextId: string;
   readonly componentId: string;
   /** 数据源意图（如 host/xj-metric + metricId/binding），由文档解析而来 */
   readonly intent: ScreenComponentHostMetricIntent;

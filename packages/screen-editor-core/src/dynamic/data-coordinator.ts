@@ -154,6 +154,7 @@ export class ScreenDataCoordinator {
     this.notify(componentId, { status: 'loading' });
 
     const request: ScreenDataExecuteRequest = {
+      contextId: this.#context.contextId,
       componentId,
       intent: {
         type: intent.type,
