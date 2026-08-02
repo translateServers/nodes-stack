@@ -4,9 +4,8 @@
  * 这是 apps/web 注册外部组件的**单一入口**——编辑路由、编辑器内预览和公开预览
  * 复用此 factory，不在三个入口分别维护组件列表。
  *
- * 内置 6 组件（text / bar-chart / rect / ellipse / image / button）由 factory
- * 自动注入，不需要在此声明。宿主受信任的外部组件通过 `NEBULA_HOST_COMPONENT_PLUGINS`
- * 声明。
+ * SDK 内置组件由下方白名单控制。
+ * 宿主受信任的外部组件通过 `NEBULA_HOST_COMPONENT_PLUGINS` 声明。
  *
  * 安全边界（Spec §12.2 + §14.2）：
  * - 外部组件不得携带 dataSource / logic / interaction（正式 parser 返回
@@ -32,19 +31,36 @@
 import {
   createScreenComponentRegistry,
   isScreenComponentRegistryError,
+  type BuiltinScreenComponentType,
   type ScreenComponentPlugin,
   type ScreenComponentRegistry,
   type ScreenComponentRegistryError,
 } from '@nebula/screen-sdk/components';
+import { indicatorCardPlugin } from '@nebula-example/indicator-card-vanilla';
+
+/**
+ * 宿主允许加载的内置组件 type。
+ *
+ * apps/web 当前不加载 ellipse。未加载的 type 不会进入组件库，引用它的文档会在
+ * registry-aware 校验阶段被拒绝。
+ */
+const NEBULA_HOST_BUILT_IN_COMPONENT_TYPES: readonly BuiltinScreenComponentType[] = [
+  'text',
+  'bar-chart',
+  'rect',
+  'image',
+  'button',
+];
 
 /**
  * 宿主受信任的外部组件 plugin 列表。
  *
- * 新增外部组件时在此数组添加 plugin。当前为空——apps/web 仅使用内置 6 组件。
+ * 新增外部组件时在此数组添加 plugin。指标卡作为 apps/web 的首个自定义组件，用于验证
+ * 宿主注册、组件库拖入、属性面板和预览的完整链路。
  *
  * 注意：添加外部组件后，宿主适配器必须在保存前使用同一注册表完成文档校验。
  */
-const NEBULA_HOST_COMPONENT_PLUGINS: readonly ScreenComponentPlugin[] = [];
+const NEBULA_HOST_COMPONENT_PLUGINS: readonly ScreenComponentPlugin[] = [indicatorCardPlugin];
 
 /**
  * 单例 registry promise 缓存。
@@ -58,7 +74,8 @@ let registryPromise: Promise<ScreenComponentRegistry> | null = null;
  * 创建 Nebula Web 共享组件注册表（Spec §14.2）。
  *
  * 返回单例 promise——首次调用触发 `createScreenComponentRegistry()`，
- * 后续调用返回同一 promise。registry 内部组合内置 6 组件 + `NEBULA_HOST_COMPONENT_PLUGINS`。
+ * 后续调用返回同一 promise。registry 内部组合选中的内置组件与
+ * `NEBULA_HOST_COMPONENT_PLUGINS`。
  *
  * 失败行为（Spec §3.4 Fail Closed）：
  * - 任一 plugin manifest 校验或 define 失败时 promise reject
@@ -71,6 +88,7 @@ let registryPromise: Promise<ScreenComponentRegistry> | null = null;
 export function getNebulaScreenComponentRegistry(): Promise<ScreenComponentRegistry> {
   if (registryPromise === null) {
     registryPromise = createScreenComponentRegistry({
+      builtInComponents: NEBULA_HOST_BUILT_IN_COMPONENT_TYPES,
       components: NEBULA_HOST_COMPONENT_PLUGINS,
     });
     // reject 时清除缓存，允许重试

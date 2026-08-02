@@ -98,6 +98,8 @@ import {
 import { metricCardPlugin } from './metric-card';
 
 const componentRegistry = await createScreenComponentRegistry({
+  // 不传时保留全部内置组件；可改为 ['text', 'bar-chart'] 或 []。
+  builtInComponents: ['text', 'bar-chart'],
   components: [metricCardPlugin],
 });
 
@@ -116,6 +118,8 @@ document.body.append(editor);
 React 和 Vue 宿主必须通过 ref 设置 property，示例见 [0.2 迁移指南](./migration-0.2.md)。
 
 `componentRegistry` 必须是 `createScreenComponentRegistry()` 返回的 facade。Element 不接受手写的 `{ size, get, has, list }` 对象；项目加载前会以 `VALIDATION` 拒绝，避免绕过 manifest、constructor 和不可变快照校验。
+
+`builtInComponents` 是宿主级白名单：未设置时加载全部六个内置组件，空数组时不加载内置组件。未加载的内置 type 不会出现在组件库，且引用它的文档会在 registry-aware 校验时被拒绝。
 
 ## 4. 安全边界
 

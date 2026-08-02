@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
+    "@nebula-example/indicator-card-vanilla": "workspace:^",
     "@nebula/screen-editor-core": "workspace:*",
     "@nebula/screen-sdk": "workspace:*",
     "@nebula/shared": "workspace:*",

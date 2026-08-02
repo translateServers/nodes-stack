@@ -70,15 +70,20 @@ export interface ScreenComponentManifest {
   events?: readonly ScreenComponentEventDefinition[];
 }
 
-/** 内置保留 type（Spec §7.2 Identity rules） */
-export const BUILTIN_COMPONENT_TYPES: ReadonlySet<string> = new Set([
+/** SDK 内置组件 type（供宿主配置 registry 白名单）。 */
+export const BUILTIN_SCREEN_COMPONENT_TYPES = Object.freeze([
   'text',
   'bar-chart',
   'rect',
   'ellipse',
   'image',
   'button',
-]);
+] as const);
+
+export type BuiltinScreenComponentType = (typeof BUILTIN_SCREEN_COMPONENT_TYPES)[number];
+
+/** 内置保留 type（Spec §7.2 Identity rules） */
+export const BUILTIN_COMPONENT_TYPES: ReadonlySet<string> = new Set(BUILTIN_SCREEN_COMPONENT_TYPES);
 
 /** 内置保留前缀（Spec §7.2: 第三方不得使用 `nebula.` 前缀） */
 export const BUILTIN_TYPE_PREFIX = 'nebula.';

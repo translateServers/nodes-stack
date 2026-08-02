@@ -6,6 +6,7 @@
  *
  * 导出内容：
  * - `createScreenComponentRegistry()`：registry 工厂，返回公共 `ScreenComponentRegistry`
+ * - `BUILTIN_SCREEN_COMPONENT_TYPES`：宿主可选择加载的内置组件 type
  * - 正式 Adapter / Document / Transfer / Snapshot / Error / Diagnostic 公共类型
  * - 正式事件 map（来自 `contracts.ts`）
  * - 组件插件协议类型（re-export from `@nebula/screen-component-sdk`）
@@ -77,9 +78,9 @@ function createPublicRegistry(
 /**
  * 异步创建组件注册表（Spec §8.1 + §8.2）。
  *
- * 自动包含 SDK 内置 6 组件（text / bar-chart / rect / ellipse / image / button），
- * 宿主只需传入额外组件 plugin。返回不可变 `ScreenComponentRegistry` 公共接口，
- * 不暴露内部 legacy 兼容字段。
+ * 默认包含 SDK 内置 6 组件（text / bar-chart / rect / ellipse / image / button）。宿主可通过
+ * `builtInComponents` 传入白名单，或传入空数组禁用全部内置组件；`components` 用于额外组件
+ * plugin。返回不可变 `ScreenComponentRegistry` 公共接口，不暴露内部 legacy 兼容字段。
  *
  * 失败行为（Spec §3.4 Fail Closed）：任一 plugin 校验或 define 失败时 Promise reject，
  * 不返回部分注册表。使用 `isScreenComponentRegistryError()` 安全收窄错误类型。
@@ -139,13 +140,15 @@ export {
 
 // ===== 组件插件协议（re-export from @nebula/screen-component-sdk） =====
 
-export type { ScreenComponentPlugin } from '@nebula/screen-component-sdk';
+export {
+  BUILTIN_SCREEN_COMPONENT_TYPES,
+  validateManifest,
+} from '@nebula/screen-component-sdk';
 
 export type {
+  BuiltinScreenComponentType,
+  ScreenComponentPlugin,
   ScreenComponentManifest,
   ScreenComponentValidationDiagnostic,
   ScreenComponentValidationResult,
 } from '@nebula/screen-component-sdk';
-
-// manifest 纯校验（供宿主在注册前预检）
-export { validateManifest } from '@nebula/screen-component-sdk';

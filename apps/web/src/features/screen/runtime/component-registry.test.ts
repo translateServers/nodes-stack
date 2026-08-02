@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  *
  * 验证：
  * - 单例缓存：多次调用返回同一 promise
- * - factory 返回包含内置 6 组件的 registry
+ * - factory 接收 apps/web 允许的内置组件白名单
  * - reject 时清除缓存允许重试
  * - isScreenComponentRegistryError 守卫
  *
@@ -22,12 +22,27 @@ const mockRegistry = {
 };
 
 const createScreenComponentRegistryMock =
-  vi.fn<(options?: { components?: readonly unknown[] }) => Promise<unknown>>();
+  vi.fn<
+    (options?: {
+      builtInComponents?: readonly string[];
+      components?: readonly unknown[];
+    }) => Promise<unknown>
+  >();
+
+const { indicatorCardPluginMock } = vi.hoisted(() => ({
+  indicatorCardPluginMock: {
+    manifest: { type: 'example.indicator-card/v1' },
+  },
+}));
 
 vi.mock('@nebula/screen-sdk/components', () => ({
   createScreenComponentRegistry: createScreenComponentRegistryMock,
   isScreenComponentRegistryError: (error: unknown): boolean =>
     error !== null && typeof error === 'object' && 'code' in error && 'diagnostics' in error,
+}));
+
+vi.mock('@nebula-example/indicator-card-vanilla', () => ({
+  indicatorCardPlugin: indicatorCardPluginMock,
 }));
 
 describe('getNebulaScreenComponentRegistry', () => {
@@ -43,7 +58,7 @@ describe('getNebulaScreenComponentRegistry', () => {
     return import('./component-registry');
   }
 
-  it('返回 promise 且内置 6 组件由 factory 自动注入', async () => {
+  it('返回 promise 且注册指标卡并排除 ellipse 组件', async () => {
     createScreenComponentRegistryMock.mockResolvedValue(mockRegistry);
     const { getNebulaScreenComponentRegistry } = await loadModule();
 
@@ -51,7 +66,10 @@ describe('getNebulaScreenComponentRegistry', () => {
 
     expect(registry).toBe(mockRegistry);
     expect(createScreenComponentRegistryMock).toHaveBeenCalledTimes(1);
-    expect(createScreenComponentRegistryMock).toHaveBeenCalledWith({ components: [] });
+    expect(createScreenComponentRegistryMock).toHaveBeenCalledWith({
+      builtInComponents: ['text', 'bar-chart', 'rect', 'image', 'button'],
+      components: [indicatorCardPluginMock],
+    });
   });
 
   it('单例缓存：多次调用返回同一 promise', async () => {

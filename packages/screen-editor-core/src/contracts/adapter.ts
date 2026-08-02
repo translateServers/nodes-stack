@@ -262,6 +262,7 @@ const safeDiagnosticMessages: Record<ScreenSdkDiagnosticCodeValue, string> = {
   UNSUPPORTED_BLUEPRINT_ACTION: 'Blueprint action is not supported.',
   DANGLING_COMPONENT_REFERENCE: 'Document contains a dangling component reference.',
   INVALID_COMPONENT_MANIFEST: 'Component manifest validation failed.',
+  INVALID_BUILTIN_COMPONENT_TYPE: 'Built-in component type is not supported.',
   UNSUPPORTED_COMPONENT_API_VERSION: 'Component API version is not supported.',
   DUPLICATE_COMPONENT_TYPE: 'Component type is already registered.',
   DUPLICATE_COMPONENT_TAG_NAME: 'Component tag name is already registered.',

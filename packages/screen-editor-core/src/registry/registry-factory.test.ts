@@ -3,6 +3,7 @@
  *
  * 覆盖：
  * - 空选项：返回仅含 6 个内置组件的 registry
+ * - 内置组件白名单：宿主可选择加载部分或不加载内置组件
  * - 单个 host plugin：自动合并到内置组件之后
  * - 多个 host plugin：保持注册顺序
  * - manifest 校验失败：原子 reject，不返回部分 registry
@@ -155,6 +156,52 @@ describe('createScreenComponentRegistry', () => {
     it('空 components 数组返回 6 个内置组件', async () => {
       const registry = await createScreenComponentRegistry({ components: [] });
       expect(registry.size).toBe(6);
+    });
+
+    it('builtInComponents 白名单只加载指定的内置组件，并保持 SDK 固定顺序', async () => {
+      const registry = await createScreenComponentRegistry({
+        builtInComponents: ['button', 'text'],
+      });
+
+      expect(registry.list().map((registration) => registration.manifest.type)).toEqual([
+        'text',
+        'button',
+      ]);
+      expect(registry.get('text')?.source).toBe('built-in');
+      expect(registry.get('button')?.source).toBe('built-in');
+      expect(registry.has('bar-chart')).toBe(false);
+    });
+
+    it('空 builtInComponents 不加载内置组件', async () => {
+      const plugin = makeHostPlugin();
+      const registry = await createScreenComponentRegistry({
+        builtInComponents: [],
+        components: [plugin],
+      });
+
+      expect(registry.size).toBe(1);
+      expect(registry.has('text')).toBe(false);
+      expect(registry.get(plugin.manifest.type)?.source).toBe('host');
+    });
+
+    it('未知内置组件 type 拒绝创建 registry', async () => {
+      await expect(
+        createScreenComponentRegistry({ builtInComponents: ['not-a-built-in-component'] }),
+      ).rejects.toMatchObject({
+        code: 'INVALID_BUILTIN_COMPONENT_TYPE',
+        diagnostics: [
+          expect.objectContaining({
+            code: 'INVALID_BUILTIN_COMPONENT_TYPE',
+            path: ['builtInComponents', 0],
+          }),
+        ],
+      });
+    });
+
+    it('重复内置组件 type 拒绝创建 registry', async () => {
+      await expect(
+        createScreenComponentRegistry({ builtInComponents: ['text', 'text'] }),
+      ).rejects.toMatchObject({ code: 'DUPLICATE_COMPONENT_TYPE' });
     });
   });
 

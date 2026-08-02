@@ -367,6 +367,8 @@ import { AcmeKpiComponent } from '@acme/nebula-screen-components';
 defineNebulaScreenEditor();
 
 const registry = await createScreenComponentRegistry({
+  // 不传时默认加载全部内置组件；也可传 [] 禁用全部内置组件。
+  builtInComponents: ['text', 'bar-chart'],
   components: [AcmeKpiComponent],
 });
 
@@ -377,7 +379,8 @@ editor.adapter = adapter;
 editor.projectId = 'screen-1';
 ```
 
-`createScreenComponentRegistry()` 自动包含 SDK 内置组件，宿主只传额外组件。
+`createScreenComponentRegistry()` 未传 `builtInComponents` 时默认包含 SDK 的六个内置组件。宿主可传入
+内置 type 白名单，或传入空数组禁用全部内置组件；外部组件仍通过 `components` 显式传入。
 
 ### 8.2 Immutability and Atomicity
 
@@ -404,6 +407,7 @@ export interface ScreenComponentRegistry {
 }
 
 export interface CreateScreenComponentRegistryOptions {
+  builtInComponents?: readonly string[];
   components?: readonly ScreenComponentPluginV1[];
 }
 
@@ -413,6 +417,7 @@ export function createScreenComponentRegistry(
 
 export type ScreenComponentRegistryErrorCode =
   | 'INVALID_COMPONENT_MANIFEST'
+  | 'INVALID_BUILTIN_COMPONENT_TYPE'
   | 'UNSUPPORTED_COMPONENT_API_VERSION'
   | 'DUPLICATE_COMPONENT_TYPE'
   | 'DUPLICATE_COMPONENT_TAG_NAME'

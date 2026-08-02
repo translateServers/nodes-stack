@@ -23,6 +23,7 @@ import type { ScreenSdkDiagnostic } from '../contracts/diagnostics.js';
  */
 export type ScreenComponentRegistryErrorCode =
   | 'INVALID_COMPONENT_MANIFEST'
+  | 'INVALID_BUILTIN_COMPONENT_TYPE'
   | 'UNSUPPORTED_COMPONENT_API_VERSION'
   | 'DUPLICATE_COMPONENT_TYPE'
   | 'DUPLICATE_COMPONENT_TAG_NAME'

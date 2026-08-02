@@ -45,7 +45,7 @@
 
 ## 4. Registry
 
-- [x] `createScreenComponentRegistry()` 自动组合内置和宿主 plugins
+- [x] `createScreenComponentRegistry()` 默认组合全部内置和宿主 plugins，宿主可用白名单选择内置组件
 - [x] registry 是不可变快照，不导出 mutation API 或底层 Map
 - [x] public registry facade 不暴露 legacy renderer/schema/icon，且 registration/manifest/list 均冻结
 - [x] 任一 plugin 失败时不返回部分 registry

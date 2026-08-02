@@ -21,6 +21,7 @@
  */
 
 import {
+  BUILTIN_COMPONENT_TYPES,
   validateManifest,
   type ScreenComponentPlugin,
   type ScreenComponentValidationDiagnostic,
@@ -54,9 +55,14 @@ export {
 /**
  * Registry 工厂选项（Spec §8.2 CreateScreenComponentRegistryOptions）。
  *
- * `components` 是宿主额外注册的组件 plugin；内置 6 组件由工厂自动注入。
+ * `components` 是宿主额外注册的组件 plugin；`builtInComponents` 可选择加载的内置组件。
  */
 export interface CreateScreenComponentRegistryOptions {
+  /**
+   * 要加载的内置组件 type 白名单。未设置时加载全部 6 个；空数组时不加载任何内置组件。
+   * 可用值见 `BUILTIN_SCREEN_COMPONENT_TYPES`。
+   */
+  readonly builtInComponents?: readonly string[];
   /** 宿主额外注册的组件 plugin 列表 */
   readonly components?: readonly ScreenComponentPlugin[];
 }
@@ -78,6 +84,7 @@ function mapValidationDiagnosticsToErrorCode(
 
 const REGISTRY_DIAGNOSTIC_MESSAGES: Record<ScreenComponentRegistryErrorCode, string> = {
   INVALID_COMPONENT_MANIFEST: '组件 manifest 校验失败。',
+  INVALID_BUILTIN_COMPONENT_TYPE: '内置组件 type 不受支持。',
   UNSUPPORTED_COMPONENT_API_VERSION: '组件 API 版本不受支持。',
   DUPLICATE_COMPONENT_TYPE: '组件 type 已被注册。',
   DUPLICATE_COMPONENT_TAG_NAME: '组件 tagName 已被注册。',
@@ -98,6 +105,52 @@ function toRegistryDiagnostics(
     severity: 'error',
     message: REGISTRY_DIAGNOSTIC_MESSAGES[code],
   }));
+}
+
+function selectBuiltInRegistrations(
+  builtInComponents: readonly string[] | undefined,
+): readonly ScreenComponentRegistration[] {
+  if (builtInComponents === undefined) {
+    return BUILTIN_COMPONENT_REGISTRATIONS;
+  }
+
+  const selectedTypes = new Set<string>();
+  for (const [index, type] of builtInComponents.entries()) {
+    if (!BUILTIN_COMPONENT_TYPES.has(type)) {
+      throw new ScreenComponentRegistryErrorImpl(
+        'INVALID_BUILTIN_COMPONENT_TYPE',
+        `[registry-factory] 不支持的内置组件 type: "${type}"`,
+        [
+          {
+            code: 'INVALID_BUILTIN_COMPONENT_TYPE',
+            path: ['builtInComponents', index],
+            severity: 'error',
+            message: REGISTRY_DIAGNOSTIC_MESSAGES.INVALID_BUILTIN_COMPONENT_TYPE,
+          },
+        ],
+      );
+    }
+    if (selectedTypes.has(type)) {
+      throw new ScreenComponentRegistryErrorImpl(
+        'DUPLICATE_COMPONENT_TYPE',
+        `[registry-factory] builtInComponents 包含重复 type: "${type}"`,
+        [
+          {
+            code: 'DUPLICATE_COMPONENT_TYPE',
+            path: ['builtInComponents', index],
+            severity: 'error',
+            message: '内置组件 type 重复。',
+          },
+        ],
+      );
+    }
+    selectedTypes.add(type);
+  }
+
+  // 保持 SDK 内置顺序，避免宿主配置的书写顺序改变组件库的稳定排序。
+  return BUILTIN_COMPONENT_REGISTRATIONS.filter((registration) =>
+    selectedTypes.has(registration.manifest.type),
+  );
 }
 
 /**
@@ -157,6 +210,7 @@ function validateHostManifests(hostPlugins: readonly ScreenComponentPlugin[]): v
 }
 
 function assertUniqueManifestIdentities(hostPlugins: readonly ScreenComponentPlugin[]): void {
+  // 即使宿主未加载某个内置组件，其 type/tagName 仍由 SDK 保留，不能被外部组件占用。
   const seenTypes = new Set(BUILTIN_COMPONENT_REGISTRATIONS.map((reg) => reg.manifest.type));
   const seenTagNames = new Set(BUILTIN_COMPONENT_REGISTRATIONS.map((reg) => reg.manifest.tagName));
 
@@ -222,7 +276,7 @@ function enqueueCustomElementCommit(
  * 1. 预检全部 host manifest 与 type/tagName 重复项
  * 2. 解析全部 plugin constructor，不触碰 customElements
  * 3. 串行检查并提交全局 Custom Element 定义
- * 4. 与 BUILTIN_COMPONENT_REGISTRATIONS 合并并构建不可变 snapshot
+ * 4. 与宿主选中的内置组件合并并构建不可变 snapshot
  *
  * 失败行为（Spec §3.4 Fail Closed）：
  * - manifest 校验失败 → INVALID_COMPONENT_MANIFEST / UNSUPPORTED_COMPONENT_API_VERSION
@@ -231,12 +285,13 @@ function enqueueCustomElementCommit(
  * - 重复 type / tagName → DUPLICATE_COMPONENT_TYPE / DUPLICATE_COMPONENT_TAG_NAME
  * - 任一失败 Promise reject，不返回部分注册表
  *
- * @param options 宿主 plugin 列表
- * @returns 不可变实例注册表（包含内置 6 组件 + 宿主组件）
+ * @param options 宿主内置组件白名单与额外 plugin 列表
+ * @returns 不可变实例注册表（包含选中的内置组件 + 宿主组件）
  */
 export async function createScreenComponentRegistry(
   options?: CreateScreenComponentRegistryOptions,
 ): Promise<ScreenComponentInstanceRegistry> {
+  const builtInRegistrations = selectBuiltInRegistrations(options?.builtInComponents);
   const hostPlugins = options?.components ?? [];
   // 1. 在任何 define()/customElements 副作用前完成 manifest 和重复项预检。
   validateHostManifests(hostPlugins);
@@ -252,9 +307,9 @@ export async function createScreenComponentRegistry(
   // 3. 所有可失败校验通过后才接触 browser-global customElements registry。
   await enqueueCustomElementCommit(hostRegistrations);
 
-  // 4. 合并内置 + 宿主 registrations
+  // 4. 合并选中的内置 + 宿主 registrations
   const allRegistrations: readonly ScreenComponentRegistration[] = [
-    ...BUILTIN_COMPONENT_REGISTRATIONS,
+    ...builtInRegistrations,
     ...hostRegistrations,
   ];
 
