@@ -84,7 +84,7 @@
 - [ ] `docs/specs/screen-editor/README.md` 与最终行为一致
 - [ ] `docs/architecture/screen-editor-architecture.md` 与最终交互架构一致
 - [ ] `docs/architecture/blueprint-runtime-architecture.md` 与最终会话及预览语义一致
-- [ ] `docs/specs/README.md` 包含本规格索引与正确状态
+- [x] `docs/specs/README.md` 包含本规格索引与正确状态
 
 ## 质量门
 
