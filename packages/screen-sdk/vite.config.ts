@@ -18,7 +18,11 @@ export default defineConfig({
       tsconfigPath: './tsconfig.json',
       exclude: ['src/**/*.test.*', 'test/**'],
       bundleTypes: {
-        bundledPackages: ['@nebula/screen-editor-core', '@nebula/shared'],
+        bundledPackages: [
+          '@nebula/screen-component-sdk',
+          '@nebula/screen-editor-core',
+          '@nebula/shared',
+        ],
       },
     }),
   ],
@@ -43,6 +47,7 @@ export default defineConfig({
       entry: {
         index: fromHere('./src/index.ts'),
         'auto-register': fromHere('./src/auto-register.ts'),
+        'components/index': fromHere('./src/components/index.ts'),
         'contracts/index': fromHere('./src/contracts/index.ts'),
       },
       formats: ['es'],

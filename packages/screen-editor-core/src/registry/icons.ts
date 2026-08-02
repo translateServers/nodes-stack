@@ -15,7 +15,6 @@
  */
 
 import { Box, Frame, Minus, Table, type LucideIcon } from 'lucide-react';
-import './registered-components';
 import { getAllModules, getIcon } from './registry';
 
 /**

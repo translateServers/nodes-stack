@@ -10,7 +10,6 @@
  * - triggerAndExecuteV2 聚合多规则
  */
 
-/* eslint-disable @typescript-eslint/unbound-method -- vitest mock 断言需访问 deps.method 引用，unbound-method 为已知误报 */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- 测试构造器中 objectContaining/any(Object) 等匹配器需要灵活类型 */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';

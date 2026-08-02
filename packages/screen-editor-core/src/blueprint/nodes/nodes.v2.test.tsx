@@ -49,37 +49,46 @@ vi.mock('@xyflow/react', async (importOriginal) => {
 
 // ===== Mock 组件注册表 =====
 // 验证 ComponentNode 从注册表派生锚点的逻辑
+//
+// Spec §13.2 Phase 1, Task 1.5 改造后：component-node.tsx 通过 registry-derive.ts
+// 间接依赖 icons.ts → registered-components.ts → 各组件模块（text-component.tsx 等），
+// 这些组件模块在加载时调用 mergeEvents/mergeActions。使用 importOriginal 保留这些
+// 真实导出，仅覆盖 getComponentEvents/getComponentActions 两个派生函数以验证锚点派生。
 
-vi.mock('../../registry/component-events-actions', () => ({
-  getComponentEvents: (type: string) => {
-    if (type === 'bar-chart') {
+vi.mock('../../registry/component-events-actions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../registry/component-events-actions')>();
+  return {
+    ...actual,
+    getComponentEvents: (type: string) => {
+      if (type === 'bar-chart') {
+        return [
+          { id: 'click', name: '点击' },
+          { id: 'hover', name: '悬停' },
+          { id: 'dataLoaded', name: '数据加载完成' },
+        ];
+      }
       return [
         { id: 'click', name: '点击' },
         { id: 'hover', name: '悬停' },
-        { id: 'dataLoaded', name: '数据加载完成' },
       ];
-    }
-    return [
-      { id: 'click', name: '点击' },
-      { id: 'hover', name: '悬停' },
-    ];
-  },
-  getComponentActions: (type: string) => {
-    if (type === 'bar-chart') {
+    },
+    getComponentActions: (type: string) => {
+      if (type === 'bar-chart') {
+        return [
+          { id: 'show', name: '显示' },
+          { id: 'hide', name: '隐藏' },
+          { id: 'toggleVisibility', name: '切换显隐' },
+          { id: 'refreshData', name: '刷新数据' },
+        ];
+      }
       return [
         { id: 'show', name: '显示' },
         { id: 'hide', name: '隐藏' },
         { id: 'toggleVisibility', name: '切换显隐' },
-        { id: 'refreshData', name: '刷新数据' },
       ];
-    }
-    return [
-      { id: 'show', name: '显示' },
-      { id: 'hide', name: '隐藏' },
-      { id: 'toggleVisibility', name: '切换显隐' },
-    ];
-  },
-}));
+    },
+  };
+});
 
 import { ComponentNode, type ComponentNode as ComponentNodeType } from './component-node';
 import { GlobalNode, type GlobalNode as GlobalNodeType } from './global-node';

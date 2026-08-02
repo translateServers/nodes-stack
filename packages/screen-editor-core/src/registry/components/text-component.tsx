@@ -1,4 +1,5 @@
 import type { ComponentStyle } from '@nebula/shared';
+import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
 import { Type } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -36,6 +37,66 @@ export function TextComponent({ props, style }: TextComponentProps) {
   );
 }
 
+function cssLength(value: unknown): string {
+  if (typeof value === 'number') return `${value}px`;
+  return typeof value === 'string' ? value : '';
+}
+
+function cssText(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssNumber(value: unknown): string {
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '';
+}
+
+export class TextCustomElement extends HTMLElement {
+  #root: HTMLDivElement | null = null;
+
+  #ensureRoot(): HTMLDivElement {
+    if (this.#root !== null) return this.#root;
+    this.style.display = 'block';
+    this.style.width = '100%';
+    this.style.height = '100%';
+    const root = document.createElement('div');
+    root.style.display = 'flex';
+    root.style.width = '100%';
+    root.style.height = '100%';
+    root.style.alignItems = 'center';
+    root.style.justifyContent = 'center';
+    root.style.overflow = 'hidden';
+    root.style.wordBreak = 'break-word';
+    this.append(root);
+    this.#root = root;
+    return root;
+  }
+
+  set model(model: ScreenComponentElementModelV1) {
+    const root = this.#ensureRoot();
+    const style = model.style;
+    const content = model.props['content'];
+    root.textContent = typeof content === 'string' ? content : '';
+    root.style.fontSize = cssLength(style['fontSize']);
+    root.style.color = cssText(style['color']);
+    root.style.textAlign = cssText(style['textAlign'], 'center');
+    root.style.fontWeight = cssNumber(style['fontWeight']);
+    root.style.lineHeight = cssNumber(style['lineHeight']);
+    root.style.letterSpacing = cssLength(style['letterSpacing']);
+    const strokeWidth = style['textStrokeWidth'];
+    root.style.webkitTextStroke =
+      typeof strokeWidth === 'number' && strokeWidth > 0
+        ? `${strokeWidth}px ${cssText(style['textStrokeColor'], '#000000')}`
+        : '';
+  }
+}
+
+if (
+  typeof customElements !== 'undefined' &&
+  customElements.get('nebula-screen-text-v1') === undefined
+) {
+  customElements.define('nebula-screen-text-v1', TextCustomElement);
+}
+
 const textModule: ComponentModule = {
   definition: {
     type: 'text',
@@ -52,6 +113,7 @@ const textModule: ComponentModule = {
     actions: mergeActions(),
   },
   renderer: TextComponent,
+  customElementConstructor: TextCustomElement,
   schema: TEXT_SCHEMA,
   icon: Type,
 };

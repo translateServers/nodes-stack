@@ -6,10 +6,12 @@ import {
   buildFilterString,
   CanvasInteractionProvider,
   INTERACTIVE_CAPABILITIES,
+  RegistryProvider,
   resolveComponentContainerStyle,
   ScreenEditorRuntimeProfileProvider,
   useBlueprintPreviewRuntime,
 } from '@nebula/screen-editor-core';
+import type { ScreenComponentRegistry } from '@nebula/screen-sdk/components';
 import { DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE } from '../runtime/dynamic-runtime-profile';
 
 /**
@@ -59,6 +61,17 @@ export function isComponentVisible(
 
 interface PreviewCanvasProps {
   project: ScreenProject;
+  /**
+   * 共享组件注册表（Task 6.4, Spec §14.2）。
+   *
+   * 编辑器内预览与公开预览复用同一 registry factory，确保渲染层与编辑器
+   * 使用同一组件定义来源。registry 必须在 PreviewCanvas 挂载前就绪。
+   */
+  registry: ScreenComponentRegistry;
+}
+
+interface PreviewCanvasContentProps {
+  project: ScreenProject;
 }
 
 /**
@@ -70,18 +83,21 @@ interface PreviewCanvasProps {
  * - 自动 fitScale 按 scaleMode 适配视口
  * - 组件可见性判定（isComponentVisible）
  * - 完整派发蓝图组件事件并调度 pageLoad / interval
+ * - 通过 RegistryProvider 注入共享 registry（Task 6.4）
  *
  * 调用方负责数据获取与加载/不存在态展示，本组件只接收 project 渲染。
  */
-export function PreviewCanvas({ project }: PreviewCanvasProps) {
+export function PreviewCanvas({ project, registry }: PreviewCanvasProps) {
   return (
     <ScreenEditorRuntimeProfileProvider profile={DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE}>
-      <PreviewCanvasContent project={project} />
+      <RegistryProvider registry={registry}>
+        <PreviewCanvasContent project={project} />
+      </RegistryProvider>
     </ScreenEditorRuntimeProfileProvider>
   );
 }
 
-function PreviewCanvasContent({ project }: PreviewCanvasProps) {
+function PreviewCanvasContent({ project }: PreviewCanvasContentProps) {
   const { canvas, components, blueprint } = project;
   const scale = fitScale(canvas.width, canvas.height, canvas.scaleMode);
   const { contextValue, onComponentClick, onComponentEvent } = useBlueprintPreviewRuntime(

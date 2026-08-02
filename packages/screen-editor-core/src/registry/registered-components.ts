@@ -1,7 +1,7 @@
 /**
  * 组件集中注册入口（Spec 驱动改造：组件库统一注册接口）
  *
- * 副作用模块：导入即触发所有组件的 registerComponent 调用。
+ * 副作用模块：导入即初始化 registry 派生 lookup 与 property schema。
  *
  * 调用方约定：任何依赖注册表派生表（COMPONENT_DEFINITIONS / RENDERERS / ICON_MAP /
  * PROPERTY_SCHEMAS）的模块，需在模块顶部 `import './registered-components'`
@@ -17,24 +17,9 @@
  */
 
 import { __registerDefinitionLookup } from './component-events-actions';
-import { getDefinitionByType, registerComponent } from './registry';
+import { getDefinitionByType } from './registry';
 import { buildPropertySchemas } from '../property-schema/schemas';
-import textModule from './components/text-component';
-import barChartModule from './components/bar-chart-component';
-import rectModule from './components/rect-component';
-import ellipseModule from './components/ellipse-component';
-import imageModule from './components/image-component';
-import buttonModule from './components/button-component';
-
-// 集中注册全部已声明组件模块。
-// 注册顺序决定 getAllDefinitions() 的返回顺序（Map 保持插入顺序），
-// 不影响 getDefinitionsByCategory 的输出（内部按 order 升序排序）。
-registerComponent(textModule);
-registerComponent(barChartModule);
-registerComponent(rectModule);
-registerComponent(ellipseModule);
-registerComponent(imageModule);
-registerComponent(buttonModule);
+import { BUILTIN_COMPONENT_MODULES } from './builtin-modules';
 
 // 注入 getDefinitionByType 打破循环依赖：
 // component-events-actions.ts 的 getComponentEvents/getComponentActions
@@ -44,4 +29,4 @@ __registerDefinitionLookup(getDefinitionByType);
 // 从注册中心派生 PROPERTY_SCHEMAS：
 // 在所有组件注册完成后调用，把 ComponentModule.schema 字段写入 PROPERTY_SCHEMAS。
 // schemas.tsx 不能直接 import 本文件（会形成循环依赖），故由本文件主动调用。
-buildPropertySchemas();
+buildPropertySchemas(BUILTIN_COMPONENT_MODULES);

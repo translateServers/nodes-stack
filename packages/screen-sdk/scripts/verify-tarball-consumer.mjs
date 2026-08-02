@@ -118,8 +118,18 @@ try {
         private: true,
         type: 'module',
         scripts: { build: 'tsc --noEmit && vite build' },
-        dependencies: { '@nebula/screen-sdk': `file:${tarballPath}` },
-        devDependencies: { typescript: '^6.0.3', vite: '^8.0.0' },
+        dependencies: {
+          '@nebula/screen-sdk': `file:${tarballPath}`,
+          react: '^19.1.0',
+          'react-dom': '^19.1.0',
+          vue: '^3.5.0',
+        },
+        devDependencies: {
+          '@types/react': '^19.1.6',
+          '@types/react-dom': '^19.1.6',
+          typescript: '^6.0.3',
+          vite: '^8.0.0',
+        },
       },
       null,
       2,
@@ -131,6 +141,7 @@ try {
       {
         compilerOptions: {
           lib: ['ES2023', 'DOM'],
+          jsx: 'react-jsx',
           module: 'ESNext',
           moduleResolution: 'bundler',
           noEmit: true,
@@ -138,7 +149,7 @@ try {
           strict: true,
           target: 'ES2023',
         },
-        include: ['src/**/*.ts'],
+        include: ['src/**/*.ts', 'src/**/*.tsx'],
       },
       null,
       2,
@@ -150,15 +161,63 @@ try {
   );
   writeFileSync(
     join(sourceRoot, 'main.ts'),
+    `import './vanilla-host';
+import './react-host';
+import './vue-host';
+`,
+  );
+  writeFileSync(
+    join(sourceRoot, 'vanilla-host.ts'),
     `import '@nebula/screen-sdk/auto-register';
-import type { ScreenHostAdapter } from '@nebula/screen-sdk';
+import type { NebulaScreenEditorElement } from '@nebula/screen-sdk';
+import {
+  createScreenComponentRegistry,
+  type ScreenComponentManifestV1,
+  type ScreenComponentPluginV1,
+  type ScreenHostAdapterV2,
+} from '@nebula/screen-sdk/components';
 import { ScreenDocumentV1Schema } from '@nebula/screen-sdk/contracts';
 import screenDocumentSchema from '@nebula/screen-sdk/contracts/screen-document.schema.json';
 
 void ScreenDocumentV1Schema;
 void screenDocumentSchema;
 
-const adapter: ScreenHostAdapter = {
+class ConsumerMetricCard extends HTMLElement {
+  set model(value: unknown) {
+    const model = value as { props?: { title?: unknown; value?: unknown } };
+    this.textContent = String(model.props?.title ?? 'Metric') + ': ' + String(model.props?.value ?? '');
+  }
+}
+
+const metricManifest: ScreenComponentManifestV1 = {
+  apiVersion: 'nebula.screen-component/v1',
+  type: 'consumer.metric-card/v1',
+  implementationVersion: '1.0.0',
+  tagName: 'consumer-metric-card-v1',
+  name: 'Consumer Metric Card',
+  category: 'chart',
+  defaultSize: { width: 240, height: 120 },
+  defaultProps: { title: 'Revenue', value: 42 },
+  propsSchema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      title: { type: 'string' },
+      value: { type: 'number' },
+    },
+    required: ['title', 'value'],
+  },
+};
+
+const metricPlugin: ScreenComponentPluginV1 = {
+  manifest: metricManifest,
+  define: () => ConsumerMetricCard,
+};
+
+const componentRegistry = await createScreenComponentRegistry({ components: [metricPlugin] });
+
+const adapter: ScreenHostAdapterV2 = {
+  documentVersion: 2,
   loadProject: async ({ projectId }) => ({
     id: projectId,
     name: 'Consumer project',
@@ -166,14 +225,25 @@ const adapter: ScreenHostAdapter = {
     status: 'draft',
     revision: '1',
     document: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       canvas: {
         width: 1920,
         height: 1080,
         backgroundColor: '#000000',
         scaleMode: 'fit',
       },
-      components: [],
+      components: [
+        {
+          id: 'consumer-card-1',
+          type: 'consumer.metric-card/v1',
+          name: 'Consumer Metric Card',
+          position: { x: 0, y: 0, width: 240, height: 120 },
+          style: {},
+          props: { title: 'Revenue', value: 42 },
+          status: { locked: false, hidden: false },
+          zIndex: 1,
+        },
+      ],
       globalVariables: [],
     },
   }),
@@ -185,10 +255,91 @@ const adapter: ScreenHostAdapter = {
   }),
 };
 
-const editor = document.createElement('nebula-screen-editor');
+const editor = document.createElement('nebula-screen-editor') as NebulaScreenEditorElement;
+editor.componentRegistry = componentRegistry;
 editor.adapter = adapter;
-editor.projectId = 'consumer-project';
+editor.projectId = 'vanilla-consumer-project';
 document.body.append(editor);
+`,
+  );
+  writeFileSync(
+    join(sourceRoot, 'react-host.tsx'),
+    `import { createElement, useEffect, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
+import '@nebula/screen-sdk/auto-register';
+import type { NebulaScreenEditorElement, ScreenHostAdapter } from '@nebula/screen-sdk';
+
+const adapter: ScreenHostAdapter = {
+  loadProject: async ({ projectId }) => ({
+    id: projectId,
+    name: 'React consumer project',
+    description: null,
+    status: 'draft',
+    revision: '1',
+    document: {
+      schemaVersion: 1,
+      canvas: { width: 1920, height: 1080, backgroundColor: '#000000', scaleMode: 'fit' },
+      components: [],
+      globalVariables: [],
+    },
+  }),
+  saveProject: async ({ projectId, draft }) => ({ id: projectId, status: 'draft', revision: '2', ...draft }),
+};
+
+function ReactHost() {
+  const editorRef = useRef<NebulaScreenEditorElement | null>(null);
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (editor === null) return;
+    editor.adapter = adapter;
+    editor.projectId = 'react-consumer-project';
+  }, []);
+  return createElement('nebula-screen-editor', { ref: editorRef });
+}
+
+const root = document.createElement('div');
+document.body.append(root);
+createRoot(root).render(createElement(ReactHost));
+`,
+  );
+  writeFileSync(
+    join(sourceRoot, 'vue-host.ts'),
+    `import { createApp, defineComponent, h } from 'vue';
+import '@nebula/screen-sdk/auto-register';
+import type { NebulaScreenEditorElement, ScreenHostAdapter } from '@nebula/screen-sdk';
+
+const adapter: ScreenHostAdapter = {
+  loadProject: async ({ projectId }) => ({
+    id: projectId,
+    name: 'Vue consumer project',
+    description: null,
+    status: 'draft',
+    revision: '1',
+    document: {
+      schemaVersion: 1,
+      canvas: { width: 1920, height: 1080, backgroundColor: '#000000', scaleMode: 'fit' },
+      components: [],
+      globalVariables: [],
+    },
+  }),
+  saveProject: async ({ projectId, draft }) => ({ id: projectId, status: 'draft', revision: '2', ...draft }),
+};
+
+const VueHost = defineComponent({
+  mounted() {
+    const editor = this.$refs['editor'] as NebulaScreenEditorElement | undefined;
+    if (editor === undefined) return;
+    editor.adapter = adapter;
+    editor.projectId = 'vue-consumer-project';
+  },
+  render() {
+    return h('nebula-screen-editor', { ref: 'editor' });
+  },
+});
+
+const root = document.createElement('div');
+document.body.append(root);
+createApp(VueHost).mount(root);
 `,
   );
 
@@ -299,7 +450,7 @@ document.body.append(editor);
       }
     }
   }
-  console.log('screen-sdk tarball consumer, chunks, fonts, and source maps: ok');
+  console.log('screen-sdk vanilla/react/vue tarball consumers, chunks, fonts, and source maps: ok');
 } finally {
   rmSync(consumerRoot, { recursive: true, force: true });
 }

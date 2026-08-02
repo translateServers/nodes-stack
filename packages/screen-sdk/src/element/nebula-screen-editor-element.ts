@@ -1,16 +1,14 @@
 import {
   dispatchScreenEditorEvent,
   normalizeScreenAdapterError,
+  resolveScreenComponentRegistryForRuntime,
   ScreenAdapterErrorCode,
   toScreenPublicError,
   type ScreenAdapterError,
-  type NebulaScreenEditorEventMap,
-  type ScreenHostAdapter,
-  type ScreenDocumentV1,
   type ScreenEditorTheme,
-  type ScreenProjectDraft,
-  type ScreenProjectEnvelope,
-  type ScreenSdkDiagnostic,
+  type ScreenHostAdapter,
+  type ScreenHostAdapterV2,
+  type ScreenSdkDiagnosticV2,
 } from '@nebula/screen-editor-core';
 import screenEditorStyles from '../styles/screen-editor.css?inline';
 import { installScreenEditorStyles } from '../styles/install-styles.js';
@@ -21,6 +19,14 @@ import type {
   ScreenEditorRuntime,
   ScreenEditorRuntimeConfiguration,
 } from './runtime.js';
+import type {
+  NebulaScreenEditorEventMapV2,
+  ScreenComponentRegistry,
+  ScreenEditorAdapterV2,
+  ScreenSdkDocument,
+  ScreenSdkProjectDraft,
+  ScreenSdkProjectEnvelope,
+} from './v2-contracts.js';
 
 const MINIMUM_EDITOR_WIDTH = 1024;
 const MINIMUM_EDITOR_HEIGHT = 640;
@@ -55,7 +61,9 @@ export class NebulaScreenEditorElement extends HTMLElement {
   readonly #runtimeError: HTMLDivElement;
   readonly #runtimeErrorMessage: HTMLSpanElement;
   readonly #runtimeRetryButton: HTMLButtonElement;
-  #adapter?: ScreenHostAdapter;
+  #adapter?: ScreenEditorAdapterV2;
+  #componentRegistry?: ScreenComponentRegistry;
+  #registryFrozen = false;
   #options?: ScreenEditorOptions;
   #resizeObserver?: ResizeObserver;
   #runtime?: ScreenEditorRuntime;
@@ -100,14 +108,29 @@ export class NebulaScreenEditorElement extends HTMLElement {
     shadowRoot.append(this.#sdkRoot);
   }
 
-  get adapter(): ScreenHostAdapter | undefined {
+  get adapter(): ScreenEditorAdapterV2 | undefined {
     return this.#adapter;
   }
 
-  set adapter(adapter: ScreenHostAdapter | undefined) {
+  set adapter(adapter: ScreenEditorAdapterV2 | undefined) {
     if (this.#adapter === adapter) return;
     this.#adapter = adapter;
     this.#updateRuntime();
+  }
+
+  get componentRegistry(): ScreenComponentRegistry | undefined {
+    return this.#componentRegistry;
+  }
+
+  set componentRegistry(registry: ScreenComponentRegistry | undefined) {
+    if (this.#registryFrozen) {
+      throw new DOMException(
+        'componentRegistry is frozen after load has started; create a new element to use a different registry.',
+        'InvalidStateError',
+      );
+    }
+    if (this.#componentRegistry === registry) return;
+    this.#componentRegistry = registry;
   }
 
   get options(): ScreenEditorOptions | undefined {
@@ -195,29 +218,29 @@ export class NebulaScreenEditorElement extends HTMLElement {
     return this.#awaitRuntime().then((runtime) => runtime.reload(options));
   }
 
-  save(): Promise<ScreenProjectEnvelope> {
+  save(): Promise<ScreenSdkProjectEnvelope> {
     return this.#awaitRuntime()
       .then((runtime) => runtime.save())
       .then((envelope) => structuredClone(envelope));
   }
 
-  publish(): Promise<ScreenProjectEnvelope> {
+  publish(): Promise<ScreenSdkProjectEnvelope> {
     return this.#awaitRuntime()
       .then((runtime) => runtime.publish())
       .then((envelope) => structuredClone(envelope));
   }
 
-  getDraft(): ScreenProjectDraft | null {
+  getDraft(): ScreenSdkProjectDraft | null {
     const draft = this.#runtime?.getDraft() ?? null;
     return draft === null ? null : structuredClone(draft);
   }
 
-  getDocument(): ScreenDocumentV1 | null {
+  getDocument(): ScreenSdkDocument | null {
     const document = this.#runtime?.getDocument() ?? null;
     return document === null ? null : structuredClone(document);
   }
 
-  validate(): ScreenSdkDiagnostic[] {
+  validate(): ScreenSdkDiagnosticV2[] {
     return structuredClone(this.#runtime?.validate() ?? []);
   }
 
@@ -242,8 +265,25 @@ export class NebulaScreenEditorElement extends HTMLElement {
   };
 
   #configuration(): ScreenEditorRuntimeConfiguration {
+    const adapter = this.#adapter;
+    const isRejectedCombo =
+      adapter !== undefined && this.#hasHostRegistry() && !this.#isV2Adapter(adapter);
+    const v2Adapter =
+      adapter !== undefined && this.#isV2Adapter(adapter) && this.#componentRegistry !== undefined
+        ? adapter
+        : undefined;
+    const v1Adapter =
+      adapter !== undefined && !isRejectedCombo && !this.#isV2Adapter(adapter)
+        ? adapter
+        : undefined;
     return {
-      adapter: this.#adapter,
+      adapter: v1Adapter,
+      ...(v2Adapter === undefined ? {} : { adapterV2: v2Adapter }),
+      // Task 6.2: registry is part of runtime configuration so it is ready
+      // before React mount. Public facades resolve to the matching core snapshot;
+      // direct internal registries remain supported for workspace hosts.
+      componentRegistry: resolveScreenComponentRegistryForRuntime(this.#componentRegistry),
+      documentMode: v2Adapter === undefined ? 'v1' : 'v2',
       options: {
         debug: this.#options?.debug ?? false,
         persistPreferences: this.#options?.persistPreferences ?? true,
@@ -329,6 +369,26 @@ export class NebulaScreenEditorElement extends HTMLElement {
 
   #updateRuntime(): void {
     if (!this.isConnected) return;
+
+    const adapter = this.#adapter;
+    const willLoad = adapter !== undefined && this.projectId !== '';
+
+    if (willLoad) {
+      // Spec §8.5: freeze registry on first load start; no hot replacement.
+      // Freeze happens before rejection so post-rejection replacement is also blocked.
+      this.#registryFrozen = true;
+      // Requirement 13: external registry + V1 adapter rejection before load.
+      // V2 adapter is identified by `documentVersion: 2` marker (Spec §12.3).
+      if (this.#hasHostRegistry() && !this.#isV2Adapter(adapter)) {
+        this.#rejectAdapterRegistryCombo();
+        return;
+      }
+      if (this.#isV2Adapter(adapter) && this.#componentRegistry === undefined) {
+        this.#rejectV2AdapterWithoutRegistry();
+        return;
+      }
+    }
+
     if (this.#runtime !== undefined) {
       this.#runtime.update(this.#configuration());
       return;
@@ -337,6 +397,61 @@ export class NebulaScreenEditorElement extends HTMLElement {
     this.#clearRuntimeError();
     this.#pendingUpdate = this.#configuration();
     void this.#mountRuntime().catch(() => undefined);
+  }
+
+  /**
+   * V2 adapter type guard (Spec §12.3).
+   * `ScreenHostAdapterV2` has `documentVersion: 2` as a runtime capability marker.
+   */
+  #isV2Adapter(adapter: ScreenHostAdapter | ScreenHostAdapterV2): adapter is ScreenHostAdapterV2 {
+    return (
+      typeof adapter === 'object' &&
+      adapter !== null &&
+      'documentVersion' in adapter &&
+      adapter.documentVersion === 2
+    );
+  }
+
+  /**
+   * Checks if the current registry contains any host-registered (external) components.
+   * External components require a V2 adapter (Requirement 13).
+   */
+  #hasHostRegistry(): boolean {
+    const registry = this.#componentRegistry;
+    if (registry === undefined) return false;
+    return registry.list().some((reg) => reg.source === 'host');
+  }
+
+  /**
+   * Rejects the external registry + V1 adapter combination before load (Requirement 13).
+   * Dispatches `nebula-error` with `VALIDATION` code and displays the runtime error UI.
+   * Does not call the Adapter or create a partial editing session.
+   */
+  #rejectAdapterRegistryCombo(): void {
+    const error = new ElementCommandError(ScreenAdapterErrorCode.VALIDATION);
+    const publicError = toScreenPublicError(error);
+    this.#mountError = error;
+    this.#runtimeErrorMessage.textContent = publicError.message;
+    this.#runtimeError.hidden = false;
+    dispatchScreenEditorEvent(this, 'nebula-error', {
+      ...(this.projectId === '' ? {} : { projectId: this.projectId }),
+      operation: 'load',
+      error: publicError,
+    });
+  }
+
+  /** V2 adapters require an explicit registry facade to select the V2 runtime. */
+  #rejectV2AdapterWithoutRegistry(): void {
+    const error = new ElementCommandError(ScreenAdapterErrorCode.VALIDATION);
+    const publicError = toScreenPublicError(error);
+    this.#mountError = error;
+    this.#runtimeErrorMessage.textContent = publicError.message;
+    this.#runtimeError.hidden = false;
+    dispatchScreenEditorEvent(this, 'nebula-error', {
+      ...(this.projectId === '' ? {} : { projectId: this.projectId }),
+      operation: 'load',
+      error: publicError,
+    });
   }
 
   #clearRuntimeError(): void {
@@ -377,13 +492,14 @@ export class NebulaScreenEditorElement extends HTMLElement {
     this.#resizeObserver.observe(this);
   }
 
-  // Typed event listener overloads — declared on the class to provide
-  // compile-time event names without unsafe declaration merging.
-  addEventListener<EventName extends keyof NebulaScreenEditorEventMap>(
+  // Typed event listener overloads (Spec §14.1: V2 event map).
+  // V1 event payloads are structurally compatible with V2 (V1 is a subset of V2),
+  // so V2 listeners accept both V1 and V2 dispatched events.
+  addEventListener<EventName extends keyof NebulaScreenEditorEventMapV2>(
     type: EventName,
     listener: (
       this: NebulaScreenEditorElement,
-      event: NebulaScreenEditorEventMap[EventName],
+      event: NebulaScreenEditorEventMapV2[EventName],
     ) => void,
     options?: boolean | AddEventListenerOptions,
   ): void;
@@ -400,11 +516,11 @@ export class NebulaScreenEditorElement extends HTMLElement {
     if (listener !== null) super.addEventListener(type, listener, options);
   }
 
-  removeEventListener<EventName extends keyof NebulaScreenEditorEventMap>(
+  removeEventListener<EventName extends keyof NebulaScreenEditorEventMapV2>(
     type: EventName,
     listener: (
       this: NebulaScreenEditorElement,
-      event: NebulaScreenEditorEventMap[EventName],
+      event: NebulaScreenEditorEventMapV2[EventName],
     ) => void,
     options?: boolean | EventListenerOptions,
   ): void;

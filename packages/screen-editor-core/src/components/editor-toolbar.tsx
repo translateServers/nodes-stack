@@ -196,7 +196,7 @@ function ZoomControls({
 interface EditorToolbarProps {
   onSave?: () => void;
   onPublish?: () => void;
-  onPreview: () => void;
+  onPreview?: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitToScreen: () => void;
@@ -288,10 +288,12 @@ export const EditorToolbar = memo(function EditorToolbar({
           isPublishing={isPublishing}
         />
         <Separator orientation="vertical" className="mx-1 h-5" />
-        <Button variant="ghost" size="sm" onClick={onPreview} className="cursor-pointer">
-          <Eye />
-          预览
-        </Button>
+        {onPreview !== undefined && (
+          <Button variant="ghost" size="sm" onClick={onPreview} className="cursor-pointer">
+            <Eye />
+            预览
+          </Button>
+        )}
         {onSave !== undefined && (
           <Button
             variant="outline"

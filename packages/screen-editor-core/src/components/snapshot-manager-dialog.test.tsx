@@ -4,8 +4,11 @@ import type { ScreenProject } from '@nebula/shared';
 import {
   ScreenAdapterErrorCode,
   ScreenHostController,
+  ScreenHostControllerV2,
   type ScreenHostAdapter,
+  type ScreenHostAdapterV2,
   type ScreenProjectEnvelopeInput,
+  type ScreenProjectEnvelopeInputV2,
 } from '@nebula/screen-editor-core/internal';
 import type {
   ScreenSnapshotHostAdapter,
@@ -17,6 +20,8 @@ import type {
 } from '../adapters/screen-editor-host-adapter';
 import { createScreenEditorStore, ScreenEditorStoreProvider } from '../stores/editor-store';
 import { createScreenHostSessionPort } from '../lib/screen-host-session';
+import { createScreenHostSessionPortV2 } from '../lib/screen-host-session-v2';
+import { buildInstanceRegistry } from '../registry/instance-registry';
 import { ScreenEditorNotificationProvider } from './screen-editor-notifications';
 import { SnapshotManagerDialog } from './snapshot-manager-dialog';
 
@@ -60,6 +65,27 @@ function createEnvelope(): ScreenProjectEnvelopeInput {
     document: {
       schemaVersion: 1,
       canvas: project.canvas,
+      components: [],
+      globalVariables: [],
+    },
+  };
+}
+
+function createV2Envelope(revision: string): ScreenProjectEnvelopeInputV2 {
+  return {
+    id: 'screen-1',
+    name: 'V2 Screen',
+    description: null,
+    status: 'draft',
+    revision,
+    document: {
+      schemaVersion: 2,
+      canvas: {
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#000000',
+        scaleMode: 'fit',
+      },
       components: [],
       globalVariables: [],
     },
@@ -230,5 +256,75 @@ describe('SnapshotManagerDialog host adapter flow', () => {
     await waitFor(() => expect(onConflict).toHaveBeenCalledOnce());
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(store.getState().project?.updatedAt).toBe('2026-07-30 10:00:00');
+  });
+
+  it('uses the V2 controller for list, create and restore operations', async () => {
+    const store = createScreenEditorStore({ persistPreferences: false });
+    const registry = buildInstanceRegistry([]);
+    type V2SnapshotAdapter = NonNullable<ScreenHostAdapterV2['snapshots']>;
+    const list = vi.fn((input: Parameters<V2SnapshotAdapter['list']>[0]) => {
+      void input;
+      return Promise.resolve([SNAPSHOT]);
+    });
+    const create = vi.fn((input: Parameters<V2SnapshotAdapter['create']>[0]) => {
+      void input;
+      return Promise.resolve(SNAPSHOT);
+    });
+    const restore = vi.fn((input: Parameters<V2SnapshotAdapter['restore']>[0]) => {
+      void input;
+      return Promise.resolve(createV2Envelope('revision-restored'));
+    });
+    const snapshots: V2SnapshotAdapter = {
+      list,
+      create,
+      restore,
+      remove: (input) => {
+        void input;
+        return Promise.resolve();
+      },
+      clear: (input) => {
+        void input;
+        return Promise.resolve();
+      },
+    };
+    const adapter: ScreenHostAdapterV2 = {
+      documentVersion: 2,
+      loadProject: () => Promise.resolve(createV2Envelope('revision-1')),
+      saveProject: () => Promise.resolve(createV2Envelope('revision-2')),
+      snapshots,
+    };
+    const controller = new ScreenHostControllerV2({
+      registry,
+      session: createScreenHostSessionPortV2(store, registry),
+    });
+    controller.setBinding('screen-1', adapter);
+    await vi.waitFor(() => expect(controller.getState().phase).toBe('awaiting-render'));
+    controller.markRendered();
+
+    const onOpenChange = vi.fn();
+    render(
+      <ScreenEditorStoreProvider store={store}>
+        <ScreenEditorNotificationProvider>
+          <SnapshotManagerDialog
+            open
+            onOpenChange={onOpenChange}
+            projectId="screen-1"
+            hostController={controller}
+          />
+        </ScreenEditorNotificationProvider>
+      </ScreenEditorStoreProvider>,
+    );
+
+    expect(await screen.findByText('0 个组件 · 1920×1080')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '创建快照' }));
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create.mock.calls[0]?.[0].draft.document.schemaVersion).toBe(2);
+
+    fireEvent.click(screen.getByRole('button', { name: '恢复快照' }));
+    fireEvent.click(await screen.findByRole('button', { name: '确认恢复' }));
+    await waitFor(() => expect(restore).toHaveBeenCalledOnce());
+    expect(restore.mock.calls[0]?.[0].snapshotId).toBe(SNAPSHOT.id);
+    expect(store.getState().project?.name).toBe('V2 Screen');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });

@@ -1,8 +1,13 @@
 # 大屏组件 SDK 与组件注册表 Spec
 
-> 状态：设计中（小步快跑方案，待评审）
-> 最近更新：2026-08-01
+> 状态：生效中（Task 0.1 已冻结协议，按小步快跑方案实施）
+> 最近更新：2026-08-02
 > 定位：定义大屏组件跨框架开发、显式注册、设计期配置、运行时渲染、事件桥接与文档校验契约
+>
+> 实施实况（2026-08-02）：组件作者 package、实例 registry、component lab 真实拖入/预览、Nebula
+> Web 共享 registry、显式 registry + V2 Adapter 的 load/save/publish/reload、transfer/export、snapshot
+> 与静态 preview 均已有定向验证；多框架 tarball smoke、浏览器 E2E 与内置 renderer 收敛仍待继续。
+> 实际阶段状态以 [tasks.md](./tasks.md) 和 [checklist.md](./checklist.md) 为准。
 
 ## 1. Background
 
@@ -105,14 +110,14 @@
 
 ## 5. Terminology
 
-| 术语 | 含义 |
-| --- | --- |
-| Component Element | 实际渲染画布内容的 Custom Element |
-| Component Manifest | 可序列化组件描述，包含身份、默认值、props schema、属性面板和事件 |
-| Component Plugin | `{ manifest, define }`，组件包对外导出的注册单元 |
-| Component Registry | 某个编辑器实例可使用的组件插件不可变快照 |
-| Built-in Component | SDK 自带组件，协议上与外部组件一致 |
-| Legacy Renderer | 迁移期间包装现有 React renderer 的内部适配器，不属于公共 API |
+| 术语                 | 含义                                       |
+| ------------------ | ---------------------------------------- |
+| Component Element  | 实际渲染画布内容的 Custom Element                 |
+| Component Manifest | 可序列化组件描述，包含身份、默认值、props schema、属性面板和事件   |
+| Component Plugin   | `{ manifest, define }`，组件包对外导出的注册单元      |
+| Component Registry | 某个编辑器实例可使用的组件插件不可变快照                     |
+| Built-in Component | SDK 自带组件，协议上与外部组件一致                      |
+| Legacy Renderer    | 迁移期间包装现有 React renderer 的内部适配器，不属于公共 API |
 
 ## 6. Architecture
 
@@ -157,12 +162,12 @@ packages/screen-component-sdk/
 
 各包职责：
 
-| Package | Owns | Does not own |
-| --- | --- | --- |
-| `@nebula/screen-component-sdk` | 组件作者协议、manifest 校验、测试辅助函数 | 编辑器 UI、Store、内置组件、宿主 Adapter |
-| `@nebula/screen-editor-core` | 实例注册表、渲染桥、属性与事件接入 | 公共 npm 入口、宿主认证、远程组件加载 |
-| `@nebula/screen-sdk` | 内置插件、注册表工厂、元素 property、V1/V2 文档契约 | 第三方组件实现、组件市场 |
-| `apps/web` | Nebula 宿主注册配置、动态编辑器和预览组装 | 公共组件协议定义 |
+| Package                        | Owns                              | Does not own                 |
+| ------------------------------ | --------------------------------- | ---------------------------- |
+| `@nebula/screen-component-sdk` | 组件作者协议、manifest 校验、测试辅助函数         | 编辑器 UI、Store、内置组件、宿主 Adapter |
+| `@nebula/screen-editor-core`   | 实例注册表、渲染桥、属性与事件接入                 | 公共 npm 入口、宿主认证、远程组件加载        |
+| `@nebula/screen-sdk`           | 内置插件、注册表工厂、元素 property、V1/V2 文档契约 | 第三方组件实现、组件市场                 |
+| `apps/web`                     | Nebula 宿主注册配置、动态编辑器和预览组装          | 公共组件协议定义                     |
 
 依赖方向：
 
@@ -837,6 +842,71 @@ export interface NebulaScreenEditorElementV2 extends HTMLElement {
 - Vue：通过 template ref 在 mounted 时赋值。
 - 宿主不需要把组件 package 转换为 React component。
 
+### 14.4 Migration Guide (0.1.x → 0.2.0)
+
+#### Breaking Changes
+
+`@nebula/screen-sdk` 从 `0.1.x` 升级到 `0.2.0` **无破坏性变更**。默认 V1 路径的 API 签名、保存行为和文档格式保持不变。
+
+#### Opt-in Path
+
+外部组件持久化通过显式导入 `@nebula/screen-sdk/components` 启用：
+
+```ts
+// 0.1.x — 仅 V1，无需额外导入
+import { defineNebulaScreenEditor } from '@nebula/screen-sdk';
+defineNebulaScreenEditor();
+
+// 0.2.0 — V1 路径不变（默认）
+import { defineNebulaScreenEditor } from '@nebula/screen-sdk';
+defineNebulaScreenEditor();
+
+// 0.2.0 — 显式 opt-in V2（需要同时提供 V2 Adapter）
+import { defineNebulaScreenEditor } from '@nebula/screen-sdk';
+import {
+  createScreenComponentRegistry,
+  type ScreenHostAdapterV2,
+} from '@nebula/screen-sdk/components';
+
+defineNebulaScreenEditor();
+
+const registry = await createScreenComponentRegistry({
+  components: [/* 宿主组件 plugin */],
+});
+
+const editor = document.querySelector('nebula-screen-editor')!;
+editor.componentRegistry = registry;   // V2 registry
+editor.adapter = v2Adapter;            // 必须是 ScreenHostAdapterV2
+editor.projectId = 'screen-1';
+```
+
+#### Compatibility Rules
+
+| 场景 | 0.1.x | 0.2.0 默认 | 0.2.0 opt-in |
+| --- | --- | --- | --- |
+| V1 Adapter + 默认 registry | ✅ V1 文档 | ✅ V1 文档（不变） | N/A |
+| V2 Adapter + 默认 registry | N/A | ❌ load 前拒绝（V2 save 签名不能安全降级为 V1） | ❌ 需先设置显式 registry |
+| V2 Adapter + 显式 built-in registry | N/A | N/A | ✅ V2 文档 |
+| 外部 registry + V1 Adapter | N/A | ❌ load 前拒绝 | ❌ load 前拒绝 |
+| 外部 registry + V2 Adapter | N/A | N/A | ✅ V2 文档（首次保存输出 V2） |
+
+#### Migration Checklist
+
+1. 升级 `@nebula/screen-sdk` 到 `0.2.0`（API 兼容，无需改动现有代码）。
+2. 如需注册外部组件，从 `@nebula/screen-sdk/components` 导入 `createScreenComponentRegistry`。
+3. 实现 `ScreenHostAdapterV2`（在 V1 Adapter 基础上增加 `documentVersion: 2` marker 和 V2 load/save 方法）。
+4. 在 `editor.adapter = ...` 之前设置 `editor.componentRegistry = ...`（V2 模式即使只使用 built-in
+   组件也必须提供显式 registry；load 开始后 registry 冻结）。
+5. 监听 V2 事件时使用 `NebulaScreenEditorEventMapV2` 类型；V1 事件签名保持兼容。
+6. V1 文档在 V2 模式下首次加载时设置 `documentMigrationPending=true`，保存 V2 成功后清除；迁移完成前禁止发布。
+
+#### What 0.2.0 Does NOT Change
+
+- V1 `ScreenDocumentV1` 格式、parser 和保存行为。
+- `defineNebulaScreenEditor()` 和 `<nebula-screen-editor>` 的默认 API。
+- `./contracts` 入口导出的 V1 JSON Schema。
+- 旧 SDK 消费者遇到 `schemaVersion=2` 时继续返回 `UNSUPPORTED_SCHEMA_VERSION`。
+
 ## 15. Security Boundary
 
 - Custom Element 与宿主运行在同一 JavaScript realm，属于受信任代码，不是安全沙箱。
@@ -849,16 +919,16 @@ export interface NebulaScreenEditorElementV2 extends HTMLElement {
 
 ## 16. Incremental Release Slices
 
-| Slice | Deliverable | User-visible change | Exit gate |
-| --- | --- | --- | --- |
-| 0 | 协议包骨架与 manifest validator | 无 | package 独立 build/test，现有编辑器零改动 |
-| 1 | 实例 registry + legacy built-ins adapter | 无 | 六内置组件行为与测试不变；双实例 registry 隔离 |
-| 2 | 外部指标卡仅渲染 | 仅组件实验页可见 | Canvas 正确渲染、preview model harness 通过，生产 SDK 入口未开放 |
-| 3 | 声明式 props | 指标卡可在属性面板配置 | 编辑、undo/redo、renderer model 更新通过 |
-| 4 | 标准事件 | 指标卡事件可连接蓝图 | allowlist、payload、runtime 闸门测试通过 |
-| 5 | ScreenDocumentV2 | 外部组件可保存、重载、导入导出 | V1/V2 parser 与 missing registry 拒绝测试通过 |
-| 6 | SDK + Nebula Host 接入 | Vanilla/React/Vue 宿主可显式注册 | tarball consumer、编辑/预览共享 registry E2E 通过 |
-| 7 | 内置组件逐个迁移 | 无预期视觉变化 | 每个组件独立迁移；最终删除 legacy registry |
+| Slice | Deliverable                            | User-visible change       | Exit gate                                         |
+| ----- | -------------------------------------- | ------------------------- | ------------------------------------------------- |
+| 0     | 协议包骨架与 manifest validator              | 无                         | package 独立 build/test，现有编辑器零改动                    |
+| 1     | 实例 registry + legacy built-ins adapter | 无                         | 六内置组件行为与测试不变；双实例 registry 隔离                      |
+| 2     | 外部指标卡仅渲染                               | 仅组件实验页可见                  | Canvas 正确渲染、preview model harness 通过，生产 SDK 入口未开放 |
+| 3     | 声明式 props                              | 指标卡可在属性面板配置               | 编辑、undo/redo、renderer model 更新通过                  |
+| 4     | 标准事件                                   | 指标卡事件可连接蓝图                | allowlist、payload、runtime 闸门测试通过                  |
+| 5     | ScreenDocumentV2                       | 外部组件可保存、重载、导入导出           | V1/V2 parser 与 missing registry 拒绝测试通过            |
+| 6     | SDK + Nebula Host 接入                   | Vanilla/React/Vue 宿主可显式注册 | tarball consumer、编辑/预览共享 registry E2E 通过          |
+| 7     | 内置组件逐个迁移                               | 无预期视觉变化                   | 每个组件独立迁移；最终删除 legacy registry                     |
 
 任何 slice 未满足退出条件时，不开始依赖它的下一阶段；无依赖的文档、测试工具和示例可并行。
 
@@ -1095,15 +1165,15 @@ export interface NebulaScreenEditorElementV2 extends HTMLElement {
 
 ## 20. Risks and Mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| `customElements` 无法重新定义同名 tag | type/tagName 带契约主版本；registry 检测冲突；宿主单版本选择 |
-| 第三方代码访问同源能力 | 首版仅显式受信任 import；文档不加载代码；安全边界写入文档 |
-| props schema 与 property panel 漂移 | 注册时交叉验证 pointer、control、defaultProps |
-| 全局 registry 泄漏到双实例 | registry Context 实例化；禁止生产路径读取模块级 Map |
-| 一次迁移六组件导致回归难定位 | legacy adapter + 单组件迁移 + 每组件退出门 |
-| V2 静态 JSON Schema 无法包含插件 schema | wire schema 与 registry domain validation 两阶段校验 |
-| 动态数据借组件插件绕过安全边界 | V1 model 不注入 fetch/Token/Adapter；动态数据独立规格 |
+| Risk                             | Mitigation                                     |
+| -------------------------------- | ---------------------------------------------- |
+| `customElements` 无法重新定义同名 tag    | type/tagName 带契约主版本；registry 检测冲突；宿主单版本选择      |
+| 第三方代码访问同源能力                      | 首版仅显式受信任 import；文档不加载代码；安全边界写入文档               |
+| props schema 与 property panel 漂移 | 注册时交叉验证 pointer、control、defaultProps           |
+| 全局 registry 泄漏到双实例               | registry Context 实例化；禁止生产路径读取模块级 Map           |
+| 一次迁移六组件导致回归难定位                   | legacy adapter + 单组件迁移 + 每组件退出门                |
+| V2 静态 JSON Schema 无法包含插件 schema  | wire schema 与 registry domain validation 两阶段校验 |
+| 动态数据借组件插件绕过安全边界                  | V1 model 不注入 fetch/Token/Adapter；动态数据独立规格      |
 
 ## 21. Related Documents
 

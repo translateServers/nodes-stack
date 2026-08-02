@@ -2,13 +2,12 @@
  * 组件库统一注册入口（Spec 驱动改造）
  *
  * 改造前：4 处手动同步注册（COMPONENT_DEFINITIONS / RENDERERS / ICON_MAP / PROPERTY_SCHEMAS）
- * 改造后：单一 registerComponent API，各组件文件声明 ComponentModule 后由 registered-components.ts 集中注册。
+ * 改造后：内置组件由固定模块清单派生；外部组件通过实例 registry 显式注入。
  *
  * 本文件作为对外 re-export 入口，保持以下 API 签名不变（向后兼容）：
  * - getDefinitionByType / getDefinitionsByCategory / getAllDefinitions
  * - searchComponentDefinitions / createComponentInstance
  * - CATEGORY_LABELS / COMPONENT_DEFINITIONS（派生）
- * - registerComponent / ComponentModule（新增）
  * - CATEGORY_META / categoryLabel / categoryIcon / categoryOrder / CategoryMeta（Task 4 新增，从 category-meta.ts re-export）
  *
  * 副作用导入：触发所有组件的注册。
@@ -48,7 +47,6 @@ export {
   getIcon,
   getRenderer,
   getSchema,
-  registerComponent,
   searchComponentDefinitions,
 } from './registry';
 

@@ -18,6 +18,7 @@ import '../registry/registered-components';
 export type {
   FieldControlComponent,
   FieldControlProps,
+  ManifestField,
   PropertyField,
   PropertySchema,
   PropertySection,
@@ -27,6 +28,7 @@ export type {
 export { TAB_LABELS } from './types';
 export { buildNestedUpdate, getByPath } from './path-utils';
 export { FIELD_CONTROLS } from './field-controls';
+export { buildHostComponentSchema, manifestToPropertySections } from './manifest-adapter';
 export {
   BAR_CHART_SCHEMA,
   BUTTON_SCHEMA,

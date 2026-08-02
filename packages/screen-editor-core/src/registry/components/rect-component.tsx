@@ -8,6 +8,7 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
 import { Square } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -33,6 +34,54 @@ export function RectComponent({ style }: RectComponentProps) {
   );
 }
 
+function cssLength(value: unknown, fallback = '0px'): string {
+  if (typeof value === 'number') return `${value}px`;
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssText(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssOpacity(value: unknown): string {
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '1';
+}
+
+export class RectCustomElement extends HTMLElement {
+  #root: HTMLDivElement | null = null;
+
+  #ensureRoot(): HTMLDivElement {
+    if (this.#root !== null) return this.#root;
+    this.style.display = 'block';
+    this.style.width = '100%';
+    this.style.height = '100%';
+    const root = document.createElement('div');
+    root.style.width = '100%';
+    root.style.height = '100%';
+    this.append(root);
+    this.#root = root;
+    return root;
+  }
+
+  set model(model: ScreenComponentElementModelV1) {
+    const root = this.#ensureRoot();
+    const style = model.style;
+    root.style.backgroundColor = cssText(style['backgroundColor'], 'transparent');
+    root.style.borderWidth = cssLength(style['borderWidth']);
+    root.style.borderStyle = cssText(style['borderStyle'], 'solid');
+    root.style.borderColor = cssText(style['borderColor'], '#000000');
+    root.style.borderRadius = cssLength(style['borderRadius']);
+    root.style.opacity = cssOpacity(style['opacity']);
+  }
+}
+
+if (
+  typeof customElements !== 'undefined' &&
+  customElements.get('nebula-screen-rect-v1') === undefined
+) {
+  customElements.define('nebula-screen-rect-v1', RectCustomElement);
+}
+
 const rectModule: ComponentModule = {
   definition: {
     type: 'rect',
@@ -54,6 +103,7 @@ const rectModule: ComponentModule = {
     actions: mergeActions(),
   },
   renderer: RectComponent,
+  customElementConstructor: RectCustomElement,
   icon: Square,
 };
 

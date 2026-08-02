@@ -13,6 +13,12 @@
 
 import { Fragment, memo, useMemo, useState, type ComponentType, type JSX } from 'react';
 import type { ScreenComponent } from '@nebula/shared';
+import {
+  getPropByPointer,
+  updatePropByPointer,
+  type ScreenComponentJsonValue,
+  type ScreenComponentProps,
+} from '@nebula/screen-component-sdk';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@nebula/screen-editor-core/internal';
 import { PanelSection } from '../components/ui-primitives';
 import { FIELD_CONTROLS } from './field-controls';
@@ -72,6 +78,61 @@ function DeclarativeFieldRenderer({
   );
 }
 
+/**
+ * Manifest 驱动字段渲染器（Task 3.2：Spec §7.4）
+ *
+ * 与 DeclarativeFieldRenderer 的区别：
+ * - 使用 RFC 6901 JSON Pointer（相对 `component.props`）取值/更新
+ * - 读取从 `component.props` 取值，而非从 component 顶层
+ * - 更新通过 `updatePropByPointer` 产生新 props，提交 `{ props: newProps }`
+ * - prototype pollution / 非法 pointer 在 updatePropByPointer 内抛错，此处 catch 静默忽略
+ */
+function ManifestFieldRenderer({
+  field,
+  component,
+  onUpdate,
+}: {
+  field: Extract<PropertyField, { kind: 'manifest-field' }>;
+  component: ScreenComponent;
+  onUpdate: (updates: Partial<ScreenComponent>) => void;
+}) {
+  const Control = FIELD_CONTROLS[field.control] as
+    | ComponentType<FieldControlProps<unknown> & Record<string, unknown>>
+    | undefined;
+  if (!Control) {
+    return <div className="text-xs text-red-400">未知控件: {field.control}</div>;
+  }
+
+  const rawValue = getPropByPointer(component.props as ScreenComponentProps, field.pointer);
+  // manifest 没有 field-level defaultValue；默认值由 manifest.defaultProps 提供，
+  // 在组件创建时已写入 component.props。若 pointer 不存在则 rawValue 为 undefined，
+  // 由各控件自行处理（NumberInput → 0, ColorInput/TextInput → '', Switch → false）。
+  const value = rawValue;
+
+  const controlProps = field.controlProps ?? {};
+
+  return (
+    <Control
+      value={value}
+      onChange={(v: unknown) => {
+        try {
+          const newProps = updatePropByPointer(
+            component.props as ScreenComponentProps,
+            field.pointer,
+            v as ScreenComponentJsonValue,
+          );
+          onUpdate({ props: newProps });
+        } catch {
+          // pointer 非法或 prototype pollution：静默忽略，不写入 Store
+        }
+      }}
+      label={field.label}
+      syncKey={`${component.id}:props${field.pointer}`}
+      {...controlProps}
+    />
+  );
+}
+
 /** 单个分区渲染器 */
 function PropertySectionRenderer({
   section,
@@ -101,6 +162,16 @@ function PropertySectionRenderer({
       {(section.fields ?? []).map((field, idx) => {
         if (field.kind === 'custom') {
           return <Fragment key={idx}>{field.render(ctx)}</Fragment>;
+        }
+        if (field.kind === 'manifest-field') {
+          return (
+            <ManifestFieldRenderer
+              key={`manifest:${field.pointer}`}
+              field={field}
+              component={component}
+              onUpdate={onUpdate}
+            />
+          );
         }
         return (
           <DeclarativeFieldRenderer

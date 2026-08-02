@@ -1,7 +1,7 @@
 # 开发指南
 
 > 状态：生效中
-> 最近更新：2026-07-24
+> 最近更新：2026-08-02
 > 定位：step-by-step 操作手册。涵盖最常见的三类扩展场景：新增大屏组件、新增后端模块、新增 API 端点
 
 ## 1. 环境配置与本地调试
@@ -54,124 +54,44 @@ pnpm test         # 单元测试
 
 ## 2. 新增大屏组件
 
-以新增一个"线条"组件为例。
+新增可复用组件优先走大屏组件 SDK：组件作者实现 Web Component + manifest，宿主通过 `@nebula/screen-sdk/components` 创建 registry 并注入 `<nebula-screen-editor>`。不要再新增 `registerComponent(ComponentModule)` 生产路径。
 
 ### 2.1 步骤总览
 
-1. 在 `@nebula/shared` 添加类型与默认配置
-2. 在 `registry/components/` 新建 renderer
-3. 在 `registry/index.ts` 注册定义
-4. 在 `registry/renderer.tsx` 注册映射
-5. 在 `property-schema/schemas.tsx` 注册属性 Schema
-6. 编写测试
+1. 在组件包中声明 `ScreenComponentManifestV1` 和 Custom Element
+2. 用 `ScreenComponentPluginV1` 暴露 `manifest + define()`
+3. 宿主调用 `createScreenComponentRegistry({ components })`
+4. 在首次 load 前给 `<nebula-screen-editor>` 赋值 `componentRegistry`
+5. 使用 `ScreenHostAdapterV2` 保存 `schemaVersion: 2` 文档
+6. 编写 manifest、renderer、属性、事件、tarball consumer 测试
 
-### 2.2 第 1 步：shared 包添加类型
+### 2.2 第 1 步：实现组件包
 
-`packages/shared/src/schemas/screen.ts`（或对应文件）添加组件类型常量与默认配置。如果组件需要新的 props 字段，在 shared 中定义 Zod schema 与 TS 类型。
+参考 [组件作者与宿主注册指南](../specs/screen-component-sdk/component-author-guide.md)。组件只接收 `model` property，渲染用原生 HTML/SVG/Web Component API，不访问编辑器 Store、Adapter、Router、Token 或 Cookie。
 
-### 2.3 第 2 步：实现 renderer
+### 2.3 第 2 步：注册到宿主
 
-在 `apps/web/src/features/screen/registry/components/` 新建 `line-component.tsx`：
+宿主从 `@nebula/screen-sdk/components` 导入 `createScreenComponentRegistry()`，将组件 plugin 显式传入，并在设置 `adapter/projectId` 前设置 `componentRegistry`。
 
-```tsx
-import type { RendererComponentProps } from '../renderer';
+### 2.4 第 3 步：持久化 V2 文档
 
-export function LineComponent({ props, style }: RendererComponentProps) {
-  // 注意：Canvas 渲染组件禁止使用 shadcn/ui
-  // 用原生 HTML/SVG + 内联样式
-  return (
-    <svg width="100%" height="100%" style={style}>
-      <line
-        x1={0} y1={0} x2="100%" y2="100%"
-        stroke={props.stroke}
-        strokeWidth={props.strokeWidth}
-      />
-    </svg>
-  );
-}
-```
+外部组件必须搭配 `ScreenHostAdapterV2`。文档只保存 `type` 与 JSON `props`，不保存 `tagName`、模块 URL、构造函数或脚本。
 
-**契约**：实现 `RendererComponentProps`，接收 `props / style / dataSource / logic / interaction / apiRawDataOverride?`。确保 `defaultProps` 中声明 `stroke` 与 `strokeWidth` 字段。
+### 2.5 第 4 步：编写测试
 
-**关键约束**（见 [coding-standards.md](../conventions/coding-standards.md) 第 3 节）：
-- Canvas 渲染组件**禁止用 shadcn/ui**
-- 用原生 HTML/SVG + 内联样式
-- 数据流：`effectiveDataSource → useApiDataSource → useChartData → 按 parseResult.status 渲染`
-
-### 2.4 第 3 步：注册定义
-
-`apps/web/src/features/screen/registry/index.ts` 的 `COMPONENT_DEFINITIONS` 追加：
-
-```ts
-{
-  type: 'line',
-  name: '线条',
-  category: 'decoration',
-  icon: 'Minus',  // lucide-react 图标名
-  keywords: ['line', '线条', '分隔线'],
-  description: '可配置的线条装饰组件',
-  defaultProps: { stroke: '#000', strokeWidth: 1 },
-  defaultSize: { width: 200, height: 2 },
-}
-```
-
-### 2.5 第 4 步：注册渲染映射
-
-`apps/web/src/features/screen/registry/renderer.tsx` 的 `RENDERERS` 追加：
-
-```ts
-import { LineComponent } from './components/line-component';
-
-const RENDERERS = {
-  // ...existing
-  line: LineComponent,
-};
-```
-
-### 2.6 第 5 步：注册属性 Schema
-
-`apps/web/src/features/screen/property-schema/schemas.tsx` 追加：
-
-```tsx
-const LINE_SCHEMA: PropertySchema = [
-  POSITION_SECTION,
-  {
-    id: 'line-style',
-    title: '线条样式',
-    tab: 'appearance',
-    defaultOpen: true,
-    fields: [
-      { kind: 'field', control: 'color', label: '颜色', path: 'props.stroke' },
-      { kind: 'field', control: 'number', label: '粗细', path: 'props.strokeWidth', controlProps: { min: 1, max: 20 } },
-    ],
-  },
-];
-
-// 注册
-PROPERTY_SCHEMAS['line'] = LINE_SCHEMA;
-```
-
-可复用预定义分区：`POSITION_SECTION` / `STYLE_SECTION` / `TEXT_PROPS_SECTION` / `TRANSFORM_SECTION`。
-
-未注册 Schema 会回退到 `DEFAULT_SCHEMA`。
-
-### 2.7 第 6 步：编写测试
-
-在 `line-component.tsx` 同目录建 `line-component.test.tsx`，覆盖：
-- 不同 props 的渲染
-- 数据源接入（如有）
-- 边界情况
+至少覆盖：manifest 校验、registry 构建、组件库拖入、renderer model、属性面板、事件 payload、V2 load/save/import/export/snapshot round-trip、tarball consumer。
 
 ### 2.8 验证
 
 ```bash
 pnpm --filter @nebula/web typecheck
-pnpm --filter @nebula/web test -- line-component
+pnpm --filter @nebula/screen-component-sdk test
+pnpm --filter @nebula/screen-sdk verify:tarball
 pnpm --filter @nebula/web lint
 pnpm biome:check
 ```
 
-启动 `pnpm dev`，打开大屏编辑器，从组件库拖入"线条"组件，验证渲染与属性面板。
+启动 SDK Host 或 Web 编辑器，从组件库拖入组件，验证渲染、属性面板、预览和保存重载。
 
 ## 3. 新增后端模块
 

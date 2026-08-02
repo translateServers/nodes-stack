@@ -62,7 +62,7 @@ interface ProjectMenubarProps {
   /** 文件级操作回调（在父组件接入 mutation） */
   onSave?: () => void;
   onPublish?: () => void;
-  onPreview: () => void;
+  onPreview?: () => void;
   onShowImport?: () => void;
   /** 直接触发 JSON 导出下载（不再通过 Dialog） */
   onExport?: () => void;
@@ -182,10 +182,12 @@ export const ProjectMenubar = memo(function ProjectMenubar({
                 <span className="flex-1">发布项目</span>
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onSelect={onPreview}>
-              <Eye className="size-4 text-muted-foreground" />
-              <span className="flex-1">预览项目</span>
-            </DropdownMenuItem>
+            {onPreview !== undefined && (
+              <DropdownMenuItem onSelect={onPreview}>
+                <Eye className="size-4 text-muted-foreground" />
+                <span className="flex-1">预览项目</span>
+              </DropdownMenuItem>
+            )}
           </DropdownMenuGroup>
           {(onShowImport !== undefined || onExport !== undefined) && (
             <>

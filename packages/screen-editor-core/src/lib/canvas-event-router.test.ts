@@ -26,7 +26,7 @@ function createElementWithClass(className: string): HTMLElement {
 }
 
 /** 暂存原始 elementsFromPoint 以便恢复（jsdom 中可能为 undefined） */
-// eslint-disable-next-line @typescript-eslint/unbound-method -- 仅用于存储引用以恢复，不调用此方法
+
 const originalElementsFromPoint = document.elementsFromPoint;
 
 /** 替换 document.elementsFromPoint 返回指定元素数组 */

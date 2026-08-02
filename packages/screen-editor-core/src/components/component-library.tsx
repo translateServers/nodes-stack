@@ -2,12 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, SearchX, Star } from 'lucide-react';
 import { useScreenEditorPreferenceNamespace, useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, ComponentDefinition } from '@nebula/shared';
-import {
-  COMPONENT_DEFINITIONS,
-  createComponentInstance,
-  getDefinitionByType,
-  searchComponentDefinitions,
-} from '../registry';
 import { categoryLabel } from '../registry/category-meta';
 import { getIconByName } from '../registry/icons';
 import {
@@ -23,14 +17,20 @@ import {
   recordComponentUsage,
   type RecentComponentEntry,
 } from '../registry/recent-components';
+import { useRegistry } from '../registry/registry-context';
+import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry';
+import {
+  createComponentInstanceFromRegistry,
+  getDefinitionFromRegistry,
+  listCategories,
+  searchDefinitions,
+} from '../registry/registry-queries';
 import { PanelSection } from './ui-primitives';
 import { Button, cn, Input } from '@nebula/screen-editor-core/internal';
 
-// 静态常量，避免每次 render 重新计算
-const CATEGORIES = [...new Set(COMPONENT_DEFINITIONS.map((d) => d.category))];
-
 export function ComponentLibrary() {
   const preferenceNamespace = useScreenEditorPreferenceNamespace();
+  const registry = useRegistry();
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [recent, setRecent] = useState<RecentComponentEntry[]>([]);
@@ -95,7 +95,13 @@ export function ComponentLibrary() {
   }, []);
 
   // 按名称 / 类型 / keywords 过滤（大小写不敏感，相关度排序）
-  const filtered = useMemo(() => searchComponentDefinitions(debouncedKeyword), [debouncedKeyword]);
+  const filtered = useMemo(
+    () => searchDefinitions(registry, debouncedKeyword),
+    [registry, debouncedKeyword],
+  );
+
+  // 分类列表从实例注册表派生（替代模块级 CATEGORIES 常量）
+  const categories = useMemo(() => listCategories(registry), [registry]);
 
   /**
    * js-combine-iterations + js-set-map-lookups：原实现为
@@ -119,8 +125,8 @@ export function ComponentLibrary() {
 
   // visibleCategories 直接从 Map 的 key 迭代获取，避免 O(N×M) 嵌套查找
   const visibleCategories = useMemo(
-    () => CATEGORIES.filter((category) => filteredByCategory.has(category)),
-    [filteredByCategory],
+    () => categories.filter((category) => filteredByCategory.has(category)),
+    [categories, filteredByCategory],
   );
 
   // 收藏 type 集合（O(1) 查询），用于 ComponentLibraryItem 高亮已收藏项
@@ -182,6 +188,7 @@ export function ComponentLibrary() {
             <PanelSection title="收藏" testId="favorite-components-section">
               <FavoriteComponentsList
                 favorites={favorites}
+                registry={registry}
                 onDragStart={handleDragStart}
                 onToggleFavorite={handleToggleFavorite}
               />
@@ -192,6 +199,7 @@ export function ComponentLibrary() {
             <PanelSection title="最近使用" testId="recent-components-section">
               <RecentComponentsList
                 recent={recent}
+                registry={registry}
                 onDragStart={handleDragStart}
                 favoriteTypes={favoriteTypes}
                 onToggleFavorite={handleToggleFavorite}
@@ -286,20 +294,22 @@ function ComponentLibraryItem({
 /** 最近使用列表：复用 ComponentLibraryItem 的视觉风格 */
 function RecentComponentsList({
   recent,
+  registry,
   onDragStart,
   favoriteTypes,
   onToggleFavorite,
 }: {
   recent: RecentComponentEntry[];
+  registry: ScreenComponentInstanceRegistry;
   onDragStart: (e: React.DragEvent, type: string) => void;
   favoriteTypes: Set<string>;
   onToggleFavorite: (type: string) => void;
 }) {
   // 只展示仍在注册表中的类型（避免历史脏数据）
-  // 使用 getDefinitionByType（Map O(1)）替代 COMPONENT_DEFINITIONS.find（数组 O(N)）
+  // 使用 getDefinitionFromRegistry（Map O(1)）替代模块级 getDefinitionByType
   const validRecent = recent
     .map((entry) => {
-      const def = getDefinitionByType(entry.type);
+      const def = getDefinitionFromRegistry(registry, entry.type);
       return def === undefined ? null : { entry, def };
     })
     .filter(
@@ -331,17 +341,19 @@ function RecentComponentsList({
 /** 收藏列表：复用 ComponentLibraryItem 的视觉风格 */
 function FavoriteComponentsList({
   favorites,
+  registry,
   onDragStart,
   onToggleFavorite,
 }: {
   favorites: FavoriteEntry[];
+  registry: ScreenComponentInstanceRegistry;
   onDragStart: (e: React.DragEvent, type: string) => void;
   onToggleFavorite: (type: string) => void;
 }) {
-  // 过滤掉已不存在的类型（历史脏数据），使用 getDefinitionByType（Map O(1)）
+  // 过滤掉已不存在的类型（历史脏数据），使用 getDefinitionFromRegistry（Map O(1)）
   const validFavorites = favorites
     .map((entry) => {
-      const def = getDefinitionByType(entry.type);
+      const def = getDefinitionFromRegistry(registry, entry.type);
       return def === undefined ? null : { entry, def };
     })
     .filter(
@@ -369,6 +381,7 @@ function FavoriteComponentsList({
 
 export function useCanvasDrop() {
   const preferenceNamespace = useScreenEditorPreferenceNamespace();
+  const registry = useRegistry();
   const project = useScreenEditorStore((s) => s.project);
   const addComponent = useScreenEditorStore((s) => s.addComponent);
   const canvasScale = useScreenEditorStore((s) => s.canvasScale);
@@ -387,14 +400,21 @@ export function useCanvasDrop() {
         0,
       );
 
-      const instance = createComponentInstance(type, x, y, maxZ + 1, project.components);
+      const instance = createComponentInstanceFromRegistry(
+        registry,
+        type,
+        x,
+        y,
+        maxZ + 1,
+        project.components,
+      );
       if (instance) {
         addComponent(instance);
         // 组件成功新增到画布后才记录最近使用
         recordComponentUsage(type, Date.now(), preferenceNamespace);
       }
     },
-    [project, addComponent, canvasScale, preferenceNamespace],
+    [project, addComponent, canvasScale, preferenceNamespace, registry],
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

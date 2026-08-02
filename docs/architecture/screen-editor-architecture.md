@@ -1,7 +1,7 @@
 # 大屏设计器架构
 
 > 状态：生效中
-> 最近更新：2026-07-29
+> 最近更新：2026-08-02
 > 定位：核心 feature 的架构说明。读完应能理解画布/组件/工具/属性面板/数据层如何协作，以及在哪里扩展
 
 ## 1. 定位与边界
@@ -107,16 +107,18 @@ withHistory(set, actionName, updater)
 
 ## 4. 组件注册表（registry/）
 
-### COMPONENT_DEFINITIONS — 单一数据源
+### 实例组件注册表
 
-`registry/index.ts` 维护组件元数据表：
+编辑器使用不可变实例 registry。内置组件从固定模块清单构建，外部组件由宿主通过 `@nebula/screen-sdk/components` 显式注入。生产路径不再使用模块级 mutable registry 或 `registerComponent(ComponentModule)`。
+
+注册项的权威数据源是 manifest：
 
 ```ts
 {
   type: string;             // 'text' | 'bar-chart' | 'rect' | 'ellipse' | 'image'
   name: string;             // 中文名
   category: string;         // 'chart' | 'text' | 'media' | 'decoration'
-  icon: string;             // lucide-react 图标名
+  icon: string;             // SDK icon token
   keywords: string[];       // 搜索别名
   description: string;
   defaultProps: object;
@@ -125,11 +127,11 @@ withHistory(set, actionName, updater)
 }
 ```
 
-辅助函数：`getDefinitionByType` / `getDefinitionsByCategory` / `searchComponentDefinitions` / `createComponentInstance`。
+组件库、属性面板、图层和蓝图锚点都从当前实例 registry 派生，支持同页两个编辑器使用不同组件集合。
 
 ### 渲染器分发
 
-`renderer.tsx` 维护 `RENDERERS: Record<type, ComponentType>`，`ComponentRenderer` memo 化包装，根据 `component.type` 查表渲染，未注册类型显示"未知组件"占位。
+`renderer.tsx` 通过当前 registry 查询 renderer。外部组件与已迁移内置组件走 Custom Element bridge；`bar-chart` 通过内部 renderer bridge 保留数据源、逻辑层、交互层和 `refreshDataSource` 能力，但这些能力不进入外部组件 ABI。
 
 `RendererComponentProps` 透传四层配置 + 蓝图 override：
 
@@ -150,11 +152,11 @@ withHistory(set, actionName, updater)
 
 ### 新增组件步骤
 
-1. 在 `@nebula/shared` 添加类型与默认 props
-2. 在 `registry/components/` 新建 renderer，实现 `RendererComponentProps` 契约
-3. 在 `registry/index.ts` 的 `COMPONENT_DEFINITIONS` 追加定义
-4. 在 `registry/renderer.tsx` 的 `RENDERERS` 注册映射
-5. 在 `property-schema/schemas.tsx` 注册属性 Schema（未注册回退 `DEFAULT_SCHEMA`）
+1. 在组件包中实现 Custom Element 和 `ScreenComponentManifestV1`
+2. 用 `ScreenComponentPluginV1` 暴露 `manifest + define()`
+3. 宿主调用 `createScreenComponentRegistry({ components })`
+4. 在 `<nebula-screen-editor>` 首次 load 前设置 `componentRegistry`
+5. 使用 `ScreenHostAdapterV2` 保存 V2 文档
 
 详见 [development-guide.md](./development-guide.md)。
 

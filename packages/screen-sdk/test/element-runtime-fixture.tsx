@@ -49,12 +49,16 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
     configuration = nextConfiguration;
     controller.setReadonly(configuration.readonly);
     controller.setBinding(configuration.projectId, configuration.adapter);
+    const registry = configuration.componentRegistry;
     root.render(
       <div
         data-testid="screen-editor-runtime"
         data-project-id={configuration.projectId}
         data-readonly={configuration.readonly ? '' : undefined}
         data-theme={configuration.theme}
+        data-component-registry-size={registry === undefined ? 'none' : String(registry.size)}
+        data-document-mode={configuration.documentMode ?? 'v1'}
+        data-v2-adapter={configuration.adapterV2 === undefined ? undefined : ''}
       />,
     );
   };

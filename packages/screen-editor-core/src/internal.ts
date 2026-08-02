@@ -6,4 +6,6 @@ export * from './events.js';
 export * from './host/browser-export.js';
 export * from './host/operation-coordinator.js';
 export * from './host/screen-host-controller.js';
+export * from './host/screen-host-controller-port.js';
+export * from './host/screen-host-controller-v2.js';
 export * from './ui/index.js';

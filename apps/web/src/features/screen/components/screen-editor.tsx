@@ -15,11 +15,14 @@ import {
   type ScreenEditorWorkbenchOperationResult,
   type ScreenNavigateRequestDetail,
 } from '@nebula/screen-editor-core';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { usePublishScreenProject, useScreenProject, useUpdateScreenProject } from '../hooks';
 import { openNebulaScreenEditorPreview } from '../adapters/nebula-screen-host-adapter';
 import { DYNAMIC_SCREEN_EDITOR_RUNTIME_PROFILE } from '../runtime/dynamic-runtime-profile';
+import { useScreenComponentRegistry } from '../runtime/use-screen-component-registry';
+import type { ScreenComponentRegistry } from '@nebula/screen-sdk/components';
 
 export interface ScreenEditorProps {
   debug?: boolean;
@@ -59,6 +62,13 @@ export function ScreenEditor({
       createScreenEditorStore({ instanceId, persistPreferences, preferenceNamespace });
   }
 
+  // Task 6.4: 共享组件注册表——registry 在 Workbench mount 前就绪（Spec §14.2）
+  const {
+    registry,
+    error: registryError,
+    isLoading: registryLoading,
+  } = useScreenComponentRegistry();
+
   useEffect(() => {
     const store = storeRef.current;
     if (!debug || store === null) return;
@@ -67,6 +77,23 @@ export function ScreenEditor({
       if (window.__screenEditorStore === store) delete window.__screenEditorStore;
     };
   }, [debug]);
+
+  if (registryLoading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (registryError !== null || registry === null) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-8 text-center">
+        <p className="text-sm font-medium text-destructive">组件注册表加载失败</p>
+        <p className="text-xs text-muted-foreground">{registryError?.message ?? '未知错误'}</p>
+      </div>
+    );
+  }
 
   return (
     <ScreenEditorStoreProvider
@@ -77,6 +104,7 @@ export function ScreenEditor({
     >
       <NebulaScreenEditorHost
         capabilityProfile={capabilityProfile}
+        componentRegistry={registry}
         hostAdapter={hostAdapter}
         onThemeChange={onThemeChange}
         portalRoot={portalRoot}
@@ -88,6 +116,7 @@ export function ScreenEditor({
 
 interface NebulaScreenEditorHostProps {
   capabilityProfile: ScreenEditorCapabilityProfile;
+  componentRegistry: ScreenComponentRegistry;
   hostAdapter?: ScreenEditorHostAdapter;
   onThemeChange: (theme: ScreenEditorTheme) => void;
   portalRoot: HTMLElement | null;
@@ -96,6 +125,7 @@ interface NebulaScreenEditorHostProps {
 
 function NebulaScreenEditorHost({
   capabilityProfile,
+  componentRegistry,
   hostAdapter,
   onThemeChange,
   portalRoot,
@@ -288,6 +318,7 @@ function NebulaScreenEditorHost({
       <ScreenEditorWorkbench
         operations={operations}
         capabilityProfile={capabilityProfile}
+        componentRegistry={componentRegistry}
         portalRoot={portalRoot}
         project={envelope}
         runtimeProfile={

@@ -3,9 +3,10 @@ import { History, Inbox, LoaderCircle, Plus, RotateCcw, Trash2 } from 'lucide-re
 import type { ScreenSnapshotHostAdapter } from '../adapters/screen-editor-host-adapter';
 import {
   toScreenPublicError,
-  type ScreenHostController,
   type ScreenSnapshotSummary,
 } from '@nebula/screen-editor-core/internal';
+import type { ScreenHostControllerPort } from '../host/screen-host-controller-port.js';
+import type { ScreenHostController } from '@nebula/screen-editor-core/internal';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useScreenEditorNotifications } from './screen-editor-notifications';
 import {
@@ -32,7 +33,7 @@ interface SnapshotManagerDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   adapter?: ScreenSnapshotHostAdapter;
-  hostController?: ScreenHostController;
+  hostController?: ScreenHostControllerPort | ScreenHostController;
   onConflict?: () => void;
   readonly?: boolean;
 }

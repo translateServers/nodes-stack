@@ -17,9 +17,8 @@
  *   若直接 `import '../registry/registered-components'` 会形成循环依赖
  *   （schemas.tsx → registered-components.ts → text-component.tsx → schemas.tsx），
  *   此时 TEXT_SCHEMA 尚未定义，textModule.schema 会是 undefined。
- * - 解决方式：schemas.tsx 仅 `import { getAllModules } from '../registry/registry'`
- *   （registry.ts 无副作用，不会触发循环），由 registered-components.ts 在所有
- *   组件注册完成后调用 `buildPropertySchemas()` 把注册中心的 schema 写入 PROPERTY_SCHEMAS。
+ * - 解决方式：registered-components.ts 在所有组件模块加载完成后调用
+ *   `buildPropertySchemas(modules)` 把 schema 写入 PROPERTY_SCHEMAS。
  */
 
 import {
@@ -29,7 +28,7 @@ import {
   BarChartVisualSection,
 } from '../components/bar-chart-config-sections';
 import { QuickEventEditor } from '../components/quick-event-editor';
-import { getAllModules } from '../registry/registry';
+import type { ComponentModule } from '../registry/types';
 import type { PropertySchema, PropertyTabId } from './types';
 
 /** 位置与尺寸分区字段（多组件类型复用） */
@@ -631,12 +630,12 @@ export const PROPERTY_SCHEMAS: Record<string, PropertySchema> = {};
  * 由 registered-components.ts 在所有 `registerComponent` 调用完成后调用一次。
  * 重复调用安全：会清空旧值并重新填充（用于测试场景重置注册表后重建）。
  */
-export function buildPropertySchemas(): void {
+export function buildPropertySchemas(modules: readonly ComponentModule[]): void {
   // 清空旧值（支持重复调用，如测试中重置注册表后重建）
   for (const key of Object.keys(PROPERTY_SCHEMAS)) {
     delete PROPERTY_SCHEMAS[key];
   }
-  for (const mod of getAllModules()) {
+  for (const mod of modules) {
     if (mod.schema !== undefined) {
       PROPERTY_SCHEMAS[mod.definition.type] = mod.schema;
     }
@@ -655,7 +654,10 @@ export function getSchemaForComponentType(type: string): PropertySchema {
 export {
   BAR_CHART_SCHEMA,
   BUTTON_SCHEMA,
+  DEFAULT_DATA_EMPTY_SECTION,
+  DEFAULT_INTERACTION_EMPTY_SECTION,
   DEFAULT_SCHEMA,
+  EVENTS_SECTION,
   FILTER_SECTION,
   LAYER_STATUS_SECTION,
   POSITION_SECTION,

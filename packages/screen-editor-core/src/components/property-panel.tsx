@@ -11,6 +11,10 @@ import {
 import { useScreenEditorStore } from '../stores/editor-store';
 import type { ScreenComponent, CanvasConfig } from '@nebula/shared';
 import {
+  validateValueAgainstSchema,
+  type ScreenComponentValidationDiagnostic,
+} from '@nebula/screen-component-sdk';
+import {
   Button,
   Select,
   SelectContent,
@@ -28,7 +32,10 @@ import { ColorInput, numberInputClass } from './panel-fields';
 import { PanelSection } from './ui-primitives';
 import { useOptionalScreenEditorEnvironment } from './screen-editor-environment';
 // Phase 2 Slice B：属性面板 Schema 化（注册表驱动 + 声明式字段 + customRender 逃生舱）
-import { getSchemaForComponentType, PropertySchemaRenderer } from '../property-schema';
+import { PropertySchemaRenderer } from '../property-schema';
+// Spec §13.2 Phase 1, Task 1.5：从实例注册表派生 schema（registry 为 null 时回退到 legacy）
+import { getSchemaFromRegistry } from '../registry/registry-derive';
+import { useOptionalRegistry } from '../registry/registry-context';
 // Task 9：全局变量管理面板（画布设置入口）
 import GlobalVariablesPanel from './global-variables-panel';
 
@@ -194,19 +201,42 @@ export function PropertyPanel() {
     [components, singleSelectedId],
   );
 
-  const handleComponentUpdate = useCallback(
-    (updates: Partial<ScreenComponent>) => {
-      if (singleSelectedId) {
-        updateComponent(singleSelectedId, updates);
-      }
-    },
-    [singleSelectedId, updateComponent],
+  // Phase 2 Slice B + Spec §13.2 Phase 1, Task 1.5：
+  // 按组件类型查找 Schema，优先从实例注册表派生（生产路径），
+  // registry 为 null（测试或无 Provider）时回退到模块级 getSchemaForComponentType。
+  const registry = useOptionalRegistry();
+  const schema = useMemo(
+    () => (selectedComponent ? getSchemaFromRegistry(registry, selectedComponent.type) : []),
+    [selectedComponent, registry],
   );
 
-  // Phase 2 Slice B：按组件类型查找 Schema（注册表驱动，消除 type === 'bar-chart' 硬编码分支）
-  const schema = useMemo(
-    () => (selectedComponent ? getSchemaForComponentType(selectedComponent.type) : []),
-    [selectedComponent],
+  // Task 3.3：获取 host 组件的 propsSchema 用于运行时 props 校验。
+  // 外部组件（source='host'）的 props 更新必须通过 propsSchema 校验，
+  // 非法更新不写 Store、不入历史（Spec §7.3: 不得只依赖属性面板控件约束）。
+  // built-in 组件无 propsSchema（propsSchema 在 Phase 7 迁移后接入），跳过校验。
+  const hostPropsSchema = useMemo(() => {
+    if (!selectedComponent || !registry) return undefined;
+    const reg = registry.get(selectedComponent.type);
+    return reg?.source === 'host' ? reg.manifest.propsSchema : undefined;
+  }, [selectedComponent, registry]);
+
+  const handleComponentUpdate = useCallback(
+    (updates: Partial<ScreenComponent>) => {
+      if (!singleSelectedId) return;
+      // Task 3.3：host 组件 props 更新前校验完整 props（Spec §7.3）
+      if (updates.props !== undefined && hostPropsSchema) {
+        const diagnostics: ScreenComponentValidationDiagnostic[] = [];
+        const valid = validateValueAgainstSchema(
+          updates.props,
+          hostPropsSchema,
+          ['props'],
+          diagnostics,
+        );
+        if (!valid) return; // 非法更新不写 Store、不入历史
+      }
+      updateComponent(singleSelectedId, updates);
+    },
+    [singleSelectedId, updateComponent, hostPropsSchema],
   );
 
   if (!components || !canvas) return null;

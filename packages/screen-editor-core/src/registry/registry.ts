@@ -1,8 +1,7 @@
 /**
  * 组件注册中心（Spec 驱动改造：组件库统一注册接口）
  *
- * 维护 `Map<string, ComponentModule>` 内部索引，提供单一 registerComponent API。
- * 各组件文件声明一个 ComponentModule 对象，由 registered-components.ts 集中调用 registerComponent 注册。
+ * 从固定的内置组件模块清单派生查询，不再维护模块级 mutable Map。
  *
  * 派生表 getters：
  * - getDefinitionByType / getAllDefinitions / getDefinitionsByCategory
@@ -14,7 +13,7 @@
  *
  * 循环依赖打破机制：
  * - __registerDefinitionLookup 仍由 component-events-actions.ts 提供
- * - registered-components.ts 在所有组件注册完成后调用 __registerDefinitionLookup(getDefinitionByType)
+ * - registered-components.ts 在模块加载后调用 __registerDefinitionLookup(getDefinitionByType)
  * - 这样 getComponentEvents/getComponentActions 在运行时能查到定义
  */
 
@@ -22,6 +21,7 @@ import type { ComponentDefinition, ComponentStyle, ScreenComponent } from '@nebu
 import type { LucideIcon } from 'lucide-react';
 import type { PropertySchema } from '../property-schema/types';
 import type { ComponentModule } from './types';
+import { BUILTIN_COMPONENT_MODULES } from './builtin-modules';
 
 /**
  * renderer 统一入参的最小子集（与 ComponentModule.renderer 声明的入参一致）。
@@ -36,41 +36,15 @@ type MinimalRendererProps = {
   style: ComponentStyle;
 };
 
-/**
- * 内部索引：type → ComponentModule
- *
- * 使用 Map 而非 Object，避免 prototype 上的键（如 __proto__）干扰，并提供 O(1) 查询。
- */
-const moduleRegistry = new Map<string, ComponentModule>();
-
-/**
- * 注册一个组件模块。
- *
- * - dev 模式（import.meta.env.DEV）下重复注册同一 type 会 console.error + throw，
- *   帮助开发者尽早发现重复注册 bug
- * - prod 模式下静默覆盖（避免单次错误中断用户流程）
- *
- * @param module ComponentModule 对象
- * @throws Error（仅 dev 模式）当 type 已注册时
- */
-export function registerComponent(module: ComponentModule): void {
-  const type = module.definition.type;
-  if (moduleRegistry.has(type)) {
-    if (import.meta.env.DEV) {
-      const message = `[registry] 重复注册组件类型: ${type}`;
-      console.error(message);
-      throw new Error(message);
-    }
-    // prod 模式静默覆盖
-  }
-  moduleRegistry.set(type, module);
-}
+const builtinModulesByType = new Map(
+  BUILTIN_COMPONENT_MODULES.map((module) => [module.definition.type, module]),
+);
 
 /**
  * 按 type 取组件定义（O(1) Map 索引）。
  */
 export function getDefinitionByType(type: string): ComponentDefinition | undefined {
-  return moduleRegistry.get(type)?.definition;
+  return builtinModulesByType.get(type)?.definition;
 }
 
 /**
@@ -79,7 +53,7 @@ export function getDefinitionByType(type: string): ComponentDefinition | undefin
  * 返回顺序为注册顺序（Map 保持插入顺序）。
  */
 export function getAllDefinitions(): ComponentDefinition[] {
-  return Array.from(moduleRegistry.values(), (m) => m.definition);
+  return BUILTIN_COMPONENT_MODULES.map((module) => module.definition);
 }
 
 /**
@@ -88,7 +62,7 @@ export function getAllDefinitions(): ComponentDefinition[] {
  * order 缺省视为最大值（排在最后）。
  */
 export function getDefinitionsByCategory(category: string): ComponentDefinition[] {
-  return Array.from(moduleRegistry.values(), (m) => m.definition)
+  return BUILTIN_COMPONENT_MODULES.map((module) => module.definition)
     .filter((d) => d.category === category)
     .sort((a, b) => {
       const ao = a.order ?? Number.MAX_SAFE_INTEGER;
@@ -101,28 +75,30 @@ export function getDefinitionsByCategory(category: string): ComponentDefinition[
  * 按 type 取渲染组件。
  */
 export function getRenderer(type: string): React.ComponentType<MinimalRendererProps> | undefined {
-  return moduleRegistry.get(type)?.renderer;
+  return builtinModulesByType.get(type)?.renderer;
 }
 
 /**
  * 按 type 取 lucide 图标组件。
  */
 export function getIcon(type: string): LucideIcon | undefined {
-  return moduleRegistry.get(type)?.icon;
+  return builtinModulesByType.get(type)?.icon;
 }
 
 /**
  * 按 type 取属性面板 Schema。
  */
 export function getSchema(type: string): PropertySchema | undefined {
-  return moduleRegistry.get(type)?.schema;
+  return builtinModulesByType.get(type)?.schema;
 }
 
 /**
  * 取所有已注册组件模块（用于派生 ICON_MAP / PROPERTY_SCHEMAS / RENDERERS）。
  */
 export function getAllModules(): IterableIterator<ComponentModule> {
-  return moduleRegistry.values();
+  return new Map(
+    BUILTIN_COMPONENT_MODULES.map((module) => [module.definition.type, module]),
+  ).values();
 }
 
 /**

@@ -206,6 +206,29 @@ describe('compileBlueprintV2 — V2 编译器', () => {
       expect(rule.steps).toHaveLength(1);
       expect(rule.steps[0]?.kind).toBe('action');
     });
+
+    it('5b. Phase 4 Task 4.2: evt:valueClick（manifest 自定义事件）→ act:show → 1 rule', () => {
+      // V2TriggerEventId 已放宽为 string，允许指标卡的 valueClick 等自定义事件
+      const bp = makeBlueprint(
+        [makeComponentNode('c1', 'comp1'), makeComponentNode('c2', 'comp2')],
+        [makeEdge('e1', 'c1', 'c2', 'evt:valueClick', 'act:show')],
+      );
+      const result = compileBlueprintV2(bp, ctxWithComponents(['comp1', 'comp2']));
+
+      expect(result.rules).toHaveLength(1);
+      const rule = result.rules[0];
+      expect(rule.triggerNodeId).toBe('c1');
+      expect(rule.triggerEventId).toBe('valueClick');
+      expect(rule.triggerComponentId).toBe('comp1');
+      expect(rule.steps).toHaveLength(1);
+      const step = rule.steps[0];
+      expect(step.kind).toBe('action');
+      if (step.kind === 'action') {
+        expect(step.nodeId).toBe('c2');
+        expect(step.componentId).toBe('comp2');
+        expect(step.config.actionId).toBe('show');
+      }
+    });
   });
 
   describe('诊断', () => {

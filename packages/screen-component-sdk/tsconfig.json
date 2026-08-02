@@ -1,0 +1,9 @@
+{
+  "extends": "@nebula/typescript-config/base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "scripts/**/*.mjs", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

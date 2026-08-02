@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import type { ComponentStyle } from '@nebula/shared';
-import { TextComponent } from './text-component';
+import { TextComponent, TextCustomElement } from './text-component';
 
 function renderText(overrides: { props?: Record<string, unknown>; style?: ComponentStyle }) {
   return render(<TextComponent props={overrides.props ?? {}} style={overrides.style ?? {}} />);
@@ -151,6 +151,36 @@ describe('TextComponent - Task 7 字间距 + 描边组合', () => {
     const target = container.firstChild as HTMLElement;
     expect(target.style.fontSize).toBe('24px');
     expect(target.style.color).toBe('rgb(0, 255, 0)');
+    expect(target.style.letterSpacing).toBe('1.5px');
+    expect(target.style.webkitTextStroke).toBe('2px #000000');
+  });
+});
+
+describe('TextCustomElement - 内置组件 ABI 迁移', () => {
+  it('通过 model property 渲染内容与文本样式', () => {
+    const element = new TextCustomElement();
+    element.model = {
+      apiVersion: 1,
+      componentId: 'text-1',
+      mode: 'design',
+      interactive: false,
+      props: { content: 'Hello CE' },
+      style: {
+        fontSize: 24,
+        color: '#00ff00',
+        textAlign: 'left',
+        letterSpacing: 1.5,
+        textStrokeWidth: 2,
+        textStrokeColor: '#000000',
+      },
+      size: { width: 200, height: 60 },
+    };
+
+    const target = element.firstElementChild as HTMLElement;
+    expect(target.textContent).toBe('Hello CE');
+    expect(target.style.fontSize).toBe('24px');
+    expect(target.style.color).toBe('rgb(0, 255, 0)');
+    expect(target.style.textAlign).toBe('left');
     expect(target.style.letterSpacing).toBe('1.5px');
     expect(target.style.webkitTextStroke).toBe('2px #000000');
   });

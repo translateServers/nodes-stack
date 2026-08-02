@@ -9,7 +9,7 @@
  *
  * 设计目的：将原本散落在 4 处的手动同步注册
  * （COMPONENT_DEFINITIONS / RENDERERS / ICON_MAP / PROPERTY_SCHEMAS）
- * 收敛为单一 registerComponent(module) API，新增组件只需在一个文件中声明并注册。
+ * 收敛为单一 ComponentModule 声明，内置组件由固定模块清单派生。
  */
 
 import type { ComponentDefinition, ComponentStyle } from '@nebula/shared';
@@ -35,6 +35,8 @@ export interface ComponentModule {
     props: Record<string, unknown>;
     style: ComponentStyle;
   }>;
+  /** 内部 Custom Element constructor；用于逐步迁移内置组件到组件 ABI。 */
+  customElementConstructor?: CustomElementConstructor;
   /** 属性面板 Schema（可选；未注册时回退 DEFAULT_SCHEMA） */
   schema?: PropertySchema;
   /** lucide 图标组件（可选；未注册时回退 DEFAULT_ICON） */

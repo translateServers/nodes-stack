@@ -6,6 +6,13 @@
     "outDir": "./dist",
     "declarationMap": false,
     "allowJs": true,
+    "paths": {
+      "@nebula/screen-component-sdk": ["../screen-component-sdk/dist/index.d.ts"],
+      "@nebula/screen-component-sdk/*": ["../screen-component-sdk/dist/*.d.ts"],
+      "@nebula/screen-editor-core": ["../screen-editor-core/dist/index.d.ts"],
+      "@nebula/screen-editor-core/*": ["../screen-editor-core/dist/*.d.ts"],
+      "@nebula/shared": ["../shared/dist/index.d.mts"]
+    },
     "types": ["node", "vitest/globals"]
   },
   "include": [

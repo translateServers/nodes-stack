@@ -1,0 +1,37 @@
+{
+  "name": "@nebula-example/indicator-card-vanilla",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vanilla 指标卡示例组件包：仅依赖 @nebula/screen-component-sdk，用于 component lab 验证外部组件注册闭环",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nebula/screen-component-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@nebula/eslint-config": "workspace:*",
+    "@nebula/typescript-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.18.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  }
+}

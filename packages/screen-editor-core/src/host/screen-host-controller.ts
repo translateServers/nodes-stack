@@ -60,6 +60,7 @@ export interface ScreenHostSessionPort {
 }
 
 export interface PreparedScreenImport {
+  readonly kind: 'v1';
   readonly file: File;
   readonly generation: number;
   readonly preview: {
@@ -351,6 +352,7 @@ export class ScreenHostController {
       const text = await file.text();
       const transfer = parseTransfer(JSON.parse(text) as unknown);
       return {
+        kind: 'v1',
         file,
         generation: this.coordinator.generation,
         preview: {

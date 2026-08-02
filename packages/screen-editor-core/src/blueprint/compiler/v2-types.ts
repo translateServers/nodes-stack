@@ -19,14 +19,14 @@ import type {
   GlobalRequestApiConfig,
 } from '@nebula/shared';
 
-/** V2 触发事件 ID（语义化，对应 evt:* 锚点） */
-export type V2TriggerEventId =
-  | 'click'
-  | 'hover'
-  | 'dataLoaded'
-  | 'dataError'
-  | 'pageLoad'
-  | 'interval';
+/**
+ * V2 触发事件 ID（语义化，对应 evt:* 锚点）。
+ *
+ * Phase 4 Task 4.2 起放宽为 `string`，允许 manifest 声明的任意事件 id（如
+ * 指标卡的 `valueClick`）。V1 内置 click/hover/dataLoaded/dataError/pageLoad/interval
+ * 仍由各组件的 `getComponentEventsFromRegistry` 决定是否暴露为 evt:* source handle。
+ */
+export type V2TriggerEventId = string;
 
 /** V2 动作 ID（对应 act:* 锚点） */
 export type V2ActionId =

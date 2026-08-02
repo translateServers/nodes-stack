@@ -20,7 +20,6 @@ import type {
   V2ConditionStep,
   V2DelayStep,
   V2Diagnostic,
-  V2TriggerEventId,
 } from './v2-types.js';
 import { MAX_COMPILE_DEPTH_V2 } from './v2-types.js';
 import { buildV2Indexes, type V2BlueprintIndexes, type V2NodeIndexEntry } from './v2-indexes.js';
@@ -185,7 +184,8 @@ function compileRules(indexes: V2BlueprintIndexes): V2CompiledRule[] {
     }
 
     for (const evtHandle of evtHandles) {
-      const eventId = evtHandle.slice('evt:'.length) as V2TriggerEventId;
+      // Phase 4 Task 4.2: V2TriggerEventId 已放宽为 string，允许 manifest 自定义事件
+      const eventId = evtHandle.slice('evt:'.length);
       const triggerComponentId = entry.componentId ?? 'global';
 
       const steps: V2CompiledStep[] = [];

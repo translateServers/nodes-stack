@@ -59,6 +59,22 @@ vi.mock('../hooks', () => ({
   useScreenPreview: vi.fn(),
 }));
 
+// Task 6.4: mock 共享 registry hook，使用真实 DEFAULT_BUILTIN_REGISTRY
+// 使 ComponentRenderer → useOptionalRegistry() 能找到内置组件定义
+vi.mock('../runtime/use-screen-component-registry', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('../runtime/use-screen-component-registry')>();
+  const { DEFAULT_BUILTIN_REGISTRY } = await import('@nebula/screen-editor-core');
+  return {
+    ...original,
+    useScreenComponentRegistry: () => ({
+      registry: DEFAULT_BUILTIN_REGISTRY,
+      error: null,
+      isLoading: false,
+    }),
+  };
+});
+
 import { useParams } from '@tanstack/react-router';
 import { useScreenPreview } from '../hooks';
 import { ComponentRenderer } from '@nebula/screen-editor-core';

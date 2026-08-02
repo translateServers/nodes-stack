@@ -12,6 +12,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       // Resolve SDK from source in dev environment to avoid duplicate React
       // instances (SDK dist bundles React for external consumers).
+      '@nebula/screen-sdk/components': path.resolve(
+        __dirname,
+        '../../packages/screen-sdk/src/components/index.ts',
+      ),
       '@nebula/screen-sdk/contracts': path.resolve(
         __dirname,
         '../../packages/screen-sdk/src/contracts/index.ts',

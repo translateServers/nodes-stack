@@ -15,11 +15,13 @@
 import { useCallback, useId, useState } from 'react';
 import { Upload, FileJson, AlertCircle } from 'lucide-react';
 import { ScreenProjectSchema, type ScreenProject } from '@nebula/shared';
-import {
-  toScreenPublicError,
-  type PreparedScreenImport,
-  type ScreenHostController,
-} from '@nebula/screen-editor-core/internal';
+import { toScreenPublicError } from '@nebula/screen-editor-core/internal';
+import type { PreparedScreenImport } from '../host/screen-host-controller.js';
+import type { ScreenProjectEnvelope } from '../contracts/document.js';
+import type {
+  ScreenImportControllerPort,
+  ScreenPreparedImport,
+} from '../host/screen-import-controller-port.js';
 import { useScreenEditorStore } from '../stores/editor-store';
 import { useScreenEditorNotifications } from './screen-editor-notifications';
 import {
@@ -37,8 +39,32 @@ interface ImportDialogProps {
   onOpenChange: (open: boolean) => void;
   /** 当前项目 ID（导入时保留，避免路由失配） */
   currentProjectId: string;
-  hostController?: ScreenHostController;
+  hostController?: ImportController;
   onConflict?: () => void;
+}
+
+type LegacyPreparedScreenImport = Omit<PreparedScreenImport, 'kind'>;
+interface LegacyImportController {
+  importProject(prepared: LegacyPreparedScreenImport): Promise<ScreenProjectEnvelope>;
+  prepareImport(file: File): Promise<LegacyPreparedScreenImport>;
+}
+type ImportController = ScreenImportControllerPort | LegacyImportController;
+
+function isImportControllerPort(
+  controller: ImportController,
+): controller is ScreenImportControllerPort {
+  return 'mode' in controller;
+}
+
+function toLegacyPreparedImport(prepared: ScreenPreparedImport): LegacyPreparedScreenImport {
+  if (prepared.kind !== 'v1') throw new Error('V1 import controller received a V2 transfer');
+  return {
+    file: prepared.file,
+    generation: prepared.generation,
+    preview: prepared.preview,
+    projectId: prepared.projectId,
+    transfer: prepared.transfer,
+  };
 }
 
 interface ParsedPreview {
@@ -47,7 +73,7 @@ interface ParsedPreview {
   componentCount: number;
   fileName: string;
   name: string;
-  prepared?: PreparedScreenImport;
+  prepared?: ScreenPreparedImport;
   project?: ScreenProject;
 }
 
@@ -92,7 +118,9 @@ export function ImportDialog({
       setError(null);
       try {
         if (hostController !== undefined) {
-          const prepared = await hostController.prepareImport(file);
+          const prepared = isImportControllerPort(hostController)
+            ? await hostController.prepareImport(file)
+            : { ...(await hostController.prepareImport(file)), kind: 'v1' as const };
           setPreview({
             fileName: file.name,
             name: prepared.preview.name,
@@ -158,7 +186,9 @@ export function ImportDialog({
     if (hostController !== undefined && preview.prepared !== undefined) {
       setIsImporting(true);
       try {
-        const envelope = await hostController.importProject(preview.prepared);
+        const envelope = isImportControllerPort(hostController)
+          ? await hostController.importProject(preview.prepared)
+          : await hostController.importProject(toLegacyPreparedImport(preview.prepared));
         notify('success', `已导入 ${envelope.name}`);
         onOpenChange(false);
         reset();

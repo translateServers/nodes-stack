@@ -1872,6 +1872,7 @@ export function ScreenCanvas({
             >
               <div
                 ref={contentRef}
+                data-testid="canvas-drop-zone"
                 className="relative"
                 style={{
                   width: canvas.width,

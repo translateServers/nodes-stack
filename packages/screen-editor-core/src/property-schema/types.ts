@@ -58,9 +58,7 @@ export type FieldControlComponent = React.ComponentType<
 /** 声明式字段：描述"取哪个路径、用什么控件、控件参数" */
 export interface DeclarativeField {
   kind: 'field';
-  /** FIELD_CONTROLS 注册名：'number' | 'color' | 'text' | 'textarea' | 'select' | 'switch' */
   control: string;
-  /** 标签文本 */
   label: string;
   /** 组件上的取值路径，如 'style.fontSize'、'position.width' */
   path: string;
@@ -72,6 +70,31 @@ export interface DeclarativeField {
   visibleWhen?: (component: ScreenComponent) => boolean;
 }
 
+/**
+ * Manifest 驱动字段（Task 3.2：Spec §7.4 声明式属性面板）
+ *
+ * 与 DeclarativeField 的区别：
+ * - `pointer` 使用 RFC 6901 JSON Pointer（相对 props 根），而非点分路径（相对 component）
+ * - 读取从 `component.props` 取值，而非从 `component` 顶层
+ * - 更新通过 `updatePropByPointer` 产生新 props，提交 `{ props: newProps }`
+ *
+ * 控件复用 FIELD_CONTROLS（text/textarea/color/switch/number/select），
+ * 不支持 customRender（Spec §7.4: 不允许 render/customRender/ReactNode/HTML）。
+ */
+export interface ManifestField {
+  kind: 'manifest-field';
+  /** FIELD_CONTROLS 注册名：'number' | 'color' | 'text' | 'textarea' | 'select' | 'switch' */
+  control: string;
+  /** 标签文本 */
+  label: string;
+  /** RFC 6901 JSON Pointer，相对 props 根（如 '/title'、'/axis/labelColor'） */
+  pointer: string;
+  /** min/max/step/options 等透传给控件 */
+  controlProps?: Record<string, unknown>;
+  /** 字段描述（manifest field.description，可用于 tooltip） */
+  description?: string;
+}
+
 /** 自定义字段逃生舱：用于 KV 编辑器等无法声明式描述的复杂字段 */
 export interface CustomField {
   kind: 'custom';
@@ -79,7 +102,7 @@ export interface CustomField {
   render: (ctx: SectionRenderContext) => ReactNode;
 }
 
-export type PropertyField = DeclarativeField | CustomField;
+export type PropertyField = DeclarativeField | ManifestField | CustomField;
 
 /** Section 渲染上下文：传递给 customRender / CustomField.render */
 export interface SectionRenderContext {

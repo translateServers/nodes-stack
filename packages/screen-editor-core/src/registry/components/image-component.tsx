@@ -13,6 +13,7 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
 import { Image } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -53,6 +54,73 @@ export function ImageComponent({ props, style }: ImageComponentProps) {
   );
 }
 
+function cssLength(value: unknown, fallback = '0px'): string {
+  if (typeof value === 'number') return `${value}px`;
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssText(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssNumber(value: unknown, fallback: string): string {
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : fallback;
+}
+
+export class ImageCustomElement extends HTMLElement {
+  #root: HTMLDivElement | null = null;
+
+  #ensureRoot(): HTMLDivElement {
+    if (this.#root !== null) return this.#root;
+    this.style.display = 'block';
+    this.style.width = '100%';
+    this.style.height = '100%';
+    const root = document.createElement('div');
+    root.style.width = '100%';
+    root.style.height = '100%';
+    this.append(root);
+    this.#root = root;
+    return root;
+  }
+
+  set model(model: ScreenComponentElementModelV1) {
+    const root = this.#ensureRoot();
+    const style = model.style;
+    const src = model.props['src'];
+    const alt = model.props['alt'];
+    root.replaceChildren();
+    if (typeof src !== 'string' || src.length === 0) {
+      root.style.display = 'flex';
+      root.style.alignItems = 'center';
+      root.style.justifyContent = 'center';
+      root.textContent = '未设置图片';
+      return;
+    }
+    root.style.display = 'block';
+    root.textContent = '';
+    const image = document.createElement('img');
+    image.src = src;
+    image.alt = typeof alt === 'string' ? alt : '';
+    image.draggable = false;
+    image.style.width = '100%';
+    image.style.height = '100%';
+    image.style.objectFit = cssText(style['objectFit'], 'cover');
+    image.style.opacity = cssNumber(style['opacity'], '1');
+    image.style.borderWidth = cssLength(style['borderWidth']);
+    image.style.borderStyle = cssText(style['borderStyle'], 'solid');
+    image.style.borderColor = cssText(style['borderColor'], '#000000');
+    image.style.borderRadius = cssLength(style['borderRadius']);
+    root.append(image);
+  }
+}
+
+if (
+  typeof customElements !== 'undefined' &&
+  customElements.get('nebula-screen-image-v1') === undefined
+) {
+  customElements.define('nebula-screen-image-v1', ImageCustomElement);
+}
+
 const imageModule: ComponentModule = {
   definition: {
     type: 'image',
@@ -69,6 +137,7 @@ const imageModule: ComponentModule = {
     actions: mergeActions(),
   },
   renderer: ImageComponent,
+  customElementConstructor: ImageCustomElement,
   icon: Image,
 };
 

@@ -3,14 +3,14 @@ import {
   downloadScreenExportFile,
   dispatchScreenEditorRequestEvent,
   parseScreenDocument,
+  parseScreenDocumentV2,
   SCREEN_DOCUMENT_VERSION,
   ScreenSdkPortalRootProvider,
   Spinner,
   toScreenPublicError,
   TooltipProvider,
-  type ScreenHostController,
-  type ScreenHostControllerState,
   type ScreenProjectDraft,
+  type ScreenProjectDraftV2,
 } from '@nebula/screen-editor-core/internal';
 import {
   lazy,
@@ -40,6 +40,13 @@ import {
   createScreenEditorWorkbenchProject,
   type ScreenEditorWorkbenchEnvelope,
 } from '../lib/screen-editor-workbench-project';
+import type { ScreenImportControllerPort } from '../host/screen-import-controller-port.js';
+import type {
+  ScreenHostControllerPort,
+  ScreenHostControllerPortState,
+} from '../host/screen-host-controller-port';
+import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry';
+import { RegistryProvider } from '../registry/registry-context';
 import {
   useScreenEditorDebugHandle,
   useScreenEditorStore,
@@ -94,19 +101,24 @@ export interface ScreenEditorWorkbenchOperationResult {
 export interface ScreenEditorWorkbenchOperationController {
   exportProject?: () => ScreenEditorWorkbenchOperationResult;
   host?: {
-    controller: ScreenHostController;
-    state: ScreenHostControllerState;
+    controller: ScreenHostControllerPort;
+    state: ScreenHostControllerPortState;
   };
+  importController?: ScreenImportControllerPort;
   isLoading?: boolean;
   isPublishing?: boolean;
   isSaving?: boolean;
   navigate: (url: string, target: '_blank' | '_self') => void;
   preview: () => void;
+  previewMode?: 'v1' | 'v2';
   projectId: string;
   publish?: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
   reload?: () => Promise<boolean>;
   save?: (callbacks: ScreenEditorWorkbenchMutationCallbacks) => void;
   snapshots?: ScreenSnapshotHostAdapter;
+  /** Set false until a runtime mode has a compatible preview request contract. */
+  staticPreviewAvailable?: boolean;
+  snapshotController?: ScreenHostControllerPort;
 }
 
 export type { ScreenEditorWorkbenchEnvelope } from '../lib/screen-editor-workbench-project';
@@ -114,6 +126,13 @@ export type { ScreenEditorWorkbenchEnvelope } from '../lib/screen-editor-workben
 export interface ScreenEditorWorkbenchProps {
   operations: ScreenEditorWorkbenchOperationController;
   capabilityProfile?: ScreenEditorCapabilityProfile;
+  /**
+   * 注入的实例注册表（Spec §13.2 Phase 1, Task 1.3）。
+   *
+   * 缺省时使用 `DEFAULT_BUILTIN_REGISTRY`（仅 6 个内置组件）。
+   * 同页两个 `ScreenEditorWorkbench` 可传入不同 registry，实现 Instance Isolation。
+   */
+  componentRegistry?: ScreenComponentInstanceRegistry;
   isActive?: () => boolean;
   portalRoot?: HTMLElement | null;
   project: ScreenEditorWorkbenchEnvelope | null | undefined;
@@ -134,6 +153,7 @@ export const ScreenEditorWorkbench = forwardRef<
 >(function ScreenEditorWorkbench(
   {
     operations,
+    componentRegistry,
     isActive = () => true,
     portalRoot = null,
     project,
@@ -178,22 +198,26 @@ export const ScreenEditorWorkbench = forwardRef<
         setTheme={setTheme}
         theme={theme}
       >
-        <ScreenEditorNotificationProvider>
-          <div ref={eventTargetRef} className="h-full min-h-0 w-full">
-            <ScreenEditorWorkbenchContent
-              eventTarget={eventTargetRef}
-              imperativeRef={ref}
-              operations={operations}
-              project={project}
-            />
-          </div>
-        </ScreenEditorNotificationProvider>
+        <RegistryProvider registry={componentRegistry}>
+          <ScreenEditorNotificationProvider>
+            <div ref={eventTargetRef} className="h-full min-h-0 w-full">
+              <ScreenEditorWorkbenchContent
+                componentRegistry={componentRegistry}
+                eventTarget={eventTargetRef}
+                imperativeRef={ref}
+                operations={operations}
+                project={project}
+              />
+            </div>
+          </ScreenEditorNotificationProvider>
+        </RegistryProvider>
       </ScreenEditorEnvironmentProvider>
     </ScreenSdkPortalRootProvider>
   );
 });
 
 interface ScreenEditorWorkbenchContentProps {
+  componentRegistry?: ScreenComponentInstanceRegistry;
   eventTarget: RefObject<HTMLDivElement | null>;
   imperativeRef: Ref<ScreenEditorWorkbenchHandle>;
   operations: ScreenEditorWorkbenchOperationController;
@@ -201,6 +225,7 @@ interface ScreenEditorWorkbenchContentProps {
 }
 
 function ScreenEditorWorkbenchContent({
+  componentRegistry,
   eventTarget,
   imperativeRef,
   operations,
@@ -460,6 +485,45 @@ function ScreenEditorWorkbenchContent({
     }
     const currentProject = store.getState().project;
     if (currentProject === null) return;
+    if (operations.previewMode === 'v2') {
+      if (componentRegistry === undefined) {
+        notify('error', 'V2 预览需要组件注册表');
+        return;
+      }
+      const documentResult = parseScreenDocumentV2(
+        {
+          schemaVersion: 2,
+          canvas: currentProject.canvas,
+          components: currentProject.components,
+          ...(currentProject.blueprint === undefined
+            ? {}
+            : { blueprint: currentProject.blueprint }),
+          globalVariables: currentProject.globalVariables ?? [],
+        },
+        componentRegistry,
+      );
+      if (!documentResult.success) {
+        notify('error', '项目包含当前 SDK 不支持的功能');
+        return;
+      }
+      const draft: ScreenProjectDraftV2 = {
+        name: currentProject.name,
+        description: currentProject.description,
+        document: documentResult.data,
+      };
+      eventTarget.current?.dispatchEvent(
+        new CustomEvent('nebula-preview-request', {
+          bubbles: true,
+          composed: true,
+          detail: {
+            projectId: operations.projectId,
+            revision: currentProject.updatedAt,
+            draft,
+          },
+        }),
+      );
+      return;
+    }
     const documentResult = parseScreenDocument({
       schemaVersion: SCREEN_DOCUMENT_VERSION,
       canvas: currentProject.canvas,
@@ -484,7 +548,7 @@ function ScreenEditorWorkbenchContent({
         draft,
       });
     }
-  }, [capabilityProfile, eventTarget, notify, operations, store]);
+  }, [capabilityProfile, componentRegistry, eventTarget, notify, operations, store]);
 
   const { handleDrop, handleDragOver } = useCanvasDrop();
   const textEditing = editorSession.textEditing;
@@ -610,7 +674,7 @@ function ScreenEditorWorkbenchContent({
           <EditorToolbar
             onSave={readonly ? undefined : handleSave}
             onPublish={!readonly && canPublish === true ? handlePublish : undefined}
-            onPreview={handlePreview}
+            onPreview={operations.staticPreviewAvailable === false ? undefined : handlePreview}
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onFitToScreen={handleFitToScreen}
@@ -709,7 +773,9 @@ function ScreenEditorWorkbenchContent({
         onOpenChange={setShowImport}
         currentProjectId={operations.projectId}
         onConflict={() => setShowConflictDialog(true)}
-        {...(operations.host === undefined ? {} : { hostController: operations.host.controller })}
+        {...(operations.importController === undefined
+          ? {}
+          : { hostController: operations.importController })}
       />
       {canUseSnapshots === true && (
         <SnapshotManagerDialog
@@ -719,7 +785,9 @@ function ScreenEditorWorkbenchContent({
           onConflict={() => setShowConflictDialog(true)}
           readonly={readonly}
           {...(operations.snapshots === undefined ? {} : { adapter: operations.snapshots })}
-          {...(operations.host === undefined ? {} : { hostController: operations.host.controller })}
+          {...(operations.snapshotController === undefined
+            ? {}
+            : { hostController: operations.snapshotController })}
         />
       )}
       {blueprintOpen && (

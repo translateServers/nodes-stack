@@ -16,6 +16,15 @@ vi.mock('../hooks', () => ({
   useScreenPreview: vi.fn(),
 }));
 
+// Task 6.4: mock 共享 registry hook，使预览组件在测试中同步就绪
+vi.mock('../runtime/use-screen-component-registry', () => ({
+  useScreenComponentRegistry: () => ({
+    registry: { get: () => undefined, has: () => false, list: () => [], size: 0 },
+    error: null,
+    isLoading: false,
+  }),
+}));
+
 vi.mock('@nebula/screen-editor-core', async (importOriginal) => {
   const original = await importOriginal<typeof import('@nebula/screen-editor-core')>();
   return {

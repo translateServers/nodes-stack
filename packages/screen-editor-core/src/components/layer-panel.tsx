@@ -39,7 +39,9 @@ import {
   ContextMenuTrigger,
 } from '@nebula/screen-editor-core/internal';
 // Phase 2 Slice C：图标注册收敛（registry/icons.ts 单一映射源，两个面板同源引用）
-import { getIconForType } from '../registry/icons';
+// Spec §13.2 Phase 1, Task 1.5：从实例注册表派生 icon（registry 为 null 时回退到 legacy）
+import { getIconFromRegistry } from '../registry/registry-derive';
+import { useOptionalRegistry } from '../registry/registry-context';
 import {
   getVisibleLayerCommands,
   isLayerCommandEnabled,
@@ -395,7 +397,10 @@ const ComponentRow = memo(function ComponentRow({
   onRenameCommit,
   onRenameCancel,
 }: ComponentRowProps) {
-  const Icon = getIconForType(comp.type);
+  // Spec §13.2 Phase 1, Task 1.5：从实例注册表派生 icon，
+  // registry 为 null（测试或无 Provider）时回退到模块级 getIconForType。
+  const registry = useOptionalRegistry();
+  const Icon = getIconFromRegistry(registry, comp.type);
   // depth=0（顶层组件）由外层 SortableLayerRow / 虚拟行包装提供 data-testid="layer-row"，
   // depth>0（分组子组件）无外层包装，在此直接打 testid 供 E2E 定位
   return (

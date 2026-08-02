@@ -8,6 +8,7 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
 import { Circle } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -34,6 +35,55 @@ export function EllipseComponent({ style }: EllipseComponentProps) {
   );
 }
 
+function cssLength(value: unknown, fallback = '0px'): string {
+  if (typeof value === 'number') return `${value}px`;
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssText(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssOpacity(value: unknown): string {
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : '1';
+}
+
+export class EllipseCustomElement extends HTMLElement {
+  #root: HTMLDivElement | null = null;
+
+  #ensureRoot(): HTMLDivElement {
+    if (this.#root !== null) return this.#root;
+    this.style.display = 'block';
+    this.style.width = '100%';
+    this.style.height = '100%';
+    const root = document.createElement('div');
+    root.style.width = '100%';
+    root.style.height = '100%';
+    root.style.borderRadius = '50%';
+    this.append(root);
+    this.#root = root;
+    return root;
+  }
+
+  set model(model: ScreenComponentElementModelV1) {
+    const root = this.#ensureRoot();
+    const style = model.style;
+    root.style.backgroundColor = cssText(style['backgroundColor'], 'transparent');
+    root.style.borderWidth = cssLength(style['borderWidth']);
+    root.style.borderStyle = cssText(style['borderStyle'], 'solid');
+    root.style.borderColor = cssText(style['borderColor'], '#000000');
+    root.style.borderRadius = '50%';
+    root.style.opacity = cssOpacity(style['opacity']);
+  }
+}
+
+if (
+  typeof customElements !== 'undefined' &&
+  customElements.get('nebula-screen-ellipse-v1') === undefined
+) {
+  customElements.define('nebula-screen-ellipse-v1', EllipseCustomElement);
+}
+
 const ellipseModule: ComponentModule = {
   definition: {
     type: 'ellipse',
@@ -54,6 +104,7 @@ const ellipseModule: ComponentModule = {
     actions: mergeActions(),
   },
   renderer: EllipseComponent,
+  customElementConstructor: EllipseCustomElement,
   icon: Circle,
 };
 

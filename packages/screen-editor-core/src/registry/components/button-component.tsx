@@ -11,6 +11,7 @@
  * 避免与用户可配置样式冲突。
  */
 import type { ComponentStyle } from '@nebula/shared';
+import type { ScreenComponentElementModelV1 } from '@nebula/screen-component-sdk';
 import { MousePointerClick } from 'lucide-react';
 import { mergeActions, mergeEvents } from '../component-events-actions';
 import type { ComponentModule } from '../types';
@@ -49,6 +50,77 @@ export function ButtonComponent({ props, style }: ButtonComponentProps) {
   );
 }
 
+function cssLength(value: unknown, fallback: string): string {
+  if (typeof value === 'number') return `${value}px`;
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssText(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function cssNumber(value: unknown, fallback: string): string {
+  return typeof value === 'number' || typeof value === 'string' ? String(value) : fallback;
+}
+
+export class ButtonCustomElement extends HTMLElement {
+  #root: HTMLDivElement | null = null;
+  #label: HTMLSpanElement | null = null;
+
+  #ensureRoot(): { label: HTMLSpanElement; root: HTMLDivElement } {
+    if (this.#root !== null && this.#label !== null) {
+      return { root: this.#root, label: this.#label };
+    }
+    this.style.display = 'block';
+    this.style.width = '100%';
+    this.style.height = '100%';
+    const root = document.createElement('div');
+    root.style.display = 'flex';
+    root.style.width = '100%';
+    root.style.height = '100%';
+    root.style.alignItems = 'center';
+    root.style.justifyContent = 'center';
+    root.style.overflow = 'hidden';
+    root.style.cursor = 'pointer';
+    root.style.userSelect = 'none';
+    const label = document.createElement('span');
+    label.style.overflow = 'hidden';
+    label.style.textOverflow = 'ellipsis';
+    label.style.whiteSpace = 'nowrap';
+    label.style.paddingInline = '0.5rem';
+    root.append(label);
+    this.append(root);
+    this.#root = root;
+    this.#label = label;
+    return { root, label };
+  }
+
+  set model(model: ScreenComponentElementModelV1) {
+    const { root, label: labelElement } = this.#ensureRoot();
+    const style = model.style;
+    const text = model.props['text'];
+    const label = typeof text === 'string' ? text : '按钮';
+    labelElement.textContent = label;
+    labelElement.title = label;
+    root.style.backgroundColor = cssText(style['backgroundColor'], '#3b82f6');
+    root.style.color = cssText(style['color'], '#ffffff');
+    root.style.fontSize = cssLength(style['fontSize'], '14px');
+    root.style.fontWeight = cssNumber(style['fontWeight'], '500');
+    root.style.borderWidth = cssLength(style['borderWidth'], '0px');
+    root.style.borderStyle = cssText(style['borderStyle'], 'solid');
+    root.style.borderColor = cssText(style['borderColor'], 'transparent');
+    root.style.borderRadius = cssLength(style['borderRadius'], '8px');
+    root.style.opacity = cssNumber(style['opacity'], '1');
+  }
+}
+
+if (
+  typeof customElements !== 'undefined' &&
+  customElements.get('nebula-screen-button-v1') === undefined
+) {
+  customElements.define('nebula-screen-button-v1', ButtonCustomElement);
+}
+
 const buttonModule: ComponentModule = {
   definition: {
     type: 'button',
@@ -72,6 +144,7 @@ const buttonModule: ComponentModule = {
     actions: mergeActions(),
   },
   renderer: ButtonComponent,
+  customElementConstructor: ButtonCustomElement,
   schema: BUTTON_SCHEMA,
   icon: MousePointerClick,
 };

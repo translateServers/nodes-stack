@@ -24,7 +24,13 @@ import { Component } from 'lucide-react';
 import { BaseNodeShell, type AnchorDescriptor } from './base-node';
 import { useBlueprintDiagnosticMap } from '../hooks/blueprint-diagnostic-context';
 import type { ComponentNodeData } from './v2-node-data-types';
-import { getComponentActions, getComponentEvents } from '../../registry/component-events-actions';
+// Spec §13.2 Phase 1, Task 1.5：从实例注册表派生 events/actions，
+// registry 为 null（测试或无 Provider）时回退到模块级 getComponentEvents/getComponentActions。
+import {
+  getComponentActionsFromRegistry,
+  getComponentEventsFromRegistry,
+} from '../../registry/registry-derive';
+import { useOptionalRegistry } from '../../registry/registry-context';
 import { useOptionalScreenEditorEnvironment } from '../../components/screen-editor-environment';
 
 /** React Flow 组件节点类型实例 */
@@ -33,13 +39,15 @@ export type ComponentNode = Node<ComponentNodeData, 'component'>;
 /**
  * 从组件类型派生事件/动作锚点列表。
  *
- * - componentType 缺省时回退到 DEFAULT_EVENTS / DEFAULT_ACTIONS
- * - 派生结果缓存到 data 上的 events/actions 字段（由调用方预填充可选）
- * - 内部 useMemo 保证同一 componentType 引用稳定时不重算
+ * - componentType 缺省时回退到空锚点列表
+ * - registry 非空时从实例注册表派生，registry 为 null 时回退到模块级 legacy 函数
+ * - staticOnly=true 时仅保留 click/hover 事件与 show/hide/toggleVisibility 动作
+ *   （V1 静态预览模式裁剪，与改造前 deriveAnchors 行为一致）
  */
 function deriveAnchors(
   componentType: string | undefined,
   staticOnly: boolean,
+  registry: ReturnType<typeof useOptionalRegistry>,
 ): {
   events: AnchorDescriptor[];
   actions: AnchorDescriptor[];
@@ -47,8 +55,8 @@ function deriveAnchors(
   if (!componentType) {
     return { events: [], actions: [] };
   }
-  const componentEvents = getComponentEvents(componentType);
-  const componentActions = getComponentActions(componentType);
+  const componentEvents = getComponentEventsFromRegistry(registry, componentType);
+  const componentActions = getComponentActionsFromRegistry(registry, componentType);
   const events = componentEvents
     .filter((event) => !staticOnly || event.id === 'click' || event.id === 'hover')
     .map((e) => ({
@@ -68,6 +76,8 @@ function deriveAnchors(
 export function ComponentNode({ id, data, selected }: NodeProps<ComponentNode>): JSX.Element {
   const { componentType, label, dangling, inCycle } = data;
   const staticOnly = useOptionalScreenEditorEnvironment()?.capabilityProfile === 'static';
+  // Spec §13.2 Phase 1, Task 1.5：读取实例注册表，未在 Provider 内时为 null（回退到 legacy）
+  const registry = useOptionalRegistry();
 
   // 从诊断上下文获取该节点的诊断等级
   const diagnosticMap = useBlueprintDiagnosticMap();
@@ -84,7 +94,7 @@ export function ComponentNode({ id, data, selected }: NodeProps<ComponentNode>):
   const locating = (data as { locating?: boolean }).locating ?? false;
 
   // 派生事件/动作锚点
-  const { events, actions } = deriveAnchors(componentType, staticOnly);
+  const { events, actions } = deriveAnchors(componentType, staticOnly, registry);
 
   return (
     <BaseNodeShell

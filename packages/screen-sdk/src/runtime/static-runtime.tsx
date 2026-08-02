@@ -2,9 +2,11 @@ import {
   ScreenAdapterErrorCode,
   type ScreenAdapterError,
   ScreenHostAdapterWorkbench,
+  ScreenHostAdapterWorkbenchV2,
   createScreenEditorStore,
   ScreenEditorStoreProvider,
   type ScreenHostAdapterWorkbenchHandle,
+  type ScreenHostAdapterWorkbenchV2Handle,
 } from '@nebula/screen-editor-core';
 import { createRoot } from 'react-dom/client';
 import {
@@ -23,19 +25,18 @@ class RuntimeCommandError extends Error implements ScreenAdapterError {
 }
 
 const DISPOSED_HANDLE = Symbol('disposed-handle');
+type RuntimeWorkbenchHandle = ScreenHostAdapterWorkbenchHandle | ScreenHostAdapterWorkbenchV2Handle;
 
 export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options) => {
   let configuration: ScreenEditorRuntimeConfiguration = options;
   let disposed = false;
-  let handle: ScreenHostAdapterWorkbenchHandle | null = null;
+  let handle: RuntimeWorkbenchHandle | null = null;
   let resolveInitialHandle:
-    | ((value: ScreenHostAdapterWorkbenchHandle | typeof DISPOSED_HANDLE) => void)
+    | ((value: RuntimeWorkbenchHandle | typeof DISPOSED_HANDLE) => void)
     | undefined;
-  const initialHandle = new Promise<ScreenHostAdapterWorkbenchHandle | typeof DISPOSED_HANDLE>(
-    (resolve) => {
-      resolveInitialHandle = resolve;
-    },
-  );
+  const initialHandle = new Promise<RuntimeWorkbenchHandle | typeof DISPOSED_HANDLE>((resolve) => {
+    resolveInitialHandle = resolve;
+  });
   const readonlyRef = { current: options.readonly };
   const store = createScreenEditorStore({
     instanceId: options.identifierPrefix,
@@ -45,7 +46,7 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
   });
   const root = createRoot(options.mountRoot, { identifierPrefix: options.identifierPrefix });
 
-  const setHandle = (nextHandle: ScreenHostAdapterWorkbenchHandle | null): void => {
+  const setHandle = (nextHandle: RuntimeWorkbenchHandle | null): void => {
     if (nextHandle === null) return;
     if (disposed) {
       nextHandle.dispose();
@@ -58,6 +59,33 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
 
   const render = (): void => {
     if (disposed) return;
+    if (
+      configuration.documentMode === 'v2' &&
+      configuration.adapterV2 !== undefined &&
+      configuration.componentRegistry !== undefined
+    ) {
+      root.render(
+        <ScreenEditorStoreProvider
+          store={store}
+          debug={configuration.options.debug}
+          instanceId={options.identifierPrefix}
+          preferenceNamespace={configuration.options.preferenceNamespace}
+        >
+          <ScreenHostAdapterWorkbenchV2
+            ref={setHandle}
+            adapter={configuration.adapterV2}
+            componentRegistry={configuration.componentRegistry}
+            isActive={options.isActive}
+            portalRoot={options.portalRoot}
+            projectId={configuration.projectId}
+            readonly={configuration.readonly}
+            setTheme={options.onThemeChange}
+            theme={configuration.theme}
+          />
+        </ScreenEditorStoreProvider>,
+      );
+      return;
+    }
     const adapterProps =
       configuration.adapter === undefined ? {} : { adapter: configuration.adapter };
     root.render(
@@ -70,6 +98,7 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
         <ScreenHostAdapterWorkbench
           ref={setHandle}
           {...adapterProps}
+          componentRegistry={configuration.componentRegistry}
           isActive={options.isActive}
           portalRoot={options.portalRoot}
           projectId={configuration.projectId}
@@ -81,14 +110,14 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
     );
   };
 
-  const requireHandle = (): ScreenHostAdapterWorkbenchHandle => {
+  const requireHandle = (): RuntimeWorkbenchHandle => {
     if (disposed || handle === null) {
       throw new RuntimeCommandError(ScreenAdapterErrorCode.UNAVAILABLE);
     }
     return handle;
   };
 
-  const awaitHandle = async (): Promise<ScreenHostAdapterWorkbenchHandle> => {
+  const awaitHandle = async (): Promise<RuntimeWorkbenchHandle> => {
     if (disposed) throw new RuntimeCommandError(ScreenAdapterErrorCode.ABORTED);
     const resolvedHandle = handle ?? (await initialHandle);
     if (resolvedHandle === DISPOSED_HANDLE) {
@@ -124,7 +153,6 @@ export const mountNebulaScreenEditorRuntime: MountScreenEditorRuntime = (options
       configuration = nextConfiguration;
       readonlyRef.current = nextConfiguration.readonly;
       handle?.controller.setReadonly(nextConfiguration.readonly);
-      handle?.controller.setBinding(nextConfiguration.projectId, nextConfiguration.adapter);
       render();
     },
     validate: () => handle?.validate() ?? [],

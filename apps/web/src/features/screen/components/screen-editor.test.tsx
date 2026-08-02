@@ -33,6 +33,15 @@ vi.mock('../hooks', () => ({
   usePublishScreenProject: vi.fn(),
 }));
 
+// Task 6.4: mock 共享 registry hook，使编辑器在测试中同步就绪
+vi.mock('../runtime/use-screen-component-registry', () => ({
+  useScreenComponentRegistry: () => ({
+    registry: { get: () => undefined, has: () => false, list: () => [], size: 0 },
+    error: null,
+    isLoading: false,
+  }),
+}));
+
 vi.mock('../../../../../../packages/screen-editor-core/src/components/screen-canvas', () => ({
   ScreenCanvas: () => {
     const { requestNavigate } = useScreenEditorEnvironment();

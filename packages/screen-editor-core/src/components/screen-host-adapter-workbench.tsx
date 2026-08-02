@@ -1,12 +1,14 @@
 import {
-  ScreenHostController,
   type ScreenDocumentV1,
   type ScreenHostAdapter,
-  type ScreenHostControllerState,
   type ScreenProjectDraft,
   type ScreenSdkDiagnostic,
   validateScreenSdkCapabilities,
 } from '@nebula/screen-editor-core/internal';
+import {
+  ScreenHostController,
+  type ScreenHostControllerState,
+} from '../host/screen-host-controller.js';
 import {
   forwardRef,
   useEffect,
@@ -16,6 +18,8 @@ import {
   useSyncExternalStore,
 } from 'react';
 import { createScreenHostSessionPort } from '../lib/screen-host-session';
+import { createV1ScreenImportControllerPort } from '../host/screen-import-controller-port.js';
+import type { ScreenComponentInstanceRegistry } from '../registry/instance-registry';
 import { useScreenEditorStoreApi } from '../stores/editor-store';
 import {
   ScreenEditorWorkbench,
@@ -26,6 +30,17 @@ import type { ScreenEditorTheme } from './screen-editor-environment';
 
 export interface ScreenHostAdapterWorkbenchProps {
   adapter?: ScreenHostAdapter;
+  /**
+   * 注入的实例注册表（Spec §13.2 Phase 6, Task 6.2）。
+   *
+   * 缺省时由 `ScreenEditorWorkbench` 使用 `DEFAULT_BUILTIN_REGISTRY`（仅 6 个内置组件）。
+   * SDK 通过 `<nebula-screen-editor>` element 的 `componentRegistry` property 透传，
+   * 确保 React runtime mount 前 registry 已就绪，project parser、Workbench 和
+   * Host Controller 共享同一 snapshot（Requirement 4, 8）。
+   *
+   * 公共 `ScreenComponentRegistry`（spec §8.2）结构化兼容此类型，可直接赋值。
+   */
+  componentRegistry?: ScreenComponentInstanceRegistry;
   portalRoot?: HTMLElement | null;
   projectId?: string;
   isActive?: () => boolean;
@@ -52,6 +67,7 @@ export const ScreenHostAdapterWorkbench = forwardRef<
 >(function ScreenHostAdapterWorkbench(
   {
     adapter,
+    componentRegistry,
     isActive = () => true,
     portalRoot = null,
     projectId,
@@ -176,9 +192,11 @@ export const ScreenHostAdapterWorkbench = forwardRef<
   const operations = useMemo<ScreenEditorWorkbenchOperationController>(
     () => ({
       host: { controller, state },
+      importController: createV1ScreenImportControllerPort(controller),
       navigate: () => undefined,
       preview: () => undefined,
       projectId: projectId ?? '',
+      snapshotController: controller,
     }),
     [controller, projectId, state],
   );
@@ -188,6 +206,7 @@ export const ScreenHostAdapterWorkbench = forwardRef<
       ref={workbenchRef}
       operations={operations}
       capabilityProfile="static"
+      componentRegistry={componentRegistry}
       isActive={isActive}
       portalRoot={portalRoot}
       project={undefined}
