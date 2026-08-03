@@ -107,6 +107,77 @@ try {
   const tarballName = readdirSync(consumerRoot).find((entry) => entry.endsWith('.tgz'));
   if (tarballName === undefined) throw new Error('SDK tarball was not created');
   const tarballPath = join(consumerRoot, tarballName).replaceAll('\\', '/');
+
+  const vanillaConsumerRoot = mkdtempSync(join(tmpdir(), 'nebula-screen-sdk-vanilla-consumer-'));
+  try {
+    const vanillaSourceRoot = join(vanillaConsumerRoot, 'src');
+    mkdirSync(vanillaSourceRoot);
+    writeFileSync(
+      join(vanillaConsumerRoot, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'nebula-screen-sdk-vanilla-consumer',
+          private: true,
+          type: 'module',
+          scripts: { build: 'tsc --noEmit' },
+          dependencies: { '@nebula/screen-sdk': `file:${tarballPath}` },
+          devDependencies: { typescript: '^6.0.3' },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(
+      join(vanillaConsumerRoot, 'tsconfig.json'),
+      `${JSON.stringify(
+        {
+          compilerOptions: {
+            lib: ['ES2023', 'DOM'],
+            module: 'ESNext',
+            moduleResolution: 'bundler',
+            noEmit: true,
+            resolveJsonModule: true,
+            strict: true,
+            target: 'ES2023',
+          },
+          include: ['src/**/*.ts'],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    writeFileSync(
+      join(vanillaSourceRoot, 'main.ts'),
+      `import '@nebula/screen-sdk/auto-register';
+import type { NebulaScreenEditorElement } from '@nebula/screen-sdk';
+import { createScreenComponentRegistry } from '@nebula/screen-sdk/components';
+import {
+  ScreenDocumentWireSchema,
+  type ScreenComponentRegistryLookup,
+} from '@nebula/screen-sdk/contracts';
+
+const registry = await createScreenComponentRegistry();
+const lookup: ScreenComponentRegistryLookup = registry;
+const editor = document.createElement('nebula-screen-editor') as NebulaScreenEditorElement;
+
+editor.componentRegistry = registry;
+void lookup;
+void ScreenDocumentWireSchema;
+`,
+    );
+
+    runPnpm(['install', '--ignore-workspace'], vanillaConsumerRoot);
+    runPnpm(['build'], vanillaConsumerRoot);
+
+    for (const dependency of ['react', 'react-dom', 'vue']) {
+      if (existsSync(join(vanillaConsumerRoot, 'node_modules', dependency))) {
+        throw new Error(`Vanilla tarball consumer unexpectedly installed ${dependency}`);
+      }
+    }
+  } finally {
+    rmSync(vanillaConsumerRoot, { recursive: true, force: true });
+  }
+
   const sourceRoot = join(consumerRoot, 'src');
   mkdirSync(sourceRoot);
 
@@ -441,7 +512,7 @@ createApp(VueHost).mount(root);
     const dependencies = manifest[field];
     if (typeof dependencies === 'object' && dependencies !== null) {
       const names = Object.keys(dependencies).sort();
-      const expected = field === 'dependencies' ? ['lucide-react', 'zod'] : [];
+      const expected = field === 'dependencies' ? ['zod'] : [];
       if (JSON.stringify(names) !== JSON.stringify(expected)) {
         throw new Error(
           `Packed SDK has unexpected ${field}: ${names.length > 0 ? names.join(', ') : '(none)'}`,

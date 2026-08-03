@@ -26,6 +26,7 @@ const FORBIDDEN_PACKAGES = new Set([
   'monaco-editor',
   'sonner',
 ]);
+const ALLOWED_DECLARATION_PACKAGES = new Set(['zod']);
 
 /** @param {string} directory @returns {string[]} */
 function listSourceMaps(directory) {
@@ -42,6 +43,15 @@ function listJavaScriptFiles(directory) {
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) return listJavaScriptFiles(path);
     return entry.endsWith('.js') ? [path] : [];
+  });
+}
+
+/** @param {string} directory @returns {string[]} */
+function listDeclarationFiles(directory) {
+  return readdirSync(directory).flatMap((entry) => {
+    const path = join(directory, entry);
+    if (statSync(path).isDirectory()) return listDeclarationFiles(path);
+    return entry.endsWith('.d.ts') ? [path] : [];
   });
 }
 
@@ -119,6 +129,38 @@ function inspectJavaScript(filePath, source) {
 }
 
 /**
+ * @param {string} filePath
+ * @param {string} source
+ * @returns {string[]}
+ */
+function inspectDeclarations(filePath, source) {
+  /** @type {string[]} */
+  const findings = [];
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  /** @param {import('typescript').Node} node */
+  function visit(node) {
+    const specifier = importSpecifier(node);
+    if (specifier !== undefined && !specifier.startsWith('.') && !specifier.startsWith('/')) {
+      const name = packageName(specifier);
+      if (!ALLOWED_DECLARATION_PACKAGES.has(name)) {
+        findings.push(`${filePath}: forbidden public declaration import: ${specifier}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return findings;
+}
+
+/**
  * @param {string} [distRoot]
  * @returns {string[]}
  */
@@ -150,7 +192,10 @@ export function checkDistBoundaries(distRoot = DIST_DIRECTORY) {
     }
     return inspected.findings;
   });
-  return [...mapFindings, ...javaScriptFindings];
+  const declarationFindings = listDeclarationFiles(distRoot).flatMap((filePath) =>
+    inspectDeclarations(filePath, readFileSync(filePath, 'utf8')),
+  );
+  return [...mapFindings, ...javaScriptFindings, ...declarationFindings];
 }
 
 const invokedPath = process.argv[1] === undefined ? undefined : resolve(process.argv[1]);

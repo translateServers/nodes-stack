@@ -14,7 +14,10 @@ import {
 } from '@nebula/shared';
 import { z } from 'zod';
 import { checkJsonValue, validateValueAgainstSchema } from '@nebula/screen-component-sdk';
-import type { ScreenComponentValidationDiagnostic } from '@nebula/screen-component-sdk';
+import type {
+  ScreenComponentManifest,
+  ScreenComponentValidationDiagnostic,
+} from '@nebula/screen-component-sdk';
 import {
   getScreenSdkSourceHandles,
   getScreenSdkTargetHandles,
@@ -24,10 +27,6 @@ import {
   isLegacyScreenSdkTriggerType,
   SCREEN_SDK_COMPONENT_TYPES,
 } from '../core/static-capability-profile.js';
-import type {
-  ScreenComponentInstanceRegistry,
-  ScreenComponentRegistration,
-} from '../registry/instance-registry.js';
 import {
   createDiagnostic,
   diagnosticsFromZodError,
@@ -44,6 +43,17 @@ export { SCREEN_SDK_COMPONENT_TYPES } from '../core/static-capability-profile.js
 
 export const ScreenSdkComponentTypeSchema = z.enum(SCREEN_SDK_COMPONENT_TYPES);
 export type ScreenSdkComponentType = z.infer<typeof ScreenSdkComponentTypeSchema>;
+
+/** Framework-neutral registry entry required by the public document parsers. */
+export interface ScreenComponentRegistryLookupEntry {
+  readonly manifest: Readonly<ScreenComponentManifest>;
+  readonly source: 'built-in' | 'host';
+}
+
+/** Minimal registry contract required for registry-aware document validation. */
+export interface ScreenComponentRegistryLookup {
+  get(type: string): ScreenComponentRegistryLookupEntry | undefined;
+}
 
 const HttpUrlSchema = z
   .string()
@@ -943,7 +953,7 @@ function appendJsonBoundaryDiagnostics(
  */
 function getComponentSourceHandles(
   node: EventBlueprint['nodes'][number],
-  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistration | undefined>,
+  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistryLookupEntry | undefined>,
 ): ReadonlySet<string> {
   if (node.kind === 'condition') return new Set(['then', 'else']);
   if (node.kind === 'delay') return new Set(['out']);
@@ -970,7 +980,7 @@ function getComponentSourceHandles(
  */
 function validateBlueprint(
   blueprint: EventBlueprint,
-  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistration | undefined>,
+  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistryLookupEntry | undefined>,
   componentIds: ReadonlySet<string>,
   diagnostics: ScreenSdkDiagnostic[],
 ): void {
@@ -1101,7 +1111,7 @@ function validateBlueprint(
  */
 export function parseScreenDocument(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenDocument> {
   const wireResult = ScreenDocumentWireSchema.safeParse(input);
   if (!wireResult.success) {
@@ -1127,7 +1137,10 @@ export function parseScreenDocument(
   }
 
   // 构建 componentId → registration 映射，供蓝图 source handle 校验使用
-  const registrationByComponentId = new Map<string, ScreenComponentRegistration | undefined>();
+  const registrationByComponentId = new Map<
+    string,
+    ScreenComponentRegistryLookupEntry | undefined
+  >();
   const componentIds = new Set<string>();
 
   // Phase 2: Registry-aware 组件校验（Spec §12.2 第 2 阶段 + Requirement 8 + 14）
@@ -1305,7 +1318,7 @@ export function migrateLegacyScreenDocument(document: LegacyScreenDocument): Scr
  */
 export function migrateLegacyScreenProjectEnvelopeInput(
   input: unknown,
-  registry?: ScreenComponentInstanceRegistry,
+  registry?: ScreenComponentRegistryLookup,
 ): LegacyScreenDocumentMigrationResult {
   const envelopeResult = LegacyScreenProjectEnvelopeInputSchema.safeParse(input);
   if (!envelopeResult.success) {
@@ -1382,7 +1395,7 @@ export function migrateLegacyScreenProjectEnvelopeInput(
  */
 export function parseScreenProjectDraft(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenProjectDraft> {
   const wireResult = ScreenProjectDraftSchema.safeParse(input);
   if (!wireResult.success) {
@@ -1426,7 +1439,7 @@ export function parseScreenProjectDraft(
  */
 export function parseScreenProjectEnvelopeInput(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
   expectedProjectId?: string,
 ): ScreenContractParseResult<ScreenProjectEnvelope> {
   const wireResult = ScreenProjectEnvelopeInputSchema.safeParse(input);
@@ -1476,7 +1489,7 @@ export function parseScreenProjectEnvelopeInput(
  */
 export function parseScreenProjectTransfer(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenProjectTransfer> {
   const wireResult = ScreenProjectTransferSchema.safeParse(input);
   if (!wireResult.success) {
@@ -1517,7 +1530,7 @@ export function parseScreenProjectTransfer(
  */
 export function parseScreenProjectExport(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenProjectExport> {
   const wireResult = ScreenProjectExportSchema.safeParse(input);
   if (!wireResult.success) {

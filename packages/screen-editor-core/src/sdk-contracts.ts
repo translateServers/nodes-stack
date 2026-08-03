@@ -60,6 +60,8 @@ export type {
   ScreenAdapterError,
   ScreenAdapterErrorCode as ScreenAdapterErrorCodeValue,
   ScreenContractParseResult,
+  ScreenComponentRegistryLookup,
+  ScreenComponentRegistryLookupEntry,
   ScreenDocument,
   ScreenDocumentInput,
   ScreenExportFile,

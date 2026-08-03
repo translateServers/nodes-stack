@@ -34,7 +34,6 @@
     "./dist/**/*.css"
   ],
   "dependencies": {
-    "lucide-react": "^1.18.0",
     "zod": "^4.4.3"
   },
   "scripts": {
