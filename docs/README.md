@@ -60,7 +60,8 @@
 | [screen-component-json-editor/](./specs/screen-component-json-editor/spec.md) | 实施中（2026-08-02） | 大屏组件 JSON 配置编辑器（Monaco、动态补全、严格校验、Web-only 发布边界） |
 | [screen-web-component-sdk/](./specs/screen-web-component-sdk/spec.md) | 已归档（2026-08-02） | 早期 Web Component SDK rollout 方案；现行宿主接入以 architecture 开发指南为准 |
 | [screen-component-sdk/](./specs/screen-component-sdk/component-author-guide.md) | 生效中（2026-08-02） | 大屏组件 SDK 与组件注册表（外部组件 registry、真实拖入、正式 document 持久化/transfer/snapshot/preview 与迁移指南已验证） |
-| [screen-sdk-dynamic-data/](./specs/screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 大屏 SDK 后续动态数据能力独立规格，不改变 static 能力边界 |
+| [screen-component-vue-bridge/](./specs/screen-component-vue-bridge/spec.md) | 设计中（2026-08-03） | 收敛唯一组件/文档/Adapter 与单一 screen-sdk，提供普通 Vue 3 SFC 注册桥接 |
+| [screen-sdk-dynamic-data/](./specs/screen-sdk-dynamic-data/spec.md) | 已归档（2026-08-03） | 独立 dynamic SDK、文档 V3 与组件 API v2 的阶段性设计，已由统一组件契约规格取代 |
 | [dataset-management/](./specs/dataset-management/README.md) | 实施中（2026-07-28） | 数据集管理设计规格（独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter）。第一阶段 MVP 已完成 |
 | [blueprint-redesign/](./specs/blueprint-redesign/spec.md) | 已归档（2026-08-02） | 历史重设计方案；现行组件节点蓝图以 architecture 与 shared schema 为准 |
 

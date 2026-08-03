@@ -14,7 +14,8 @@ specs 是本文档体系中**最重要的开发依据**。每个 spec 必须包�
 | 大屏组件 JSON 配置编辑器 | [screen-component-json-editor/](./screen-component-json-editor/spec.md) | 实施中（2026-08-02） | Nebula Web 使用 Monaco 直接编辑选中组件完整可变配置，提供 registry 驱动补全、严格校验、原子历史并保持 SDK 无 Monaco 依赖 |
 | 大屏设计器 Web Component SDK | [screen-web-component-sdk/](./screen-web-component-sdk/spec.md) | 已归档（2026-08-02） | 早期 SDK rollout 方案；现行 SDK 宿主接入以 architecture 开发指南为准 |
 | 大屏组件 SDK 与组件注册表 | [screen-component-sdk/](./screen-component-sdk/component-author-guide.md) | 生效中（2026-08-02） | 正式 Manifest + Web Component + 实例注册表、Web 共享接入、transfer/preview/snapshot 与迁移指南；旧 rollout spec 已归档 |
-| 大屏 SDK 动态数据能力 | [screen-sdk-dynamic-data/](./screen-sdk-dynamic-data/spec.md) | 设计中（2026-08-01） | 后续版本的 API/dataset、动态全局变量与蓝图数据动作独立规格；不改变 static 能力边界 |
+| 大屏统一组件契约与 Vue 3 注册桥接 | [screen-component-vue-bridge/](./screen-component-vue-bridge/spec.md) | 设计中（2026-08-03） | 收敛唯一组件/文档/Adapter 与单一 screen-sdk，提供普通 Vue 3 SFC 注册、Props/事件/样式桥接 |
+| 大屏 SDK 动态数据能力 | [screen-sdk-dynamic-data/](./screen-sdk-dynamic-data/spec.md) | 已归档（2026-08-03） | 独立 dynamic SDK、文档 V3 与组件 API v2 的阶段性设计，已由统一组件契约规格取代 |
 | 数据集管理 | [dataset-management/](./dataset-management/README.md) | 实施中（2026-07-28） | 独立可复用数据集实体、三层分离、后端代理 + 缓存 + Mock + 沙箱 filter。第一阶段 MVP 已完成，验收进度见 checklist.md |
 | 事件蓝图重新设计 | [blueprint-redesign/](./blueprint-redesign/spec.md) | 已归档（2026-08-02） | 历史重设计方案；现行组件节点蓝图、锚点与迁移边界以 architecture 与 shared schema 为准 |
 | 事件蓝图事件触发链路修复 | [blueprint-event-trigger-fix/](./blueprint-event-trigger-fix/spec.md) | 生效中（2026-07-29） | 修复 dataLoaded/dataError/interval 事件触发并明确编辑器画布总闸门（代码已合并，手动验证待确认） |
