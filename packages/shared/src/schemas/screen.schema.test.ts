@@ -2,9 +2,144 @@ import { describe, it, expect } from 'vitest';
 import {
   ComponentStyleSchema,
   DataSourceConfigSchema,
+  EMPTY_SCREEN_DOCUMENT,
+  ScreenDocumentSchema,
   ScreenComponentSchema,
+  UpdateScreenProjectSchema,
   isSensitiveHeaderKey,
 } from './screen.schema.js';
+
+function canonicalDocument(overrides: Record<string, unknown> = {}) {
+  return {
+    ...EMPTY_SCREEN_DOCUMENT,
+    canvas: { ...EMPTY_SCREEN_DOCUMENT.canvas },
+    components: [
+      {
+        id: 'metric-1',
+        type: 'nebula.metric/v1',
+        name: 'Metric',
+        position: { x: 0, y: 0, width: 240, height: 100 },
+        style: {},
+        props: { title: 'CPU' },
+        status: { locked: false, hidden: false },
+        zIndex: 1,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+describe('ScreenDocumentSchema', () => {
+  it('accepts only the canonical marker and strict document shape', () => {
+    expect(ScreenDocumentSchema.safeParse(canonicalDocument()).success).toBe(true);
+    expect(
+      ScreenDocumentSchema.safeParse({ ...canonicalDocument(), schemaVersion: 2 }).success,
+    ).toBe(false);
+    expect(
+      ScreenDocumentSchema.safeParse({ ...canonicalDocument(), legacyDocument: true }).success,
+    ).toBe(false);
+  });
+
+  it('rejects legacy data sources and component fields instead of stripping them', () => {
+    const component = canonicalDocument().components[0];
+    expect(
+      ScreenDocumentSchema.safeParse({
+        ...canonicalDocument(),
+        components: [
+          {
+            ...component,
+            dataSource: { type: 'api', apiConfig: { url: 'https://example.com', method: 'GET' } },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      ScreenDocumentSchema.safeParse({
+        ...canonicalDocument(),
+        components: [{ ...component, logic: { limit: 5 } }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('does not strip unknown blueprint fields', () => {
+    expect(
+      ScreenDocumentSchema.safeParse({
+        ...canonicalDocument(),
+        blueprint: {
+          version: 2,
+          nodes: [
+            {
+              id: 'node-1',
+              kind: 'component',
+              position: { x: 0, y: 0 },
+              componentId: 'metric-1',
+              injected: true,
+            },
+          ],
+          edges: [],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects URI resource ids and forbidden nested request keys', () => {
+    const component = canonicalDocument().components[0];
+    expect(
+      ScreenDocumentSchema.safeParse({
+        ...canonicalDocument(),
+        components: [
+          {
+            ...component,
+            dataSource: {
+              type: 'host-resource',
+              resourceType: 'metric',
+              resourceId: 'https://evil.test',
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ScreenDocumentSchema.safeParse({
+        ...canonicalDocument(),
+        components: [
+          {
+            ...component,
+            dataSource: {
+              type: 'host-resource',
+              resourceType: 'metric',
+              resourceId: 'dataset-1',
+              params: { nested: { Headers: { Authorization: 'secret' } } },
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe('UpdateScreenProjectSchema', () => {
+  it('distinguishes omitted metadata from explicit null clearing and accepts only full documents', () => {
+    expect(
+      UpdateScreenProjectSchema.safeParse({ expectedUpdatedAt: '2026-08-03 00:00:00' }).success,
+    ).toBe(true);
+    expect(
+      UpdateScreenProjectSchema.safeParse({
+        expectedUpdatedAt: '2026-08-03 00:00:00',
+        description: null,
+        thumbnail: null,
+        document: canonicalDocument(),
+      }).success,
+    ).toBe(true);
+    expect(
+      UpdateScreenProjectSchema.safeParse({
+        expectedUpdatedAt: '2026-08-03 00:00:00',
+        canvas: EMPTY_SCREEN_DOCUMENT.canvas,
+      }).success,
+    ).toBe(false);
+  });
+});
 
 describe('DataSourceConfigSchema', () => {
   it('should reject invalid type', () => {

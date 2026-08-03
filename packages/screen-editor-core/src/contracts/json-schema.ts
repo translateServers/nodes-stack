@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ScreenDocumentJsonSchema as SharedScreenDocumentJsonSchema } from '@nebula/shared';
 
 import {
   ScreenDocumentInputSchema,
@@ -9,7 +10,7 @@ import {
   ScreenProjectTransferSchema,
 } from './document.js';
 
-export const ScreenDocumentJsonSchema = z.toJSONSchema(ScreenDocumentWireSchema, { io: 'input' });
+export const ScreenDocumentJsonSchema = SharedScreenDocumentJsonSchema;
 export const ScreenDocumentInputJsonSchema = z.toJSONSchema(ScreenDocumentInputSchema, {
   io: 'input',
 });

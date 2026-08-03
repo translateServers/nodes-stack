@@ -6,7 +6,7 @@
 # 它会把后端包及其所有依赖(含 workspace 依赖)实际复制到部署目录,
 # 而不是通过符号链接。这保证了运行时 node_modules 结构完整。
 
-ARG NODE_VERSION=22-alpine
+ARG NODE_VERSION=22.22.3-alpine
 
 # ============================================================
 # Stage 1: base — 安装 pnpm,复用层

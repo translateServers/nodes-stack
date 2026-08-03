@@ -6,7 +6,6 @@ import { BusinessException } from '@/common/exceptions/business.exception';
 import { DatasetCacheService } from '@/modules/dataset/dataset-cache.service';
 import { DatasetFilterService } from '@/modules/dataset/dataset-filter.service';
 import { DatasetMockService } from '@/modules/dataset/dataset-mock.service';
-import { DatasetReferenceService } from '@/modules/dataset/dataset-reference.service';
 import { StaticExecutor } from '@/modules/dataset/executors/static.executor';
 import { ApiExecutor } from '@/modules/dataset/executors/api.executor';
 import { UnsupportedExecutor } from '@/modules/dataset/executors/unsupported.executor';
@@ -17,6 +16,7 @@ import type {
   DatasetMockConfig,
   DatasetCacheStrategy,
   DatasetShape,
+  ScreenHostResourceSummary,
 } from '@nebula/shared/schemas';
 import type {
   CreateDatasetDto,
@@ -85,7 +85,6 @@ export class DatasetService {
     private cacheService: DatasetCacheService,
     private filterService: DatasetFilterService,
     private mockService: DatasetMockService,
-    private referenceService: DatasetReferenceService,
     private staticExecutor: StaticExecutor,
     private apiExecutor: ApiExecutor,
     private unsupportedExecutor: UnsupportedExecutor,
@@ -209,8 +208,6 @@ export class DatasetService {
 
   async remove(id: string): Promise<void> {
     await this.findEntityById(id);
-    // 删除前校验引用（存在引用时需用户确认，此处直接拒绝）
-    await this.referenceService.checkReferencesBeforeDelete(id);
     await this.prisma.dataset.delete({ where: { id } });
     this.cacheService.invalidateDataset(id);
   }
@@ -219,8 +216,47 @@ export class DatasetService {
 
   async getReferenceCount(id: string): Promise<DatasetReferenceCountResponse> {
     await this.findEntityById(id);
-    const count = await this.referenceService.countReferences(id);
-    return { datasetId: id, count };
+    // DatasetReference is a legacy index and is not maintained by canonical Screen documents.
+    return { datasetId: id, count: 0 };
+  }
+
+  /**
+   * Lists Dataset-backed metric resources for the Screen host gateway.
+   * Screen documents never store dataset-specific transport configuration.
+   */
+  async listMetricHostResources(projectId: string): Promise<ScreenHostResourceSummary[]> {
+    const datasets = await this.prisma.dataset.findMany({
+      where: { projectId, status: 'active' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return datasets.map((dataset) => ({
+      resourceType: 'metric',
+      resourceId: dataset.id,
+      name: dataset.name,
+    }));
+  }
+
+  /**
+   * Executes a Dataset only after the gateway has established path-project
+   * ownership. The resource id is deliberately opaque outside this boundary.
+   */
+  async executeMetricHostResource(
+    projectId: string,
+    datasetId: string,
+    isPreview: boolean,
+  ): Promise<unknown> {
+    const dataset = await this.findEntityWithProject(datasetId);
+    if (dataset.projectId !== projectId || (isPreview && dataset.project.status !== 'published')) {
+      throw new BusinessException(BizCode.SCREEN_NOT_FOUND);
+    }
+
+    const result = await this.executeResolvedDataset(
+      dataset,
+      { params: {}, useMock: false },
+      isPreview,
+    );
+    return result.parsed;
   }
 
   // ===== 执行 =====
@@ -237,8 +273,16 @@ export class DatasetService {
     dto: ExecuteDatasetDto,
     isAnonymous: boolean,
   ): Promise<DatasetExecuteResultResponse> {
-    const start = Date.now();
     const dataset = await this.findEntityWithProject(id);
+    return this.executeResolvedDataset(dataset, dto, isAnonymous);
+  }
+
+  private async executeResolvedDataset(
+    dataset: DatasetWithProject,
+    dto: ExecuteDatasetDto,
+    isAnonymous: boolean,
+  ): Promise<DatasetExecuteResultResponse> {
+    const start = Date.now();
     const config = this.parseConfig(dataset);
     const shape = this.parseJsonField<DatasetShape>(dataset.shape);
     const cacheStrategy = this.parseJsonField<DatasetCacheStrategy>(dataset.cache);
@@ -269,7 +313,7 @@ export class DatasetService {
 
     // 缓存命中检查（仅非 Mock 模式）
     if (cacheStrategy?.enabled) {
-      const cached = this.cacheService.get<unknown>(id, dto.params);
+      const cached = this.cacheService.get<unknown>(dataset.id, dto.params);
       if (cached !== undefined) {
         return {
           status: 'success',
@@ -292,7 +336,7 @@ export class DatasetService {
 
     // 写入缓存
     if (cacheStrategy?.enabled) {
-      this.cacheService.set(id, dto.params, raw, {
+      this.cacheService.set(dataset.id, dto.params, raw, {
         ttl: cacheStrategy.ttl,
         tags: cacheStrategy.tags,
       });

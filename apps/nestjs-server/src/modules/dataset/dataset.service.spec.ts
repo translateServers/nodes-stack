@@ -7,7 +7,6 @@ import { DatasetService } from '@/modules/dataset/dataset.service';
 import { DatasetCacheService } from '@/modules/dataset/dataset-cache.service';
 import { DatasetFilterService } from '@/modules/dataset/dataset-filter.service';
 import { DatasetMockService } from '@/modules/dataset/dataset-mock.service';
-import { DatasetReferenceService } from '@/modules/dataset/dataset-reference.service';
 import { StaticExecutor } from '@/modules/dataset/executors/static.executor';
 import { ApiExecutor } from '@/modules/dataset/executors/api.executor';
 import { UnsupportedExecutor } from '@/modules/dataset/executors/unsupported.executor';
@@ -42,10 +41,6 @@ describe('DatasetService', () => {
   };
   let filterService: { applyFilter: jest.Mock };
   let mockService: { generate: jest.Mock };
-  let referenceService: {
-    countReferences: jest.Mock;
-    checkReferencesBeforeDelete: jest.Mock;
-  };
   let staticExecutor: { execute: jest.Mock; test: jest.Mock };
   let apiExecutor: { execute: jest.Mock; test: jest.Mock };
   let unsupportedExecutor: { execute: jest.Mock; test: jest.Mock };
@@ -69,10 +64,6 @@ describe('DatasetService', () => {
     };
     filterService = { applyFilter: jest.fn() };
     mockService = { generate: jest.fn() };
-    referenceService = {
-      countReferences: jest.fn(),
-      checkReferencesBeforeDelete: jest.fn(),
-    };
     staticExecutor = { execute: jest.fn(), test: jest.fn() };
     apiExecutor = { execute: jest.fn(), test: jest.fn() };
     unsupportedExecutor = { execute: jest.fn(), test: jest.fn() };
@@ -84,7 +75,6 @@ describe('DatasetService', () => {
         { provide: DatasetCacheService, useValue: cacheService },
         { provide: DatasetFilterService, useValue: filterService },
         { provide: DatasetMockService, useValue: mockService },
-        { provide: DatasetReferenceService, useValue: referenceService },
         { provide: StaticExecutor, useValue: staticExecutor },
         { provide: ApiExecutor, useValue: apiExecutor },
         { provide: UnsupportedExecutor, useValue: unsupportedExecutor },
@@ -392,21 +382,8 @@ describe('DatasetService', () => {
       expect(prisma.dataset.delete).not.toHaveBeenCalled();
     });
 
-    it('存在引用应抛异常（referenceService 抛出）', async () => {
+    it('does not use the legacy DatasetReference index when deleting', async () => {
       prisma.dataset.findUnique.mockResolvedValue(makeEntity({ id: 'ds-1' }));
-      referenceService.checkReferencesBeforeDelete.mockRejectedValue(
-        new BusinessException(BizCode.DATASET_EXECUTION_FAILED),
-      );
-
-      await expect(service.remove('ds-1')).rejects.toMatchObject({
-        bizCode: BizCode.DATASET_EXECUTION_FAILED,
-      });
-      expect(prisma.dataset.delete).not.toHaveBeenCalled();
-    });
-
-    it('无引用应删除并失效缓存', async () => {
-      prisma.dataset.findUnique.mockResolvedValue(makeEntity({ id: 'ds-1' }));
-      referenceService.checkReferencesBeforeDelete.mockResolvedValue(undefined);
       prisma.dataset.delete.mockResolvedValue(undefined);
 
       await service.remove('ds-1');
@@ -426,12 +403,49 @@ describe('DatasetService', () => {
       });
     });
 
-    it('应返回引用数', async () => {
+    it('returns zero because canonical Screen documents do not maintain DatasetReference', async () => {
       prisma.dataset.findUnique.mockResolvedValue(makeEntity({ id: 'ds-1' }));
-      referenceService.countReferences.mockResolvedValue(5);
 
       const result = await service.getReferenceCount('ds-1');
-      expect(result).toEqual({ datasetId: 'ds-1', count: 5 });
+      expect(result).toEqual({ datasetId: 'ds-1', count: 0 });
+    });
+  });
+
+  describe('Screen host metric resources', () => {
+    it('enforces Dataset.projectId before executing an opaque metric resource id', async () => {
+      prisma.dataset.findUnique.mockResolvedValue(
+        makeEntityWithProject({ id: 'dataset-1', projectId: 'other-project' }, 'published'),
+      );
+
+      await expect(
+        service.executeMetricHostResource('project-1', 'dataset-1', false),
+      ).rejects.toMatchObject({ bizCode: BizCode.SCREEN_NOT_FOUND });
+      expect(staticExecutor.execute).not.toHaveBeenCalled();
+    });
+
+    it('lists only active project datasets and returns parsed data for a published preview', async () => {
+      prisma.dataset.findMany.mockResolvedValue([
+        { id: 'dataset-1', name: 'CPU' },
+        { id: 'dataset-2', name: 'Memory' },
+      ]);
+      await expect(service.listMetricHostResources('project-1')).resolves.toEqual([
+        { resourceType: 'metric', resourceId: 'dataset-1', name: 'CPU' },
+        { resourceType: 'metric', resourceId: 'dataset-2', name: 'Memory' },
+      ]);
+      expect(prisma.dataset.findMany).toHaveBeenCalledWith({
+        where: { projectId: 'project-1', status: 'active' },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+
+      prisma.dataset.findUnique.mockResolvedValue(
+        makeEntityWithProject({ id: 'dataset-1', projectId: 'project-1' }, 'published'),
+      );
+      staticExecutor.execute.mockResolvedValue({ value: 42 });
+
+      await expect(
+        service.executeMetricHostResource('project-1', 'dataset-1', true),
+      ).resolves.toEqual({ value: 42 });
     });
   });
 

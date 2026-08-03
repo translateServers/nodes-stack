@@ -20,7 +20,7 @@ import {
   parseDynamicScreenDocumentV3,
   type DynamicScreenDocumentV3,
 } from './dynamic-document.js';
-import { parseScreenDocument } from './document.js';
+import { parseScreenDocument, type ScreenComponentRegistryLookup } from './document.js';
 
 function manifest(
   type: string,
@@ -315,5 +315,130 @@ describe('DynamicScreenDocumentV3Schema 与 JSON Schema 生成', () => {
     ).oneOf;
     expect(dataSource).toHaveLength(2);
     expect((dataSource[1].properties.type as { const: string }).const).toBe('host/xj-metric');
+  });
+});
+
+describe('parseScreenDocument canonical registry semantics', () => {
+  function canonicalManifest(type: string): ScreenComponentManifest {
+    return {
+      ...manifest(type),
+      events: [{ id: 'valueClick', name: 'Value click' }],
+      dataCapability: {
+        acceptedSources: ['static', 'host-resource'],
+        hostResourceTypes: ['metric'],
+      },
+    } as unknown as ScreenComponentManifest;
+  }
+
+  function canonicalRegistry(): ScreenComponentRegistryLookup {
+    const registration = {
+      source: 'host' as const,
+      manifest: canonicalManifest('nebula.metric/v1'),
+    };
+    return {
+      get: (type) => (type === registration.manifest.type ? registration : undefined),
+    };
+  }
+
+  function canonicalDocument(overrides: Record<string, unknown> = {}) {
+    return {
+      schemaVersion: 1,
+      canvas: { width: 1920, height: 1080, backgroundColor: '#000000', scaleMode: 'fit' },
+      components: [
+        {
+          id: 'metric-1',
+          type: 'nebula.metric/v1',
+          name: 'Metric',
+          position: { x: 0, y: 0, width: 240, height: 100 },
+          style: {},
+          props: {},
+          dataSource: { type: 'host-resource', resourceType: 'metric', resourceId: 'dataset-1' },
+          status: { locked: false, hidden: false },
+          zIndex: 1,
+        },
+      ],
+      globalVariables: [],
+      ...overrides,
+    };
+  }
+
+  it('accepts a canonical host resource only when the manifest declares it', () => {
+    expect(parseScreenDocument(canonicalDocument(), canonicalRegistry()).success).toBe(true);
+
+    const staticOnly = {
+      get: () => ({
+        source: 'host' as const,
+        manifest: {
+          ...canonicalManifest('nebula.metric/v1'),
+          dataCapability: { acceptedSources: ['static'] },
+        } as unknown as ScreenComponentManifest,
+      }),
+    } satisfies ScreenComponentRegistryLookup;
+    const result = parseScreenDocument(canonicalDocument(), staticOnly);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(
+        result.diagnostics.some((item) => item.code === 'UNSUPPORTED_COMPONENT_CAPABILITY'),
+      ).toBe(true);
+    }
+  });
+
+  it('rejects unknown components, old branches, and non-host refreshData targets', () => {
+    const unknown = parseScreenDocument(
+      canonicalDocument({
+        components: [{ ...canonicalDocument().components[0], type: 'unknown/v1' }],
+      }),
+      canonicalRegistry(),
+    );
+    expect(unknown.success).toBe(false);
+    if (!unknown.success) {
+      expect(unknown.diagnostics.some((item) => item.code === 'MISSING_COMPONENT_DEFINITION')).toBe(
+        true,
+      );
+    }
+
+    expect(
+      parseScreenDocument(
+        canonicalDocument({
+          components: [{ ...canonicalDocument().components[0], logic: { limit: 1 } }],
+        }),
+        canonicalRegistry(),
+      ).success,
+    ).toBe(false);
+
+    const refresh = parseScreenDocument(
+      canonicalDocument({
+        components: [
+          { ...canonicalDocument().components[0], dataSource: { type: 'static', staticData: [] } },
+        ],
+        blueprint: {
+          version: 2,
+          nodes: [
+            {
+              id: 'metric-node',
+              position: { x: 0, y: 0 },
+              kind: 'component',
+              componentId: 'metric-1',
+            },
+          ],
+          edges: [
+            {
+              id: 'refresh',
+              source: 'metric-node',
+              sourceHandle: 'evt:valueClick',
+              target: 'metric-node',
+              targetHandle: 'act:refreshData',
+            },
+          ],
+        },
+      }),
+      canonicalRegistry(),
+    );
+    expect(refresh.success).toBe(false);
+    if (!refresh.success) {
+      expect(
+        refresh.diagnostics.some((item) => item.code === 'UNSUPPORTED_COMPONENT_CAPABILITY'),
+      ).toBe(true);
+    }
   });
 });

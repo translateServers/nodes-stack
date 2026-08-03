@@ -3,10 +3,10 @@
 > 状态：已归档
 > 最近更新：2026-08-03
 > 定位：记录独立 dynamic SDK、文档 V3 和组件 API v2 的阶段性设计；不再作为当前实现依据
-> 归档原因：由统一组件契约与 Vue 3 注册桥接规格取代
+> 归档原因：由统一组件契约与 React 19、Vue 3 注册桥接规格取代
 
 > 归档说明：项目不再维护 static/dynamic 与 V1/V2/V3 双轨。唯一现行目标契约见
-> [大屏统一组件契约与 Vue 3 注册桥接 Spec](../screen-component-vue-bridge/spec.md)。
+> [大屏统一组件契约与 React 19、Vue 3 注册桥接 Spec](../screen-component-framework-bridges/spec.md)。
 
 ## 0. 实施状态（A1 切片）
 

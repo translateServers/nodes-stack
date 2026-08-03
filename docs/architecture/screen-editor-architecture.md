@@ -1,8 +1,11 @@
 # 大屏设计器架构
 
 > 状态：生效中
-> 最近更新：2026-08-02
+> 最近更新：2026-08-03
 > 定位：核心 feature 的架构说明。读完应能理解画布/组件/工具/属性面板/数据层如何协作，以及在哪里扩展
+> 迁移说明：本文记录当前实现。新增大屏契约、数据能力、SDK 或 React/Vue 组件代码必须遵循
+> [ADR-0003](../decisions/ADR-0003-screen-unified-contract-framework-bridges.md) 与对应 Spec；其中 V1/V2/V3、
+> legacy migration、API/dataset document 数据源和 `<nebula-screen-editor>` 的描述不再作为新增实现依据。
 
 ## 1. 定位与边界
 

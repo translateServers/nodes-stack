@@ -1,8 +1,9 @@
 # ADR-0001: 大屏 SDK 静态 Runtime 边界与组合方式
 
-> 状态：已接受
+> 状态：已替代
 > 日期：2026-07-31
 > 定位：确定 Web Component SDK、编辑器共享核心与 Nebula Web 动态能力的源码边界和依赖方向
+> 替代：由 [ADR-0003](./ADR-0003-screen-unified-contract-framework-bridges.md) 统一 component/document/data/SDK 契约
 
 ## 背景
 

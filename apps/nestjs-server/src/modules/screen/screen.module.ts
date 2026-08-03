@@ -1,16 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ScreenController } from './screen.controller';
+import { ScreenResourceService } from './screen-resource.service';
 import { ScreenService } from './screen.service';
 import { DatasetModule } from '@/modules/dataset/dataset.module';
 
 /**
- * ScreenModule 导入 DatasetModule 以使用 DatasetReferenceService，
- * 在项目保存时重建数据集引用索引（data-model §4.2）。
+ * ScreenModule imports DatasetModule for the fixed host-resource resolver registry.
  */
 @Module({
   imports: [DatasetModule],
   controllers: [ScreenController],
-  providers: [ScreenService],
+  providers: [ScreenService, ScreenResourceService],
   exports: [ScreenService],
 })
 export class ScreenModule {}

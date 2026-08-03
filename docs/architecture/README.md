@@ -10,8 +10,8 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [system-overview.md](./system-overview.md) | 生效中（2026-08-02） | 系统总览。新人入职第一篇必读。monorepo 结构、技术栈、通信约定、数据库模型、路由、常用命令 |
-| [screen-editor-architecture.md](./screen-editor-architecture.md) | 生效中（2026-08-02） | 大屏设计器架构。核心 feature 的目录组织、状态管理、组件注册表、画布系统、工具系统、属性面板、数据层 |
+| [system-overview.md](./system-overview.md) | 生效中（2026-08-03） | 系统总览。新人入职第一篇必读。monorepo 结构、技术栈、通信约定、数据库模型、路由、常用命令 |
+| [screen-editor-architecture.md](./screen-editor-architecture.md) | 生效中（2026-08-03） | 大屏设计器架构。核心 feature 的目录组织、状态管理、组件注册表、画布系统、工具系统、属性面板、数据层 |
 | [blueprint-runtime-architecture.md](./blueprint-runtime-architecture.md) | 生效中（2026-07-29） | 蓝图运行时架构。节点类型、纯函数编译器、薄执行器 + 依赖注入、宿主总闸门、预览集成、沙盒调试 |
 | _待创建_ | — | 部署架构（前端/后端/数据库/缓存拓扑） |
 
@@ -19,7 +19,7 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| [development-guide.md](./development-guide.md) | 生效中（2026-08-02） | 开发指南。环境配置、新增大屏组件、新增后端模块、新增 API 端点、新增页面与导航、新增工具、新增蓝图节点、共享包变更、常见问题 |
+| [development-guide.md](./development-guide.md) | 生效中（2026-08-03） | 开发指南。大屏组件章节记录当前 0.2 基线，新桥接实现以 framework bridges Spec 为准；其余章节覆盖模块/API/页面/工具等 |
 
 ## 归属规则
 

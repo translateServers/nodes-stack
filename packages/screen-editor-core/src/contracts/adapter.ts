@@ -1,12 +1,15 @@
+import {
+  checkJsonValue,
+  type ScreenComponentJsonValue,
+  type ScreenComponentValidationDiagnostic,
+} from '@nebula/screen-component-sdk';
 import { z } from 'zod';
 
 import {
-  LegacyScreenProjectEnvelopeInputSchema,
   ScreenProjectDraftSchema,
   ScreenProjectEnvelopeInputSchema,
   ScreenProjectExportSchema,
   ScreenProjectTransferSchema,
-  type LegacyScreenProjectEnvelopeInput,
   type ScreenProjectDraft,
   type ScreenProjectEnvelopeInput,
   type ScreenProjectExport,
@@ -115,19 +118,66 @@ export interface ScreenSnapshotAdapter {
   readonly clear: (input: SnapshotClearInput) => Promise<void>;
 }
 
-/**
- * The formal adapter surface. Legacy project payloads are accepted only from
- * loadProject, where the host controller migrates them before entering state.
- */
+export const SCREEN_HOST_RESOURCE_MAX_RESPONSE_BYTES = 1_048_576;
+
+export interface ScreenHostResourceIntent {
+  readonly resourceType: string;
+  readonly resourceId: string;
+  readonly params?: Readonly<Record<string, ScreenComponentJsonValue>>;
+  readonly binding?: Readonly<Record<string, ScreenComponentJsonValue>>;
+}
+
+export interface ScreenHostResourceSummary {
+  readonly resourceType: string;
+  readonly resourceId: string;
+  readonly name: string;
+  readonly metadata?: Readonly<Record<string, ScreenComponentJsonValue>>;
+}
+
+export type ScreenDataContextSource = 'design' | 'preview' | 'viewer';
+
+export interface ScreenDataExecutionContext {
+  readonly contextId: string;
+  readonly projectId: string;
+  readonly source: ScreenDataContextSource;
+}
+
+export interface ScreenHostDataAdapter {
+  readonly listResources: (input: {
+    readonly resourceType: string;
+    readonly signal?: AbortSignal;
+  }) => Promise<readonly ScreenHostResourceSummary[]>;
+  readonly openContext: (context: ScreenDataExecutionContext) => Promise<void>;
+  readonly syncContext: (context: ScreenDataExecutionContext) => Promise<void>;
+  readonly closeContext: (contextId: string) => Promise<void>;
+  readonly execute: (
+    request: {
+      readonly contextId: string;
+      readonly componentId: string;
+      readonly intent: ScreenHostResourceIntent;
+    },
+    signal: AbortSignal,
+  ) => Promise<{ readonly data: ScreenComponentJsonValue }>;
+}
+
+export interface ScreenHostResourceExecuteRequest {
+  readonly contextId: string;
+  readonly componentId: string;
+  readonly intent: ScreenHostResourceIntent;
+}
+
+export interface ScreenHostResourceExecuteResult {
+  readonly data: ScreenComponentJsonValue;
+}
+
 export interface ScreenHostAdapter {
-  readonly loadProject: (
-    input: LoadProjectInput,
-  ) => Promise<LegacyScreenProjectEnvelopeInput | ScreenProjectEnvelopeInput>;
+  readonly loadProject: (input: LoadProjectInput) => Promise<ScreenProjectEnvelopeInput>;
   readonly saveProject: (input: SaveProjectInput) => Promise<ScreenProjectEnvelopeInput>;
   readonly publishProject?: (input: PublishProjectInput) => Promise<ScreenProjectEnvelopeInput>;
   readonly importProject?: (input: ImportProjectInput) => Promise<ScreenProjectEnvelopeInput>;
   readonly exportProject?: (input: ExportProjectInput) => Promise<ScreenProjectExport>;
   readonly snapshots?: ScreenSnapshotAdapter;
+  readonly data?: ScreenHostDataAdapter;
 }
 
 export interface ScreenHostCapabilities {
@@ -137,6 +187,7 @@ export interface ScreenHostCapabilities {
   readonly import: boolean;
   readonly export: boolean;
   readonly snapshots: boolean;
+  readonly data: boolean;
 }
 
 export const ScreenAdapterErrorCode = {
@@ -317,6 +368,230 @@ function isFunction(value: unknown): value is (...args: never[]) => unknown {
   return typeof value === 'function';
 }
 
+function cloneVerifiedJsonValue(value: unknown): ScreenComponentJsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneVerifiedJsonValue(item));
+  }
+
+  if (isRecord(value)) {
+    const clone: Record<string, ScreenComponentJsonValue> = {};
+    for (const key of Object.keys(value)) {
+      clone[key] = cloneVerifiedJsonValue(value[key]);
+    }
+    return clone;
+  }
+
+  throw new TypeError('Value is outside the JSON boundary.');
+}
+
+export function cloneScreenComponentJsonValue(
+  value: unknown,
+): ScreenComponentJsonValue | undefined {
+  const diagnostics: ScreenComponentValidationDiagnostic[] = [];
+  try {
+    if (!checkJsonValue(value, [], diagnostics)) {
+      return undefined;
+    }
+    return cloneVerifiedJsonValue(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function cloneDetachedJsonRecord(
+  value: unknown,
+): Readonly<Record<string, ScreenComponentJsonValue>> | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const diagnostics: ScreenComponentValidationDiagnostic[] = [];
+  try {
+    if (!checkJsonValue(value, [], diagnostics)) {
+      return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+
+  const record: Record<string, ScreenComponentJsonValue> = {};
+  for (const key of Object.keys(value)) {
+    record[key] = cloneVerifiedJsonValue(value[key]);
+  }
+  return record;
+}
+
+function getUtf8JsonByteLength(value: ScreenComponentJsonValue): number | undefined {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  } catch {
+    return undefined;
+  }
+}
+
+function cloneScreenHostResourceIntent(value: unknown): ScreenHostResourceIntent | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const allowedKeys = new Set(['resourceType', 'resourceId', 'params', 'binding']);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+    return undefined;
+  }
+
+  const resourceType = value.resourceType;
+  const resourceId = value.resourceId;
+  if (typeof resourceType !== 'string' || typeof resourceId !== 'string') {
+    return undefined;
+  }
+
+  const params = value.params;
+  const binding = value.binding;
+  const clonedParams = params === undefined ? undefined : cloneDetachedJsonRecord(params);
+  const clonedBinding = binding === undefined ? undefined : cloneDetachedJsonRecord(binding);
+  if (
+    (params !== undefined && clonedParams === undefined) ||
+    (binding !== undefined && clonedBinding === undefined)
+  ) {
+    return undefined;
+  }
+
+  return {
+    resourceType,
+    resourceId,
+    ...(clonedParams === undefined ? {} : { params: clonedParams }),
+    ...(clonedBinding === undefined ? {} : { binding: clonedBinding }),
+  };
+}
+
+function cloneScreenHostResourceSummary(value: unknown): ScreenHostResourceSummary | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const allowedKeys = new Set(['resourceType', 'resourceId', 'name', 'metadata']);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+    return undefined;
+  }
+
+  const resourceType = value.resourceType;
+  const resourceId = value.resourceId;
+  const name = value.name;
+  const metadata = value.metadata;
+  if (
+    typeof resourceType !== 'string' ||
+    typeof resourceId !== 'string' ||
+    typeof name !== 'string'
+  ) {
+    return undefined;
+  }
+
+  const clonedMetadata = metadata === undefined ? undefined : cloneDetachedJsonRecord(metadata);
+  if (metadata !== undefined && clonedMetadata === undefined) {
+    return undefined;
+  }
+
+  return {
+    resourceType,
+    resourceId,
+    name,
+    ...(clonedMetadata === undefined ? {} : { metadata: clonedMetadata }),
+  };
+}
+
+export function cloneScreenHostResourceData(value: unknown): ScreenComponentJsonValue | undefined {
+  const data = cloneScreenComponentJsonValue(value);
+  if (data === undefined) {
+    return undefined;
+  }
+
+  const byteLength = getUtf8JsonByteLength(data);
+  if (byteLength === undefined || byteLength > SCREEN_HOST_RESOURCE_MAX_RESPONSE_BYTES) {
+    return undefined;
+  }
+
+  return data;
+}
+
+export function prepareScreenHostResourceExecuteRequest(
+  value: unknown,
+): ScreenHostResourceExecuteRequest | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const allowedKeys = new Set(['contextId', 'componentId', 'intent']);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+    return undefined;
+  }
+
+  const contextId = value.contextId;
+  const componentId = value.componentId;
+  const intent = cloneScreenHostResourceIntent(value.intent);
+  if (typeof contextId !== 'string' || typeof componentId !== 'string' || intent === undefined) {
+    return undefined;
+  }
+
+  return { contextId, componentId, intent };
+}
+
+export function validateScreenHostResourceExecuteResult(
+  value: unknown,
+): ScreenHostResourceExecuteResult | undefined {
+  if (!isRecord(value) || !Object.hasOwn(value, 'data')) {
+    return undefined;
+  }
+
+  const data = cloneScreenHostResourceData(value.data);
+  return data === undefined ? undefined : { data };
+}
+
+export async function executeScreenHostResource(
+  adapter: ScreenHostDataAdapter,
+  request: ScreenHostResourceExecuteRequest,
+  signal: AbortSignal,
+): Promise<ScreenHostResourceExecuteResult | undefined> {
+  const preparedRequest = prepareScreenHostResourceExecuteRequest(request);
+  if (preparedRequest === undefined) {
+    return undefined;
+  }
+
+  const result = await adapter.execute(preparedRequest, signal);
+  return validateScreenHostResourceExecuteResult(result);
+}
+
+export async function listScreenHostResources(
+  adapter: ScreenHostDataAdapter,
+  input: { readonly resourceType: string; readonly signal?: AbortSignal },
+): Promise<readonly ScreenHostResourceSummary[] | undefined> {
+  if (typeof input.resourceType !== 'string') {
+    return undefined;
+  }
+
+  const resources = await adapter.listResources({
+    resourceType: input.resourceType,
+    ...(input.signal === undefined ? {} : { signal: input.signal }),
+  });
+  const summaries: ScreenHostResourceSummary[] = [];
+  for (const resource of resources) {
+    const summary = cloneScreenHostResourceSummary(resource);
+    if (summary === undefined) {
+      return undefined;
+    }
+    summaries.push(summary);
+  }
+  return summaries;
+}
+
 function isScreenSdkDiagnosticCode(value: string): value is ScreenSdkDiagnosticCodeValue {
   return new Set<string>(Object.values(ScreenSdkDiagnosticCode)).has(value);
 }
@@ -378,6 +653,28 @@ export function assertScreenHostAdapter(adapter: unknown): asserts adapter is Sc
     });
   }
 
+  const data = adapter.data;
+  if (data !== undefined) {
+    if (!isRecord(data)) {
+      throw new NormalizedScreenAdapterError('Data adapter must be an object.', {
+        code: ScreenAdapterErrorCode.VALIDATION,
+      });
+    }
+
+    const dataMethods = [
+      'listResources',
+      'openContext',
+      'syncContext',
+      'closeContext',
+      'execute',
+    ] as const;
+    if (dataMethods.some((method) => !isFunction(data[method]))) {
+      throw new NormalizedScreenAdapterError('Data adapter capability group is incomplete.', {
+        code: ScreenAdapterErrorCode.VALIDATION,
+      });
+    }
+  }
+
   const snapshots = adapter.snapshots;
   if (snapshots === undefined) {
     return;
@@ -406,7 +703,17 @@ export function deriveScreenHostCapabilities(adapter: unknown): ScreenHostCapabi
     import: isFunction(adapter.importProject),
     export: isFunction(adapter.exportProject),
     snapshots: adapter.snapshots !== undefined,
+    data: adapter.data !== undefined,
   };
+}
+
+export function requireScreenHostDataAdapter(adapter: ScreenHostAdapter): ScreenHostDataAdapter {
+  if (adapter.data === undefined) {
+    throw new NormalizedScreenAdapterError('Host resource data capability is unavailable.', {
+      code: ScreenAdapterErrorCode.UNAVAILABLE,
+    });
+  }
+  return adapter.data;
 }
 
 export function isScreenAdapterError(value: unknown): value is ScreenAdapterError {
@@ -475,7 +782,6 @@ export function throwIfAborted(signal: AbortSignal): void {
 }
 
 export const AdapterResponseSchemas = {
-  legacyProjectEnvelopeInput: LegacyScreenProjectEnvelopeInputSchema,
   projectEnvelopeInput: ScreenProjectEnvelopeInputSchema,
   projectDraft: ScreenProjectDraftSchema,
   projectTransfer: ScreenProjectTransferSchema,

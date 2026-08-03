@@ -1,7 +1,7 @@
 # 系统总览
 
 > 状态：生效中
-> 最近更新：2026-08-02
+> 最近更新：2026-08-03
 > 定位：新人入职第一篇必读。读完应能回答"项目是什么、用什么技术、怎么跑起来、怎么动手"
 
 ## 1. 项目是什么
@@ -98,7 +98,8 @@ nebula/
 | 类型感知 lint | ESLint 9 + typescript-eslint 8 |
 | Git 钩子 | simple-git-hooks + lint-staged（pre-commit 跑 Biome） |
 
-> **Node 版本**：无 `.nvmrc` 与 `engines` 声明，但 `@types/node ^24`，建议使用 **Node 24+**。
+> **Node 版本**：CI 和 Docker 使用 **Node 22.22.3+**，pnpm 固定 `9.15.0`。`@types/node ^24` 是类型依赖，
+> 不代表 Node 24 runtime 要求。详见 [ADR-0003](../decisions/ADR-0003-screen-unified-contract-framework-bridges.md)。
 
 ## 4. 前后端通信约定
 

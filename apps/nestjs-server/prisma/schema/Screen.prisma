@@ -2,12 +2,10 @@ model ScreenProject {
   id          String   @id @default(uuid())
   name        String   @unique
   description String?
-  canvas      String   @default("{}")
-  components  String   @default("[]")
-  /// Historical storage fields, read only by the document migration path.
-  blueprint   String?
-  /// Canonical serialized ScreenDocument.
-  document    String?
+  /// Canonical serialized ScreenDocument. Legacy columns remain in deployed
+  /// databases until the BUS-approved destructive migration, but are not part
+  /// of the active Prisma model or service read/write path.
+  document    String
   status      String   @default("draft")
   thumbnail   String?
   createdAt   DateTime @default(now())
