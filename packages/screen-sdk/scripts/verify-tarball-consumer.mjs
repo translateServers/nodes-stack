@@ -12,13 +12,18 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PNPM_EXEC_PATH = process.env['npm_execpath'];
+
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null;
+}
 
 /** @param {string[]} args @param {string} cwd */
 function runPnpm(args, cwd) {
@@ -49,6 +54,16 @@ function listFiles(directory) {
     if (statSync(path).isDirectory()) return listFiles(path);
     return [path];
   });
+}
+
+/** @param {string} specifier */
+function isReactRuntimeImport(specifier) {
+  return (
+    specifier === 'react' ||
+    specifier.startsWith('react/') ||
+    specifier === 'react-dom' ||
+    specifier.startsWith('react-dom/')
+  );
 }
 
 /**
@@ -178,6 +193,34 @@ void ScreenDocumentWireSchema;
     rmSync(vanillaConsumerRoot, { recursive: true, force: true });
   }
 
+  const vueConsumerRoot = mkdtempSync(join(tmpdir(), 'nebula-screen-sdk-vue-consumer-'));
+  try {
+    writeFileSync(
+      join(vueConsumerRoot, 'package.json'),
+      `${JSON.stringify(
+        {
+          name: 'nebula-screen-sdk-vue-consumer',
+          private: true,
+          dependencies: {
+            '@nebula/screen-sdk': `file:${tarballPath}`,
+            vue: '^3.5.0',
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    runPnpm(['install', '--ignore-workspace'], vueConsumerRoot);
+
+    for (const dependency of ['react', 'react-dom']) {
+      if (existsSync(join(vueConsumerRoot, 'node_modules', dependency))) {
+        throw new Error(`Vue tarball consumer unexpectedly installed ${dependency}`);
+      }
+    }
+  } finally {
+    rmSync(vueConsumerRoot, { recursive: true, force: true });
+  }
+
   const sourceRoot = join(consumerRoot, 'src');
   mkdirSync(sourceRoot);
 
@@ -232,7 +275,7 @@ void ScreenDocumentWireSchema;
   );
   writeFileSync(
     join(sourceRoot, 'main.ts'),
-    `import './vanilla-host';
+    `import '@nebula/screen-sdk/react';
 import './react-host';
 import './vue-host';
 `,
@@ -336,7 +379,6 @@ document.body.append(editor);
     join(sourceRoot, 'react-host.tsx'),
     `import { createElement, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@nebula/screen-sdk/auto-register';
 import type { NebulaScreenEditorElement, ScreenHostAdapter } from '@nebula/screen-sdk';
 
 const adapter: ScreenHostAdapter = {
@@ -375,7 +417,6 @@ createRoot(root).render(createElement(ReactHost));
   writeFileSync(
     join(sourceRoot, 'vue-host.ts'),
     `import { createApp, defineComponent, h } from 'vue';
-import '@nebula/screen-sdk/auto-register';
 import type { NebulaScreenEditorElement, ScreenHostAdapter } from '@nebula/screen-sdk';
 
 const adapter: ScreenHostAdapter = {
@@ -433,15 +474,44 @@ createApp(VueHost).mount(root);
   const installedDistRoot = join(installedPackageRoot, 'dist');
   const javaScriptInspections = listJavaScriptFiles(installedDistRoot).map((filePath) => ({
     filePath,
+    relativePath: relative(installedDistRoot, filePath).replaceAll('\\', '/'),
     ...inspectJavaScript(filePath),
   }));
-  const bareImports = javaScriptInspections.flatMap(({ filePath, specifiers }) =>
+  const reactRuntimeInspections = javaScriptInspections.filter(
+    ({ relativePath }) => relativePath === 'react.js' || relativePath.startsWith('react/'),
+  );
+  if (!reactRuntimeInspections.some(({ relativePath }) => relativePath === 'react.js')) {
+    throw new Error('Packed SDK is missing the React runtime entry');
+  }
+  const defaultRuntimeInspections = javaScriptInspections.filter(
+    ({ relativePath }) => relativePath !== 'react.js' && !relativePath.startsWith('react/'),
+  );
+  const bareImports = defaultRuntimeInspections.flatMap(({ filePath, specifiers }) =>
     specifiers
       .filter(({ value }) => !value.startsWith('.') && !value.startsWith('/'))
       .map(({ value }) => `${filePath}: ${value}`),
   );
   if (bareImports.length > 0) {
-    throw new Error(`Packed SDK contains bare runtime imports:\n${bareImports.join('\n')}`);
+    throw new Error(`Packed default SDK contains bare runtime imports:\n${bareImports.join('\n')}`);
+  }
+  const invalidReactRuntimeImports = reactRuntimeInspections.flatMap(({ filePath, specifiers }) =>
+    specifiers
+      .filter(({ value }) => !value.startsWith('.') && !value.startsWith('/'))
+      .filter(({ value }) => !isReactRuntimeImport(value))
+      .map(({ value }) => `${filePath}: ${value}`),
+  );
+  if (invalidReactRuntimeImports.length > 0) {
+    throw new Error(
+      `Packed React SDK contains unexpected bare runtime imports:\n${invalidReactRuntimeImports.join('\n')}`,
+    );
+  }
+  const reactRuntimeImports = reactRuntimeInspections.flatMap(({ specifiers }) =>
+    specifiers
+      .filter(({ value }) => !value.startsWith('.') && !value.startsWith('/'))
+      .map(({ value }) => value),
+  );
+  if (!reactRuntimeImports.includes('react') || !reactRuntimeImports.includes('react-dom/client')) {
+    throw new Error('Packed React SDK does not reuse the host React and ReactDOM runtime');
   }
 
   const unresolvedImports = javaScriptInspections.flatMap(({ filePath, specifiers }) =>
@@ -457,13 +527,19 @@ createApp(VueHost).mount(root);
     );
   }
 
-  const dynamicImports = javaScriptInspections.flatMap(({ specifiers }) =>
+  const dynamicImports = defaultRuntimeInspections.flatMap(({ specifiers }) =>
     specifiers.filter(({ dynamic }) => dynamic).map(({ value }) => value),
   );
   for (const expectedChunk of ['blueprint-sheet', 'static-runtime']) {
     if (!dynamicImports.some((specifier) => specifier.includes(expectedChunk))) {
       throw new Error(`Packed SDK is missing the ${expectedChunk} dynamic chunk import`);
     }
+  }
+  const reactDynamicImports = reactRuntimeInspections.flatMap(({ specifiers }) =>
+    specifiers.filter(({ dynamic }) => dynamic).map(({ value }) => value),
+  );
+  if (!reactDynamicImports.some((specifier) => specifier.includes('react-runtime'))) {
+    throw new Error('Packed SDK is missing the React runtime dynamic chunk import');
   }
 
   for (const { executable, filePath } of javaScriptInspections) {
@@ -512,7 +588,12 @@ createApp(VueHost).mount(root);
     const dependencies = manifest[field];
     if (typeof dependencies === 'object' && dependencies !== null) {
       const names = Object.keys(dependencies).sort();
-      const expected = field === 'dependencies' ? ['zod'] : [];
+      const expected =
+        field === 'dependencies'
+          ? ['zod']
+          : field === 'peerDependencies'
+            ? ['react', 'react-dom']
+            : [];
       if (JSON.stringify(names) !== JSON.stringify(expected)) {
         throw new Error(
           `Packed SDK has unexpected ${field}: ${names.length > 0 ? names.join(', ') : '(none)'}`,
@@ -520,7 +601,22 @@ createApp(VueHost).mount(root);
       }
     }
   }
-  console.log('screen-sdk vanilla/react/vue tarball consumers, chunks, fonts, and source maps: ok');
+  const peerDependenciesMeta = manifest['peerDependenciesMeta'];
+  const reactPeerMeta = isRecord(peerDependenciesMeta) ? peerDependenciesMeta['react'] : undefined;
+  const reactDomPeerMeta = isRecord(peerDependenciesMeta)
+    ? peerDependenciesMeta['react-dom']
+    : undefined;
+  if (
+    !isRecord(reactPeerMeta) ||
+    !isRecord(reactDomPeerMeta) ||
+    reactPeerMeta['optional'] !== true ||
+    reactDomPeerMeta['optional'] !== true
+  ) {
+    throw new Error('Packed SDK React peer dependencies must remain optional');
+  }
+  console.log(
+    'screen-sdk vanilla/default, React, and Vue tarball consumers, chunks, fonts, and source maps: ok',
+  );
 } finally {
   rmSync(consumerRoot, { recursive: true, force: true });
 }
