@@ -57,3 +57,6 @@ test-artifacts/*
 
 # Test databases (local only)
 apps/nestjs-server/test-e2e.db
+
+# Workbuddy cache
+.workbuddy/

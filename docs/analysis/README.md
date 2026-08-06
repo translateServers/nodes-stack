@@ -6,7 +6,7 @@
 
 | 文档 | 状态 | 说明 |
 | --- | --- | --- |
-| _待创建_ | — | — |
+| [screen-designer-feature-inventory.md](./screen-designer-feature-inventory.md) | 生效中 | 大屏设计器功能点全量清单（快捷键 / 拖拽 / 辅助线 / 吸附 / 工具 / 状态机 / 形状 / 选择 / 分组 / 层级 / 历史 / 剪贴板 / 对齐 / 面板 / 蓝图 / 注册 / 数据 / 宿主 / 已知 bug / 设计原则） |
 
 ## 归属规则
 
