@@ -1,14 +1,14 @@
 # 开发指南
 
 > 状态：生效中
-> 最近更新：2026-08-02
+> 最近更新：2026-08-03
 > 定位：step-by-step 操作手册。涵盖最常见的三类扩展场景：新增大屏组件、新增后端模块、新增 API 端点
 
 ## 1. 环境配置与本地调试
 
 ### 1.1 前置要求
 
-- **Node.js 24+**（项目 `@types/node ^24`）
+- **Node.js 22.22.3+**（CI 与 Docker 基线；`@types/node ^24` 仅为类型依赖）
 - **pnpm 9.15.0**（`packageManager` 字段锁定，不要用其他版本）
 
 ### 1.2 安装与启动
@@ -54,6 +54,10 @@ pnpm test         # 单元测试
 
 ## 2. 新增大屏组件
 
+> 过渡说明：本节记录当前已实现的 0.2 流程，其中 `<nebula-screen-editor>` 与 `schemaVersion: 2` 不再作为
+> 新增实现依据。React/Vue bridge、canonical designer/viewer 和唯一 document 的新工作必须遵循
+> [framework bridges Spec](../specs/screen-component-framework-bridges/spec.md)；BUS-5 后再重写本节。
+
 新增可复用组件优先走大屏组件 SDK：组件作者实现 Web Component + manifest，宿主通过 `@nebula/screen-sdk/components` 创建 registry 并注入 `<nebula-screen-editor>`。不要再新增 `registerComponent(ComponentModule)` 生产路径。
 
 ### 2.1 步骤总览
@@ -83,7 +87,8 @@ pnpm test         # 单元测试
 
 ### 2.6 历史文档迁移
 
-新代码只读写正式 `ScreenDocument`。历史持久化记录只可通过 `Legacy*` parser 和迁移函数读取，迁移成功后必须在下次保存前写回正式文档；不要在业务组件、Adapter 或 SDK 公共 API 中引入版本别名。
+本段历史迁移说明已由 [ADR-0003](../decisions/ADR-0003-screen-unified-contract-framework-bridges.md) 取代。
+后续实现只使用唯一 strict document，直接重置开发/E2E 数据；不得新增 `Legacy*` parser、迁移函数或版本别名。
 
 ### 2.8 验证
 

@@ -311,7 +311,405 @@ export const ComponentDefinitionSchema = z.object({
 });
 export type ComponentDefinition = z.infer<typeof ComponentDefinitionSchema>;
 
-// ===== 顶层项目 =====
+// ===== Canonical Screen Document =====
+
+export const SCREEN_DOCUMENT_SCHEMA_VERSION = 1 as const;
+
+export const SCREEN_HOST_RESOURCE_MAX_RESPONSE_BYTES = 1_048_576;
+
+export const SCREEN_HOST_RESOURCE_FORBIDDEN_KEYS = [
+  'authorization',
+  'cookie',
+  'endpoint',
+  'header',
+  'headers',
+  'method',
+  'script',
+  'sql',
+  'token',
+  'uri',
+  'url',
+] as const;
+
+const SCREEN_HOST_RESOURCE_FORBIDDEN_KEY_SET: ReadonlySet<string> = new Set(
+  SCREEN_HOST_RESOURCE_FORBIDDEN_KEYS,
+);
+const SCREEN_RESOURCE_TYPE_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
+const URI_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i;
+const SCREEN_JSON_POLLUTION_KEYS: ReadonlySet<string> = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
+
+export type ScreenDocumentJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ScreenDocumentJsonValue[]
+  | { [key: string]: ScreenDocumentJsonValue };
+
+function validateScreenDocumentJsonValue(
+  value: unknown,
+  context: z.RefinementCtx,
+  path: ReadonlyArray<string | number> = [],
+): void {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    context.addIssue({ code: 'custom', path: [...path], message: 'JSON number must be finite' });
+    return;
+  }
+
+  if (typeof value !== 'object' || value === null) return;
+
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) {
+      validateScreenDocumentJsonValue(entry, context, [...path, index]);
+    }
+    return;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    context.addIssue({
+      code: 'custom',
+      path: [...path],
+      message: 'JSON object must use a plain object prototype',
+    });
+    return;
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (SCREEN_JSON_POLLUTION_KEYS.has(key)) {
+      context.addIssue({
+        code: 'custom',
+        path: [...path, key],
+        message: 'JSON key is not allowed',
+      });
+      continue;
+    }
+    validateScreenDocumentJsonValue(entry, context, [...path, key]);
+  }
+}
+
+export const ScreenDocumentJsonValueSchema = z
+  .json()
+  .superRefine((value, context) => validateScreenDocumentJsonValue(value, context));
+
+function validateHostResourceKeys(
+  value: ScreenDocumentJsonValue,
+  context: z.RefinementCtx,
+  path: ReadonlyArray<string | number> = [],
+): void {
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) {
+      validateHostResourceKeys(entry, context, [...path, index]);
+    }
+    return;
+  }
+
+  if (typeof value !== 'object' || value === null) return;
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (SCREEN_HOST_RESOURCE_FORBIDDEN_KEY_SET.has(key.toLowerCase())) {
+      context.addIssue({
+        code: 'custom',
+        path: [...path, key],
+        message: 'Host resource intent contains a forbidden request configuration key',
+      });
+      continue;
+    }
+    validateHostResourceKeys(entry, context, [...path, key]);
+  }
+}
+
+const ScreenDocumentJsonRecordSchema = z.record(
+  z.string().min(1).max(128),
+  ScreenDocumentJsonValueSchema,
+);
+
+const ScreenHostResourceJsonRecordSchema = ScreenDocumentJsonRecordSchema.superRefine(
+  (value, context) => validateHostResourceKeys(value, context),
+);
+
+export const ScreenCanvasConfigSchema = z
+  .object({
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    backgroundColor: z.string(),
+    backgroundImage: z.string().optional(),
+    scaleMode: ScaleModeSchema,
+  })
+  .strict();
+export type ScreenCanvasConfig = z.infer<typeof ScreenCanvasConfigSchema>;
+
+export const ScreenComponentPositionSchema = z
+  .object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+    rotation: z.number().optional(),
+  })
+  .strict();
+export type ScreenComponentPosition = z.infer<typeof ScreenComponentPositionSchema>;
+
+export const ScreenComponentDocumentStatusSchema = z
+  .object({
+    locked: z.boolean(),
+    hidden: z.boolean(),
+  })
+  .strict();
+export type ScreenComponentDocumentStatus = z.infer<typeof ScreenComponentDocumentStatusSchema>;
+
+export const ScreenStaticDataSourceSchema = z
+  .object({
+    type: z.literal('static'),
+    staticData: ScreenDocumentJsonValueSchema,
+    dataPath: z.string().max(256).optional(),
+    fieldMapping: z.record(z.string().min(1).max(128), z.string().min(1).max(128)).optional(),
+  })
+  .strict();
+export type ScreenStaticDataSource = z.infer<typeof ScreenStaticDataSourceSchema>;
+
+export const ScreenHostResourceDataSourceSchema = z
+  .object({
+    type: z.literal('host-resource'),
+    resourceType: z.string().regex(SCREEN_RESOURCE_TYPE_PATTERN),
+    resourceId: z
+      .string()
+      .min(1)
+      .max(256)
+      .refine((value) => !URI_SCHEME_PATTERN.test(value), 'resourceId must not be a URI'),
+    params: ScreenHostResourceJsonRecordSchema.optional(),
+    binding: ScreenHostResourceJsonRecordSchema.optional(),
+  })
+  .strict();
+export type ScreenHostResourceDataSource = z.infer<typeof ScreenHostResourceDataSourceSchema>;
+
+export const ScreenDataSourceSchema = z.discriminatedUnion('type', [
+  ScreenStaticDataSourceSchema,
+  ScreenHostResourceDataSourceSchema,
+]);
+export type ScreenDataSource = z.infer<typeof ScreenDataSourceSchema>;
+
+export const ScreenComponentDocumentNodeSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    type: z.string().min(1).max(256),
+    name: z.string().min(1).max(256),
+    position: ScreenComponentPositionSchema,
+    style: ScreenDocumentJsonRecordSchema,
+    props: ScreenDocumentJsonRecordSchema,
+    dataSource: ScreenDataSourceSchema.optional(),
+    status: ScreenComponentDocumentStatusSchema,
+    zIndex: z.number().int(),
+    parentId: z.string().min(1).max(128).nullable().optional(),
+  })
+  .strict();
+export type ScreenComponentDocumentNode = z.infer<typeof ScreenComponentDocumentNodeSchema>;
+
+export const ScreenStaticGlobalVariableSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    name: z.string().min(1).max(128),
+    type: z.literal('static'),
+    value: ScreenDocumentJsonValueSchema.optional(),
+    description: z.string().max(1_024).optional(),
+  })
+  .strict();
+export type ScreenStaticGlobalVariable = z.infer<typeof ScreenStaticGlobalVariableSchema>;
+
+function validateStrictObjectKeys(
+  value: unknown,
+  keys: readonly string[],
+  context: z.RefinementCtx,
+  path: ReadonlyArray<string | number>,
+): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return;
+  const allowed = new Set(keys);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      context.addIssue({
+        code: 'custom',
+        path: [...path, key],
+        message: 'Unknown blueprint field',
+      });
+    }
+  }
+}
+
+function validateStrictScreenBlueprint(value: unknown, context: z.RefinementCtx): void {
+  validateScreenDocumentJsonValue(value, context);
+  validateStrictObjectKeys(value, ['version', 'nodes', 'edges'], context, []);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return;
+
+  const blueprint = value as Record<string, unknown>;
+  if (Array.isArray(blueprint.nodes)) {
+    for (const [index, node] of blueprint.nodes.entries()) {
+      if (typeof node !== 'object' || node === null || Array.isArray(node)) continue;
+      const record = node as Record<string, unknown>;
+      const nodeKeys =
+        record.kind === 'component'
+          ? ['id', 'position', 'kind', 'componentId', 'globalType', 'config']
+          : ['id', 'position', 'kind', 'config'];
+      validateStrictObjectKeys(record, nodeKeys, context, ['nodes', index]);
+      validateStrictObjectKeys(record.position, ['x', 'y'], context, ['nodes', index, 'position']);
+
+      if (record.kind === 'component' && record.config !== undefined) {
+        const configKeys =
+          record.globalType === 'navigate'
+            ? ['globalType', 'url', 'target']
+            : record.globalType === 'requestApi'
+              ? ['globalType', 'method', 'url', 'headers', 'body', 'secretHeaderKeys', 'timeoutMs']
+              : record.globalType === 'scrollTo'
+                ? ['globalType', 'targetComponentId']
+                : ['globalType', 'intervalMs'];
+        validateStrictObjectKeys(record.config, configKeys, context, ['nodes', index, 'config']);
+        continue;
+      }
+
+      if (record.kind === 'condition') {
+        validateStrictObjectKeys(record.config, ['type', 'expression'], context, [
+          'nodes',
+          index,
+          'config',
+        ]);
+        const config = record.config;
+        if (typeof config !== 'object' || config === null || Array.isArray(config)) continue;
+        const expression = (config as Record<string, unknown>).expression;
+        validateStrictObjectKeys(expression, ['source', 'operator', 'value'], context, [
+          'nodes',
+          index,
+          'config',
+          'expression',
+        ]);
+        if (typeof expression !== 'object' || expression === null || Array.isArray(expression))
+          continue;
+        const source = (expression as Record<string, unknown>).source;
+        const sourceKeys =
+          typeof source === 'object' &&
+          source !== null &&
+          !Array.isArray(source) &&
+          (source as Record<string, unknown>).kind === 'componentProp'
+            ? ['kind', 'componentId', 'key']
+            : ['kind', 'componentId', 'path'];
+        validateStrictObjectKeys(source, sourceKeys, context, [
+          'nodes',
+          index,
+          'config',
+          'expression',
+          'source',
+        ]);
+      } else if (record.kind === 'delay') {
+        validateStrictObjectKeys(record.config, ['delayMs'], context, ['nodes', index, 'config']);
+      } else if (record.kind === 'comment') {
+        validateStrictObjectKeys(record.config, ['text'], context, ['nodes', index, 'config']);
+      }
+    }
+  }
+
+  if (Array.isArray(blueprint.edges)) {
+    for (const [index, edge] of blueprint.edges.entries()) {
+      validateStrictObjectKeys(
+        edge,
+        ['id', 'source', 'sourceHandle', 'target', 'targetHandle'],
+        context,
+        ['edges', index],
+      );
+    }
+  }
+}
+
+const StrictScreenBlueprintSchema = z
+  .unknown()
+  .superRefine((value, context) => validateStrictScreenBlueprint(value, context))
+  .pipe(EventBlueprintSchema);
+
+export const ScreenDocumentSchema = z
+  .object({
+    schemaVersion: z.literal(SCREEN_DOCUMENT_SCHEMA_VERSION),
+    canvas: ScreenCanvasConfigSchema,
+    components: z.array(ScreenComponentDocumentNodeSchema),
+    globalVariables: z.array(ScreenStaticGlobalVariableSchema),
+    blueprint: StrictScreenBlueprintSchema.optional(),
+  })
+  .strict();
+export type ScreenDocument = z.infer<typeof ScreenDocumentSchema>;
+export const ScreenDocumentJsonSchema = z.toJSONSchema(ScreenDocumentSchema, { io: 'input' });
+
+export const EMPTY_SCREEN_DOCUMENT: ScreenDocument = {
+  schemaVersion: SCREEN_DOCUMENT_SCHEMA_VERSION,
+  canvas: {
+    width: 1920,
+    height: 1080,
+    backgroundColor: '#000000',
+    scaleMode: 'fit',
+  },
+  components: [],
+  globalVariables: [],
+};
+
+export const ScreenHostResourceIntentSchema = z
+  .object({
+    resourceType: z.string().regex(SCREEN_RESOURCE_TYPE_PATTERN),
+    resourceId: z
+      .string()
+      .min(1)
+      .max(256)
+      .refine((value) => !URI_SCHEME_PATTERN.test(value), 'resourceId must not be a URI'),
+    params: ScreenHostResourceJsonRecordSchema.optional(),
+    binding: ScreenHostResourceJsonRecordSchema.optional(),
+  })
+  .strict();
+export type ScreenHostResourceIntent = z.infer<typeof ScreenHostResourceIntentSchema>;
+
+export const ScreenHostResourceSummarySchema = z
+  .object({
+    resourceType: z.string().regex(SCREEN_RESOURCE_TYPE_PATTERN),
+    resourceId: z.string().min(1).max(256),
+    name: z.string().min(1).max(256),
+    metadata: ScreenDocumentJsonRecordSchema.optional(),
+  })
+  .strict();
+export type ScreenHostResourceSummary = z.infer<typeof ScreenHostResourceSummarySchema>;
+
+export const ListScreenHostResourcesQuerySchema = z
+  .object({
+    resourceType: z.string().regex(SCREEN_RESOURCE_TYPE_PATTERN),
+  })
+  .strict();
+export type ListScreenHostResourcesQuery = z.infer<typeof ListScreenHostResourcesQuerySchema>;
+
+export const ExecuteScreenHostResourceSchema = z
+  .object({
+    contextId: z.string().min(1).max(128),
+    componentId: z.string().min(1).max(128),
+    intent: ScreenHostResourceIntentSchema,
+  })
+  .strict();
+export type ExecuteScreenHostResource = z.infer<typeof ExecuteScreenHostResourceSchema>;
+
+export const ScreenHostResourceResponseSchema = z
+  .object({
+    data: ScreenDocumentJsonValueSchema,
+  })
+  .strict();
+export type ScreenHostResourceResponse = z.infer<typeof ScreenHostResourceResponseSchema>;
+
+/**
+ * Metric is the first concrete host resolver. Its allowlist intentionally has
+ * no caller-controlled execution parameters: Dataset configuration remains the
+ * sole source for request details and parameter policy.
+ */
+export const MetricScreenHostResourceIntentSchema = ScreenHostResourceIntentSchema.extend({
+  resourceType: z.literal('metric'),
+  params: z.object({}).strict().optional(),
+  binding: z.object({}).strict().optional(),
+}).strict();
+export type MetricScreenHostResourceIntent = z.infer<typeof MetricScreenHostResourceIntentSchema>;
+
+// ===== Legacy Screen Document helpers (inactive; BUS-4 deletion candidate) =====
 
 /**
  * 蓝图输入联合类型：归档 trigger/action 图或正式组件节点图。
@@ -328,20 +726,9 @@ export const BlueprintInputSchema = z.discriminatedUnion('version', [
 ]);
 export type BlueprintInput = LegacyEventBlueprint | EventBlueprint;
 
-export const ScreenDocumentSchema = z.object({
-  canvas: CanvasConfigSchema.describe('画布配置'),
-  components: z.array(ScreenComponentSchema).describe('组件实例列表'),
-  blueprint: EventBlueprintSchema.optional().describe('交互层：项目级事件蓝图'),
-  globalVariables: z
-    .array(GlobalVariableSchema)
-    .default([])
-    .describe('项目级全局变量，可在数据源参数与蓝图模板插值中通过 {{globalVars.xxx}} 引用'),
-});
-export type ScreenDocument = z.infer<typeof ScreenDocumentSchema>;
-
 /**
  * Historical persisted document shape. It is only accepted by storage migration readers;
- * all live API and editor paths use ScreenDocumentSchema.
+ * all live API and editor paths use the canonical ScreenDocumentSchema above.
  */
 export const LegacyScreenDocumentSchema = z.object({
   canvas: CanvasConfigSchema,
@@ -390,35 +777,42 @@ export const ScreenProjectSchema = ScreenDocumentSchema.extend({
   thumbnail: z.string().nullable().optional().describe('缩略图'),
   createdAt: DateTimeStringSchema.describe('创建时间'),
   updatedAt: DateTimeStringSchema.describe('更新时间'),
-});
+})
+  .omit({
+    schemaVersion: true,
+    canvas: true,
+    components: true,
+    globalVariables: true,
+    blueprint: true,
+  })
+  .extend({
+    document: ScreenDocumentSchema,
+  })
+  .strict();
 export type ScreenProject = z.infer<typeof ScreenProjectSchema>;
 
 // ===== DTO =====
 
-export const CreateScreenProjectSchema = z.object({
-  name: z.string().min(1, '项目名称不能为空').describe('项目名称'),
-  description: z.string().optional().describe('项目描述'),
-  canvas: CanvasConfigSchema.optional().describe('画布配置（可选，使用默认值）'),
-});
+export const CreateScreenProjectSchema = z
+  .object({
+    name: z.string().min(1, '项目名称不能为空').describe('项目名称'),
+    description: z.string().nullable().optional().describe('项目描述'),
+    document: ScreenDocumentSchema.optional().describe('完整大屏文档（缺省时创建空文档）'),
+  })
+  .strict();
 export type CreateScreenProjectParams = z.infer<typeof CreateScreenProjectSchema>;
 
-export const UpdateScreenProjectSchema = z.object({
-  name: z.string().min(1, '项目名称不能为空').optional().describe('项目名称'),
-  description: z.string().optional().describe('项目描述'),
-  canvas: CanvasConfigSchema.optional().describe('画布配置'),
-  components: z.array(ScreenComponentSchema).optional().describe('组件实例列表'),
-  blueprint: BlueprintInputSchema.optional().describe(
-    '事件蓝图（归档输入会在服务端迁移；缺省表示不修改）',
-  ),
-  globalVariables: z
-    .array(GlobalVariableSchema)
-    .optional()
-    .describe('项目级全局变量（可选；缺省表示不修改，与 blueprint 语义一致）'),
-  thumbnail: z.string().optional().describe('缩略图'),
-  expectedUpdatedAt: DateTimeStringSchema.describe(
-    '本次更新基于的保存基线，值来自客户端最后确认的服务端 updatedAt',
-  ),
-});
+export const UpdateScreenProjectSchema = z
+  .object({
+    name: z.string().min(1, '项目名称不能为空').optional().describe('项目名称'),
+    description: z.string().nullable().optional().describe('项目描述；null 清空'),
+    thumbnail: z.string().nullable().optional().describe('缩略图；null 清空'),
+    document: ScreenDocumentSchema.optional().describe('完整大屏文档；出现时原子替换'),
+    expectedUpdatedAt: DateTimeStringSchema.describe(
+      '本次更新基于的保存基线，值来自客户端最后确认的服务端 updatedAt',
+    ),
+  })
+  .strict();
 export type UpdateScreenProjectParams = z.infer<typeof UpdateScreenProjectSchema>;
 
 export const PublishScreenProjectSchema = z.object({

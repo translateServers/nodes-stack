@@ -6,7 +6,7 @@
 #   1. 传统容器编排 (docker-compose): BACKEND_URL=http://server:3000
 #   2. CloudBase CloudRun: BACKEND_URL 通过环境变量注入后端公网/内网地址
 
-ARG NODE_VERSION=22-alpine
+ARG NODE_VERSION=22.22.3-alpine
 ARG NGINX_VERSION=alpine
 
 # ============================================================

@@ -9,12 +9,20 @@ import {
   InteractionConfigSchema,
   LogicConfigSchema,
   migrateLegacyBlueprint,
+  ScreenComponentDocumentNodeSchema,
+  ScreenDocumentSchema as SharedScreenDocumentSchema,
+  SCREEN_DOCUMENT_SCHEMA_VERSION,
   type EventBlueprint,
   type LegacyEventBlueprint,
+  type ScreenComponentDocumentNode,
+  type ScreenDocument as SharedScreenDocument,
 } from '@nebula/shared';
 import { z } from 'zod';
 import { checkJsonValue, validateValueAgainstSchema } from '@nebula/screen-component-sdk';
-import type { ScreenComponentValidationDiagnostic } from '@nebula/screen-component-sdk';
+import type {
+  ScreenComponentManifest,
+  ScreenComponentValidationDiagnostic,
+} from '@nebula/screen-component-sdk';
 import {
   getScreenSdkSourceHandles,
   getScreenSdkTargetHandles,
@@ -24,10 +32,6 @@ import {
   isLegacyScreenSdkTriggerType,
   SCREEN_SDK_COMPONENT_TYPES,
 } from '../core/static-capability-profile.js';
-import type {
-  ScreenComponentInstanceRegistry,
-  ScreenComponentRegistration,
-} from '../registry/instance-registry.js';
 import {
   createDiagnostic,
   diagnosticsFromZodError,
@@ -44,6 +48,17 @@ export { SCREEN_SDK_COMPONENT_TYPES } from '../core/static-capability-profile.js
 
 export const ScreenSdkComponentTypeSchema = z.enum(SCREEN_SDK_COMPONENT_TYPES);
 export type ScreenSdkComponentType = z.infer<typeof ScreenSdkComponentTypeSchema>;
+
+/** Framework-neutral registry entry required by the public document parsers. */
+export interface ScreenComponentRegistryLookupEntry {
+  readonly manifest: Readonly<ScreenComponentManifest>;
+  readonly source: 'built-in' | 'host';
+}
+
+/** Minimal registry contract required for registry-aware document validation. */
+export interface ScreenComponentRegistryLookup {
+  get(type: string): ScreenComponentRegistryLookupEntry | undefined;
+}
 
 const HttpUrlSchema = z
   .string()
@@ -214,51 +229,26 @@ export const LegacyScreenProjectTransferSchema = z
 
 export type LegacyScreenProjectTransfer = z.infer<typeof LegacyScreenProjectTransferSchema>;
 
-// ===== 正式 Screen Document =====
+// ===== Canonical Screen Document =====
 
-export const SCREEN_DOCUMENT_VERSION = 2 as const;
+export const SCREEN_DOCUMENT_VERSION = SCREEN_DOCUMENT_SCHEMA_VERSION;
 export const SCREEN_TRANSFER_FORMAT_VERSION = 2 as const;
 
 /**
- * 正式 wire 组件 schema。
- *
- * 与归档严格组件 schema 的差异：
- * - `type` 接受任意字符串（registry 在运行时按 type 查 manifest 校验）
- * - `props` 为 JSON record（manifest propsSchema 在运行时校验）
- * - 保留 dataSource / logic / interaction 可选字段：内置组件（如 bar-chart）继续使用；
- *   正式 parser 对 `source='host'` 外部组件拒绝这些字段并返回
- *   `UNSUPPORTED_COMPONENT_CAPABILITY`（Requirement 14，Task 5.2 实现）
- *
- * `.strict()` 拒绝 `tagName` / `moduleUrl` / `script` 等字段（Requirement 12：
- * 项目文档不得声明或触发组件脚本加载）。
+ * Alias to the shared canonical component wire schema. Component-specific props
+ * are validated against the active registry after this strict wire boundary.
  */
-const ScreenComponentWireSchema = z
-  .object({
-    ...ScreenSdkComponentBaseShape,
-    type: z.string().min(1),
-    props: z.record(z.string(), z.unknown()),
-  })
-  .strict();
+export const ScreenComponentWireSchema = ScreenComponentDocumentNodeSchema;
 
 export type ScreenComponentWire = z.infer<typeof ScreenComponentWireSchema>;
 
 /**
  * 正式 wire 文档 schema（两阶段校验第一阶段）。
  *
- * 仅校验文档容器、组件公共字段和 JSON 边界；组件特定 schema 由注册表在运行时提供。
- * 与归档严格文档的差异：`schemaVersion=2`，组件使用 permissive wire 形状。
- *
- * `.strict()` 拒绝未知顶层字段（如 `tagName` / `moduleUrl` / `script`）。
+ * The shared schema is the sole canonical wire source. Core only performs
+ * registry-aware semantic validation after this strict boundary succeeds.
  */
-export const ScreenDocumentWireSchema = z
-  .object({
-    schemaVersion: z.literal(SCREEN_DOCUMENT_VERSION),
-    canvas: ScreenSdkCanvasConfigSchema,
-    components: z.array(ScreenComponentWireSchema),
-    blueprint: EventBlueprintSchema.optional(),
-    globalVariables: z.array(StaticGlobalVariableSchema).default([]),
-  })
-  .strict();
+export const ScreenDocumentWireSchema = SharedScreenDocumentSchema;
 
 /**
  * 正式文档 domain 类型。
@@ -266,28 +256,20 @@ export const ScreenDocumentWireSchema = z
  * 结构与 `ScreenDocumentWireSchema` 的推断类型一致：registry 校验在 parser
  * 阶段完成（Task 5.2），通过后的文档实例结构与 wire 形状相同。
  */
-export type ScreenDocument = z.infer<typeof ScreenDocumentWireSchema>;
+export type ScreenDocument = SharedScreenDocument;
 
 /**
  * 正式文档 wire 输入类型。
  *
- * 与归档输入对应：用于 envelope input 中尚未通过 domain 校验的
- * 文档字段。`schemaVersion` 仍必须是 2，其余字段保持 unknown 以便后续两阶段校验。
+ * Input intentionally has the same strict shape as the canonical document.
+ * Core does not maintain a permissive input schema or migration branch.
  */
-export const ScreenDocumentInputSchema = z
-  .object({
-    schemaVersion: z.literal(SCREEN_DOCUMENT_VERSION),
-    canvas: z.unknown(),
-    components: z.array(z.unknown()),
-    blueprint: z.unknown().optional(),
-    globalVariables: z.array(z.unknown()).optional(),
-  })
-  .passthrough();
+export const ScreenDocumentInputSchema = SharedScreenDocumentSchema;
 
 export type ScreenDocumentInput = z.infer<typeof ScreenDocumentInputSchema>;
 
 /**
- * SDK 文档使用正式模型；归档文档只能通过迁移函数读取。
+ * SDK document consumers use the canonical model.
  */
 export type ScreenSdkDocument = ScreenDocument;
 
@@ -930,6 +912,244 @@ function appendJsonBoundaryDiagnostics(
   }
 }
 
+interface ManifestDataCapability {
+  readonly acceptedSources: readonly string[];
+  readonly hostResourceTypes?: readonly string[];
+}
+
+function getManifestDataCapability(
+  manifest: Readonly<ScreenComponentManifest>,
+): ManifestDataCapability | undefined {
+  const capability = (manifest as Readonly<{ dataCapability?: unknown }>).dataCapability;
+  if (typeof capability !== 'object' || capability === null || Array.isArray(capability)) {
+    return undefined;
+  }
+
+  const candidate = capability as Readonly<{
+    acceptedSources?: unknown;
+    hostResourceTypes?: unknown;
+  }>;
+  if (!Array.isArray(candidate.acceptedSources) || !candidate.acceptedSources.every(isString)) {
+    return undefined;
+  }
+  if (
+    candidate.hostResourceTypes !== undefined &&
+    (!Array.isArray(candidate.hostResourceTypes) || !candidate.hostResourceTypes.every(isString))
+  ) {
+    return undefined;
+  }
+
+  return {
+    acceptedSources: candidate.acceptedSources,
+    ...(candidate.hostResourceTypes === undefined
+      ? {}
+      : { hostResourceTypes: candidate.hostResourceTypes }),
+  };
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function validateCanonicalBlueprint(
+  blueprint: EventBlueprint,
+  registrations: ReadonlyMap<string, ScreenComponentRegistryLookupEntry | undefined>,
+  components: ReadonlyMap<string, ScreenComponentDocumentNode>,
+  diagnostics: ScreenSdkDiagnostic[],
+): void {
+  const nodes = new Map(blueprint.nodes.map((node) => [node.id, node]));
+  const allowedComponentActions = new Set([
+    'show',
+    'hide',
+    'toggleVisibility',
+    'navigate',
+    'scrollTo',
+  ]);
+
+  for (const [index, node] of blueprint.nodes.entries()) {
+    if (node.kind === 'condition') {
+      const componentId = node.config.expression.source.componentId;
+      if (!components.has(componentId)) {
+        addUniqueFormalDiagnostic(
+          diagnostics,
+          createDiagnostic(
+            ScreenSdkDiagnosticCode.DANGLING_COMPONENT_REFERENCE,
+            ['blueprint', 'nodes', index, 'config', 'expression', 'source', 'componentId'],
+            '蓝图引用了不存在的组件',
+          ),
+        );
+      }
+      continue;
+    }
+
+    if (node.kind !== 'component') continue;
+
+    if (node.globalType === 'requestApi') {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.UNSUPPORTED_BLUEPRINT_NODE,
+          ['blueprint', 'nodes', index, 'globalType'],
+          'Screen document does not support requestApi nodes',
+        ),
+      );
+      continue;
+    }
+
+    if (node.globalType === undefined && !components.has(node.componentId)) {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.DANGLING_COMPONENT_REFERENCE,
+          ['blueprint', 'nodes', index, 'componentId'],
+          '蓝图引用了不存在的组件',
+        ),
+      );
+    }
+
+    if (
+      node.globalType === 'scrollTo' &&
+      node.config?.globalType === 'scrollTo' &&
+      !components.has(node.config.targetComponentId)
+    ) {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.DANGLING_COMPONENT_REFERENCE,
+          ['blueprint', 'nodes', index, 'config', 'targetComponentId'],
+          '蓝图引用了不存在的组件',
+        ),
+      );
+    }
+  }
+
+  for (const [index, edge] of blueprint.edges.entries()) {
+    const source = nodes.get(edge.source);
+    const target = nodes.get(edge.target);
+
+    if (source === undefined) {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.DANGLING_COMPONENT_REFERENCE,
+          ['blueprint', 'edges', index, 'source'],
+          '蓝图边引用了不存在的源节点',
+        ),
+      );
+    } else if (source.kind === 'component' && source.globalType === undefined) {
+      const registration = registrations.get(source.componentId);
+      const eventId = edge.sourceHandle.startsWith('evt:')
+        ? edge.sourceHandle.slice('evt:'.length)
+        : '';
+      if (
+        registration !== undefined &&
+        !registration.manifest.events?.some((event) => event.id === eventId)
+      ) {
+        addUniqueFormalDiagnostic(
+          diagnostics,
+          createDiagnostic(
+            ScreenSdkDiagnosticCode.INVALID_COMPONENT_EVENT,
+            ['blueprint', 'edges', index, 'sourceHandle'],
+            '蓝图事件锚点不在组件 manifest.events 声明列表中',
+          ),
+        );
+      }
+    } else {
+      const allowedSourceHandles =
+        source.kind === 'condition'
+          ? new Set(['then', 'else'])
+          : source.kind === 'delay'
+            ? new Set(['out'])
+            : source.kind === 'component' && source.globalType === 'pageLoad'
+              ? new Set(['evt:pageLoad'])
+              : source.kind === 'component' && source.globalType === 'interval'
+                ? new Set(['evt:interval'])
+                : new Set<string>();
+      if (!allowedSourceHandles.has(edge.sourceHandle)) {
+        addUniqueFormalDiagnostic(
+          diagnostics,
+          createDiagnostic(
+            ScreenSdkDiagnosticCode.INVALID_COMPONENT_EVENT,
+            ['blueprint', 'edges', index, 'sourceHandle'],
+            '蓝图事件锚点不受当前节点支持',
+          ),
+        );
+      }
+    }
+
+    if (target === undefined) {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.DANGLING_COMPONENT_REFERENCE,
+          ['blueprint', 'edges', index, 'target'],
+          '蓝图边引用了不存在的目标节点',
+        ),
+      );
+      continue;
+    }
+
+    if (target.kind === 'condition' || target.kind === 'delay') {
+      if (edge.targetHandle !== 'in') {
+        addUniqueFormalDiagnostic(
+          diagnostics,
+          createDiagnostic(
+            ScreenSdkDiagnosticCode.UNSUPPORTED_BLUEPRINT_ACTION,
+            ['blueprint', 'edges', index, 'targetHandle'],
+            '蓝图动作锚点不受当前节点支持',
+          ),
+        );
+      }
+      continue;
+    }
+
+    if (target.kind !== 'component') {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.UNSUPPORTED_BLUEPRINT_ACTION,
+          ['blueprint', 'edges', index, 'targetHandle'],
+          '注释节点不能作为蓝图动作目标',
+        ),
+      );
+      continue;
+    }
+
+    const actionId = edge.targetHandle.startsWith('act:')
+      ? edge.targetHandle.slice('act:'.length)
+      : '';
+    if (actionId === 'refreshData') {
+      const component = components.get(target.componentId);
+      if (component?.dataSource?.type !== 'host-resource') {
+        addUniqueFormalDiagnostic(
+          diagnostics,
+          createDiagnostic(
+            ScreenSdkDiagnosticCode.UNSUPPORTED_COMPONENT_CAPABILITY,
+            ['blueprint', 'edges', index, 'targetHandle'],
+            'refreshData 只能指向配置 host-resource 的组件',
+          ),
+        );
+      }
+    } else if (
+      (target.globalType === 'navigate' && actionId !== 'navigate') ||
+      (target.globalType === 'scrollTo' && actionId !== 'scrollTo') ||
+      (target.globalType !== undefined &&
+        target.globalType !== 'navigate' &&
+        target.globalType !== 'scrollTo') ||
+      (target.globalType === undefined && !allowedComponentActions.has(actionId))
+    ) {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.UNSUPPORTED_BLUEPRINT_ACTION,
+          ['blueprint', 'edges', index, 'targetHandle'],
+          '蓝图动作锚点不受当前节点支持',
+        ),
+      );
+    }
+  }
+}
+
 /**
  * 获取正式蓝图组件节点的允许 source handle 集合（registry-derived allowlist）。
  *
@@ -943,7 +1163,7 @@ function appendJsonBoundaryDiagnostics(
  */
 function getComponentSourceHandles(
   node: EventBlueprint['nodes'][number],
-  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistration | undefined>,
+  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistryLookupEntry | undefined>,
 ): ReadonlySet<string> {
   if (node.kind === 'condition') return new Set(['then', 'else']);
   if (node.kind === 'delay') return new Set(['out']);
@@ -970,7 +1190,7 @@ function getComponentSourceHandles(
  */
 function validateBlueprint(
   blueprint: EventBlueprint,
-  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistration | undefined>,
+  registrationByComponentId: ReadonlyMap<string, ScreenComponentRegistryLookupEntry | undefined>,
   componentIds: ReadonlySet<string>,
   diagnostics: ScreenSdkDiagnostic[],
 ): void {
@@ -1101,7 +1321,7 @@ function validateBlueprint(
  */
 export function parseScreenDocument(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenDocument> {
   const wireResult = ScreenDocumentWireSchema.safeParse(input);
   if (!wireResult.success) {
@@ -1127,26 +1347,63 @@ export function parseScreenDocument(
   }
 
   // 构建 componentId → registration 映射，供蓝图 source handle 校验使用
-  const registrationByComponentId = new Map<string, ScreenComponentRegistration | undefined>();
-  const componentIds = new Set<string>();
+  const registrationByComponentId = new Map<
+    string,
+    ScreenComponentRegistryLookupEntry | undefined
+  >();
+  const componentsById = new Map<string, ScreenComponentDocumentNode>();
 
-  // Phase 2: Registry-aware 组件校验（Spec §12.2 第 2 阶段 + Requirement 8 + 14）
   for (const [index, component] of wire.components.entries()) {
-    componentIds.add(component.id);
+    if (componentsById.has(component.id)) {
+      addUniqueFormalDiagnostic(
+        diagnostics,
+        createDiagnostic(
+          ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
+          ['components', index, 'id'],
+          'Screen document contains a duplicate component id',
+        ),
+      );
+    }
+    componentsById.set(component.id, component);
+
     appendJsonBoundaryDiagnostics(
       component.props,
       ['components', index, 'props'],
       ScreenSdkDiagnosticCode.INVALID_COMPONENT_PROPS,
       diagnostics,
     );
-    if (component.dataSource !== undefined && Object.hasOwn(component.dataSource, 'staticData')) {
+    appendJsonBoundaryDiagnostics(
+      component.style,
+      ['components', index, 'style'],
+      ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
+      diagnostics,
+    );
+    if (component.dataSource?.type === 'static') {
       appendJsonBoundaryDiagnostics(
         component.dataSource.staticData,
         ['components', index, 'dataSource', 'staticData'],
         ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
         diagnostics,
       );
+    } else if (component.dataSource?.type === 'host-resource') {
+      if (component.dataSource.params !== undefined) {
+        appendJsonBoundaryDiagnostics(
+          component.dataSource.params,
+          ['components', index, 'dataSource', 'params'],
+          ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
+          diagnostics,
+        );
+      }
+      if (component.dataSource.binding !== undefined) {
+        appendJsonBoundaryDiagnostics(
+          component.dataSource.binding,
+          ['components', index, 'dataSource', 'binding'],
+          ScreenSdkDiagnosticCode.INVALID_DOCUMENT,
+          diagnostics,
+        );
+      }
     }
+
     const registration = registry.get(component.type);
     registrationByComponentId.set(component.id, registration);
 
@@ -1162,7 +1419,6 @@ export function parseScreenDocument(
       continue;
     }
 
-    // 先统一校验 wire props 的 JSON 边界，再校验 manifest.propsSchema。
     const propsDiagnostics: ScreenComponentValidationDiagnostic[] = [];
     validateValueAgainstSchema(
       component.props,
@@ -1181,44 +1437,46 @@ export function parseScreenDocument(
       );
     }
 
-    // 外部组件能力校验（Requirement 14: 外部组件不得声明 dataSource/logic/interaction）
-    if (registration.source === 'host') {
-      if (component.dataSource !== undefined) {
+    if (component.dataSource !== undefined) {
+      const capability = getManifestDataCapability(registration.manifest);
+      if (
+        capability === undefined ||
+        !capability.acceptedSources.includes(component.dataSource.type)
+      ) {
         addUniqueFormalDiagnostic(
           diagnostics,
           createDiagnostic(
             'UNSUPPORTED_COMPONENT_CAPABILITY',
             ['components', index, 'dataSource'],
-            '外部组件不支持 dataSource 配置',
+            '组件 manifest 不接受当前数据源类型',
           ),
         );
       }
-      if (component.logic !== undefined) {
+
+      if (
+        component.dataSource.type === 'host-resource' &&
+        (capability === undefined ||
+          !capability.hostResourceTypes?.includes(component.dataSource.resourceType))
+      ) {
         addUniqueFormalDiagnostic(
           diagnostics,
           createDiagnostic(
             'UNSUPPORTED_COMPONENT_CAPABILITY',
-            ['components', index, 'logic'],
-            '外部组件不支持 logic 配置',
-          ),
-        );
-      }
-      if (component.interaction !== undefined) {
-        addUniqueFormalDiagnostic(
-          diagnostics,
-          createDiagnostic(
-            'UNSUPPORTED_COMPONENT_CAPABILITY',
-            ['components', index, 'interaction'],
-            '外部组件不支持 interaction 配置',
+            ['components', index, 'dataSource', 'resourceType'],
+            '组件 manifest 不接受当前 host resource 类型',
           ),
         );
       }
     }
   }
 
-  // Phase 3: 蓝图语义校验（source handle 使用 registry-derived allowlist）
   if (wire.blueprint !== undefined) {
-    validateBlueprint(wire.blueprint, registrationByComponentId, componentIds, diagnostics);
+    validateCanonicalBlueprint(
+      wire.blueprint,
+      registrationByComponentId,
+      componentsById,
+      diagnostics,
+    );
   }
 
   if (diagnostics.length > 0) {
@@ -1279,16 +1537,13 @@ export type LegacyScreenDocumentMigrationResult =
  * 调用方必须先通过 `parseLegacyScreenDocument()` 校验历史文档合法性后再调用本函数。
  */
 export function migrateLegacyScreenDocument(document: LegacyScreenDocument): ScreenDocument {
-  return {
+  return SharedScreenDocumentSchema.parse({
     schemaVersion: SCREEN_DOCUMENT_VERSION,
     canvas: document.canvas,
-    components: document.components.map((component) => ({
-      ...component,
-      props: { ...component.props },
-    })),
+    components: document.components,
     ...(document.blueprint !== undefined ? { blueprint: document.blueprint } : {}),
-    globalVariables: document.globalVariables.map((variable) => ({ ...variable })),
-  };
+    globalVariables: document.globalVariables,
+  });
 }
 
 /**
@@ -1305,7 +1560,7 @@ export function migrateLegacyScreenDocument(document: LegacyScreenDocument): Scr
  */
 export function migrateLegacyScreenProjectEnvelopeInput(
   input: unknown,
-  registry?: ScreenComponentInstanceRegistry,
+  registry?: ScreenComponentRegistryLookup,
 ): LegacyScreenDocumentMigrationResult {
   const envelopeResult = LegacyScreenProjectEnvelopeInputSchema.safeParse(input);
   if (!envelopeResult.success) {
@@ -1382,7 +1637,7 @@ export function migrateLegacyScreenProjectEnvelopeInput(
  */
 export function parseScreenProjectDraft(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenProjectDraft> {
   const wireResult = ScreenProjectDraftSchema.safeParse(input);
   if (!wireResult.success) {
@@ -1426,7 +1681,7 @@ export function parseScreenProjectDraft(
  */
 export function parseScreenProjectEnvelopeInput(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
   expectedProjectId?: string,
 ): ScreenContractParseResult<ScreenProjectEnvelope> {
   const wireResult = ScreenProjectEnvelopeInputSchema.safeParse(input);
@@ -1476,7 +1731,7 @@ export function parseScreenProjectEnvelopeInput(
  */
 export function parseScreenProjectTransfer(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenProjectTransfer> {
   const wireResult = ScreenProjectTransferSchema.safeParse(input);
   if (!wireResult.success) {
@@ -1517,7 +1772,7 @@ export function parseScreenProjectTransfer(
  */
 export function parseScreenProjectExport(
   input: unknown,
-  registry: ScreenComponentInstanceRegistry,
+  registry: ScreenComponentRegistryLookup,
 ): ScreenContractParseResult<ScreenProjectExport> {
   const wireResult = ScreenProjectExportSchema.safeParse(input);
   if (!wireResult.success) {

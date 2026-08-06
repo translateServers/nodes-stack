@@ -1,8 +1,9 @@
 # ADR-0002: 大屏组件扩展采用 Manifest + Web Component + 实例注册表
 
-> 状态：已接受
+> 状态：已替代
 > 日期：2026-08-01
 > 定位：确定大屏组件跨框架开发、注册和运行的长期扩展协议
+> 替代：由 [ADR-0003](./ADR-0003-screen-unified-contract-framework-bridges.md) 收敛为唯一组件与文档契约
 
 ## 背景
 

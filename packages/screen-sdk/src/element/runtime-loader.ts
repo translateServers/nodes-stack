@@ -41,4 +41,17 @@ export function createRuntimeMountLoader(
   };
 }
 
-export const loadRuntimeMount = createRuntimeMountLoader();
+let runtimeMountLoader = createRuntimeMountLoader();
+let runtimeLoadStarted = false;
+
+export function configureRuntimeMountLoader(importRuntime: RuntimeImporter): void {
+  if (runtimeLoadStarted) {
+    throw new Error('Screen editor runtime cannot be reconfigured after it starts loading.');
+  }
+  runtimeMountLoader = createRuntimeMountLoader(importRuntime);
+}
+
+export function loadRuntimeMount(): Promise<MountScreenEditorRuntime> {
+  runtimeLoadStarted = true;
+  return runtimeMountLoader();
+}

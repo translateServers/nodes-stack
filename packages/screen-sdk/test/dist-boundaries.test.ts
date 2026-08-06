@@ -136,4 +136,28 @@ describe('screen SDK production module graph gate', () => {
 
     expect(checkDistBoundaries(root).join('\n')).toContain('forbidden production import: axios');
   });
+
+  it('accepts zod as the only external public declaration dependency', () => {
+    const root = makeSourcemapFixture(['../../src/index.ts']);
+    writeFileSync(
+      join(root, 'index.d.ts'),
+      "import { z } from 'zod'; export declare const schema: z.ZodString;\n",
+    );
+
+    expect(checkDistBoundaries(root)).toEqual([]);
+  });
+
+  it.each([
+    'react',
+    'react-dom/client',
+    'lucide-react',
+    '@nebula/screen-editor-core',
+  ])('rejects %s from public declarations', (specifier) => {
+    const root = makeSourcemapFixture(['../../src/index.ts']);
+    writeFileSync(join(root, 'index.d.ts'), `import type {} from '${specifier}';\n`);
+
+    expect(checkDistBoundaries(root).join('\n')).toContain(
+      `forbidden public declaration import: ${specifier}`,
+    );
+  });
 });

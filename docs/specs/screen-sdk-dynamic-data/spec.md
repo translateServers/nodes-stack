@@ -1,8 +1,12 @@
 # 大屏 SDK 动态数据能力 Spec
 
-> 状态：生效中（A1 契约切片已完成；A2 起进入 XJ 对接实施）
+> 状态：已归档
 > 最近更新：2026-08-03
-> 定位：定义 Web Component SDK 后续动态数据能力的独立演进边界；当前不改变 `@nebula/screen-sdk` V1 static 契约
+> 定位：记录独立 dynamic SDK、文档 V3 和组件 API v2 的阶段性设计；不再作为当前实现依据
+> 归档原因：由统一组件契约与 React 19、Vue 3 注册桥接规格取代
+
+> 归档说明：项目不再维护 static/dynamic 与 V1/V2/V3 双轨。唯一现行目标契约见
+> [大屏统一组件契约与 React 19、Vue 3 注册桥接 Spec](../screen-component-framework-bridges/spec.md)。
 
 ## 0. 实施状态（A1 切片）
 

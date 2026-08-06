@@ -1,16 +1,17 @@
 import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 import {
-  CreateDatasetSchema as _CreateDatasetSchema,
+  CreateDatasetRequestSchema as _CreateDatasetRequestSchema,
   UpdateDatasetSchema as _UpdateDatasetSchema,
   ExecuteDatasetParamsSchema as _ExecuteDatasetParamsSchema,
   BatchExecuteDatasetParamsSchema as _BatchExecuteDatasetParamsSchema,
-  DatasetSchema as _DatasetSchema,
+  BatchDatasetExecuteItemSchema as _BatchDatasetExecuteItemSchema,
+  BatchExecuteDatasetResultSchema as _BatchExecuteDatasetResultSchema,
+  ListDatasetQuerySchema as _ListDatasetQuerySchema,
+  DatasetResponseSchema as _DatasetResponseSchema,
   DatasetExecuteResultSchema as _DatasetExecuteResultSchema,
   TestDatasetResultSchema as _TestDatasetResultSchema,
   DatasetReferenceCountSchema as _DatasetReferenceCountSchema,
-  DatasetTypeSchema,
-  DatasetStatusSchema,
 } from '@nebula/shared/schemas';
 
 /**
@@ -19,8 +20,8 @@ import {
  * 设计依据：`docs/specs/dataset-management/architecture.md` §2
  *
  * 关键约定：
- * - `projectId` 不在 shared Schema 中（由 API 层注入），Create 与 List DTO 在此扩展
- * - 响应 Schema 直接复用 shared `DatasetSchema`，时间戳在 service 层格式化为字符串
+ * - 所有 DTO 直接包装 shared request/response schema，不在 API 层扩展契约字段
+ * - 响应 Schema 直接复用 shared `DatasetResponseSchema`，时间戳在 service 层格式化为字符串
  *   （shared `DateTimeStringSchema` 为字符串正则，后端 service 用 dayjs 格式化 Date → 字符串）
  * - DTO 类通过 `createZodDto` 包装，既用于运行时校验（ZodValidationPipe）也用于 OpenAPI 文档
  */
@@ -30,17 +31,9 @@ import {
 /**
  * 创建数据集 Schema
  *
- * shared `CreateDatasetSchema` 是按 type 分发的判别联合（不含 projectId），
- * 此处通过 `.and()` 追加 `projectId` 字段（API 层从 body 注入）。
- *
- * projectId 改为可选：前端 UI 暂无项目上下文，未传时由 service 层回退到默认项目
- * （取数据库第一个项目）。保留可选字段以兼容未来引入项目选择器后的强约束。
+ * projectId 的可选性由 shared `CreateDatasetRequestSchema` 定义。
  */
-export const CreateDatasetSchema = _CreateDatasetSchema.and(
-  z.object({
-    projectId: z.string().min(1).optional().describe('所属项目 ID（可选，未传时使用默认项目）'),
-  }),
-);
+export const CreateDatasetSchema = _CreateDatasetRequestSchema;
 
 /**
  * 注意：`CreateDatasetSchema` 是判别联合 + 交集，
@@ -71,11 +64,7 @@ export class BatchExecuteDatasetDto extends createZodDto(BatchExecuteDatasetSche
 
 // ===== 列表查询 =====
 
-export const ListDatasetQuerySchema = z.object({
-  projectId: z.string().min(1).optional().describe('项目 ID（可选，未传时返回所有项目的数据集）'),
-  status: DatasetStatusSchema.optional().describe('按状态过滤'),
-  type: DatasetTypeSchema.optional().describe('按类型过滤'),
-});
+export const ListDatasetQuerySchema = _ListDatasetQuerySchema;
 
 export class ListDatasetQueryDto extends createZodDto(ListDatasetQuerySchema) {}
 
@@ -84,20 +73,11 @@ export class ListDatasetQueryDto extends createZodDto(ListDatasetQuerySchema) {}
 /**
  * 数据集响应 Schema
  *
- * shared `DatasetSchema` 是判别联合（不含 projectId，projectId 属于 API 层作用域字段），
- * 此处通过 `.and()` 追加 `projectId`，使 API 响应包含项目归属信息。
- *
- * projectId 设为可选：前端 shared `DatasetSchema` 不含此字段，
- * Zod 默认 strip 模式会忽略额外字段，但显式声明 optional 可避免 OpenAPI 文档
- * 将 projectId 标为必填，让前后端契约在文档层对齐。
+ * projectId 的响应语义由 shared `DatasetResponseSchema` 定义。
  * service 层在 `toResponse` 中将 Date 时间戳格式化为 "YYYY-MM-DD HH:mm:ss" 字符串，
  * 以匹配 shared `DateTimeStringSchema` 的正则约束。
  */
-export const DatasetResponseSchema = z
-  .object({
-    projectId: z.string().optional().describe('所属项目 ID（可选）'),
-  })
-  .and(_DatasetSchema);
+export const DatasetResponseSchema = _DatasetResponseSchema;
 
 /**
  * 同 `CreateDatasetDto`：`_DatasetSchema` 是判别联合，无法 `extends createZodDto(...)`，
@@ -124,14 +104,9 @@ export type TestDatasetResultResponse = z.infer<typeof TestDatasetResultResponse
 
 // ===== 批量执行结果响应 =====
 
-export const BatchDatasetExecuteItemResponseSchema = z.object({
-  datasetId: z.string(),
-  result: _DatasetExecuteResultSchema,
-});
+export const BatchDatasetExecuteItemResponseSchema = _BatchDatasetExecuteItemSchema;
 
-export const BatchExecuteDatasetResultResponseSchema = z.array(
-  BatchDatasetExecuteItemResponseSchema,
-);
+export const BatchExecuteDatasetResultResponseSchema = _BatchExecuteDatasetResultSchema;
 
 export class BatchExecuteDatasetResultDto extends createZodDto(
   BatchExecuteDatasetResultResponseSchema,

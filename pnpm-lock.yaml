@@ -668,9 +668,6 @@ importers:
 
   packages/screen-sdk:
     dependencies:
-      lucide-react:
-        specifier: ^1.18.0
-        version: 1.18.0(react@19.2.7)
       zod:
         specifier: ^4.4.3
         version: 4.4.3

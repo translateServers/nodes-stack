@@ -4,7 +4,6 @@ import { DatasetService } from '@/modules/dataset/dataset.service';
 import { DatasetCacheService } from '@/modules/dataset/dataset-cache.service';
 import { DatasetFilterService } from '@/modules/dataset/dataset-filter.service';
 import { DatasetMockService } from '@/modules/dataset/dataset-mock.service';
-import { DatasetReferenceService } from '@/modules/dataset/dataset-reference.service';
 import { StaticExecutor } from '@/modules/dataset/executors/static.executor';
 import { ApiExecutor } from '@/modules/dataset/executors/api.executor';
 import { UnsupportedExecutor } from '@/modules/dataset/executors/unsupported.executor';
@@ -14,7 +13,7 @@ import { UnsupportedExecutor } from '@/modules/dataset/executors/unsupported.exe
  *
  * 设计依据：`docs/specs/dataset-management/architecture.md` §1
  *
- * 导出 DatasetReferenceService 供 ScreenModule 在项目保存时重建引用索引。
+ * DatasetService is exported for Screen host-resource resolver dispatch.
  */
 @Module({
   controllers: [DatasetController],
@@ -23,11 +22,10 @@ import { UnsupportedExecutor } from '@/modules/dataset/executors/unsupported.exe
     DatasetCacheService,
     DatasetFilterService,
     DatasetMockService,
-    DatasetReferenceService,
     StaticExecutor,
     ApiExecutor,
     UnsupportedExecutor,
   ],
-  exports: [DatasetReferenceService],
+  exports: [DatasetService],
 })
 export class DatasetModule {}

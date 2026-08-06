@@ -12,6 +12,10 @@
       "types": "./dist/auto-register.d.ts",
       "import": "./dist/auto-register.js"
     },
+    "./react": {
+      "types": "./dist/auto-register.d.ts",
+      "import": "./dist/react.js"
+    },
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
@@ -31,15 +35,27 @@
   ],
   "sideEffects": [
     "./dist/auto-register.js",
+    "./dist/react.js",
     "./dist/**/*.css"
   ],
   "dependencies": {
-    "lucide-react": "^1.18.0",
     "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "scripts": {
     "prebuild": "pnpm --filter @nebula/shared build && pnpm --filter @nebula/screen-component-sdk build && pnpm --filter @nebula/screen-editor-core build",
-    "build": "pnpm check:boundaries && vite build && pnpm check:dist-boundaries && node ./scripts/generate-json-schemas.mjs && node ./scripts/normalize-declarations.mjs",
+    "build": "pnpm check:boundaries && vite build && vite build --mode react-runtime && pnpm check:dist-boundaries && node ./scripts/generate-json-schemas.mjs && node ./scripts/normalize-declarations.mjs",
     "check:boundaries": "node ./scripts/check-boundaries.mjs",
     "check:dist-boundaries": "node ./scripts/check-dist-boundaries.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",

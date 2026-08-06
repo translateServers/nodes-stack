@@ -8,14 +8,23 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { ScreenService } from '@/modules/screen/screen.service';
+import { ScreenResourceService } from '@/modules/screen/screen-resource.service';
 import {
   CreateScreenProjectDto,
+  ExecuteScreenHostResourceDto,
+  ListScreenHostResourcesQueryDto,
   PublishScreenProjectDto,
+  ScreenHostResourceResponseDto,
+  ScreenHostResourceSummaryDto,
   ScreenProjectResponseDto,
   UpdateScreenProjectDto,
+  type ScreenHostResourceResponse,
+  type ScreenHostResourceSummary,
   type ScreenProjectResponse,
 } from '@/modules/screen/dto/screen.dto';
 import {
@@ -30,7 +39,10 @@ import { Public } from '@/common/decorators/public.decorator';
 @ApiGlobalErrors()
 @Controller('screen')
 export class ScreenController {
-  constructor(private readonly screenService: ScreenService) {}
+  constructor(
+    private readonly screenService: ScreenService,
+    private readonly screenResourceService: ScreenResourceService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -45,6 +57,16 @@ export class ScreenController {
   @ApiSuccessResponse(ScreenProjectResponseDto, { isArray: true })
   findAllProjects(): Promise<ScreenProjectResponse[]> {
     return this.screenService.findAllProjects();
+  }
+
+  @Get(':projectId/resources')
+  @ApiOperation({ summary: '获取项目宿主资源', description: '仅返回当前项目可执行的受控资源。' })
+  @ApiSuccessResponse(ScreenHostResourceSummaryDto, { isArray: true })
+  listResources(
+    @Param('projectId') projectId: string,
+    @Query() query: ListScreenHostResourcesQueryDto,
+  ): Promise<ScreenHostResourceSummary[]> {
+    return this.screenResourceService.listResources(projectId, query.resourceType);
   }
 
   @Get(':id')
@@ -65,6 +87,31 @@ export class ScreenController {
     @Body() dto: UpdateScreenProjectDto,
   ): Promise<ScreenProjectResponse> {
     return this.screenService.updateProject(id, dto);
+  }
+
+  @Post(':projectId/resources/execute')
+  @ApiOperation({ summary: '执行项目宿主资源', description: '执行固定 resolver 允许的项目资源。' })
+  @ApiSuccessResponse(ScreenHostResourceResponseDto)
+  executeResource(
+    @Param('projectId') projectId: string,
+    @Body() dto: ExecuteScreenHostResourceDto,
+  ): Promise<ScreenHostResourceResponse> {
+    return this.screenResourceService.executeResource(projectId, dto, false);
+  }
+
+  @Post(':projectId/preview/resources/execute')
+  @Public()
+  @Throttle({ long: { ttl: 60_000, limit: 30 } })
+  @ApiOperation({
+    summary: '执行公开预览宿主资源',
+    description: '仅允许已发布项目，且使用独立限流。',
+  })
+  @ApiSuccessResponse(ScreenHostResourceResponseDto)
+  executePreviewResource(
+    @Param('projectId') projectId: string,
+    @Body() dto: ExecuteScreenHostResourceDto,
+  ): Promise<ScreenHostResourceResponse> {
+    return this.screenResourceService.executeResource(projectId, dto, true);
   }
 
   @Post(':id/publish')
